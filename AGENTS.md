@@ -46,7 +46,7 @@ make build           # 构建 Docker 镜像
 
 ## Code Conventions
 
-- 用中文与开发者沟通（注释、文档、commit message）
+- 用开发者的语言和开发者沟通，注释、commit message用英语。文档默认用中文放在docs/zh-CN目录。
 - Async everywhere: 所有 DB 操作、HTTP 调用、API handler 必须 async
 - TDD: 先写失败测试 → 实现 → 验证通过
 - DRY, YAGNI: 不做过早抽象
