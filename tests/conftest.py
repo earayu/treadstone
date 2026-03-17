@@ -1,6 +1,5 @@
-from httpx import ASGITransport, AsyncClient
-
 import pytest
+from httpx import ASGITransport, AsyncClient
 
 from treadstone.main import app
 
