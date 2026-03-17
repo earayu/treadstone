@@ -59,11 +59,9 @@ make build           # 构建 Docker 镜像
 
 # Git & GitHub
 make ship MSG=x      # add + commit + push（MSG 必填）
-make issue TITLE=x   # 创建 GitHub issue（BODY, LABELS 可选）
-make pr TITLE=x      # 创建 pull request（BODY 可选）
-make pr-list         # 列出打开的 PR
-make ci-status       # 查看当前分支 CI 状态
 ```
+
+GitHub 操作直接使用 `gh` CLI（已认证），参见 `.agents/skills/github-workflow/`。
 
 ## Code Conventions
 

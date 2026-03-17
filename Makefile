@@ -1,5 +1,4 @@
-.PHONY: help install dev test test-unit test-all test-cov lint format migrate migration build clean ship
-.PHONY: issue pr pr-list ci-status
+.PHONY: help install dev test test-unit test-all test-cov lint format migrate migration downgrade build clean ship
 
 # ── Development ──────────────────────────────────────────────────────────────
 
@@ -67,18 +66,3 @@ ship: ## AI commit & push: make ship MSG="feat: add user model"
 	git add -A
 	git commit -m "$(MSG)"
 	git push
-
-issue: ## Create GitHub issue: make issue TITLE="bug title" BODY="description" LABELS="bug"
-	@if [ -z "$(TITLE)" ]; then echo "Usage: make issue TITLE=\"title\" BODY=\"desc\" LABELS=\"bug\""; exit 1; fi
-	gh issue create --title "$(TITLE)" --body "$(BODY)" $(if $(LABELS),--label "$(LABELS)",)
-
-pr: ## Create pull request: make pr TITLE="feat title" BODY="description"
-	@if [ -z "$(TITLE)" ]; then echo "Usage: make pr TITLE=\"title\" BODY=\"description\""; exit 1; fi
-	git push -u origin HEAD
-	gh pr create --title "$(TITLE)" --body "$(BODY)"
-
-pr-list: ## List open pull requests
-	gh pr list
-
-ci-status: ## Show CI status for current branch
-	gh run list --branch "$$(git branch --show-current)" --limit 5
