@@ -19,6 +19,7 @@ dev = [
     "httpx>=0.28.1",
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.0.0",
     "ruff>=0.15.6",
 ]
 
@@ -31,3 +32,8 @@ select = ["E", "F", "I", "UP"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "integration: 需要真实数据库连接的集成测试",
+]
+addopts = "-m 'not integration' --tb=short"
