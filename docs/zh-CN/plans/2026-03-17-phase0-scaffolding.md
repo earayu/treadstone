@@ -389,19 +389,17 @@ git commit -m "chore: ruff lint config and gitignore"
 
 ---
 
-### Task 7：AI Agent 项目指令（AGENTS.md + CLAUDE.md + .agents/skills/）
+### Task 7：AI Agent 项目指令（AGENTS.md + .agents/skills/）
 
 **Files:**
 - Create: `AGENTS.md`
-- Create: `CLAUDE.md`
 - Create: `.agents/skills/dev-workflow/SKILL.md`
 
-三层配置各司其职：
+两层配置各司其职：
 
 | 文件 | 作用 | 支持平台 |
 |------|------|---------|
-| `AGENTS.md` | 项目总体约定（技术栈、规范、命令） | Cursor, Codex CLI, Copilot, Windsurf, Amp, Devin |
-| `CLAUDE.md` | 桥接到 AGENTS.md（一行） | Claude Code |
+| `AGENTS.md` | 项目总体约定（技术栈、规范、命令） | Cursor, Codex CLI, Copilot, Claude Code, Windsurf, Amp, Devin |
 | `.agents/skills/` | 可复用工作流 skill | Cursor (原生), Claude Code (.claude/skills/ 兼容), Codex (.codex/skills/ 兼容) |
 
 Cursor 原生从 `.agents/skills/` 加载 skill，同时兼容 `.claude/skills/` 和 `.codex/skills/`。因此 `.agents/skills/` 是最佳的平台无关位置。后续随项目发展可按需添加更多 skill（如 deploy、troubleshoot 等）。
@@ -483,13 +481,7 @@ docs/                # 设计文档和计划
 - 绝不提交 .env、secrets 或凭证
 ```
 
-**Step 2: 写 CLAUDE.md**
-
-```markdown
-Read and follow AGENTS.md in this repository for all project conventions and instructions.
-```
-
-**Step 3: 写第一个 skill — dev-workflow**
+**Step 2: 写第一个 skill — dev-workflow**
 
 ```markdown
 ---
@@ -545,11 +537,11 @@ make migrate
 6. `git commit`
 ```
 
-**Step 4: Commit**
+**Step 3: Commit**
 
 ```bash
-git add AGENTS.md CLAUDE.md .agents/
-git commit -m "chore: AGENTS.md, CLAUDE.md, and .agents/skills for AI agent instructions"
+git add AGENTS.md .agents/
+git commit -m "chore: AGENTS.md and .agents/skills for AI agent instructions"
 ```
 
 ---
