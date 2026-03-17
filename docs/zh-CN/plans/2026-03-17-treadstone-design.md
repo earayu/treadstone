@@ -47,7 +47,7 @@
 | K8s 交互 | agent-sandbox Python SDK | 封装在 k8s_client.py 中 |
 | 隔离层 | gVisor (RuntimeClass) | 不需裸金属/嵌套虚拟化，运维成本最低 |
 | 容器化 | Docker + K8s Manifests | 应用容器化部署到 K8s |
-| AI Agent 指令 | AGENTS.md + CLAUDE.md | 跨平台标准，Cursor/Codex/Copilot 等均支持 |
+| AI Agent 指令 | AGENTS.md + CLAUDE.md + .agents/skills/ | 跨平台开放标准（Agent Skills），Cursor/Codex/Copilot 等均支持 |
 | 任务入口 | Makefile | 人和 AI 统一通过 make xxx 调用项目命令 |
 
 ### 不引入的技术（MVP 阶段）

@@ -389,15 +389,26 @@ git commit -m "chore: ruff lint config and gitignore"
 
 ---
 
-### Task 7：AGENTS.md + CLAUDE.md（AI Agent 项目指令）
+### Task 7：AI Agent 项目指令（AGENTS.md + CLAUDE.md + .agents/skills/）
 
 **Files:**
 - Create: `AGENTS.md`
 - Create: `CLAUDE.md`
+- Create: `.agents/skills/dev-workflow/SKILL.md`
+
+三层配置各司其职：
+
+| 文件 | 作用 | 支持平台 |
+|------|------|---------|
+| `AGENTS.md` | 项目总体约定（技术栈、规范、命令） | Cursor, Codex CLI, Copilot, Windsurf, Amp, Devin |
+| `CLAUDE.md` | 桥接到 AGENTS.md（一行） | Claude Code |
+| `.agents/skills/` | 可复用工作流 skill | Cursor (原生), Claude Code (.claude/skills/ 兼容), Codex (.codex/skills/ 兼容) |
+
+Cursor 原生从 `.agents/skills/` 加载 skill，同时兼容 `.claude/skills/` 和 `.codex/skills/`。因此 `.agents/skills/` 是最佳的平台无关位置。后续随项目发展可按需添加更多 skill（如 deploy、troubleshoot 等）。
 
 **Step 1: 写 AGENTS.md**
 
-`AGENTS.md` 是跨平台标准（Cursor、Codex CLI、Copilot、Windsurf、Amp、Devin 均原生支持），作为项目级 AI 指令的唯一信息源。
+`AGENTS.md` 是跨平台标准，作为项目级 AI 指令的唯一信息源。保持精简，只放 agent 需要知道的全局约定。
 
 ```markdown
 # Treadstone
@@ -416,78 +427,129 @@ Sandbox + Skills 组合为可复用垂直 Agent 的开放平台与市场。
 
 ## Project Structure
 
-```
-treadstone/          # Application source code
-  main.py            # FastAPI app entrypoint
-  config.py          # pydantic-settings configuration
-  core/              # Database, shared utilities
-  models/            # SQLAlchemy models
-  api/               # API routes
-  auth/              # Authentication
-  services/          # Business logic
-tests/               # pytest test files
-alembic/             # Database migrations
+treadstone/          # 应用源码
+  main.py            # FastAPI 入口
+  config.py          # pydantic-settings 配置
+  core/              # 数据库、共享工具
+  models/            # SQLAlchemy 模型
+  api/               # API 路由
+  auth/              # 认证
+  services/          # 业务逻辑
+tests/               # pytest 测试
+alembic/             # 数据库迁移
 deploy/              # K8s manifests
-scripts/             # Dev/ops shell scripts
-docs/                # Design docs and plans
-```
+docs/                # 设计文档和计划
+.agents/skills/      # AI Agent 可复用 skill
 
 ## Essential Commands
 
-All project commands are available via Makefile. Run `make help` to see all targets.
+所有项目命令通过 Makefile 暴露，运行 `make help` 查看全部。
 
-```bash
-make dev             # Start local dev server (uvicorn --reload)
-make test            # Run all tests
-make lint            # Run ruff check + format
-make migrate         # Run alembic upgrade head
-make migration MSG=x # Generate new alembic migration
-make build           # Build Docker image
-```
+  make dev             # 启动本地开发服务器 (热重载)
+  make test            # 运行测试
+  make lint            # 代码检查
+  make format          # 自动格式化
+  make migrate         # 运行数据库迁移
+  make migration MSG=x # 生成新迁移
+  make build           # 构建 Docker 镜像
 
 ## Code Conventions
 
-- Use Chinese (中文) for comments, docs, and commit messages when communicating with the developer
-- Async everywhere: all DB operations, HTTP calls, and API handlers must be async
-- TDD: write failing test first, then implement, then verify
-- DRY, YAGNI: no premature abstraction
-- Type hints required on all function signatures
-- Ruff rules: E, F, I, UP (see pyproject.toml)
-- Line length: 120
+- 用中文与开发者沟通（注释、文档、commit message）
+- Async everywhere: 所有 DB 操作、HTTP 调用、API handler 必须 async
+- TDD: 先写失败测试 → 实现 → 验证通过
+- DRY, YAGNI: 不做过早抽象
+- 所有函数签名必须有 type hints
+- Ruff rules: E, F, I, UP (见 pyproject.toml)
+- 行宽: 120
 
 ## Database
 
-- Neon Serverless PostgreSQL, connection string in TREADSTONE_DATABASE_URL env var
-- SQLAlchemy async engine with asyncpg driver
-- Alembic for migrations (use sync psycopg2 URL for alembic by stripping +asyncpg)
-- All connection strings require ?sslmode=require for Neon
+- Neon Serverless PostgreSQL，连接串通过 TREADSTONE_DATABASE_URL 环境变量注入
+- SQLAlchemy async engine + asyncpg driver
+- Alembic 迁移（alembic 使用 sync URL，需去掉 +asyncpg）
+- 所有连接串必须带 ?sslmode=require
 
 ## Testing
 
-- pytest-asyncio with asyncio_mode = "auto"
-- Use httpx.AsyncClient + ASGITransport for API tests (no real server needed)
-- Monkeypatch environment variables in tests, don't rely on .env
+- pytest-asyncio，asyncio_mode = "auto"
+- 用 httpx.AsyncClient + ASGITransport 测试 API（无需启动真实服务器）
+- 测试中用 monkeypatch 设置环境变量，不依赖 .env 文件
 
 ## Git Workflow
 
 - Conventional commits: feat:, fix:, chore:, docs:, test:, refactor:
-- Commit frequently, each commit should be a small logical unit
-- Never commit .env, secrets, or credentials
+- 频繁提交，每个 commit 是一个小的逻辑单元
+- 绝不提交 .env、secrets 或凭证
 ```
 
 **Step 2: 写 CLAUDE.md**
-
-`CLAUDE.md` 是 Claude Code 专用指令文件，内容只需桥接到 `AGENTS.md`，避免重复维护。
 
 ```markdown
 Read and follow AGENTS.md in this repository for all project conventions and instructions.
 ```
 
-**Step 3: Commit**
+**Step 3: 写第一个 skill — dev-workflow**
+
+```markdown
+---
+name: dev-workflow
+description: Treadstone 开发工作流。开发、测试、迁移数据库时使用此 skill。涵盖本地开发启动、测试运行、lint、数据库迁移的完整流程。
+---
+
+# Dev Workflow
+
+## 本地开发
+
+1. 确保 `.env` 文件存在且包含有效的 `TREADSTONE_DATABASE_URL`（Neon 连接串）
+2. 启动开发服务器：`make dev`
+3. API 文档：http://localhost:8000/docs
+
+## 运行测试
 
 ```bash
-git add AGENTS.md CLAUDE.md
-git commit -m "chore: add AGENTS.md and CLAUDE.md for AI agent instructions"
+make test
+```
+
+测试不需要真实数据库连接（用 httpx ASGITransport mock）。
+需要数据库的集成测试用 monkeypatch 注入环境变量。
+
+## 代码质量
+
+```bash
+make lint     # 检查（不修改）
+make format   # 自动修复 + 格式化
+```
+
+提交前必须通过 lint。
+
+## 数据库迁移
+
+```bash
+# 修改 models/ 后生成迁移
+make migration MSG="描述变更"
+
+# 应用迁移到 Neon
+make migrate
+```
+
+注意：Alembic 使用 sync driver（psycopg2），会自动将 DATABASE_URL 中的 `+asyncpg` 替换掉。
+
+## 新增 API 端点的标准流程
+
+1. 在 `tests/` 写失败测试
+2. `make test` 确认失败
+3. 在 `treadstone/api/` 实现路由
+4. `make test` 确认通过
+5. `make lint` 确认代码质量
+6. `git commit`
+```
+
+**Step 4: Commit**
+
+```bash
+git add AGENTS.md CLAUDE.md .agents/
+git commit -m "chore: AGENTS.md, CLAUDE.md, and .agents/skills for AI agent instructions"
 ```
 
 ---
