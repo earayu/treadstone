@@ -43,9 +43,19 @@ make migrate
 
 ## 新增 API 端点的标准流程
 
-1. 在 `tests/` 写失败测试
+1. 在 `tests/api/` 写失败测试
 2. `make test` 确认失败
 3. 在 `treadstone/api/` 实现路由
 4. `make test` 确认通过
 5. `make lint` 确认代码质量
 6. `git commit`
+
+## AI 提交代码
+
+完成开发后，用 `make ship` 一键提交并推送：
+
+```bash
+make ship MSG="feat: 描述你的改动"
+```
+
+MSG 参数必填，遵循 Conventional Commits 规范。

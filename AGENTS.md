@@ -36,12 +36,16 @@ docs/                # 设计文档和计划
 
 ```bash
 make dev             # 启动本地开发服务器 (热重载)
-make test            # 运行测试
+make test            # 运行测试（排除 integration）
+make test-unit       # 仅运行 unit 测试
+make test-all        # 运行全部测试（含 integration，需真实 DB）
+make test-cov        # 运行测试 + 覆盖率报告
 make lint            # 代码检查
 make format          # 自动格式化
 make migrate         # 运行数据库迁移
 make migration MSG=x # 生成新迁移
 make build           # 构建 Docker 镜像
+make ship MSG=x      # AI 专用：add + commit + push（MSG 必填）
 ```
 
 ## Code Conventions
@@ -66,6 +70,11 @@ make build           # 构建 Docker 镜像
 - pytest-asyncio，asyncio_mode = "auto"（无需手动标记 @pytest.mark.asyncio）
 - 用 httpx.AsyncClient + ASGITransport 测试 API（无需启动真实服务器）
 - 测试中用 monkeypatch 设置环境变量，不依赖 .env 文件
+- 测试三层结构：
+  - `tests/unit/` — 纯逻辑，无 IO
+  - `tests/api/` — API 路由测试，用 ASGITransport
+  - `tests/integration/` — 需要真实 DB，标记 @pytest.mark.integration，默认不运行
+- 共享 fixture 放在 `tests/conftest.py`（如 httpx client）
 
 ## Git Workflow
 
