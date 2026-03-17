@@ -6,8 +6,8 @@
 
 - 初始化 uv 项目，配置 pyproject.toml
 - FastAPI 应用骨架 + Uvicorn
-- PostgreSQL 连接 + SQLAlchemy async
-- Docker Compose（FastAPI + PostgreSQL）
+- Neon (Serverless PostgreSQL) 连接 + SQLAlchemy async
+- Dockerfile + K8s Manifests
 - 基础 CI（lint + test）
 
 ## Phase 1：认证系统（第 2 周）
@@ -65,7 +65,7 @@
 
 | 里程碑 | 时间 | 交付物 |
 |---|---|---|
-| M0：能跑起来 | 第 1 周末 | FastAPI + PostgreSQL 本地运行 |
+| M0：能跑起来 | 第 1 周末 | FastAPI + Neon PostgreSQL 运行 |
 | M1：能登录 | 第 2 周末 | 注册/登录/JWT 全流程 |
 | M2：能创建沙箱 | 第 4 周末 | 通过 API 在 K8s 上创建/使用/销毁沙箱 |
 | M3：能收钱 | 第 5 周末 | Stripe 集成，按时长计费 |

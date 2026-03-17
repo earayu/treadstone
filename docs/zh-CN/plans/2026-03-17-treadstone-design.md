@@ -43,15 +43,19 @@
 | 包管理 | uv | 快速，现代 Python 工具链 |
 | ASGI 服务器 | Uvicorn | FastAPI 标配 |
 | 异步任务 | FastAPI BackgroundTasks | MVP 阶段够用，K8s 本身已是异步 |
-| 数据库 | PostgreSQL | 用户/订单/沙箱元数据 |
+| 数据库 | Neon (Serverless PostgreSQL) | 免运维，按用量计费，开发生产统一，自带分支/快照 |
 | K8s 交互 | agent-sandbox Python SDK | 封装在 k8s_client.py 中 |
 | 隔离层 | gVisor (RuntimeClass) | 不需裸金属/嵌套虚拟化，运维成本最低 |
-| 容器化 | Docker + K8s Helm Chart | 参考 ApeRAG 部署方式 |
+| 容器化 | Docker + K8s Manifests | 应用容器化部署到 K8s |
+| AI Agent 指令 | AGENTS.md + CLAUDE.md | 跨平台标准，Cursor/Codex/Copilot 等均支持 |
+| 任务入口 | Makefile | 人和 AI 统一通过 make xxx 调用项目命令 |
 
 ### 不引入的技术（MVP 阶段）
 
 | 技术 | 不引入的理由 |
 |---|---|
+| Docker Compose | 生产是 K8s，数据库是 Neon 托管，无需本地编排；维护两套配置对独立开发者是负担 |
+| 自建 PostgreSQL | Neon 免运维、按用量计费、自带分支，独立开发者不值得自己运维数据库 |
 | Celery + Redis | K8s 本身已是异步编排，FastAPI BackgroundTasks 够用 |
 | Redis 缓存 | 沙箱状态在 K8s CR 中，无需额外缓存 |
 | 前端 | 一个人精力有限，先出 API，用 Swagger UI 演示 |
@@ -67,8 +71,9 @@
 
 ## 部署目标
 
-- 部署在 K8s 集群上（云厂商托管 K8s：GKE/EKS/AKS）
-- 开发环境用 Docker Compose + Kind/Minikube
+- 数据库：Neon Serverless PostgreSQL（开发和生产统一，通过 Neon Branch 隔离环境）
+- 应用：K8s 集群（生产用云厂商托管 GKE/EKS/AKS，开发用 Kind）
+- 本地开发：直连 Neon + `uvicorn --reload`，无需本地数据库
 
 ## 日期
 
