@@ -1,10 +1,19 @@
-.PHONY: help dev test test-unit test-all test-cov lint format migrate migration build clean ship
+.PHONY: help install dev test test-unit test-all test-cov lint format migrate migration build clean ship
+.PHONY: issue pr pr-list ci-status
+
+# ── Development ──────────────────────────────────────────────────────────────
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
+install: ## Install dependencies (first time setup)
+	uv sync
+	@echo "✓ Dependencies installed. Copy .env.example to .env and fill in your Neon connection string."
+
 dev: ## Start local dev server with hot reload
 	uv run uvicorn treadstone.main:app --reload --host 0.0.0.0 --port 8000
+
+# ── Testing ──────────────────────────────────────────────────────────────────
 
 test: ## Run tests (excludes integration)
 	uv run pytest tests/ -v
@@ -18,6 +27,8 @@ test-all: ## Run all tests including integration (needs real DB)
 test-cov: ## Run tests with coverage report
 	uv run pytest tests/ -v --cov=treadstone --cov-report=term-missing --cov-report=html
 
+# ── Code Quality ─────────────────────────────────────────────────────────────
+
 lint: ## Run linter and formatter check
 	uv run ruff check treadstone/ tests/
 	uv run ruff format --check treadstone/ tests/
@@ -26,11 +37,19 @@ format: ## Auto-format code
 	uv run ruff check --fix treadstone/ tests/
 	uv run ruff format treadstone/ tests/
 
+# ── Database ─────────────────────────────────────────────────────────────────
+
 migrate: ## Run database migrations
 	uv run alembic upgrade head
 
 migration: ## Generate new migration (usage: make migration MSG="add users table")
+	@if [ -z "$(MSG)" ]; then echo "Error: MSG is required. Usage: make migration MSG=\"add users table\""; exit 1; fi
 	uv run alembic revision --autogenerate -m "$(MSG)"
+
+downgrade: ## Rollback last migration
+	uv run alembic downgrade -1
+
+# ── Build ────────────────────────────────────────────────────────────────────
 
 build: ## Build Docker image
 	docker build -t treadstone-api:latest .
@@ -41,8 +60,25 @@ clean: ## Remove build artifacts and caches
 	find . -type d -name .ruff_cache -exec rm -rf {} + 2>/dev/null || true
 	rm -rf dist/ build/ *.egg-info/ htmlcov/
 
+# ── Git & GitHub (AI agent) ──────────────────────────────────────────────────
+
 ship: ## AI commit & push: make ship MSG="feat: add user model"
 	@if [ -z "$(MSG)" ]; then echo "Usage: make ship MSG=\"your commit message\""; exit 1; fi
 	git add -A
 	git commit -m "$(MSG)"
 	git push
+
+issue: ## Create GitHub issue: make issue TITLE="bug title" BODY="description" LABELS="bug"
+	@if [ -z "$(TITLE)" ]; then echo "Usage: make issue TITLE=\"title\" BODY=\"desc\" LABELS=\"bug\""; exit 1; fi
+	gh issue create --title "$(TITLE)" --body "$(BODY)" $(if $(LABELS),--label "$(LABELS)",)
+
+pr: ## Create pull request: make pr TITLE="feat title" BODY="description"
+	@if [ -z "$(TITLE)" ]; then echo "Usage: make pr TITLE=\"title\" BODY=\"description\""; exit 1; fi
+	git push -u origin HEAD
+	gh pr create --title "$(TITLE)" --body "$(BODY)"
+
+pr-list: ## List open pull requests
+	gh pr list
+
+ci-status: ## Show CI status for current branch
+	gh run list --branch "$$(git branch --show-current)" --limit 5

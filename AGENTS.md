@@ -35,17 +35,34 @@ docs/                # 设计文档和计划
 所有项目命令通过 Makefile 暴露，运行 `make help` 查看全部。
 
 ```bash
+# Development
+make install         # 安装依赖 (首次设置)
 make dev             # 启动本地开发服务器 (热重载)
+
+# Testing
 make test            # 运行测试（排除 integration）
 make test-unit       # 仅运行 unit 测试
 make test-all        # 运行全部测试（含 integration，需真实 DB）
 make test-cov        # 运行测试 + 覆盖率报告
+
+# Code Quality
 make lint            # 代码检查
 make format          # 自动格式化
+
+# Database
 make migrate         # 运行数据库迁移
-make migration MSG=x # 生成新迁移
+make migration MSG=x # 生成新迁移（MSG 必填）
+make downgrade       # 回滚上一次迁移
+
+# Build
 make build           # 构建 Docker 镜像
-make ship MSG=x      # AI 专用：add + commit + push（MSG 必填）
+
+# Git & GitHub
+make ship MSG=x      # add + commit + push（MSG 必填）
+make issue TITLE=x   # 创建 GitHub issue（BODY, LABELS 可选）
+make pr TITLE=x      # 创建 pull request（BODY 可选）
+make pr-list         # 列出打开的 PR
+make ci-status       # 查看当前分支 CI 状态
 ```
 
 ## Code Conventions
