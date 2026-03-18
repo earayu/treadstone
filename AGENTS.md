@@ -70,6 +70,7 @@ GitHub 操作直接使用 `gh` CLI。
 ## Code Conventions
 
 - 用开发者的语言和开发者沟通，注释、commit message用英语。文档默认用中文放在docs/zh-CN目录。
+- **GitHub 上所有公开内容必须使用英文**：commit messages, PR title/body, Issue title/body, review comments, release notes。
 - Async everywhere: 所有 DB 操作、HTTP 调用、API handler 必须 async
 - TDD: 先写失败测试 → 实现 → 验证通过
 - DRY, YAGNI: 不做过早抽象
@@ -100,3 +101,5 @@ GitHub 操作直接使用 `gh` CLI。
 - Conventional commits: feat:, fix:, chore:, docs:, test:, refactor:
 - 频繁提交，每个 commit 是一个小的逻辑单元
 - 绝不提交 .env、secrets 或凭证
+- 每个 PR 创建后，关联到 GitHub Project Board: `gh project item-add 5 --owner earayu --url <PR_URL>`
+- PR/Issue 创建后应在 Project Board（https://github.com/users/earayu/projects/5/views/1）中维护状态

@@ -5,6 +5,7 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 from treadstone.config import settings
 from treadstone.core.database import Base
+from treadstone.models import *  # noqa: F401,F403 — register all models with Base.metadata
 
 config = context.config
 
