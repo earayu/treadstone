@@ -1,4 +1,4 @@
-.PHONY: help install dev test test-unit test-all test-cov lint format migrate migration downgrade build clean ship
+.PHONY: help install dev test test-unit test-all test-cov lint format migrate migration downgrade gen-openapi build clean ship
 
 # ── Development ──────────────────────────────────────────────────────────────
 
@@ -47,6 +47,11 @@ migration: ## Generate new migration (usage: make migration MSG="add users table
 
 downgrade: ## Rollback last migration
 	uv run alembic downgrade -1
+
+# ── OpenAPI / SDK ────────────────────────────────────────────────────────
+
+gen-openapi: ## Export openapi.json from FastAPI app (no server needed)
+	uv run python scripts/export_openapi.py
 
 # ── Build ────────────────────────────────────────────────────────────────────
 
