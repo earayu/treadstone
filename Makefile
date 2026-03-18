@@ -1,13 +1,17 @@
-.PHONY: help install dev test test-unit test-all test-cov lint format migrate migration downgrade gen-openapi build clean ship
+.PHONY: help install install-hooks dev test test-unit test-all test-cov lint format migrate migration downgrade gen-openapi build clean ship
 
 # ── Development ──────────────────────────────────────────────────────────────
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-install: ## Install dependencies (first time setup)
+install: install-hooks ## Install dependencies (first time setup)
 	uv sync
 	@echo "✓ Dependencies installed. Copy .env.example to .env and fill in your Neon connection string."
+
+install-hooks: ## Install git hooks (auto-called by install)
+	git config core.hooksPath .githooks
+	@echo "✓ Git hooks installed (.githooks/)"
 
 dev: ## Start local dev server with hot reload
 	uv run uvicorn treadstone.main:app --reload --host 0.0.0.0 --port 8000
@@ -68,6 +72,7 @@ clean: ## Remove build artifacts and caches
 
 ship: ## AI commit & push: make ship MSG="feat: add user model"
 	@if [ -z "$(MSG)" ]; then echo "Usage: make ship MSG=\"your commit message\""; exit 1; fi
+	@if [ "$$(git symbolic-ref --short HEAD)" = "main" ]; then echo "Error: Cannot ship from main. Create a feature branch first."; exit 1; fi
 	git add -A
 	git commit -m "$(MSG)"
 	git push
