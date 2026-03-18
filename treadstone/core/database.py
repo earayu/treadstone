@@ -10,9 +10,9 @@ class Base(DeclarativeBase):
     pass
 
 
-def _build_engine():
+def _build_engine(url: str | None = None):
     connect_args: dict = {}
-    db_url = settings.database_url
+    db_url = url or settings.database_url
     if "sslmode=require" in db_url:
         db_url = db_url.replace("?sslmode=require", "").replace("&sslmode=require", "")
         ssl_ctx = ssl.create_default_context()

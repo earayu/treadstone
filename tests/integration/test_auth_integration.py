@@ -1,21 +1,25 @@
 """Integration tests for the auth system against real Neon DB.
 
 These tests create real users in the database and clean up after themselves.
+Uses Neon test branch if tests/integration/.env.test exists; otherwise falls back
+to the default TREADSTONE_DATABASE_URL.
+
 Run with: make test-all
 """
 
 import secrets
-import ssl
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, select, text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from treadstone.config import settings
+import treadstone.core.database as db_mod
 from treadstone.main import app
 from treadstone.models.api_key import ApiKey
 from treadstone.models.user import Invitation, OAuthAccount, User
+
+from .conftest import _load_test_db_url
 
 UNIQUE = secrets.token_hex(4)
 TEST_EMAIL = f"inttest-{UNIQUE}@test.treadstone.dev"
@@ -25,15 +29,7 @@ TEST_PASSWORD = "IntTest_Str0ng!"
 
 def _make_engine():
     """Create a fresh async engine for cleanup (avoids event loop conflicts)."""
-    db_url = settings.database_url
-    connect_args: dict = {}
-    if "sslmode=require" in db_url:
-        db_url = db_url.replace("?sslmode=require", "").replace("&sslmode=require", "")
-        ssl_ctx = ssl.create_default_context()
-        ssl_ctx.check_hostname = False
-        ssl_ctx.verify_mode = ssl.CERT_NONE
-        connect_args["ssl"] = ssl_ctx
-    return create_async_engine(db_url, echo=False, connect_args=connect_args)
+    return db_mod._build_engine(url=_load_test_db_url())
 
 
 @pytest.fixture(autouse=True)
