@@ -1,5 +1,3 @@
-from typing import Optional
-
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
@@ -19,9 +17,9 @@ required_current_user = fastapi_users.current_user(active=True)
 
 
 async def authenticate_api_key(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     session: AsyncSession = Depends(get_session),
-) -> Optional[User]:
+) -> User | None:
     """Bearer sk-xxx -> API Key auth"""
     if not credentials or not credentials.credentials.startswith("sk-"):
         return None
@@ -39,8 +37,8 @@ async def authenticate_api_key(
 
 
 async def authenticate_oidc_jwt(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
-) -> Optional[User]:
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> User | None:
     """Bearer <jwt> -> external OIDC verification (auth0 / authing / logto)"""
     if settings.auth_type not in ("auth0", "authing", "logto"):
         return None
@@ -57,8 +55,8 @@ async def authenticate_oidc_jwt(
 
 async def get_current_user(
     request: Request,
-    api_key_user: Optional[User] = Depends(authenticate_api_key),
-    cookie_user: Optional[User] = Depends(optional_current_user),
+    api_key_user: User | None = Depends(authenticate_api_key),
+    cookie_user: User | None = Depends(optional_current_user),
 ) -> User:
     """Priority: API Key -> Cookie/JWT Session"""
     user = api_key_user or cookie_user

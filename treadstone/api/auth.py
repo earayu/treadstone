@@ -1,6 +1,5 @@
 import secrets
 from datetime import timedelta
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
@@ -23,7 +22,7 @@ router.include_router(fastapi_users.get_auth_router(auth_backend))
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
-    invitation_token: Optional[str] = None
+    invitation_token: str | None = None
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
@@ -35,7 +34,7 @@ async def register(
     user_count = count_result.scalar_one()
     is_first_user = user_count == 0
 
-    invitation: Optional[Invitation] = None
+    invitation: Invitation | None = None
     if settings.register_mode == "invitation" and not is_first_user:
         if not body.invitation_token:
             raise HTTPException(status_code=403, detail="Invitation token required")

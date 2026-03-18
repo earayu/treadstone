@@ -1,3 +1,5 @@
+from datetime import UTC
+
 from treadstone.models.user import Invitation, OAuthAccount, Role, User
 
 
@@ -27,27 +29,27 @@ def test_role_enum_values():
 
 
 def test_invitation_is_valid(freezer):
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     inv = Invitation()
     inv.is_used = False
-    inv.expires_at = datetime.now(timezone.utc) + timedelta(days=1)
+    inv.expires_at = datetime.now(UTC) + timedelta(days=1)
     assert inv.is_valid() is True
 
 
 def test_invitation_expired_is_invalid(freezer):
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     inv = Invitation()
     inv.is_used = False
-    inv.expires_at = datetime.now(timezone.utc) - timedelta(days=1)
+    inv.expires_at = datetime.now(UTC) - timedelta(days=1)
     assert inv.is_valid() is False
 
 
 def test_invitation_used_is_invalid(freezer):
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     inv = Invitation()
     inv.is_used = True
-    inv.expires_at = datetime.now(timezone.utc) + timedelta(days=1)
+    inv.expires_at = datetime.now(UTC) + timedelta(days=1)
     assert inv.is_valid() is False

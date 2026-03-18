@@ -1,6 +1,6 @@
 import secrets
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 
 from fastapi_users.db import SQLAlchemyBaseOAuthAccountTable, SQLAlchemyBaseUserTable
 from sqlalchemy import Boolean, DateTime, ForeignKey, String
@@ -10,14 +10,14 @@ from treadstone.core.database import Base
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def random_id(n: int = 16) -> str:
     return secrets.token_hex(n // 2)
 
 
-class Role(str, Enum):
+class Role(StrEnum):
     ADMIN = "admin"
     RW = "rw"
     RO = "ro"
@@ -33,9 +33,7 @@ class User(SQLAlchemyBaseUserTable[str], Base):
     gmt_created: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     gmt_updated: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     gmt_deleted: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    oauth_accounts: Mapped[list["OAuthAccount"]] = relationship(
-        "OAuthAccount", lazy="joined", back_populates="user"
-    )
+    oauth_accounts: Mapped[list["OAuthAccount"]] = relationship("OAuthAccount", lazy="joined", back_populates="user")
 
 
 class OAuthAccount(SQLAlchemyBaseOAuthAccountTable[str], Base):

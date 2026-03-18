@@ -1,5 +1,3 @@
-from typing import Optional
-
 from fastapi import Request
 from fastapi_users import BaseUserManager, FastAPIUsers
 from fastapi_users.authentication import AuthenticationBackend, CookieTransport, JWTStrategy
@@ -16,14 +14,14 @@ COOKIE_MAX_AGE = 86400  # 24 hours
 
 
 # ── OAuth clients (only enabled when secrets are configured) ──
-google_oauth_client: Optional[GoogleOAuth2] = None
+google_oauth_client: GoogleOAuth2 | None = None
 if settings.google_oauth_client_id and settings.google_oauth_client_secret:
     google_oauth_client = GoogleOAuth2(
         settings.google_oauth_client_id,
         settings.google_oauth_client_secret,
     )
 
-github_oauth_client: Optional[GitHubOAuth2] = None
+github_oauth_client: GitHubOAuth2 | None = None
 if settings.github_oauth_client_id and settings.github_oauth_client_secret:
     github_oauth_client = GitHubOAuth2(
         settings.github_oauth_client_id,
@@ -39,7 +37,7 @@ class UserManager(BaseUserManager[User, str]):
     def parse_id(self, value: str) -> str:
         return value
 
-    async def on_after_register(self, user: User, request: Optional[Request] = None) -> None:
+    async def on_after_register(self, user: User, request: Request | None = None) -> None:
         """First registered user automatically becomes ADMIN."""
         async for session in get_session():
             result = await session.execute(select(func.count()).select_from(User))
@@ -51,10 +49,10 @@ class UserManager(BaseUserManager[User, str]):
                 await session.commit()
                 await session.refresh(user)
 
-    async def on_after_forgot_password(self, user: User, token: str, request: Optional[Request] = None) -> None:
+    async def on_after_forgot_password(self, user: User, token: str, request: Request | None = None) -> None:
         pass  # TODO: send email
 
-    async def on_after_request_verify(self, user: User, token: str, request: Optional[Request] = None) -> None:
+    async def on_after_request_verify(self, user: User, token: str, request: Request | None = None) -> None:
         pass  # TODO: send email
 
 
