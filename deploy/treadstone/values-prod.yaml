@@ -1,0 +1,26 @@
+replicaCount: 2
+
+image:
+  repository: ""
+  tag: ""
+  pullPolicy: Always
+
+env:
+  TREADSTONE_DEBUG: "false"
+  TREADSTONE_AUTH_TYPE: "cookie"
+
+envSecretRef: treadstone-secrets
+
+resources:
+  limits:
+    cpu: "1"
+    memory: 512Mi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80

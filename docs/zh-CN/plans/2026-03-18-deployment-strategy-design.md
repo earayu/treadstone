@@ -61,7 +61,7 @@ agent-sandbox Python SDK 的通信架构依赖一个 [sandbox-router](https://gi
 | Chart | 内容 | Namespace | 更新频率 | 权限 |
 |---|---|---|---|---|
 | `agent-sandbox` | controller + CRD + extensions | `agent-sandbox-system` | 极低（跟随上游 release） | cluster-admin |
-| `treadstone-api` | FastAPI Deployment + Service + ConfigMap + ServiceAccount | `treadstone` | 高（每次功能迭代） | namespace |
+| `treadstone` | Deployment + Service + ConfigMap + ServiceAccount | `treadstone` | 高（每次功能迭代） | namespace |
 | `sandbox-runtime` | Sandbox Router + SandboxTemplate CRs + WarmPool CRs | `treadstone` | 中（模板/路由变更时） | namespace |
 
 拆分原因：
@@ -90,7 +90,7 @@ agent-sandbox Python SDK 的通信架构依赖一个 [sandbox-router](https://gi
 
 | 配置项 | dev (Kind) | prod (ACK) |
 |---|---|---|
-| Treadstone image | `treadstone-api:latest` | ACR registry |
+| Treadstone image | `treadstone:latest` | ACR registry |
 | agent-sandbox controller image | `registry.k8s.io/...` | ACR mirror |
 | agent-infra/sandbox image | `ghcr.io/agent-infra/sandbox:latest` | 中国镜像源或 ACR mirror |
 | Treadstone replicas | 1 | 2+ |
@@ -103,7 +103,7 @@ agent-sandbox Python SDK 的通信架构依赖一个 [sandbox-router](https://gi
 
 ```
 deploy/
-├── treadstone-api/                        # Treadstone FastAPI 服务
+├── treadstone/                            # Treadstone 应用服务
 │   ├── Chart.yaml
 │   ├── values.yaml
 │   ├── values-dev.yaml
@@ -148,7 +148,7 @@ deploy/
 用户/Agent
   │
   ▼
-Treadstone API (FastAPI, deploy/treadstone-api)
+Treadstone (FastAPI, deploy/treadstone)
   │
   ├─ 创建/删除沙箱 ──▶ K8s API ──▶ agent-sandbox controller
   │                                      │

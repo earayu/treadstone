@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "treadstone.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "treadstone.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "treadstone.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "treadstone.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "treadstone.serviceAccountName" . }}
+      containers:
+        - name: treadstone
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "treadstone.fullname" . }}-config
+            {{- if .Values.envSecretRef }}
+            - secretRef:
+                name: {{ .Values.envSecretRef }}
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

@@ -1,0 +1,21 @@
+replicaCount: 1
+
+image:
+  repository: treadstone
+  tag: latest
+  pullPolicy: IfNotPresent
+
+env:
+  TREADSTONE_DEBUG: "true"
+  TREADSTONE_AUTH_TYPE: "cookie"
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+hpa:
+  enabled: false

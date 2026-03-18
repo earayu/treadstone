@@ -1,12 +1,10 @@
 from fastapi import Depends, FastAPI
 from fastapi.routing import APIRoute
-from sqlalchemy import text
 
 from treadstone.api.auth import router as auth_router
 from treadstone.api.config import router as config_router
 from treadstone.api.deps import get_current_user
 from treadstone.config import settings
-from treadstone.core.database import engine
 from treadstone.core.users import auth_backend, fastapi_users, github_oauth_client, google_oauth_client
 from treadstone.models.user import User
 
@@ -40,14 +38,7 @@ if github_oauth_client:
 
 @app.get("/health", tags=["system"])
 async def health():
-    db_ok = False
-    try:
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-            db_ok = True
-    except Exception:
-        pass
-    return {"status": "ok", "db": db_ok}
+    return {"status": "ok"}
 
 
 @app.get("/api/me", tags=["auth"])

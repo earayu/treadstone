@@ -1,4 +1,4 @@
-.PHONY: help install install-hooks dev test test-unit test-all test-cov lint format migrate migration downgrade gen-openapi build clean ship
+.PHONY: help install install-hooks dev test test-unit test-all test-cov lint format migrate migration downgrade gen-openapi build clean ship deploy-infra deploy-runtime deploy-app deploy-all undeploy-app undeploy-runtime undeploy-all kind-create kind-delete
 
 # ── Development ──────────────────────────────────────────────────────────────
 
@@ -60,13 +60,51 @@ gen-openapi: ## Export openapi.json from FastAPI app (no server needed)
 # ── Build ────────────────────────────────────────────────────────────────────
 
 build: ## Build Docker image
-	docker build -t treadstone-api:latest .
+	docker build -t treadstone:latest .
 
 clean: ## Remove build artifacts and caches
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name .pytest_cache -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name .ruff_cache -exec rm -rf {} + 2>/dev/null || true
 	rm -rf dist/ build/ *.egg-info/ htmlcov/
+
+# ── Deploy (Helm) ────────────────────────────────────────────────────────────
+
+ENV ?= dev
+
+deploy-infra: ## Deploy agent-sandbox controller (once per cluster)
+	helm upgrade --install agent-sandbox deploy/agent-sandbox \
+		-f deploy/agent-sandbox/values-$(ENV).yaml \
+		--create-namespace
+
+deploy-runtime: ## Deploy sandbox router + templates + warmpool
+	helm upgrade --install sandbox-runtime deploy/sandbox-runtime \
+		-n treadstone -f deploy/sandbox-runtime/values-$(ENV).yaml \
+		--create-namespace
+
+deploy-app: ## Deploy Treadstone application
+	helm upgrade --install treadstone deploy/treadstone \
+		-n treadstone -f deploy/treadstone/values-$(ENV).yaml \
+		--create-namespace
+
+deploy-all: deploy-infra deploy-runtime deploy-app ## Deploy everything (infra → runtime → app)
+
+undeploy-app: ## Undeploy Treadstone application
+	helm uninstall treadstone -n treadstone 2>/dev/null || true
+
+undeploy-runtime: ## Undeploy sandbox runtime
+	helm uninstall sandbox-runtime -n treadstone 2>/dev/null || true
+
+undeploy-all: undeploy-app undeploy-runtime ## Undeploy app + runtime (keeps infra)
+	@echo "Note: agent-sandbox controller left in place. Run 'helm uninstall agent-sandbox' to remove."
+
+# ── Kind (local K8s) ─────────────────────────────────────────────────────────
+
+kind-create: ## Create local Kind cluster for development
+	@bash scripts/kind-setup.sh
+
+kind-delete: ## Delete local Kind cluster
+	kind delete cluster --name treadstone
 
 # ── Git & GitHub (AI agent) ──────────────────────────────────────────────────
 
