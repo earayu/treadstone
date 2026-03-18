@@ -92,15 +92,24 @@ make ship MSG="feat: add user registration endpoint"
 
 `make ship` = `git add -A` + `git commit` + `git push`。
 
-**Commit message 格式：** `<type>: <描述>`
-- `feat:` 新功能
-- `fix:` 修复
-- `test:` 测试
-- `refactor:` 重构
-- `chore:` 配置、依赖
-- `docs:` 文档
+**Commit message 格式：** `<type>: <description>`
+- `feat:` new feature
+- `fix:` bug fix
+- `test:` tests
+- `refactor:` refactoring
+- `chore:` config, dependencies
+- `docs:` documentation
 
 小步提交，每个 commit 一个逻辑单元。
+
+> **⚠️ 语言规范：所有 GitHub 上公开可见的内容必须使用英文。** 包括但不限于：
+> - Commit messages
+> - PR title 和 body
+> - Issue title 和 body
+> - Code review comments
+> - Release notes
+>
+> 代码注释和本地文档（docs/zh-CN/）使用中文。AGENTS.md 中已有此规范，此处再次强调。
 
 ---
 
@@ -109,8 +118,8 @@ make ship MSG="feat: add user registration endpoint"
 ```bash
 gh pr create --title "feat: add user authentication" --body "$(cat <<'EOF'
 ## Summary
-- 实现了用户注册和登录
-- 支持 email/password + Cookie session
+- Implement user registration and login
+- Support email/password + Cookie session
 
 ## Test Plan
 - [x] make test
@@ -119,7 +128,20 @@ EOF
 )"
 ```
 
-PR body 用 HEREDOC 传，避免引号转义问题。
+PR body 用 HEREDOC 传，避免引号转义问题。**PR title 和 body 必须使用英文。**
+
+---
+
+## Step 5.5：维护 GitHub Project Board
+
+每个 PR 创建后，需要关联到项目看板：
+
+```bash
+# 将 PR 添加到 Project Board（项目编号 5）
+gh project item-add 5 --owner earayu --url <PR_URL>
+```
+
+同理，创建的 Issue 也要添加到看板。确保看板及时反映当前进度。
 
 ---
 
