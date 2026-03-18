@@ -175,6 +175,20 @@ git checkout main && git pull
 
 ---
 
+## 集成测试（如涉及数据库交互）
+
+集成测试跑在真实的 Neon test 分支上，详细说明见 `tests/integration/README.md`。
+
+快速开始：
+
+```bash
+cp tests/integration/.env.test.example tests/integration/.env.test
+# 编辑 .env.test，填入 Neon test 分支连接串
+make test-all
+```
+
+---
+
 ## 数据库变更（如有）
 
 如果这个功能需要修改数据库 schema，在 Step 2 开发循环中：
