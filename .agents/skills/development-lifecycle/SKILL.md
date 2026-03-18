@@ -191,15 +191,16 @@ make test-all
 
 ## 数据库变更（如有）
 
-如果这个功能需要修改数据库 schema，在 Step 2 开发循环中：
+涉及数据库 schema 变更时，参考 `.agents/skills/database-migration/` skill，它包含完整的模型设计规范、迁移生成、Neon 分支测试、回滚流程和常见陷阱。
+
+快速命令：
 
 ```bash
 # 修改 treadstone/models/ 后
 make migration MSG="add users and oauth_accounts tables"
-make migrate
+make migrate          # 先在 test 分支验证，再应用到 production
+make downgrade        # 出问题时回滚
 ```
-
-出问题：`make downgrade` 回滚，修改模型后重新生成迁移。
 
 ---
 
