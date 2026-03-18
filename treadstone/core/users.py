@@ -36,6 +36,9 @@ class UserManager(BaseUserManager[User, str]):
     reset_password_token_secret = settings.jwt_secret
     verification_token_secret = settings.jwt_secret
 
+    def parse_id(self, value: str) -> str:
+        return value
+
     async def on_after_register(self, user: User, request: Optional[Request] = None) -> None:
         """First registered user automatically becomes ADMIN."""
         async for session in get_session():

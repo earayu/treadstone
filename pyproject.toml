@@ -16,6 +16,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "aiosqlite>=0.22.1",
     "auth0-python>=4.2.0,<5.0.0",
     "fastapi-users[oauth,sqlalchemy]>=14.0.1",
     "httpx>=0.28.1",
