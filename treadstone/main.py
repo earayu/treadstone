@@ -2,6 +2,7 @@ from fastapi import Depends, FastAPI
 from sqlalchemy import text
 
 from treadstone.api.auth import router as auth_router
+from treadstone.api.config import router as config_router
 from treadstone.api.deps import get_current_user
 from treadstone.config import settings
 from treadstone.core.database import engine
@@ -10,8 +11,9 @@ from treadstone.models.user import User
 
 app = FastAPI(title=settings.app_name)
 
-# ── Auth routes ──
+# ── Routes ──
 app.include_router(auth_router)
+app.include_router(config_router)
 
 if google_oauth_client:
     app.include_router(
