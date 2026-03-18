@@ -16,7 +16,7 @@ router:
 sandboxTemplate:
   name: treadstone-sandbox
   image: ghcr.io/agent-infra/sandbox:latest
-  containerPort: 8888
+  containerPort: 8080
   resources:
     requests:
       cpu: 500m
