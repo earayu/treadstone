@@ -85,6 +85,7 @@ class SandboxSubdomainMiddleware:
     async def _handle_http(self, scope: Scope, receive: Receive, send: Send, sandbox_id: str) -> None:
         request = Request(scope, receive)
         path = scope.get("path", "/")
+        query_string = scope.get("query_string", b"").decode("latin-1")
         headers = dict(request.headers)
 
         body_parts: list[bytes] = []
@@ -95,7 +96,8 @@ class SandboxSubdomainMiddleware:
                 break
         body = b"".join(body_parts)
 
-        target_url = build_sandbox_url(sandbox_id, path)
+        full_path = f"{path}?{query_string}" if query_string else path
+        target_url = build_sandbox_url(sandbox_id, full_path)
         logger.info("Subdomain proxy %s %s → %s", request.method, sandbox_id, target_url)
 
         client = await get_http_client()
@@ -120,6 +122,9 @@ class SandboxSubdomainMiddleware:
     async def _handle_websocket(self, scope: Scope, receive: Receive, send: Send, sandbox_id: str) -> None:
         websocket = WebSocket(scope, receive, send)
         path = scope.get("path", "/")
+        query_string = scope.get("query_string", b"").decode("latin-1")
+        if query_string:
+            path = f"{path}?{query_string}"
         logger.info("Subdomain WS proxy %s → %s", sandbox_id, path)
 
         await websocket.accept()
