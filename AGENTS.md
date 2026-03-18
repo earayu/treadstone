@@ -54,11 +54,14 @@ make migrate         # 运行数据库迁移
 make migration MSG=x # 生成新迁移（MSG 必填）
 make downgrade       # 回滚上一次迁移
 
+# OpenAPI / SDK
+make gen-openapi     # 导出 openapi.json（不需要启动服务器）
+
 # Build
 make build           # 构建 Docker 镜像
 
 # Git & GitHub
-make ship MSG=x      # add + commit + push（MSG 必填）
+make ship MSG=x      # add + commit + push（MSG 必填，仅限功能分支）
 ```
 
 GitHub 操作直接使用 `gh` CLI。
@@ -96,8 +99,17 @@ GitHub 操作直接使用 `gh` CLI。
   - `tests/integration/` — 需要真实 DB，标记 @pytest.mark.integration，默认不运行
 - 共享 fixture 放在 `tests/conftest.py`（如 httpx client）
 
+## OpenAPI / SDK Generation
+
+- Code-first: 从 FastAPI 代码自动生成 OpenAPI spec，不维护静态 YAML
+- `make gen-openapi` 导出 `openapi.json`（构建产物，已加入 .gitignore）
+- 所有 API router 必须设置 `tags=["xxx"]`，SDK 方法名依赖 tag + 函数名
+- 未来生成前端 TypeScript SDK：`npx @hey-api/openapi-ts -i openapi.json -o src/client`
+- 未来生成 Python SDK：`openapi-python-client generate --path openapi.json`
+
 ## Git Workflow
 
+- **永远不要直接 push 到 main 分支**，所有合并必须走 Pull Request
 - Conventional commits: feat:, fix:, chore:, docs:, test:, refactor:
 - 频繁提交，每个 commit 是一个小的逻辑单元
 - 绝不提交 .env、secrets 或凭证

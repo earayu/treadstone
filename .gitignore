@@ -19,6 +19,8 @@ htmlcov/
 *.db
 *.sqlite3
 
+openapi.json
+
 .DS_Store
 Thumbs.db
 
