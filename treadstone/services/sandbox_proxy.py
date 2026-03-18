@@ -167,8 +167,13 @@ async def proxy_websocket(
         async def client_to_upstream() -> None:
             try:
                 while True:
-                    data = await client_ws.receive_bytes()
-                    await upstream.send(data)
+                    msg = await client_ws.receive()
+                    if "bytes" in msg and msg["bytes"]:
+                        await upstream.send(msg["bytes"])
+                    elif "text" in msg and msg["text"]:
+                        await upstream.send(msg["text"])
+                    else:
+                        break
             except WebSocketDisconnect:
                 pass
 
