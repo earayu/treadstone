@@ -9,6 +9,7 @@ from treadstone.api.deps import get_current_user
 from treadstone.api.sandbox import router as sandbox_router
 from treadstone.config import settings
 from treadstone.core.users import auth_backend, fastapi_users, github_oauth_client, google_oauth_client
+from treadstone.middleware.sandbox_subdomain import SandboxSubdomainMiddleware
 from treadstone.models.user import User
 from treadstone.services.sandbox_proxy import close_http_client
 
@@ -26,6 +27,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title=settings.app_name, generate_unique_id_function=custom_generate_unique_id, lifespan=lifespan)
+
+# ── Middleware (outermost = first to run) ──
+app.add_middleware(SandboxSubdomainMiddleware)
 
 # ── Routes ──
 app.include_router(auth_router)
