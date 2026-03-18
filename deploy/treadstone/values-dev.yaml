@@ -8,6 +8,7 @@ image:
 env:
   TREADSTONE_DEBUG: "true"
   TREADSTONE_AUTH_TYPE: "cookie"
+  TREADSTONE_SANDBOX_DOMAIN: "sandbox.localhost"
 
 resources:
   limits:

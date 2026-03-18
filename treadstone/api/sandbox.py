@@ -2,15 +2,14 @@
 Sandbox proxy API router.
 
 Provides transparent HTTP + WebSocket reverse proxying to sandbox pods.
-Two routing styles, path-based takes priority:
+sandbox_id is always taken from the URL path; namespace and port can be
+overridden per-request via X-Sandbox-Namespace / X-Sandbox-Port headers.
 
-  Path-based (browser-friendly):
-    /api/sandbox/{sandbox_id}/{path}
-    /api/sandbox/{sandbox_id}/ws/{path}
+  HTTP:      /api/sandbox/{sandbox_id}/{path}
+  WebSocket: /api/sandbox/{sandbox_id}/ws/{path}
 
-  Header-based (SDK-compatible):
-    /api/sandbox/{path}  + X-Sandbox-ID header
-    /api/sandbox/ws/{path}  + X-Sandbox-ID header
+For browser Web UI access, use the subdomain-based route instead
+(handled by SandboxSubdomainMiddleware, not this router).
 """
 
 from __future__ import annotations
