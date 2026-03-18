@@ -61,7 +61,7 @@ make build           # 构建 Docker 镜像
 make ship MSG=x      # add + commit + push（MSG 必填）
 ```
 
-GitHub 操作直接使用 `gh` CLI（已认证）。
+GitHub 操作直接使用 `gh` CLI。
 
 **Skills：**
 - `.agents/skills/dev-setup/` — 首次设置本地环境（只需一次）
