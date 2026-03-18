@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     logto_domain: str = ""
     logto_app_id: str = ""
 
+    # Sandbox proxy defaults (overridable per-request via X-Sandbox-* headers)
+    sandbox_namespace: str = "default"
+    sandbox_port: int = 8080
+    sandbox_proxy_timeout: float = 180.0
+
     model_config = {"env_prefix": "TREADSTONE_", "env_file": ".env", "env_file_encoding": "utf-8"}
 
 

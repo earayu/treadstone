@@ -16,6 +16,7 @@ helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
 {{- define "treadstone.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "treadstone.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
+app: sandbox-router
 {{- end }}
 
 {{- define "treadstone.serviceAccountName" -}}

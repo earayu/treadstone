@@ -8,10 +8,12 @@ dependencies = [
     "alembic>=1.18.4",
     "asyncpg>=0.31.0",
     "fastapi>=0.135.1",
+    "httpx>=0.28.1",
     "psycopg2-binary>=2.9.11",
     "pydantic-settings>=2.13.1",
     "sqlalchemy[asyncio]>=2.0.48",
     "uvicorn[standard]>=0.42.0",
+    "websockets>=16.0",
 ]
 
 [dependency-groups]
