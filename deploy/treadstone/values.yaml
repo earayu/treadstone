@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: treadstone
+  repository: ghcr.io/earayu/treadstone
   tag: latest
   pullPolicy: IfNotPresent
 

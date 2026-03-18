@@ -2,7 +2,7 @@ router:
   enabled: false
   replicaCount: 1
   image:
-    repository: sandbox-router
+    repository: ghcr.io/earayu/sandbox-router
     tag: latest
     pullPolicy: IfNotPresent
   service:
