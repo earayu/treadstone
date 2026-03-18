@@ -16,4 +16,5 @@ helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
 {{- define "sandbox-runtime.routerLabels" -}}
 app.kubernetes.io/name: sandbox-router
 app.kubernetes.io/instance: {{ .Release.Name }}
+app: sandbox-router
 {{- end }}

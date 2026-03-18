@@ -26,6 +26,17 @@ class Settings(BaseSettings):
     logto_domain: str = ""
     logto_app_id: str = ""
 
+    # Sandbox proxy defaults (overridable per-request via X-Sandbox-* headers)
+    sandbox_namespace: str = "treadstone"
+    sandbox_port: int = 8080
+    sandbox_proxy_timeout: float = 180.0
+
+    # Subdomain-based sandbox routing (for browser Web UI access)
+    # Dev: "sandbox.localhost"  →  {sandbox_id}.sandbox.localhost:8000
+    # Prod: "sandbox.example.com"  →  {sandbox_id}.sandbox.example.com
+    # Empty string disables subdomain routing.
+    sandbox_domain: str = ""
+
     model_config = {"env_prefix": "TREADSTONE_", "env_file": ".env", "env_file_encoding": "utf-8"}
 
 
