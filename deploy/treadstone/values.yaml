@@ -1,0 +1,34 @@
+replicaCount: 1
+
+image:
+  repository: treadstone
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8000
+
+env:
+  TREADSTONE_DEBUG: "false"
+  TREADSTONE_AUTH_TYPE: "cookie"
+
+envSecretRef: ""
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+serviceAccount:
+  create: true
+  name: ""
+
+hpa:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80

@@ -1,0 +1,15 @@
+{{/*
+Load upstream manifests verbatim.
+CRDs and cluster-scoped resources are applied as-is from the vendored files.
+The controller Deployment's namespace, replicas, and resources are patched
+via the Kustomize-style post-renderer or manual overrides below.
+
+For simplicity, we apply the raw manifests directly. Namespace and replica
+overrides should be done via `helm upgrade --post-renderer` or by editing
+the upstream files when absolutely necessary.
+*/}}
+
+---
+{{ .Files.Get "upstream/manifest.yaml" }}
+---
+{{ .Files.Get "upstream/extensions.yaml" }}

@@ -1,0 +1,13 @@
+namespace: agent-sandbox-system
+
+controller:
+  image:
+    registry: ""
+  replicas: 2
+  resources:
+    limits:
+      cpu: "1"
+      memory: 512Mi
+    requests:
+      cpu: 200m
+      memory: 256Mi
