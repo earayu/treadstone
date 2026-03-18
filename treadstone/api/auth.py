@@ -143,8 +143,11 @@ async def change_password(
     valid, _ = ph.verify_and_update(body.old_password, current_user.hashed_password)
     if not valid:
         raise HTTPException(status_code=400, detail="Wrong current password")
-    current_user.hashed_password = ph.hash(body.new_password)
-    session.add(current_user)
+    user = await session.get(User, current_user.id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.hashed_password = ph.hash(body.new_password)
+    session.add(user)
     await session.commit()
     return {"detail": "Password changed"}
 
