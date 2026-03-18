@@ -16,25 +16,31 @@ spec:
       labels:
         {{- include "sandbox-runtime.routerLabels" . | nindent 8 }}
     spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
       containers:
         - name: sandbox-router
           image: "{{ .Values.router.image.repository }}:{{ .Values.router.image.tag }}"
           imagePullPolicy: {{ .Values.router.image.pullPolicy }}
+          env:
+            - name: PROXY_TIMEOUT_SECONDS
+              value: "{{ .Values.router.proxyTimeoutSeconds | default 180 }}"
           ports:
             - name: http
               containerPort: 8080
               protocol: TCP
-          livenessProbe:
-            httpGet:
-              path: /
-              port: http
-            initialDelaySeconds: 5
-            periodSeconds: 15
           readinessProbe:
             httpGet:
-              path: /
+              path: /healthz
               port: http
-            initialDelaySeconds: 3
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
             periodSeconds: 10
           resources:
             {{- toYaml .Values.router.resources | nindent 12 }}
