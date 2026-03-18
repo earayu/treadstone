@@ -15,7 +15,7 @@ router:
 
 sandboxTemplate:
   name: treadstone-sandbox
-  image: ghcr.io/agent-infra/sandbox:latest
+  image: enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
   containerPort: 8888
   resources:
     requests:

@@ -14,16 +14,14 @@ spec:
           ports:
             - containerPort: {{ .Values.sandboxTemplate.containerPort }}
           readinessProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: {{ .Values.sandboxTemplate.containerPort }}
-            initialDelaySeconds: 0
-            periodSeconds: 1
+            initialDelaySeconds: 5
+            periodSeconds: 5
           livenessProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: {{ .Values.sandboxTemplate.containerPort }}
-            initialDelaySeconds: 2
+            initialDelaySeconds: 15
             periodSeconds: 10
           resources:
             {{- toYaml .Values.sandboxTemplate.resources | nindent 12 }}
