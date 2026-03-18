@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
@@ -25,6 +26,8 @@ async def lifespan(app: FastAPI):
     yield
     await close_http_client()
 
+
+logging.basicConfig(level=logging.DEBUG if settings.debug else logging.WARNING)
 
 app = FastAPI(title=settings.app_name, generate_unique_id_function=custom_generate_unique_id, lifespan=lifespan)
 
