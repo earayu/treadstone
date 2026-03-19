@@ -140,3 +140,32 @@ Treadstone is a single FastAPI backend service. It requires:
 ### Lint / format
 
 - `make lint` (ruff check + format check), `make format` (auto-fix). See Makefile for details.
+
+### K8s cluster in Cloud Agent VM
+
+Kind does **not** work in Cloud Agent VMs (Firecracker) — systemd and kernel features are missing. Use **k3s** directly instead:
+
+```bash
+# Install k3s binary (skip systemd service registration)
+curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_START=true sh -
+
+# Start k3s server-only (no agent — avoids cgroup/overlayfs issues)
+sudo k3s server \
+  --disable traefik --disable metrics-server \
+  --write-kubeconfig-mode 644 --data-dir /tmp/k3s \
+  --snapshotter fuse-overlayfs --flannel-backend host-gw \
+  --kubelet-arg=cgroups-per-qos=false \
+  --kubelet-arg=enforce-node-allocatable="" \
+  --disable-agent &>/tmp/k3s-server.log &
+
+# Copy kubeconfig
+sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+sudo chown $(id -u):$(id -g) ~/.kube/config
+```
+
+Key caveats:
+- **Server-only mode** (`--disable-agent`): K8s API works for CRDs/resources, but no Pods can be scheduled (no nodes). The agent-sandbox controller won't run as a Pod.
+- **fuse-overlayfs** is required (kernel doesn't support overlayfs).
+- **host-gw** flannel backend is needed (VXLAN not supported by kernel).
+- To run Treadstone against the real K8s API, set `TREADSTONE_DEBUG=false` in `.env` and unset the `TREADSTONE_DEBUG` env var if it was exported in the shell.
+- Sandbox creation via API works (creates SandboxClaim in K8s), but sandboxes stay in "creating" state without a running controller.
