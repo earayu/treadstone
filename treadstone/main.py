@@ -8,6 +8,7 @@ from treadstone.api.auth import router as auth_router
 from treadstone.api.config import router as config_router
 from treadstone.api.deps import get_current_user
 from treadstone.api.sandbox import router as sandbox_router
+from treadstone.api.sandboxes import router as sandboxes_router
 from treadstone.config import settings
 from treadstone.core.users import auth_backend, fastapi_users, github_oauth_client, google_oauth_client
 from treadstone.middleware.sandbox_subdomain import SandboxSubdomainMiddleware
@@ -38,6 +39,7 @@ app.add_middleware(SandboxSubdomainMiddleware)
 app.include_router(auth_router)
 app.include_router(config_router)
 app.include_router(sandbox_router)
+app.include_router(sandboxes_router)
 
 if google_oauth_client:
     app.include_router(
