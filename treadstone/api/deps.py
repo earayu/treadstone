@@ -58,7 +58,7 @@ async def authenticate_api_key(
     if not api_key or api_key.is_expired():
         return None
     user_result = await session.execute(select(User).where(User.id == api_key.user_id))
-    return user_result.scalar_one_or_none()
+    return user_result.unique().scalar_one_or_none()
 
 
 async def authenticate_oidc_jwt(

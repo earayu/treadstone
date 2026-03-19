@@ -89,21 +89,21 @@ class Kr8sClient:
 
         url = f"/apis/{CLAIM_API_GROUP}/{CLAIM_API_VERSION}/namespaces/{namespace}/sandboxclaims"
         logger.info("K8s POST %s (name=%s)", url, name)
-        async with api.call_api("POST", url=url, data=manifest) as resp:
+        async with api.call_api("POST", base=url, version="", json=manifest) as resp:
             return resp.json()
 
     async def delete_sandbox_claim(self, name: str, namespace: str) -> bool:
         api = await self._get_api()
         url = f"/apis/{CLAIM_API_GROUP}/{CLAIM_API_VERSION}/namespaces/{namespace}/sandboxclaims/{name}"
         logger.info("K8s DELETE %s", url)
-        async with api.call_api("DELETE", url=url) as resp:
+        async with api.call_api("DELETE", base=url, version="") as resp:
             return resp.status_code < 400
 
     async def get_sandbox_claim(self, name: str, namespace: str) -> dict[str, Any] | None:
         api = await self._get_api()
         url = f"/apis/{CLAIM_API_GROUP}/{CLAIM_API_VERSION}/namespaces/{namespace}/sandboxclaims/{name}"
         try:
-            async with api.call_api("GET", url=url) as resp:
+            async with api.call_api("GET", base=url, version="") as resp:
                 return resp.json()
         except Exception:
             return None
@@ -114,7 +114,7 @@ class Kr8sClient:
         api = await self._get_api()
         url = f"/apis/{SANDBOX_API_GROUP}/{SANDBOX_API_VERSION}/namespaces/{namespace}/sandboxes/{name}"
         try:
-            async with api.call_api("GET", url=url) as resp:
+            async with api.call_api("GET", base=url, version="") as resp:
                 return resp.json()
         except Exception:
             return None
@@ -122,7 +122,7 @@ class Kr8sClient:
     async def list_sandboxes(self, namespace: str) -> list[dict[str, Any]]:
         api = await self._get_api()
         url = f"/apis/{SANDBOX_API_GROUP}/{SANDBOX_API_VERSION}/namespaces/{namespace}/sandboxes"
-        async with api.call_api("GET", url=url) as resp:
+        async with api.call_api("GET", base=url, version="") as resp:
             data = resp.json()
             return data.get("items", [])
 
@@ -133,8 +133,9 @@ class Kr8sClient:
         scale_body = {"spec": {"replicas": replicas}}
         async with api.call_api(
             "PATCH",
-            url=url,
-            data=scale_body,
+            base=url,
+            version="",
+            json=scale_body,
             headers={"Content-Type": "application/merge-patch+json"},
         ) as resp:
             return resp.status_code < 400
@@ -144,7 +145,7 @@ class Kr8sClient:
     async def list_sandbox_templates(self, namespace: str) -> list[dict[str, Any]]:
         api = await self._get_api()
         url = f"/apis/{TEMPLATE_API_GROUP}/{TEMPLATE_API_VERSION}/namespaces/{namespace}/sandboxtemplates"
-        async with api.call_api("GET", url=url) as resp:
+        async with api.call_api("GET", base=url, version="") as resp:
             data = resp.json()
             items = data.get("items", [])
             return [
