@@ -534,7 +534,197 @@ Proxy 透传时，底层 Runtime 返回的错误码原样返回（如 AIO 的 40
 
 ---
 
-## 10. 架构总览
+## 10. 数据模型
+
+### 10.1 Source of Truth 策略
+
+采用 **DB 存意图+快照，K8s 存运行状态** 的混合模式（参考 [Daytona 架构](https://www.daytona.io/docs/en/architecture/)）：
+
+| 数据类别 | 存储位置 | 说明 |
+|----------|----------|------|
+| 业务身份 | **DB 独有** | id, name, owner_id, labels 等。K8s 中没有这些概念 |
+| 创建时快照 | **DB 独有** | template, runtime_type, image。模板/镜像更新不影响已有 Sandbox |
+| 生命周期策略 | **DB 独有** | auto_stop_interval, auto_delete_interval。Treadstone 自己管理 |
+| 运行时状态 | **K8s 为主，DB 缓存** | status, endpoints。由 K8s Watch 事件驱动写入 DB |
+| K8s 关联 | **DB 存映射** | k8s_sandbox_name, k8s_namespace。建立 DB 与 K8s CR 的关联 |
+
+**核心原则：所有读查询只走 DB，不查 K8s API Server。** K8s 状态通过 Watch 事件实时同步到 DB。
+
+### 10.2 Sandbox 表
+
+```python
+class SandboxStatus(StrEnum):
+    CREATING = "creating"
+    READY = "ready"
+    STOPPED = "stopped"
+    ERROR = "error"
+    DELETING = "deleting"
+    DELETED = "deleted"
+
+class Sandbox(Base):
+    __tablename__ = "sandbox"
+
+    # 业务身份（DB 独有）
+    id: str                    # sb- + 16hex，PK
+    name: str                  # unique, 用户指定或自动生成
+    owner_id: str              # FK → user.id
+
+    # 创建时快照（DB 独有，模板变了不影响已有 Sandbox）
+    template: str              # 创建时的模板名
+    runtime_type: str          # 从模板继承，如 "aio"
+    image: str                 # 创建时的镜像名+tag
+
+    # 业务元数据（DB 独有）
+    labels: JSON               # key-value 标签，默认 {}
+    auto_stop_interval: int    # 分钟，0=永不，默认 15
+    auto_delete_interval: int  # 分钟，-1=不自动删除
+
+    # K8s 关联
+    k8s_sandbox_name: str | None   # K8s Sandbox CR 名称
+    k8s_namespace: str             # Pod 所在 namespace
+
+    # 运行时状态（K8s 为主，DB 缓存，Watch 驱动更新）
+    status: str                # SandboxStatus
+    status_message: str | None # 错误信息等补充说明
+    endpoints: JSON            # {"http": "...", "vnc": "..."} 多端口预留
+
+    # 乐观锁
+    version: int               # 每次更新 +1，防止并发写冲突
+
+    # 时间戳（DB 独有，计费和审计用）
+    gmt_created: datetime
+    gmt_started: datetime | None
+    gmt_stopped: datetime | None
+    gmt_deleted: datetime | None
+```
+
+**不需要新增的表：**
+
+| 概念 | 理由 |
+|------|------|
+| SandboxTemplate | MVP 不存 DB，从 K8s SandboxTemplate CR 读取 |
+| SandboxToken | JWT 无状态，不需要表（MVP 不做 token revocation） |
+
+### 10.3 状态机定义
+
+**合法状态转换表：**
+
+```
+creating  → ready       # K8s Watch: Pod Ready
+creating  → error       # K8s Watch: Pod Failed
+ready     → stopped     # 用户 stop / auto_stop 触发
+ready     → error       # K8s Watch: Pod 异常
+ready     → deleting    # 用户 delete
+stopped   → ready       # 用户 start
+stopped   → deleting    # 用户 delete
+stopped   → deleted     # auto_delete 触发
+error     → stopped     # 用户 stop（尝试恢复）
+error     → deleting    # 用户 delete
+deleting  → deleted     # K8s Watch: CR 已删除
+```
+
+**所有未列出的转换都是非法的**（如 `deleted → ready`），代码层面必须拦截。
+
+**并发保护：** 所有状态更新使用乐观锁：
+
+```sql
+UPDATE sandbox
+SET status = :new_status, version = version + 1, ...
+WHERE id = :id AND version = :expected_version
+```
+
+`rows_affected = 0` 表示版本冲突，放弃本次更新（下一个 Watch 事件或 Reconciliation 会修正）。
+
+---
+
+## 11. K8s 状态同步
+
+### 11.1 架构：API Server 内嵌 Watch
+
+```
+Treadstone API Server (FastAPI + Uvicorn)
+  │
+  ├── HTTP 请求处理（用户 API）
+  │     └── 所有读查询只走 DB
+  │
+  └── 后台任务（lifespan 启动）
+        ├── K8s Watch: Sandbox CR 变化事件 → 更新 DB（主驱动）
+        └── 定期 Reconciliation: 每 5 分钟全量比对（兜底）
+```
+
+使用 `kr8s`（轻量 async Python K8s 客户端）或 `kubernetes-asyncio`，在 FastAPI lifespan 中启动后台 Watch 协程。
+
+### 11.2 Watch 事件处理
+
+```
+K8s Watch 事件到达
+    │
+    ├── ADDED: 新 Sandbox CR 出现
+    │   └── DB 中有对应记录？→ 校验状态转换合法性 → 更新 status（乐观锁）
+    │       DB 中没有？→ 忽略（手动创建的 CR，不归 Treadstone 管）
+    │
+    ├── MODIFIED: Sandbox CR 状态变化
+    │   └── 从 CR status 中提取 phase/conditions
+    │       映射到 Treadstone status (creating→ready→error 等)
+    │       校验状态转换合法性 → 更新 DB（乐观锁）
+    │
+    └── DELETED: Sandbox CR 被删除
+        └── DB 中 status 为 deleting？→ 标记 deleted, gmt_deleted=now()
+            DB 中 status 不是 deleting？→ 标记 error（意外删除）
+```
+
+### 11.3 用户操作完整流程（以删除为例）
+
+```
+1. 用户: DELETE /v1/sandboxes/{id}
+2. API:  校验权限和状态 → DB 标记 status=deleting, version+1（乐观锁）
+3. API:  调用 K8s API 删除 Sandbox CR
+4. API:  立即返回 204（不等 K8s 删完）
+5. K8s:  agent-sandbox controller 清理 Pod 等资源
+6. K8s:  Sandbox CR 被删除
+7. Watch: 收到 DELETED 事件
+8. Watch: 校验 DB status=deleting（合法转换）→ 标记 deleted, gmt_deleted=now()
+```
+
+### 11.4 定期 Reconciliation（兜底）
+
+Watch 可能因为网络断开、进程重启等原因丢失事件。每 5 分钟跑一次全量比对：
+
+1. **一次 List** 拉取 namespace 下所有 Sandbox CR → 在内存中建 `{name: cr}` Map
+2. 查询 DB 中所有 `status NOT IN (deleted)` 的记录
+3. 逐条比对：
+   - DB 有、K8s 有 → 比对 status，不一致则修正 DB（乐观锁）
+   - DB 有、K8s 无 → 如果 DB status 是 `deleting`，标记 `deleted`；否则标记 `error`
+   - K8s 有、DB 无 → 忽略（不归 Treadstone 管的 CR）
+
+**注意：** 使用一次 List 而非 N 个 GET，避免 API Server 压力。
+
+### 11.5 Watch 断线重连
+
+K8s Watch 必须携带 `resourceVersion` 参数续接，断线期间的事件不会丢失。选型时需验证 `kr8s` 或 `kubernetes-asyncio` 是否自动处理 `resourceVersion` 续接和断线重连。如果不支持，需要自行实现 List-Watch 循环：
+
+```
+启动 → List（全量同步，记录 resourceVersion）→ Watch（从该版本续接）
+                                                    ↓ 断线
+                                               重新 List → Watch
+```
+
+### 11.6 已知约束
+
+> **⚠️ 当前设计假设 Treadstone API Server 运行单副本。**
+>
+> 如果水平扩展到多副本，每个副本都会跑 Watch，同一个 K8s 事件会被多次处理，
+> 导致并发写 DB。乐观锁可以保证数据正确性（冲突时放弃更新），但会产生无效的
+> DB 操作。
+>
+> 水平扩展前必须实现 **Leader Election**（K8s Lease 或 Redis 分布式锁），
+> 确保只有一个副本运行 Watch 和 Reconciliation。
+>
+> 参见 Issue: #TBD
+
+---
+
+## 12. 架构总览
 
 ```
 用户 / Agent / CLI / Web UI
@@ -543,25 +733,30 @@ Proxy 透传时，底层 Runtime 返回的错误码原样返回（如 AIO 的 40
          │  或 Sandbox Token (JWT)
          │  或 Cookie
          ▼
-┌──────────────────────────────────────────────────┐
-│  Treadstone API (FastAPI)                         │
-│                                                   │
-│  /v1/auth/*          认证、API Key 管理           │
-│  /v1/sandbox-templates  模板查询（K8s CR 只读）    │
-│  /v1/sandboxes/*     生命周期 CRUD + start/stop   │
-│  /v1/sandboxes/{id}/proxy/*  数据面透传           │
-│                                                   │
-│  ┌─────────────────────────────────────────────┐  │
-│  │  Proxy 层                                    │  │
-│  │  认证 → 权限校验 → 状态校验 → 计费 → 转发    │  │
-│  └─────────────────────────────────────────────┘  │
-└─────────────────┬────────────────────────────────┘
-                  │
-    ┌─────────────┼─────────────┐
-    │             │             │
-    ▼             ▼             ▼
-┌────────┐ ┌────────────┐ ┌──────────┐
-│ Neon   │ │ K8s API    │ │ Sandbox  │
+┌──────────────────────────────────────────────────────────────┐
+│  Treadstone API Server (FastAPI)                              │
+│                                                               │
+│  ┌── HTTP 请求处理 ────────────────────────────────────────┐ │
+│  │  /v1/auth/*          认证、API Key 管理                  │ │
+│  │  /v1/sandbox-templates  模板查询（K8s CR 只读）           │ │
+│  │  /v1/sandboxes/*     生命周期 CRUD + start/stop          │ │
+│  │  /v1/sandboxes/{id}/proxy/*  数据面透传                  │ │
+│  │                                                          │ │
+│  │  所有读查询 → DB only                                    │ │
+│  │  写操作 → DB + K8s API                                   │ │
+│  └──────────────────────────────────────────────────────────┘ │
+│                                                               │
+│  ┌── 后台任务（lifespan）──────────────────────────────────┐ │
+│  │  K8s Watch: Sandbox CR 事件 → 更新 DB（乐观锁）         │ │
+│  │  Reconciliation: 每 5 分钟 List + 全量比对               │ │
+│  └──────────────────────────────────────────────────────────┘ │
+└─────────────────┬───────────────────┬────────────────────────┘
+                  │                   │
+    ┌─────────────┼───────────────────┼─────────┐
+    │             │                   │         │
+    ▼             ▼                   ▼         ▼
+┌────────┐ ┌────────────┐ ┌──────────┐  Watch/List
+│ Neon   │ │ K8s API    │ │ Sandbox  │  (事件驱动)
 │ (PG)   │ │ (CRD)     │ │ Pods     │
 │        │ │            │ │          │
 │ User   │ │ Sandbox CR │ │ AIO:8080 │
@@ -572,19 +767,24 @@ Proxy 透传时，底层 Runtime 返回的错误码原样返回（如 AIO 的 40
 
 ---
 
-## 11. 与其他 Phase 的关系
+## 13. 与其他 Phase 的关系
 
 | Phase | 与本设计的关系 |
 |-------|---------------|
 | **Phase 1（已完成）** | Auth 路由从 `/api/auth/` 迁移到 `/v1/auth/`，补充 API Key CRUD 和 JSON login |
 | **Phase 3（计费）** | Proxy 层的"计费记录"从日志升级为真实计费事件 |
 | **Phase 4（Marketplace）** | `sandbox-templates` 从只读升级为 CRUD，加入描述、作者、定价等元数据 |
-| **Phase 5（生产化）** | 可引入 `archived` 状态、分页、限流、Sandbox resize 等 |
+| **Phase 5（生产化）** | 可引入 `archived` 状态、分页、限流、Sandbox resize、**多副本 Leader Election** 等 |
 
 ---
 
-## 12. 参考
+## 14. 参考
 
 - [Daytona Sandboxes 文档](https://www.daytona.io/docs/en/sandboxes/) — Sandbox 生命周期、SDK 设计、auto-stop/auto-archive/auto-delete
+- [Daytona 架构文档](https://www.daytona.io/docs/en/architecture/) — Control Plane / Compute Plane 分层，PostgreSQL 存元数据 + Watch reconciliation
 - [AIO Sandbox (agent-infra/sandbox)](https://github.com/agent-infra/sandbox) — 内部 API（`/v1/shell/*`, `/v1/file/*`, `/v1/browser/*` 等）
 - [kubernetes-sigs/agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) — CRD 编排层
+- [RecordOps: Infrastructure as Data](https://dev.to/selenehyun/when-terraform-stops-scaling-for-multi-tenant-kubernetes-a-database-driven-approach-3oi5) — DB-driven K8s provisioning pattern
+- [StackOverflow: Reconciliation from DB → K8s or DB as caching layer](https://stackoverflow.com/questions/79878328) — 多租户 K8s SaaS 的 Source of Truth 讨论
+- [kr8s](https://docs.kr8s.org/) — 轻量 async Python K8s 客户端
+- [kubernetes-asyncio](https://kubernetes-asyncio.readthedocs.io/) — 官方 K8s Python 客户端 async 分支
