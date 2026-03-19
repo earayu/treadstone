@@ -1,0 +1,178 @@
+"""Sandbox lifecycle service layer.
+
+Handles create/get/list/delete/start/stop with state machine validation.
+Delegates to K8s via SandboxClaim (create/delete) and Sandbox scale (start/stop).
+"""
+
+import logging
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from treadstone.config import settings
+from treadstone.core.errors import InvalidTransitionError, SandboxNotFoundError
+from treadstone.models.sandbox import Sandbox, SandboxStatus, is_valid_transition
+from treadstone.models.user import random_id, utc_now
+from treadstone.services.k8s_client import K8sClientProtocol, get_k8s_client
+
+logger = logging.getLogger(__name__)
+
+
+class SandboxService:
+    def __init__(self, session: AsyncSession, k8s_client: K8sClientProtocol | None = None):
+        self.session = session
+        self.k8s = k8s_client or get_k8s_client()
+
+    async def create(
+        self,
+        owner_id: str,
+        template: str,
+        name: str | None = None,
+        runtime_type: str = "aio",
+        labels: dict | None = None,
+        auto_stop_interval: int = 15,
+        auto_delete_interval: int = -1,
+    ) -> Sandbox:
+        sandbox_id = "sb" + random_id()
+        sandbox_name = name or f"sb-{random_id(8)}"
+
+        sandbox = Sandbox()
+        sandbox.id = sandbox_id
+        sandbox.name = sandbox_name
+        sandbox.owner_id = owner_id
+        sandbox.template = template
+        sandbox.runtime_type = runtime_type
+        sandbox.labels = labels or {}
+        sandbox.auto_stop_interval = auto_stop_interval
+        sandbox.auto_delete_interval = auto_delete_interval
+        sandbox.status = SandboxStatus.CREATING
+        sandbox.version = 1
+        sandbox.endpoints = {}
+        sandbox.gmt_created = utc_now()
+        sandbox.k8s_namespace = settings.sandbox_namespace
+        sandbox.k8s_sandbox_claim_name = sandbox_name
+
+        self.session.add(sandbox)
+        await self.session.commit()
+        await self.session.refresh(sandbox)
+
+        try:
+            logger.info("Creating SandboxClaim %s (template=%s, ns=%s)", sandbox_name, template, sandbox.k8s_namespace)
+            await self.k8s.create_sandbox_claim(
+                name=sandbox_name,
+                template_ref=template,
+                namespace=sandbox.k8s_namespace,
+            )
+            logger.info("SandboxClaim %s created successfully", sandbox_name)
+        except Exception:
+            logger.exception("Failed to create SandboxClaim for sandbox %s", sandbox_id)
+            sandbox.status = SandboxStatus.ERROR
+            sandbox.status_message = "Failed to create SandboxClaim"
+            sandbox.version += 1
+            self.session.add(sandbox)
+            await self.session.commit()
+
+        return sandbox
+
+    async def get(self, sandbox_id: str, owner_id: str) -> Sandbox | None:
+        result = await self.session.execute(
+            select(Sandbox).where(Sandbox.id == sandbox_id, Sandbox.owner_id == owner_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_by_owner(self, owner_id: str, labels: dict | None = None) -> list[Sandbox]:
+        stmt = select(Sandbox).where(
+            Sandbox.owner_id == owner_id,
+            Sandbox.status != SandboxStatus.DELETED,
+        )
+        result = await self.session.execute(stmt)
+        sandboxes = list(result.scalars().all())
+
+        if labels:
+            sandboxes = [s for s in sandboxes if all(s.labels.get(k) == v for k, v in labels.items())]
+
+        return sandboxes
+
+    async def delete(self, sandbox_id: str, owner_id: str) -> None:
+        sandbox = await self.get(sandbox_id, owner_id)
+        if sandbox is None:
+            raise SandboxNotFoundError(sandbox_id)
+
+        if not is_valid_transition(sandbox.status, SandboxStatus.DELETING):
+            raise InvalidTransitionError(sandbox_id, sandbox.status, "deleting")
+
+        sandbox.status = SandboxStatus.DELETING
+        sandbox.version += 1
+        self.session.add(sandbox)
+        await self.session.commit()
+
+        claim_name = sandbox.k8s_sandbox_claim_name or sandbox.name
+        try:
+            logger.info("Deleting SandboxClaim %s (ns=%s)", claim_name, sandbox.k8s_namespace)
+            await self.k8s.delete_sandbox_claim(name=claim_name, namespace=sandbox.k8s_namespace)
+            logger.info("SandboxClaim %s deleted successfully", claim_name)
+        except Exception:
+            logger.exception("Failed to delete SandboxClaim for sandbox %s", sandbox_id)
+            sandbox.status = SandboxStatus.ERROR
+            sandbox.status_message = "Failed to delete SandboxClaim"
+            sandbox.version += 1
+            self.session.add(sandbox)
+            await self.session.commit()
+
+    async def start(self, sandbox_id: str, owner_id: str) -> Sandbox:
+        sandbox = await self.get(sandbox_id, owner_id)
+        if sandbox is None:
+            raise SandboxNotFoundError(sandbox_id)
+
+        if sandbox.status != SandboxStatus.STOPPED:
+            raise InvalidTransitionError(sandbox_id, sandbox.status, "ready")
+
+        sandbox.status = SandboxStatus.CREATING
+        sandbox.gmt_started = utc_now()
+        sandbox.version += 1
+        self.session.add(sandbox)
+        await self.session.commit()
+
+        k8s_name = sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.name
+        try:
+            logger.info("Scaling sandbox %s to replicas=1 (ns=%s)", k8s_name, sandbox.k8s_namespace)
+            await self.k8s.scale_sandbox(name=k8s_name, namespace=sandbox.k8s_namespace, replicas=1)
+            logger.info("Sandbox %s scaled to 1 successfully", k8s_name)
+        except Exception:
+            logger.exception("Failed to scale sandbox %s to 1", sandbox_id)
+            sandbox.status = SandboxStatus.ERROR
+            sandbox.status_message = "Failed to start sandbox"
+            sandbox.version += 1
+            self.session.add(sandbox)
+            await self.session.commit()
+
+        return sandbox
+
+    async def stop(self, sandbox_id: str, owner_id: str) -> Sandbox:
+        sandbox = await self.get(sandbox_id, owner_id)
+        if sandbox is None:
+            raise SandboxNotFoundError(sandbox_id)
+
+        if sandbox.status not in (SandboxStatus.READY, SandboxStatus.ERROR):
+            raise InvalidTransitionError(sandbox_id, sandbox.status, "stopped")
+
+        sandbox.status = SandboxStatus.STOPPED
+        sandbox.gmt_stopped = utc_now()
+        sandbox.version += 1
+        self.session.add(sandbox)
+        await self.session.commit()
+
+        k8s_name = sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.name
+        try:
+            logger.info("Scaling sandbox %s to replicas=0 (ns=%s)", k8s_name, sandbox.k8s_namespace)
+            await self.k8s.scale_sandbox(name=k8s_name, namespace=sandbox.k8s_namespace, replicas=0)
+            logger.info("Sandbox %s scaled to 0 successfully", k8s_name)
+        except Exception:
+            logger.exception("Failed to scale sandbox %s to 0", sandbox_id)
+            sandbox.status = SandboxStatus.ERROR
+            sandbox.status_message = "Failed to stop sandbox"
+            sandbox.version += 1
+            self.session.add(sandbox)
+            await self.session.commit()
+
+        return sandbox

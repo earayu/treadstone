@@ -1,0 +1,54 @@
+{{- if .Values.serviceAccount.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "treadstone.fullname" . }}
+  labels:
+    {{- include "treadstone.labels" . | nindent 4 }}
+rules:
+  # SandboxClaim CRs: Treadstone creates/deletes these to provision sandboxes
+  - apiGroups:
+      - extensions.agents.x-k8s.io
+    resources:
+      - sandboxclaims
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - delete
+  # SandboxTemplate CRs: read-only for templates API
+  - apiGroups:
+      - extensions.agents.x-k8s.io
+    resources:
+      - sandboxtemplates
+    verbs:
+      - get
+      - list
+      - watch
+  # Sandbox CRs: watch for state sync, patch for replicas (start/stop)
+  - apiGroups:
+      - agents.x-k8s.io
+    resources:
+      - sandboxes
+    verbs:
+      - get
+      - list
+      - watch
+      - patch
+  # Sandbox status: read for Watch events
+  - apiGroups:
+      - agents.x-k8s.io
+    resources:
+      - sandboxes/status
+    verbs:
+      - get
+  # Sandbox scale subresource: start (replicas=1) / stop (replicas=0)
+  - apiGroups:
+      - agents.x-k8s.io
+    resources:
+      - sandboxes/scale
+    verbs:
+      - get
+      - patch
+{{- end }}

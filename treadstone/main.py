@@ -1,14 +1,19 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 
 from treadstone.api.auth import router as auth_router
 from treadstone.api.config import router as config_router
 from treadstone.api.deps import get_current_user
-from treadstone.api.sandbox import router as sandbox_router
+from treadstone.api.sandbox_proxy import router as sandbox_proxy_router
+from treadstone.api.sandbox_templates import router as sandbox_templates_router
+from treadstone.api.sandboxes import router as sandboxes_router
 from treadstone.config import settings
+from treadstone.core.errors import TreadstoneError
 from treadstone.core.users import auth_backend, fastapi_users, github_oauth_client, google_oauth_client
 from treadstone.middleware.sandbox_subdomain import SandboxSubdomainMiddleware
 from treadstone.models.user import User
@@ -23,7 +28,13 @@ def custom_generate_unique_id(route: APIRoute) -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from treadstone.core.database import async_session
+    from treadstone.services.k8s_client import get_k8s_client
+    from treadstone.services.k8s_sync import start_sync_loop
+
+    sync_task = asyncio.create_task(start_sync_loop(settings.sandbox_namespace, get_k8s_client(), async_session))
     yield
+    sync_task.cancel()
     await close_http_client()
 
 
@@ -31,25 +42,33 @@ logging.basicConfig(level=logging.DEBUG if settings.debug else logging.WARNING)
 
 app = FastAPI(title=settings.app_name, generate_unique_id_function=custom_generate_unique_id, lifespan=lifespan)
 
+
+@app.exception_handler(TreadstoneError)
+async def treadstone_error_handler(request: Request, exc: TreadstoneError):
+    return JSONResponse(status_code=exc.status, content=exc.to_dict())
+
+
 # ── Middleware (outermost = first to run) ──
 app.add_middleware(SandboxSubdomainMiddleware)
 
 # ── Routes ──
 app.include_router(auth_router)
 app.include_router(config_router)
-app.include_router(sandbox_router)
+app.include_router(sandbox_proxy_router)
+app.include_router(sandbox_templates_router)
+app.include_router(sandboxes_router)
 
 if google_oauth_client:
     app.include_router(
         fastapi_users.get_oauth_router(google_oauth_client, auth_backend, settings.jwt_secret),
-        prefix="/api/auth/google",
+        prefix="/v1/auth/google",
         tags=["auth"],
     )
 
 if github_oauth_client:
     app.include_router(
         fastapi_users.get_oauth_router(github_oauth_client, auth_backend, settings.jwt_secret),
-        prefix="/api/auth/github",
+        prefix="/v1/auth/github",
         tags=["auth"],
     )
 
@@ -59,6 +78,6 @@ async def health():
     return {"status": "ok"}
 
 
-@app.get("/api/me", tags=["auth"])
+@app.get("/v1/me", tags=["auth"])
 async def me(user: User = Depends(get_current_user)):
     return {"id": user.id, "email": user.email, "role": user.role}

@@ -10,9 +10,10 @@ from treadstone.api.deps import get_current_admin, get_current_user
 from treadstone.config import settings
 from treadstone.core.database import get_session
 from treadstone.core.users import auth_backend, fastapi_users
-from treadstone.models.user import Invitation, Role, User, utc_now
+from treadstone.models.api_key import ApiKey
+from treadstone.models.user import Invitation, Role, User, random_id, utc_now
 
-router = APIRouter(prefix="/api/auth", tags=["auth"])
+router = APIRouter(prefix="/v1/auth", tags=["auth"])
 
 # ── fastapi-users built-in login / logout ──
 router.include_router(fastapi_users.get_auth_router(auth_backend))
@@ -171,4 +172,79 @@ async def delete_user(
         if admin_count_result.scalar_one() <= 1:
             raise HTTPException(status_code=400, detail="Cannot delete the last admin")
     await session.delete(target)
+    await session.commit()
+
+
+# ── API Key CRUD ──
+class CreateApiKeyRequest(BaseModel):
+    name: str = "default"
+    expires_in: int | None = None
+
+
+@router.post("/api-keys", status_code=status.HTTP_201_CREATED)
+async def create_api_key(
+    body: CreateApiKeyRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    key_value = "sk-" + secrets.token_hex(24)
+    gmt_expires = None
+    if body.expires_in is not None:
+        gmt_expires = utc_now() + timedelta(seconds=body.expires_in)
+    api_key = ApiKey(
+        id="key" + random_id(),
+        key=key_value,
+        name=body.name,
+        user_id=current_user.id,
+        gmt_expires=gmt_expires,
+    )
+    session.add(api_key)
+    await session.commit()
+    await session.refresh(api_key)
+    return {
+        "id": api_key.id,
+        "name": api_key.name,
+        "key": api_key.key,
+        "created_at": str(api_key.gmt_created),
+        "expires_at": str(api_key.gmt_expires) if api_key.gmt_expires else None,
+    }
+
+
+@router.get("/api-keys")
+async def list_api_keys(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(
+        select(ApiKey).where(ApiKey.user_id == current_user.id, ApiKey.gmt_deleted.is_(None))
+    )
+    keys = result.scalars().all()
+    return {
+        "items": [
+            {
+                "id": k.id,
+                "name": k.name,
+                "key_prefix": k.key[:7] + "..." + k.key[-4:],
+                "created_at": str(k.gmt_created),
+                "expires_at": str(k.gmt_expires) if k.gmt_expires else None,
+            }
+            for k in keys
+        ]
+    }
+
+
+@router.delete("/api-keys/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_api_key(
+    key_id: str,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(
+        select(ApiKey).where(ApiKey.id == key_id, ApiKey.user_id == current_user.id, ApiKey.gmt_deleted.is_(None))
+    )
+    api_key = result.scalar_one_or_none()
+    if not api_key:
+        raise HTTPException(status_code=404, detail="API key not found")
+    api_key.gmt_deleted = utc_now()
+    session.add(api_key)
     await session.commit()

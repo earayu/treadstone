@@ -15,4 +15,10 @@ class ApiKey(Base):
     name: Mapped[str] = mapped_column(String(256), nullable=False, default="default")
     user_id: Mapped[str] = mapped_column(String(24), ForeignKey("user.id", ondelete="cascade"), nullable=False)
     gmt_created: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    gmt_expires: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     gmt_deleted: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    def is_expired(self) -> bool:
+        if self.gmt_expires is None:
+            return False
+        return utc_now() >= self.gmt_expires

@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from treadstone.config import settings
 from treadstone.core.users import github_oauth_client, google_oauth_client
 
-router = APIRouter(prefix="/api", tags=["config"])
+router = APIRouter(prefix="/v1", tags=["config"])
 
 
 @router.get("/config")
