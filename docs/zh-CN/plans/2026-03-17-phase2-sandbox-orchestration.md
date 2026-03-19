@@ -720,7 +720,7 @@ K8s Watch 必须携带 `resourceVersion` 参数续接，断线期间的事件不
 > 水平扩展前必须实现 **Leader Election**（K8s Lease 或 Redis 分布式锁），
 > 确保只有一个副本运行 Watch 和 Reconciliation。
 >
-> 参见 Issue: #TBD
+> 参见 Issue: [#15](https://github.com/earayu/treadstone/issues/15)
 
 ---
 
