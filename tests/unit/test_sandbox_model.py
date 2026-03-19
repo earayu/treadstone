@@ -55,7 +55,7 @@ def test_sandbox_tablename():
 
 
 VALID_TRANSITIONS: dict[str, list[str]] = {
-    "creating": ["ready", "error"],
+    "creating": ["ready", "error", "deleting"],
     "ready": ["stopped", "error", "deleting"],
     "stopped": ["ready", "deleting", "deleted"],
     "error": ["stopped", "deleting"],

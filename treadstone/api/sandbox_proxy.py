@@ -8,6 +8,8 @@ Requires authentication and verifies sandbox ownership + ready status before pro
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
@@ -22,6 +24,8 @@ from treadstone.services.sandbox_proxy import (
     proxy_http_request,
     resolve_routing,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/sandboxes", tags=["sandbox-proxy"])
 
@@ -73,6 +77,7 @@ async def http_proxy(
             port=routing["port"],
         )
     except Exception:
+        logger.exception("Proxy failed for sandbox %s", sandbox_id)
         raise SandboxUnreachableError(sandbox_id)
 
     return StreamingResponse(

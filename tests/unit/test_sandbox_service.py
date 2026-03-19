@@ -128,10 +128,22 @@ class TestSandboxServiceDelete:
         assert sb.status == SandboxStatus.DELETING
         k8s.delete_sandbox_claim.assert_called_once()
 
-    async def test_delete_invalid_transition_raises(self):
+    async def test_delete_from_creating_succeeds(self):
         from treadstone.services.sandbox_service import SandboxService
 
         sb = _make_sandbox(status=SandboxStatus.CREATING)
+        session = _mock_session(sb)
+        k8s = _mock_k8s_client()
+        service = SandboxService(session=session, k8s_client=k8s)
+
+        await service.delete(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
+        assert sb.status == SandboxStatus.DELETING
+        k8s.delete_sandbox_claim.assert_called_once()
+
+    async def test_delete_from_deleted_raises(self):
+        from treadstone.services.sandbox_service import SandboxService
+
+        sb = _make_sandbox(status=SandboxStatus.DELETED)
         session = _mock_session(sb)
         service = SandboxService(session=session, k8s_client=_mock_k8s_client())
 

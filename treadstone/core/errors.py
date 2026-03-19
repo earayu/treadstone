@@ -86,7 +86,7 @@ class ValidationError(TreadstoneError):
 class InvalidTransitionError(TreadstoneError):
     def __init__(self, sandbox_id: str, from_status: str, to_status: str):
         super().__init__(
-            code="sandbox_not_ready",
+            code="invalid_transition",
             message=f"Cannot transition sandbox {sandbox_id} from {from_status} to {to_status}.",
             status=409,
         )

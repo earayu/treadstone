@@ -122,15 +122,11 @@ class TestGetSandbox:
 
 
 class TestDeleteSandbox:
-    async def test_delete_returns_204(self, auth_client):
+    async def test_delete_from_creating_returns_204(self, auth_client):
         create_resp = await auth_client.post("/v1/sandboxes", json={"template": "python-dev", "name": "del-sb"})
         sandbox_id = create_resp.json()["id"]
-        # Sandbox is in "creating" state, need to set to "ready" first
-        # Use start? No — creating → ready is only via K8s Watch.
-        # For the test, we need to manually set status. Let's test delete from stopped state.
-        # Actually, creating → deleting is not valid. Let's create, check that delete from creating fails.
         resp = await auth_client.delete(f"/v1/sandboxes/{sandbox_id}")
-        assert resp.status_code == 409  # creating → deleting is invalid
+        assert resp.status_code == 204
 
     async def test_delete_nonexistent_returns_404(self, auth_client):
         resp = await auth_client.delete("/v1/sandboxes/sb-nonexistent1234")

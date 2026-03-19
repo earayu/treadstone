@@ -103,10 +103,18 @@ class SandboxService:
         self.session.add(sandbox)
         await self.session.commit()
 
-        await self.k8s.delete_sandbox_claim(
-            name=sandbox.k8s_claim_name or sandbox.name,
-            namespace=sandbox.k8s_namespace,
-        )
+        try:
+            await self.k8s.delete_sandbox_claim(
+                name=sandbox.k8s_claim_name or sandbox.name,
+                namespace=sandbox.k8s_namespace,
+            )
+        except Exception:
+            logger.exception("Failed to delete SandboxClaim for sandbox %s", sandbox_id)
+            sandbox.status = SandboxStatus.ERROR
+            sandbox.status_message = "Failed to delete SandboxClaim"
+            sandbox.version += 1
+            self.session.add(sandbox)
+            await self.session.commit()
 
     async def start(self, sandbox_id: str, owner_id: str) -> Sandbox:
         sandbox = await self.get(sandbox_id, owner_id)
@@ -116,14 +124,22 @@ class SandboxService:
         if sandbox.status != SandboxStatus.STOPPED:
             raise InvalidTransitionError(sandbox_id, sandbox.status, "ready")
 
-        k8s_name = sandbox.k8s_sandbox_name or sandbox.k8s_claim_name or sandbox.name
-        await self.k8s.scale_sandbox(name=k8s_name, namespace=sandbox.k8s_namespace, replicas=1)
-
         sandbox.status = SandboxStatus.CREATING
         sandbox.gmt_started = utc_now()
         sandbox.version += 1
         self.session.add(sandbox)
         await self.session.commit()
+
+        try:
+            k8s_name = sandbox.k8s_sandbox_name or sandbox.k8s_claim_name or sandbox.name
+            await self.k8s.scale_sandbox(name=k8s_name, namespace=sandbox.k8s_namespace, replicas=1)
+        except Exception:
+            logger.exception("Failed to scale sandbox %s to 1", sandbox_id)
+            sandbox.status = SandboxStatus.ERROR
+            sandbox.status_message = "Failed to start sandbox"
+            sandbox.version += 1
+            self.session.add(sandbox)
+            await self.session.commit()
 
         return sandbox
 
@@ -135,13 +151,21 @@ class SandboxService:
         if sandbox.status not in (SandboxStatus.READY, SandboxStatus.ERROR):
             raise InvalidTransitionError(sandbox_id, sandbox.status, "stopped")
 
-        k8s_name = sandbox.k8s_sandbox_name or sandbox.k8s_claim_name or sandbox.name
-        await self.k8s.scale_sandbox(name=k8s_name, namespace=sandbox.k8s_namespace, replicas=0)
-
         sandbox.status = SandboxStatus.STOPPED
         sandbox.gmt_stopped = utc_now()
         sandbox.version += 1
         self.session.add(sandbox)
         await self.session.commit()
+
+        try:
+            k8s_name = sandbox.k8s_sandbox_name or sandbox.k8s_claim_name or sandbox.name
+            await self.k8s.scale_sandbox(name=k8s_name, namespace=sandbox.k8s_namespace, replicas=0)
+        except Exception:
+            logger.exception("Failed to scale sandbox %s to 0", sandbox_id)
+            sandbox.status = SandboxStatus.ERROR
+            sandbox.status_message = "Failed to stop sandbox"
+            sandbox.version += 1
+            self.session.add(sandbox)
+            await self.session.commit()
 
         return sandbox

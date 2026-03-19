@@ -19,7 +19,7 @@ class SandboxStatus(StrEnum):
 
 
 VALID_TRANSITIONS: dict[str, list[str]] = {
-    SandboxStatus.CREATING: [SandboxStatus.READY, SandboxStatus.ERROR],
+    SandboxStatus.CREATING: [SandboxStatus.READY, SandboxStatus.ERROR, SandboxStatus.DELETING],
     SandboxStatus.READY: [SandboxStatus.STOPPED, SandboxStatus.ERROR, SandboxStatus.DELETING],
     SandboxStatus.STOPPED: [SandboxStatus.READY, SandboxStatus.DELETING, SandboxStatus.DELETED],
     SandboxStatus.ERROR: [SandboxStatus.STOPPED, SandboxStatus.DELETING],

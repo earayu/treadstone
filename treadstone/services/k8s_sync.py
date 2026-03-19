@@ -107,15 +107,19 @@ async def handle_watch_event(
         if event_type in ("ADDED", "MODIFIED"):
             new_status, message = derive_status_from_sandbox_cr(cr_object)
 
+            dirty = False
             if sandbox.k8s_sandbox_name is None:
                 sandbox.k8s_sandbox_name = cr_name
-                self_session = session
-                self_session.add(sandbox)
+                dirty = True
 
             service_fqdn = cr_object.get("status", {}).get("serviceFQDN", "")
             if service_fqdn and sandbox.endpoints.get("service_fqdn") != service_fqdn:
                 sandbox.endpoints = {**sandbox.endpoints, "service_fqdn": service_fqdn}
+                dirty = True
+
+            if dirty:
                 session.add(sandbox)
+                await session.flush()
 
             if sandbox.status == new_status:
                 if sandbox.k8s_resource_version != cr_rv:
