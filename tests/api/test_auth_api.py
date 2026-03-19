@@ -48,7 +48,7 @@ async def db_session():
 async def test_register_first_user_becomes_admin(db_session):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post(
-            "/api/auth/register",
+            "/v1/auth/register",
             json={"email": "admin@example.com", "password": "StrongPass123!"},
         )
     assert resp.status_code == 201
@@ -60,16 +60,16 @@ async def test_register_first_user_becomes_admin(db_session):
 @pytest.mark.asyncio
 async def test_register_duplicate_email(db_session):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        await client.post("/api/auth/register", json={"email": "a@b.com", "password": "Pass123!"})
-        resp = await client.post("/api/auth/register", json={"email": "a@b.com", "password": "Pass123!"})
+        await client.post("/v1/auth/register", json={"email": "a@b.com", "password": "Pass123!"})
+        resp = await client.post("/v1/auth/register", json={"email": "a@b.com", "password": "Pass123!"})
     assert resp.status_code == 400
 
 
 @pytest.mark.asyncio
 async def test_login_success(db_session):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        await client.post("/api/auth/register", json={"email": "u@b.com", "password": "Pass123!"})
-        resp = await client.post("/api/auth/login", data={"username": "u@b.com", "password": "Pass123!"})
+        await client.post("/v1/auth/register", json={"email": "u@b.com", "password": "Pass123!"})
+        resp = await client.post("/v1/auth/login", data={"username": "u@b.com", "password": "Pass123!"})
     assert resp.status_code == 200 or resp.status_code == 204
     assert "session" in resp.cookies
 
@@ -77,17 +77,17 @@ async def test_login_success(db_session):
 @pytest.mark.asyncio
 async def test_login_wrong_password(db_session):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        await client.post("/api/auth/register", json={"email": "x@b.com", "password": "Pass123!"})
-        resp = await client.post("/api/auth/login", data={"username": "x@b.com", "password": "WRONG"})
+        await client.post("/v1/auth/register", json={"email": "x@b.com", "password": "Pass123!"})
+        resp = await client.post("/v1/auth/login", data={"username": "x@b.com", "password": "WRONG"})
     assert resp.status_code == 400
 
 
 @pytest.mark.asyncio
 async def test_get_user_after_login(db_session):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        await client.post("/api/auth/register", json={"email": "me@b.com", "password": "Pass123!"})
-        login_resp = await client.post("/api/auth/login", data={"username": "me@b.com", "password": "Pass123!"})
+        await client.post("/v1/auth/register", json={"email": "me@b.com", "password": "Pass123!"})
+        login_resp = await client.post("/v1/auth/login", data={"username": "me@b.com", "password": "Pass123!"})
         cookies = login_resp.cookies
-        resp = await client.get("/api/auth/user", cookies=cookies)
+        resp = await client.get("/v1/auth/user", cookies=cookies)
     assert resp.status_code == 200
     assert resp.json()["email"] == "me@b.com"

@@ -42,14 +42,14 @@ app.include_router(sandbox_router)
 if google_oauth_client:
     app.include_router(
         fastapi_users.get_oauth_router(google_oauth_client, auth_backend, settings.jwt_secret),
-        prefix="/api/auth/google",
+        prefix="/v1/auth/google",
         tags=["auth"],
     )
 
 if github_oauth_client:
     app.include_router(
         fastapi_users.get_oauth_router(github_oauth_client, auth_backend, settings.jwt_secret),
-        prefix="/api/auth/github",
+        prefix="/v1/auth/github",
         tags=["auth"],
     )
 
@@ -59,6 +59,6 @@ async def health():
     return {"status": "ok"}
 
 
-@app.get("/api/me", tags=["auth"])
+@app.get("/v1/me", tags=["auth"])
 async def me(user: User = Depends(get_current_user)):
     return {"id": user.id, "email": user.email, "role": user.role}
