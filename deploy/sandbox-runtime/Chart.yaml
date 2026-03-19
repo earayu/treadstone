@@ -1,6 +1,6 @@
 apiVersion: v2
 name: sandbox-runtime
-description: Sandbox Router, SandboxTemplate CRs, and SandboxWarmPool CRs
+description: SandboxTemplate CRs and SandboxWarmPool CRs
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
