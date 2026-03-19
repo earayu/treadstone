@@ -1,0 +1,38 @@
+{{- if .Values.serviceAccount.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "treadstone.fullname" . }}
+  labels:
+    {{- include "treadstone.labels" . | nindent 4 }}
+rules:
+  # Sandbox CRs: full lifecycle management (create, delete, watch for state sync)
+  - apiGroups:
+      - agents.x-k8s.io
+    resources:
+      - sandboxes
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - delete
+      - patch
+      - update
+  # Sandbox CR status: read for Watch events
+  - apiGroups:
+      - agents.x-k8s.io
+    resources:
+      - sandboxes/status
+    verbs:
+      - get
+  # SandboxTemplate CRs: read-only for templates API
+  - apiGroups:
+      - extensions.agents.x-k8s.io
+    resources:
+      - sandboxtemplates
+    verbs:
+      - get
+      - list
+      - watch
+{{- end }}

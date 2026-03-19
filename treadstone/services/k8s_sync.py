@@ -140,12 +140,15 @@ async def start_sync_loop(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Run periodic reconciliation. Watch integration is deferred to real K8s client."""
-    while True:
-        try:
-            await reconcile(namespace, k8s_client, session_factory)
-        except Exception:
-            logger.exception("Reconciliation failed")
-        await asyncio.sleep(RECONCILE_INTERVAL)
+    try:
+        while True:
+            try:
+                await reconcile(namespace, k8s_client, session_factory)
+            except Exception:
+                logger.exception("Reconciliation failed")
+            await asyncio.sleep(RECONCILE_INTERVAL)
+    except asyncio.CancelledError:
+        logger.info("Sync loop shutting down")
 
 
 async def _optimistic_update(

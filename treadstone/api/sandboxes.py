@@ -1,12 +1,12 @@
 """Sandbox CRUD API router — control plane endpoints."""
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from treadstone.api.deps import get_current_user
 from treadstone.core.database import get_session
-from treadstone.core.errors import InvalidTransitionError, SandboxNotFoundError
+from treadstone.core.errors import ForbiddenError, SandboxNotFoundError
 from treadstone.models.user import User
 from treadstone.services.sandbox_service import SandboxService
 from treadstone.services.sandbox_token import create_sandbox_token
@@ -120,10 +120,15 @@ async def list_sandboxes(
 
 @router.get("/{sandbox_id}")
 async def get_sandbox(
+    request: Request,
     sandbox_id: str,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    payload = getattr(request.state, "sandbox_token_payload", None)
+    if payload and payload["sandbox_id"] != sandbox_id:
+        raise ForbiddenError("Sandbox Token scope mismatch: token is for a different sandbox")
+
     service = SandboxService(session=session)
     sandbox = await service.get(sandbox_id=sandbox_id, owner_id=user.id)
     if sandbox is None:
@@ -138,12 +143,7 @@ async def delete_sandbox(
     session: AsyncSession = Depends(get_session),
 ):
     service = SandboxService(session=session)
-    try:
-        await service.delete(sandbox_id=sandbox_id, owner_id=user.id)
-    except LookupError:
-        raise SandboxNotFoundError(sandbox_id)
-    except ValueError:
-        raise InvalidTransitionError(sandbox_id, "current", "deleting")
+    await service.delete(sandbox_id=sandbox_id, owner_id=user.id)
 
 
 @router.post("/{sandbox_id}/start")
@@ -153,12 +153,7 @@ async def start_sandbox(
     session: AsyncSession = Depends(get_session),
 ):
     service = SandboxService(session=session)
-    try:
-        sandbox = await service.start(sandbox_id=sandbox_id, owner_id=user.id)
-    except LookupError:
-        raise SandboxNotFoundError(sandbox_id)
-    except ValueError:
-        raise InvalidTransitionError(sandbox_id, "current", "ready")
+    sandbox = await service.start(sandbox_id=sandbox_id, owner_id=user.id)
     return _to_detail(sandbox)
 
 
@@ -169,12 +164,7 @@ async def stop_sandbox(
     session: AsyncSession = Depends(get_session),
 ):
     service = SandboxService(session=session)
-    try:
-        sandbox = await service.stop(sandbox_id=sandbox_id, owner_id=user.id)
-    except LookupError:
-        raise SandboxNotFoundError(sandbox_id)
-    except ValueError:
-        raise InvalidTransitionError(sandbox_id, "current", "stopped")
+    sandbox = await service.stop(sandbox_id=sandbox_id, owner_id=user.id)
     return _to_detail(sandbox)
 
 

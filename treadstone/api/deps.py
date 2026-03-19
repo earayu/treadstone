@@ -1,7 +1,7 @@
 import logging
 
 import jwt
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from treadstone.auth import tv
 from treadstone.config import settings
 from treadstone.core.database import get_session
+from treadstone.core.errors import AuthRequiredError, ForbiddenError
 from treadstone.core.users import fastapi_users
 from treadstone.models.api_key import ApiKey
 from treadstone.models.user import Role, User
@@ -87,7 +88,7 @@ async def get_current_user(
     sandbox_user, sandbox_payload = sandbox_token_result
     user = sandbox_user or api_key_user or cookie_user
     if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+        raise AuthRequiredError()
     if sandbox_payload:
         request.state.sandbox_token_payload = sandbox_payload
     return user
@@ -95,5 +96,5 @@ async def get_current_user(
 
 async def get_current_admin(user: User = Depends(get_current_user)) -> User:
     if user.role != Role.ADMIN.value:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin required")
+        raise ForbiddenError("Admin required")
     return user

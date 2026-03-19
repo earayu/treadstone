@@ -21,7 +21,7 @@ class K8sClientProtocol(Protocol):
 class FakeK8sClient:
     """In-memory stub for testing — returns sample templates and succeeds all operations."""
 
-    _templates: list[dict[str, Any]] = [
+    _DEFAULT_TEMPLATES: tuple[dict[str, Any], ...] = (
         {
             "name": "python-dev",
             "display_name": "Python Development",
@@ -36,12 +36,11 @@ class FakeK8sClient:
             "runtime_type": "aio",
             "resource_spec": {"cpu": "2", "memory": "2Gi"},
         },
-    ]
-
-    _sandbox_crs: dict[str, dict[str, Any]]
+    )
 
     def __init__(self) -> None:
-        self._sandbox_crs = {}
+        self._templates: list[dict[str, Any]] = list(self._DEFAULT_TEMPLATES)
+        self._sandbox_crs: dict[str, dict[str, Any]] = {}
 
     async def list_sandbox_templates(self, namespace: str) -> list[dict[str, Any]]:
         return list(self._templates)

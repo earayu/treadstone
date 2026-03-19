@@ -4,12 +4,17 @@ Handles create/get/list/delete/start/stop with state machine validation
 and delegates K8s operations to an injected K8s client.
 """
 
+import logging
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from treadstone.core.errors import InvalidTransitionError, SandboxNotFoundError
 from treadstone.models.sandbox import Sandbox, SandboxStatus, is_valid_transition
 from treadstone.models.user import random_id, utc_now
 from treadstone.services.k8s_client import K8sClientProtocol, get_k8s_client
+
+logger = logging.getLogger(__name__)
 
 
 class SandboxService:
@@ -52,12 +57,20 @@ class SandboxService:
         await self.session.commit()
         await self.session.refresh(sandbox)
 
-        await self.k8s.create_sandbox_cr(
-            name=sandbox_name,
-            template=template,
-            namespace=sandbox.k8s_namespace,
-            image=image,
-        )
+        try:
+            await self.k8s.create_sandbox_cr(
+                name=sandbox_name,
+                template=template,
+                namespace=sandbox.k8s_namespace,
+                image=image,
+            )
+        except Exception:
+            logger.exception("Failed to create K8s resource for sandbox %s", sandbox_id)
+            sandbox.status = SandboxStatus.ERROR
+            sandbox.status_message = "Failed to create K8s resource"
+            sandbox.version += 1
+            self.session.add(sandbox)
+            await self.session.commit()
 
         return sandbox
 
@@ -83,10 +96,10 @@ class SandboxService:
     async def delete(self, sandbox_id: str, owner_id: str) -> None:
         sandbox = await self.get(sandbox_id, owner_id)
         if sandbox is None:
-            raise LookupError(f"Sandbox {sandbox_id} not found")
+            raise SandboxNotFoundError(sandbox_id)
 
         if not is_valid_transition(sandbox.status, SandboxStatus.DELETING):
-            raise ValueError(f"Invalid transition from {sandbox.status} to deleting")
+            raise InvalidTransitionError(sandbox_id, sandbox.status, "deleting")
 
         sandbox.status = SandboxStatus.DELETING
         sandbox.version += 1
@@ -101,10 +114,10 @@ class SandboxService:
     async def start(self, sandbox_id: str, owner_id: str) -> Sandbox:
         sandbox = await self.get(sandbox_id, owner_id)
         if sandbox is None:
-            raise LookupError(f"Sandbox {sandbox_id} not found")
+            raise SandboxNotFoundError(sandbox_id)
 
         if sandbox.status != SandboxStatus.STOPPED:
-            raise ValueError(f"Invalid transition from {sandbox.status} to ready — start requires stopped state")
+            raise InvalidTransitionError(sandbox_id, sandbox.status, "ready")
 
         sandbox.status = SandboxStatus.READY
         sandbox.gmt_started = utc_now()
@@ -122,10 +135,10 @@ class SandboxService:
     async def stop(self, sandbox_id: str, owner_id: str) -> Sandbox:
         sandbox = await self.get(sandbox_id, owner_id)
         if sandbox is None:
-            raise LookupError(f"Sandbox {sandbox_id} not found")
+            raise SandboxNotFoundError(sandbox_id)
 
         if sandbox.status not in (SandboxStatus.READY, SandboxStatus.ERROR):
-            raise ValueError(f"Invalid transition from {sandbox.status} to stopped — stop requires ready or error")
+            raise InvalidTransitionError(sandbox_id, sandbox.status, "stopped")
 
         sandbox.status = SandboxStatus.STOPPED
         sandbox.gmt_stopped = utc_now()

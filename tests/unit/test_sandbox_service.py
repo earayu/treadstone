@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from treadstone.core.errors import InvalidTransitionError
 from treadstone.models.sandbox import Sandbox, SandboxStatus
 
 
@@ -129,7 +130,7 @@ class TestSandboxServiceDelete:
         session = _mock_session(sb)
         service = SandboxService(session=session, k8s_client=_mock_k8s_client())
 
-        with pytest.raises(ValueError, match="transition"):
+        with pytest.raises(InvalidTransitionError):
             await service.delete(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
 
 
@@ -165,7 +166,7 @@ class TestSandboxServiceStartStop:
         session = _mock_session(sb)
         service = SandboxService(session=session, k8s_client=_mock_k8s_client())
 
-        with pytest.raises(ValueError, match="requires stopped"):
+        with pytest.raises(InvalidTransitionError):
             await service.start(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
 
     async def test_start_from_creating_raises(self):
@@ -175,5 +176,5 @@ class TestSandboxServiceStartStop:
         session = _mock_session(sb)
         service = SandboxService(session=session, k8s_client=_mock_k8s_client())
 
-        with pytest.raises(ValueError, match="requires stopped"):
+        with pytest.raises(InvalidTransitionError):
             await service.start(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
