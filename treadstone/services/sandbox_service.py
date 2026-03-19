@@ -1,7 +1,7 @@
 """Sandbox lifecycle service layer.
 
-Handles create/get/list/delete/start/stop with state machine validation
-and delegates K8s operations to an injected K8s client.
+Handles create/get/list/delete/start/stop with state machine validation.
+Delegates to K8s via SandboxClaim (create/delete) and Sandbox scale (start/stop).
 """
 
 import logging
@@ -26,7 +26,6 @@ class SandboxService:
         self,
         owner_id: str,
         template: str,
-        image: str,
         name: str | None = None,
         runtime_type: str = "aio",
         labels: dict | None = None,
@@ -42,7 +41,6 @@ class SandboxService:
         sandbox.owner_id = owner_id
         sandbox.template = template
         sandbox.runtime_type = runtime_type
-        sandbox.image = image
         sandbox.labels = labels or {}
         sandbox.auto_stop_interval = auto_stop_interval
         sandbox.auto_delete_interval = auto_delete_interval
@@ -51,23 +49,22 @@ class SandboxService:
         sandbox.endpoints = {}
         sandbox.gmt_created = utc_now()
         sandbox.k8s_namespace = "treadstone"
-        sandbox.k8s_sandbox_name = sandbox_name
+        sandbox.k8s_claim_name = sandbox_name
 
         self.session.add(sandbox)
         await self.session.commit()
         await self.session.refresh(sandbox)
 
         try:
-            await self.k8s.create_sandbox_cr(
+            await self.k8s.create_sandbox_claim(
                 name=sandbox_name,
-                template=template,
+                template_ref=template,
                 namespace=sandbox.k8s_namespace,
-                image=image,
             )
         except Exception:
-            logger.exception("Failed to create K8s resource for sandbox %s", sandbox_id)
+            logger.exception("Failed to create SandboxClaim for sandbox %s", sandbox_id)
             sandbox.status = SandboxStatus.ERROR
-            sandbox.status_message = "Failed to create K8s resource"
+            sandbox.status_message = "Failed to create SandboxClaim"
             sandbox.version += 1
             self.session.add(sandbox)
             await self.session.commit()
@@ -106,8 +103,8 @@ class SandboxService:
         self.session.add(sandbox)
         await self.session.commit()
 
-        await self.k8s.delete_sandbox_cr(
-            name=sandbox.k8s_sandbox_name or sandbox.name,
+        await self.k8s.delete_sandbox_claim(
+            name=sandbox.k8s_claim_name or sandbox.name,
             namespace=sandbox.k8s_namespace,
         )
 
@@ -119,16 +116,14 @@ class SandboxService:
         if sandbox.status != SandboxStatus.STOPPED:
             raise InvalidTransitionError(sandbox_id, sandbox.status, "ready")
 
-        sandbox.status = SandboxStatus.READY
+        k8s_name = sandbox.k8s_sandbox_name or sandbox.k8s_claim_name or sandbox.name
+        await self.k8s.scale_sandbox(name=k8s_name, namespace=sandbox.k8s_namespace, replicas=1)
+
+        sandbox.status = SandboxStatus.CREATING
         sandbox.gmt_started = utc_now()
         sandbox.version += 1
         self.session.add(sandbox)
         await self.session.commit()
-
-        await self.k8s.start_sandbox_cr(
-            name=sandbox.k8s_sandbox_name or sandbox.name,
-            namespace=sandbox.k8s_namespace,
-        )
 
         return sandbox
 
@@ -140,15 +135,13 @@ class SandboxService:
         if sandbox.status not in (SandboxStatus.READY, SandboxStatus.ERROR):
             raise InvalidTransitionError(sandbox_id, sandbox.status, "stopped")
 
+        k8s_name = sandbox.k8s_sandbox_name or sandbox.k8s_claim_name or sandbox.name
+        await self.k8s.scale_sandbox(name=k8s_name, namespace=sandbox.k8s_namespace, replicas=0)
+
         sandbox.status = SandboxStatus.STOPPED
         sandbox.gmt_stopped = utc_now()
         sandbox.version += 1
         self.session.add(sandbox)
         await self.session.commit()
-
-        await self.k8s.stop_sandbox_cr(
-            name=sandbox.k8s_sandbox_name or sandbox.name,
-            namespace=sandbox.k8s_namespace,
-        )
 
         return sandbox

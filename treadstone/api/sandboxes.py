@@ -18,7 +18,6 @@ class CreateSandboxRequest(BaseModel):
     template: str
     name: str | None = None
     runtime_type: str = "aio"
-    image: str = "ghcr.io/earayu/sandbox-runtime:latest"
     labels: dict = Field(default_factory=dict)
     auto_stop_interval: int = 15
     auto_delete_interval: int = -1
@@ -39,7 +38,7 @@ class SandboxResponse(BaseModel):
 
 
 class SandboxDetailResponse(SandboxResponse):
-    image: str
+    image: str | None = None
     status_message: str | None = None
     endpoints: dict
     proxy_url: str
@@ -91,7 +90,6 @@ async def create_sandbox(
     sandbox = await service.create(
         owner_id=user.id,
         template=body.template,
-        image=body.image,
         name=body.name,
         runtime_type=body.runtime_type,
         labels=body.labels,

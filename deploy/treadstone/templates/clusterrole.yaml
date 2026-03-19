@@ -6,26 +6,17 @@ metadata:
   labels:
     {{- include "treadstone.labels" . | nindent 4 }}
 rules:
-  # Sandbox CRs: full lifecycle management (create, delete, watch for state sync)
+  # SandboxClaim CRs: Treadstone creates/deletes these to provision sandboxes
   - apiGroups:
-      - agents.x-k8s.io
+      - extensions.agents.x-k8s.io
     resources:
-      - sandboxes
+      - sandboxclaims
     verbs:
       - get
       - list
       - watch
       - create
       - delete
-      - patch
-      - update
-  # Sandbox CR status: read for Watch events
-  - apiGroups:
-      - agents.x-k8s.io
-    resources:
-      - sandboxes/status
-    verbs:
-      - get
   # SandboxTemplate CRs: read-only for templates API
   - apiGroups:
       - extensions.agents.x-k8s.io
@@ -35,4 +26,29 @@ rules:
       - get
       - list
       - watch
+  # Sandbox CRs: watch for state sync, patch for replicas (start/stop)
+  - apiGroups:
+      - agents.x-k8s.io
+    resources:
+      - sandboxes
+    verbs:
+      - get
+      - list
+      - watch
+      - patch
+  # Sandbox status: read for Watch events
+  - apiGroups:
+      - agents.x-k8s.io
+    resources:
+      - sandboxes/status
+    verbs:
+      - get
+  # Sandbox scale subresource: start (replicas=1) / stop (replicas=0)
+  - apiGroups:
+      - agents.x-k8s.io
+    resources:
+      - sandboxes/scale
+    verbs:
+      - get
+      - patch
 {{- end }}

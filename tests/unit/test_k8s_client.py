@@ -1,4 +1,4 @@
-"""Unit tests for K8s client (FakeK8sClient)."""
+"""Unit tests for K8s client (FakeK8sClient) — SandboxClaim-based model."""
 
 from treadstone.services.k8s_client import FakeK8sClient
 
@@ -12,39 +12,66 @@ async def test_list_sandbox_templates():
     assert "nodejs-dev" in names
 
 
-async def test_create_and_get_sandbox_cr():
+async def test_create_and_get_sandbox_claim():
     client = FakeK8sClient()
-    cr = await client.create_sandbox_cr("sb-test", "python-dev", "treadstone", "img:latest")
-    assert cr["metadata"]["name"] == "sb-test"
+    claim = await client.create_sandbox_claim("my-sb", "python-dev", "treadstone")
+    assert claim["kind"] == "SandboxClaim"
+    assert claim["spec"]["sandboxTemplateRef"]["name"] == "python-dev"
+    assert claim["status"]["sandbox"]["Name"] == "my-sb"
 
-    fetched = await client.get_sandbox_cr("sb-test", "treadstone")
+    fetched = await client.get_sandbox_claim("my-sb", "treadstone")
     assert fetched is not None
-    assert fetched["spec"]["template"] == "python-dev"
 
 
-async def test_delete_sandbox_cr():
+async def test_create_claim_also_creates_sandbox():
     client = FakeK8sClient()
-    await client.create_sandbox_cr("sb-del", "python-dev", "treadstone", "img:latest")
-    result = await client.delete_sandbox_cr("sb-del", "treadstone")
+    await client.create_sandbox_claim("my-sb", "python-dev", "treadstone")
+    sb = await client.get_sandbox("my-sb", "treadstone")
+    assert sb is not None
+    assert sb["kind"] == "Sandbox"
+    assert sb["status"]["serviceFQDN"] == "my-sb.treadstone.svc.cluster.local"
+
+
+async def test_delete_sandbox_claim_removes_sandbox():
+    client = FakeK8sClient()
+    await client.create_sandbox_claim("del-sb", "python-dev", "treadstone")
+    result = await client.delete_sandbox_claim("del-sb", "treadstone")
     assert result is True
-    assert await client.get_sandbox_cr("sb-del", "treadstone") is None
+    assert await client.get_sandbox_claim("del-sb", "treadstone") is None
+    assert await client.get_sandbox("del-sb", "treadstone") is None
 
 
-async def test_list_sandbox_crs():
+async def test_list_sandboxes():
     client = FakeK8sClient()
-    await client.create_sandbox_cr("sb-1", "python-dev", "treadstone", "img:latest")
-    await client.create_sandbox_cr("sb-2", "python-dev", "treadstone", "img:latest")
-    crs = await client.list_sandbox_crs("treadstone")
-    assert len(crs) == 2
+    await client.create_sandbox_claim("sb-1", "python-dev", "treadstone")
+    await client.create_sandbox_claim("sb-2", "python-dev", "treadstone")
+    sbs = await client.list_sandboxes("treadstone")
+    assert len(sbs) == 2
 
 
-async def test_start_stop_sandbox_cr():
+async def test_scale_sandbox_stop_and_start():
     client = FakeK8sClient()
-    await client.create_sandbox_cr("sb-ss", "python-dev", "treadstone", "img:latest")
-    await client.start_sandbox_cr("sb-ss", "treadstone")
-    cr = await client.get_sandbox_cr("sb-ss", "treadstone")
-    assert cr["status"]["phase"] == "Ready"
+    await client.create_sandbox_claim("sb-scale", "python-dev", "treadstone")
+    client.simulate_sandbox_ready("sb-scale", "treadstone")
 
-    await client.stop_sandbox_cr("sb-ss", "treadstone")
-    cr = await client.get_sandbox_cr("sb-ss", "treadstone")
-    assert cr["status"]["phase"] == "Stopped"
+    await client.scale_sandbox("sb-scale", "treadstone", 0)
+    sb = await client.get_sandbox("sb-scale", "treadstone")
+    assert sb["spec"]["replicas"] == 0
+    assert sb["status"]["replicas"] == 0
+
+    await client.scale_sandbox("sb-scale", "treadstone", 1)
+    sb = await client.get_sandbox("sb-scale", "treadstone")
+    assert sb["spec"]["replicas"] == 1
+
+
+async def test_simulate_sandbox_ready():
+    client = FakeK8sClient()
+    await client.create_sandbox_claim("sb-ready", "python-dev", "treadstone")
+    sb = await client.get_sandbox("sb-ready", "treadstone")
+    ready_cond = [c for c in sb["status"]["conditions"] if c["type"] == "Ready"][0]
+    assert ready_cond["status"] == "False"
+
+    client.simulate_sandbox_ready("sb-ready", "treadstone")
+    sb = await client.get_sandbox("sb-ready", "treadstone")
+    ready_cond = [c for c in sb["status"]["conditions"] if c["type"] == "Ready"][0]
+    assert ready_cond["status"] == "True"
