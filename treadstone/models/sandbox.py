@@ -51,7 +51,7 @@ class Sandbox(Base):
 
     k8s_sandbox_claim_name: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     k8s_sandbox_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    k8s_namespace: Mapped[str] = mapped_column(String(255), nullable=False, default="treadstone")
+    k8s_namespace: Mapped[str] = mapped_column(String(255), nullable=False)
     k8s_resource_version: Mapped[str | None] = mapped_column(String(255), nullable=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

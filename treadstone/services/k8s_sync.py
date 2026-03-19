@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from treadstone.config import settings
 from treadstone.models.sandbox import Sandbox, SandboxStatus, is_valid_transition
 from treadstone.services.k8s_client import K8sClientProtocol
 
@@ -73,7 +74,7 @@ async def handle_watch_event(
 ) -> None:
     """Process a single K8s Watch event and update the DB."""
     cr_name = cr_object.get("metadata", {}).get("name")
-    cr_namespace = cr_object.get("metadata", {}).get("namespace", "treadstone")
+    cr_namespace = cr_object.get("metadata", {}).get("namespace", settings.sandbox_namespace)
     cr_rv = cr_object.get("metadata", {}).get("resourceVersion")
 
     if not cr_name:

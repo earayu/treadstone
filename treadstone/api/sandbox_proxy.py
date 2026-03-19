@@ -73,7 +73,7 @@ async def http_proxy(
             path=path,
             headers=headers,
             body=body,
-            namespace=routing["namespace"],
+            namespace=sandbox.k8s_namespace,
             port=routing["port"],
         )
     except Exception:
