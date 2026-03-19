@@ -12,9 +12,3 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
 {{- end }}
-
-{{- define "sandbox-runtime.routerLabels" -}}
-app.kubernetes.io/name: sandbox-router
-app.kubernetes.io/instance: {{ .Release.Name }}
-app: sandbox-router
-{{- end }}

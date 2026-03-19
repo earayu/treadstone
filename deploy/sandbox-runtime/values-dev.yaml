@@ -1,18 +1,3 @@
-router:
-  enabled: true
-  replicaCount: 1
-  image:
-    repository: ghcr.io/earayu/sandbox-router
-    tag: latest
-    pullPolicy: IfNotPresent
-  resources:
-    limits:
-      cpu: 250m
-      memory: 128Mi
-    requests:
-      cpu: 50m
-      memory: 64Mi
-
 sandboxTemplate:
   name: treadstone-sandbox
   image: enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
