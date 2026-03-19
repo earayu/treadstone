@@ -1,6 +1,8 @@
 """Unit tests for K8s client (FakeK8sClient) — SandboxClaim-based model."""
 
-from treadstone.services.k8s_client import FakeK8sClient
+from datetime import UTC, datetime, timedelta
+
+from treadstone.services.k8s_client import FakeK8sClient, format_shutdown_time
 
 
 async def test_list_sandbox_templates():
@@ -62,6 +64,19 @@ async def test_scale_sandbox_stop_and_start():
     await client.scale_sandbox("sb-scale", "treadstone", 1)
     sb = await client.get_sandbox("sb-scale", "treadstone")
     assert sb["spec"]["replicas"] == 1
+
+
+async def test_create_with_shutdown_time():
+    client = FakeK8sClient()
+    dt = datetime.now(UTC) + timedelta(hours=1)
+    claim = await client.create_sandbox_claim("sb-expiry", "python-dev", "treadstone", shutdown_time=dt)
+    assert "lifecycle" in claim["spec"]
+    assert claim["spec"]["lifecycle"]["shutdownTime"] == format_shutdown_time(dt)
+
+
+def test_format_shutdown_time():
+    dt = datetime(2026, 3, 19, 12, 0, 0, tzinfo=UTC)
+    assert format_shutdown_time(dt) == "2026-03-19T12:00:00Z"
 
 
 async def test_simulate_sandbox_ready():

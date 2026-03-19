@@ -10,7 +10,9 @@ Two implementations:
 - Kr8sClient: Real K8s API calls via kr8s (async), used in production
 """
 
+import asyncio
 import logging
+from datetime import UTC, datetime
 from typing import Any, Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
@@ -23,11 +25,16 @@ TEMPLATE_API_GROUP = "extensions.agents.x-k8s.io"
 TEMPLATE_API_VERSION = "v1alpha1"
 
 
+def format_shutdown_time(dt: datetime) -> str:
+    """Format a datetime as RFC3339 for K8s shutdownTime field."""
+    return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 @runtime_checkable
 class K8sClientProtocol(Protocol):
     # ── SandboxClaim (extensions.agents.x-k8s.io) ──
     async def create_sandbox_claim(
-        self, name: str, template_ref: str, namespace: str, shutdown_time: str | None = None
+        self, name: str, template_ref: str, namespace: str, shutdown_time: datetime | None = None
     ) -> dict[str, Any]: ...
 
     async def delete_sandbox_claim(self, name: str, namespace: str) -> bool: ...
@@ -55,18 +62,20 @@ class Kr8sClient:
 
     def __init__(self) -> None:
         self._api = None
+        self._lock = asyncio.Lock()
 
     async def _get_api(self):
-        if self._api is None:
-            import kr8s
+        async with self._lock:
+            if self._api is None:
+                import kr8s
 
-            self._api = await kr8s.asyncio.api()
+                self._api = await kr8s.asyncio.api()
         return self._api
 
     # ── SandboxClaim ──
 
     async def create_sandbox_claim(
-        self, name: str, template_ref: str, namespace: str, shutdown_time: str | None = None
+        self, name: str, template_ref: str, namespace: str, shutdown_time: datetime | None = None
     ) -> dict[str, Any]:
         api = await self._get_api()
         manifest: dict[str, Any] = {
@@ -76,7 +85,7 @@ class Kr8sClient:
             "spec": {"sandboxTemplateRef": {"name": template_ref}},
         }
         if shutdown_time:
-            manifest["spec"]["lifecycle"] = {"shutdownTime": shutdown_time}
+            manifest["spec"]["lifecycle"] = {"shutdownTime": format_shutdown_time(shutdown_time)}
 
         url = f"/apis/{CLAIM_API_GROUP}/{CLAIM_API_VERSION}/namespaces/{namespace}/sandboxclaims"
         logger.info("K8s POST %s (name=%s)", url, name)
@@ -93,20 +102,22 @@ class Kr8sClient:
     async def get_sandbox_claim(self, name: str, namespace: str) -> dict[str, Any] | None:
         api = await self._get_api()
         url = f"/apis/{CLAIM_API_GROUP}/{CLAIM_API_VERSION}/namespaces/{namespace}/sandboxclaims/{name}"
-        async with api.call_api("GET", url=url) as resp:
-            if resp.status_code == 404:
-                return None
-            return resp.json()
+        try:
+            async with api.call_api("GET", url=url) as resp:
+                return resp.json()
+        except Exception:
+            return None
 
     # ── Sandbox ──
 
     async def get_sandbox(self, name: str, namespace: str) -> dict[str, Any] | None:
         api = await self._get_api()
         url = f"/apis/{SANDBOX_API_GROUP}/{SANDBOX_API_VERSION}/namespaces/{namespace}/sandboxes/{name}"
-        async with api.call_api("GET", url=url) as resp:
-            if resp.status_code == 404:
-                return None
-            return resp.json()
+        try:
+            async with api.call_api("GET", url=url) as resp:
+                return resp.json()
+        except Exception:
+            return None
 
     async def list_sandboxes(self, namespace: str) -> list[dict[str, Any]]:
         api = await self._get_api()
@@ -192,13 +203,9 @@ class FakeK8sClient:
         self._sandboxes: dict[str, dict[str, Any]] = {}
 
     async def create_sandbox_claim(
-        self, name: str, template_ref: str, namespace: str, shutdown_time: str | None = None
+        self, name: str, template_ref: str, namespace: str, shutdown_time: datetime | None = None
     ) -> dict[str, Any]:
         key = f"{namespace}/{name}"
-        lifecycle = {}
-        if shutdown_time:
-            lifecycle["shutdownTime"] = shutdown_time
-
         sandbox_name = name
         claim: dict[str, Any] = {
             "apiVersion": f"{CLAIM_API_GROUP}/{CLAIM_API_VERSION}",
@@ -207,8 +214,8 @@ class FakeK8sClient:
             "spec": {"sandboxTemplateRef": {"name": template_ref}},
             "status": {"conditions": [], "sandbox": {"Name": sandbox_name}},
         }
-        if lifecycle:
-            claim["spec"]["lifecycle"] = lifecycle
+        if shutdown_time:
+            claim["spec"]["lifecycle"] = {"shutdownTime": format_shutdown_time(shutdown_time)}
         self._claims[key] = claim
 
         self._sandboxes[key] = {
