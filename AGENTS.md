@@ -115,3 +115,28 @@ GitHub 操作直接使用 `gh` CLI。
 - 绝不提交 .env、secrets 或凭证
 - 每个 PR 创建后，关联到 GitHub Project Board: `gh project item-add 5 --owner earayu --url <PR_URL>`
 - PR/Issue 创建后应在 Project Board（https://github.com/users/earayu/projects/5/views/1）中维护状态
+
+## Cursor Cloud specific instructions
+
+### Services overview
+
+Treadstone is a single FastAPI backend service. It requires:
+- **Neon PostgreSQL** (external) — set `TREADSTONE_DATABASE_URL` secret for DB-dependent features (auth, sandboxes, migrations). Without it, unit/API tests still pass (they use in-memory SQLite), the dev server starts, and `/health` works, but auth and CRUD endpoints return 500.
+- **Kubernetes** — not needed for local dev. `TREADSTONE_DEBUG=true` activates `FakeK8sClient`.
+
+### Running the dev environment
+
+1. `make install` installs all deps via `uv sync` and configures git hooks.
+2. Copy `.env.example` to `.env` (already has `TREADSTONE_DEBUG=true`). Set `TREADSTONE_DATABASE_URL` if you have a Neon connection string.
+3. `make dev` starts uvicorn on port 8000 with hot reload.
+4. The k8s_sync background task will log DB connection errors on startup if no real DB is configured — this is expected and does not prevent the server from serving non-DB endpoints.
+
+### Testing caveats
+
+- `make test` runs unit + API tests (137+) using in-memory SQLite — no real DB needed.
+- `make test-all` includes integration tests that require `TREADSTONE_DATABASE_URL` pointing to a real Neon instance.
+- API tests override DB session via `app.dependency_overrides` with `sqlite+aiosqlite://`. If you add new API tests needing DB, follow the same pattern in `tests/api/test_auth_api.py`.
+
+### Lint / format
+
+- `make lint` (ruff check + format check), `make format` (auto-fix). See Makefile for details.
