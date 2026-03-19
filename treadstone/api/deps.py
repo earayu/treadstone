@@ -55,7 +55,7 @@ async def authenticate_api_key(
         )
     )
     api_key = result.scalar_one_or_none()
-    if not api_key:
+    if not api_key or api_key.is_expired():
         return None
     user_result = await session.execute(select(User).where(User.id == api_key.user_id))
     return user_result.scalar_one_or_none()

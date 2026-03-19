@@ -22,7 +22,7 @@ def test_sandbox_fields_exist():
         "labels",
         "auto_stop_interval",
         "auto_delete_interval",
-        "k8s_claim_name",
+        "k8s_sandbox_claim_name",
         "k8s_sandbox_name",
         "k8s_namespace",
         "k8s_resource_version",

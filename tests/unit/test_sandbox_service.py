@@ -21,7 +21,7 @@ def _make_sandbox(**overrides) -> Sandbox:
         "status": SandboxStatus.CREATING,
         "version": 1,
         "endpoints": {},
-        "k8s_claim_name": "test-sandbox",
+        "k8s_sandbox_claim_name": "test-sandbox",
         "k8s_sandbox_name": "test-sandbox",
         "k8s_namespace": "treadstone",
     }
@@ -72,7 +72,7 @@ class TestSandboxServiceCreate:
         assert result.status == SandboxStatus.CREATING
         assert result.owner_id == "user1234567890abcd"
         assert result.template == "python-dev"
-        assert result.k8s_claim_name == "my-sandbox"
+        assert result.k8s_sandbox_claim_name == "my-sandbox"
         session.add.assert_called_once()
         session.commit.assert_called()
 

@@ -49,7 +49,7 @@ class Sandbox(Base):
     auto_stop_interval: Mapped[int] = mapped_column(Integer, nullable=False, default=15)
     auto_delete_interval: Mapped[int] = mapped_column(Integer, nullable=False, default=-1)
 
-    k8s_claim_name: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    k8s_sandbox_claim_name: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     k8s_sandbox_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     k8s_namespace: Mapped[str] = mapped_column(String(255), nullable=False, default="treadstone")
     k8s_resource_version: Mapped[str | None] = mapped_column(String(255), nullable=True)

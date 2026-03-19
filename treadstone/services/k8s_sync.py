@@ -82,7 +82,7 @@ async def handle_watch_event(
     async with session_factory() as session:
         result = await session.execute(
             select(Sandbox).where(
-                ((Sandbox.k8s_sandbox_name == cr_name) | (Sandbox.k8s_claim_name == cr_name)),
+                ((Sandbox.k8s_sandbox_name == cr_name) | (Sandbox.k8s_sandbox_claim_name == cr_name)),
                 Sandbox.k8s_namespace == cr_namespace,
             )
         )
@@ -164,7 +164,7 @@ async def reconcile(
         sandboxes = result.scalars().all()
 
         for sandbox in sandboxes:
-            cr_key = sandbox.k8s_sandbox_name or sandbox.k8s_claim_name or sandbox.name
+            cr_key = sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.name
             cr = cr_map.pop(cr_key, None)
 
             if cr is None:

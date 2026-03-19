@@ -42,7 +42,7 @@ async def _create_sandbox(factory, **overrides) -> Sandbox:
         "status": SandboxStatus.CREATING,
         "version": 1,
         "endpoints": {},
-        "k8s_claim_name": "test-sb",
+        "k8s_sandbox_claim_name": "test-sb",
         "k8s_sandbox_name": "test-sb",
         "k8s_namespace": "treadstone",
         "gmt_created": utc_now(),

@@ -178,6 +178,7 @@ async def delete_user(
 # ── API Key CRUD ──
 class CreateApiKeyRequest(BaseModel):
     name: str = "default"
+    expires_in: int | None = None
 
 
 @router.post("/api-keys", status_code=status.HTTP_201_CREATED)
@@ -187,16 +188,26 @@ async def create_api_key(
     session: AsyncSession = Depends(get_session),
 ):
     key_value = "sk-" + secrets.token_hex(24)
+    gmt_expires = None
+    if body.expires_in is not None:
+        gmt_expires = utc_now() + timedelta(seconds=body.expires_in)
     api_key = ApiKey(
         id="key" + random_id(),
         key=key_value,
         name=body.name,
         user_id=current_user.id,
+        gmt_expires=gmt_expires,
     )
     session.add(api_key)
     await session.commit()
     await session.refresh(api_key)
-    return {"id": api_key.id, "name": api_key.name, "key": api_key.key, "created_at": str(api_key.gmt_created)}
+    return {
+        "id": api_key.id,
+        "name": api_key.name,
+        "key": api_key.key,
+        "created_at": str(api_key.gmt_created),
+        "expires_at": str(api_key.gmt_expires) if api_key.gmt_expires else None,
+    }
 
 
 @router.get("/api-keys")
@@ -215,6 +226,7 @@ async def list_api_keys(
                 "name": k.name,
                 "key_prefix": k.key[:7] + "..." + k.key[-4:],
                 "created_at": str(k.gmt_created),
+                "expires_at": str(k.gmt_expires) if k.gmt_expires else None,
             }
             for k in keys
         ]

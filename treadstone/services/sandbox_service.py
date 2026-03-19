@@ -9,6 +9,7 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from treadstone.config import settings
 from treadstone.core.errors import InvalidTransitionError, SandboxNotFoundError
 from treadstone.models.sandbox import Sandbox, SandboxStatus, is_valid_transition
 from treadstone.models.user import random_id, utc_now
@@ -48,19 +49,21 @@ class SandboxService:
         sandbox.version = 1
         sandbox.endpoints = {}
         sandbox.gmt_created = utc_now()
-        sandbox.k8s_namespace = "treadstone"
-        sandbox.k8s_claim_name = sandbox_name
+        sandbox.k8s_namespace = settings.sandbox_namespace
+        sandbox.k8s_sandbox_claim_name = sandbox_name
 
         self.session.add(sandbox)
         await self.session.commit()
         await self.session.refresh(sandbox)
 
         try:
+            logger.info("Creating SandboxClaim %s (template=%s, ns=%s)", sandbox_name, template, sandbox.k8s_namespace)
             await self.k8s.create_sandbox_claim(
                 name=sandbox_name,
                 template_ref=template,
                 namespace=sandbox.k8s_namespace,
             )
+            logger.info("SandboxClaim %s created successfully", sandbox_name)
         except Exception:
             logger.exception("Failed to create SandboxClaim for sandbox %s", sandbox_id)
             sandbox.status = SandboxStatus.ERROR
@@ -103,11 +106,11 @@ class SandboxService:
         self.session.add(sandbox)
         await self.session.commit()
 
+        claim_name = sandbox.k8s_sandbox_claim_name or sandbox.name
         try:
-            await self.k8s.delete_sandbox_claim(
-                name=sandbox.k8s_claim_name or sandbox.name,
-                namespace=sandbox.k8s_namespace,
-            )
+            logger.info("Deleting SandboxClaim %s (ns=%s)", claim_name, sandbox.k8s_namespace)
+            await self.k8s.delete_sandbox_claim(name=claim_name, namespace=sandbox.k8s_namespace)
+            logger.info("SandboxClaim %s deleted successfully", claim_name)
         except Exception:
             logger.exception("Failed to delete SandboxClaim for sandbox %s", sandbox_id)
             sandbox.status = SandboxStatus.ERROR
@@ -130,9 +133,11 @@ class SandboxService:
         self.session.add(sandbox)
         await self.session.commit()
 
+        k8s_name = sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.name
         try:
-            k8s_name = sandbox.k8s_sandbox_name or sandbox.k8s_claim_name or sandbox.name
+            logger.info("Scaling sandbox %s to replicas=1 (ns=%s)", k8s_name, sandbox.k8s_namespace)
             await self.k8s.scale_sandbox(name=k8s_name, namespace=sandbox.k8s_namespace, replicas=1)
+            logger.info("Sandbox %s scaled to 1 successfully", k8s_name)
         except Exception:
             logger.exception("Failed to scale sandbox %s to 1", sandbox_id)
             sandbox.status = SandboxStatus.ERROR
@@ -157,9 +162,11 @@ class SandboxService:
         self.session.add(sandbox)
         await self.session.commit()
 
+        k8s_name = sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.name
         try:
-            k8s_name = sandbox.k8s_sandbox_name or sandbox.k8s_claim_name or sandbox.name
+            logger.info("Scaling sandbox %s to replicas=0 (ns=%s)", k8s_name, sandbox.k8s_namespace)
             await self.k8s.scale_sandbox(name=k8s_name, namespace=sandbox.k8s_namespace, replicas=0)
+            logger.info("Sandbox %s scaled to 0 successfully", k8s_name)
         except Exception:
             logger.exception("Failed to scale sandbox %s to 0", sandbox_id)
             sandbox.status = SandboxStatus.ERROR
