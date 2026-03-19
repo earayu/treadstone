@@ -1,13 +1,15 @@
 """Sandbox CRUD API router — control plane endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from treadstone.api.deps import get_current_user
 from treadstone.core.database import get_session
+from treadstone.core.errors import InvalidTransitionError, SandboxNotFoundError
 from treadstone.models.user import User
 from treadstone.services.sandbox_service import SandboxService
+from treadstone.services.sandbox_token import create_sandbox_token
 
 router = APIRouter(prefix="/v1/sandboxes", tags=["sandboxes"])
 
@@ -125,7 +127,7 @@ async def get_sandbox(
     service = SandboxService(session=session)
     sandbox = await service.get(sandbox_id=sandbox_id, owner_id=user.id)
     if sandbox is None:
-        raise HTTPException(status_code=404, detail=f"Sandbox {sandbox_id} not found")
+        raise SandboxNotFoundError(sandbox_id)
     return _to_detail(sandbox)
 
 
@@ -139,9 +141,9 @@ async def delete_sandbox(
     try:
         await service.delete(sandbox_id=sandbox_id, owner_id=user.id)
     except LookupError:
-        raise HTTPException(status_code=404, detail=f"Sandbox {sandbox_id} not found")
-    except ValueError as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise SandboxNotFoundError(sandbox_id)
+    except ValueError:
+        raise InvalidTransitionError(sandbox_id, "current", "deleting")
 
 
 @router.post("/{sandbox_id}/start")
@@ -154,9 +156,9 @@ async def start_sandbox(
     try:
         sandbox = await service.start(sandbox_id=sandbox_id, owner_id=user.id)
     except LookupError:
-        raise HTTPException(status_code=404, detail=f"Sandbox {sandbox_id} not found")
-    except ValueError as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise SandboxNotFoundError(sandbox_id)
+    except ValueError:
+        raise InvalidTransitionError(sandbox_id, "current", "ready")
     return _to_detail(sandbox)
 
 
@@ -170,7 +172,31 @@ async def stop_sandbox(
     try:
         sandbox = await service.stop(sandbox_id=sandbox_id, owner_id=user.id)
     except LookupError:
-        raise HTTPException(status_code=404, detail=f"Sandbox {sandbox_id} not found")
-    except ValueError as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise SandboxNotFoundError(sandbox_id)
+    except ValueError:
+        raise InvalidTransitionError(sandbox_id, "current", "stopped")
     return _to_detail(sandbox)
+
+
+class CreateSandboxTokenRequest(BaseModel):
+    expires_in: int = 3600
+
+
+@router.post("/{sandbox_id}/token", status_code=status.HTTP_201_CREATED)
+async def create_token(
+    sandbox_id: str,
+    body: CreateSandboxTokenRequest,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    service = SandboxService(session=session)
+    sandbox = await service.get(sandbox_id=sandbox_id, owner_id=user.id)
+    if sandbox is None:
+        raise SandboxNotFoundError(sandbox_id)
+
+    token, expires_at = create_sandbox_token(
+        sandbox_id=sandbox.id,
+        user_id=user.id,
+        expires_in=body.expires_in,
+    )
+    return {"token": token, "sandbox_id": sandbox.id, "expires_at": str(expires_at)}

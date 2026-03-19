@@ -118,6 +118,7 @@ class TestGetSandbox:
     async def test_get_nonexistent_returns_404(self, auth_client):
         resp = await auth_client.get("/v1/sandboxes/sb-nonexistent1234")
         assert resp.status_code == 404
+        assert resp.json()["error"]["code"] == "sandbox_not_found"
 
 
 class TestDeleteSandbox:
@@ -134,6 +135,7 @@ class TestDeleteSandbox:
     async def test_delete_nonexistent_returns_404(self, auth_client):
         resp = await auth_client.delete("/v1/sandboxes/sb-nonexistent1234")
         assert resp.status_code == 404
+        assert resp.json()["error"]["code"] == "sandbox_not_found"
 
 
 class TestStartStopSandbox:

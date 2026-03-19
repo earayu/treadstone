@@ -4,43 +4,18 @@ Handles create/get/list/delete/start/stop with state machine validation
 and delegates K8s operations to an injected K8s client.
 """
 
-from typing import Protocol, runtime_checkable
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from treadstone.models.sandbox import Sandbox, SandboxStatus, is_valid_transition
 from treadstone.models.user import random_id, utc_now
-
-
-@runtime_checkable
-class K8sClientProtocol(Protocol):
-    async def create_sandbox_cr(self, name: str, template: str, namespace: str, image: str) -> dict: ...
-    async def delete_sandbox_cr(self, name: str, namespace: str) -> bool: ...
-    async def start_sandbox_cr(self, name: str, namespace: str) -> bool: ...
-    async def stop_sandbox_cr(self, name: str, namespace: str) -> bool: ...
-
-
-class FakeK8sClient:
-    """Stub K8s client for testing — all operations succeed immediately."""
-
-    async def create_sandbox_cr(self, name: str, template: str, namespace: str, image: str) -> dict:
-        return {"metadata": {"name": name}}
-
-    async def delete_sandbox_cr(self, name: str, namespace: str) -> bool:
-        return True
-
-    async def start_sandbox_cr(self, name: str, namespace: str) -> bool:
-        return True
-
-    async def stop_sandbox_cr(self, name: str, namespace: str) -> bool:
-        return True
+from treadstone.services.k8s_client import K8sClientProtocol, get_k8s_client
 
 
 class SandboxService:
     def __init__(self, session: AsyncSession, k8s_client: K8sClientProtocol | None = None):
         self.session = session
-        self.k8s = k8s_client or FakeK8sClient()
+        self.k8s = k8s_client or get_k8s_client()
 
     async def create(
         self,

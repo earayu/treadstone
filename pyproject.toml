@@ -11,6 +11,7 @@ dependencies = [
     "httpx>=0.28.1",
     "psycopg2-binary>=2.9.11",
     "pydantic-settings>=2.13.1",
+    "pyjwt>=2.12.1",
     "sqlalchemy[asyncio]>=2.0.48",
     "uvicorn[standard]>=0.42.0",
     "websockets>=16.0",
