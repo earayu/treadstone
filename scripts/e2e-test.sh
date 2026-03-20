@@ -13,7 +13,9 @@ set -euo pipefail
 BASE_URL="${BASE_URL:-http://localhost}"
 UNIQUE=$(head -c 8 /dev/urandom | xxd -p | head -c 8)
 VARS_FILE=$(mktemp)
-E2E_DIR="$(cd "$(dirname "$0")/.." && pwd)/tests/e2e"
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+E2E_DIR="$ROOT_DIR/tests/e2e"
+REPORT_DIR="$ROOT_DIR/reports/e2e"
 
 cleanup() { rm -f "$VARS_FILE"; }
 trap cleanup EXIT
@@ -47,4 +49,9 @@ done
 
 # ── Run all E2E tests (parallel by default in --test mode) ───────────────────
 
-hurl --test --variables-file "$VARS_FILE" "$E2E_DIR"/*.hurl
+mkdir -p "$REPORT_DIR"
+hurl --test --variables-file "$VARS_FILE" \
+    --report-html "$REPORT_DIR" \
+    "$E2E_DIR"/*.hurl
+
+printf "\nHTML report: %s/index.html\n" "$REPORT_DIR"
