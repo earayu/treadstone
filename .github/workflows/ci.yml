@@ -26,6 +26,7 @@ jobs:
         run: uv run pytest tests/ -v --cov=treadstone --cov-report=term-missing
         env:
           TREADSTONE_DATABASE_URL: "postgresql+asyncpg://fake:fake@localhost/fake?sslmode=require"
+          TREADSTONE_DEBUG: "true"
 
   integration:
     runs-on: ubuntu-latest
