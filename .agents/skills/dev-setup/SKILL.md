@@ -1,128 +1,101 @@
 ---
 name: dev-setup
-description: 首次设置 Treadstone 本地开发环境。克隆仓库后、开始开发前必须完成。涵盖系统依赖安装、Python 环境、Neon 数据库连接配置、迁移、环境验证。只需做一次。当用户/agent 刚进入项目或需要重建环境时使用此 skill。
+description: First-time Treadstone local development environment setup. Run once after cloning the repo and before starting any development. Covers system dependency installation, Python environment, Neon database connection, migrations, and environment verification. Use this skill when the user/agent just entered the project, needs to rebuild the environment, or encounters setup-related issues like missing dependencies, broken .env, or failed migrations.
 ---
 
-# 本地开发环境设置
+# First-Time Dev Environment Setup
 
-这个 skill 只需要执行一次。完成后环境就绪，切换到 `development-lifecycle` skill 开始开发。
+Run this once. After completion, switch to the `dev-lifecycle` skill for daily development.
 
-## 1. 系统依赖
+## 1. System Dependencies
 
-确认以下工具已安装：
+Verify these tools are installed:
 
 ```bash
-python3 --version    # 需要 3.12+
-uv --version         # Python 包管理器
-gh --version         # GitHub CLI（可选，用于 PR/issue 操作）
-docker --version     # 容器构建 + Kind 集群
-kind --version       # 本地 K8s 集群（沙箱开发需要）
-kubectl version --client  # K8s CLI
-helm version --short # Helm chart 部署
+python3 --version        # 3.12+
+uv --version             # Python package manager
+gh --version             # GitHub CLI (optional, for PR/issue ops)
+docker --version         # Container builds + Kind cluster
+kind --version           # Local K8s cluster (sandbox dev only)
+kubectl version --client # K8s CLI
+helm version --short     # Helm chart deployment
 ```
 
-**安装缺失工具（macOS）：**
+Install missing tools (macOS):
 
 ```bash
-# uv
 curl -LsSf https://astral.sh/uv/install.sh | sh
-# Kind + kubectl + helm
 brew install kind kubectl helm
 ```
 
-## 2. 安装 Python 依赖
+## 2. Install Python Dependencies
 
 ```bash
 make install
-# 等价于 uv sync，会创建 .venv 并安装所有依赖
 ```
 
-## 3. 配置数据库（Neon）
+This runs `uv sync` (creates `.venv`, installs all deps) and configures git hooks.
 
-项目使用 [Neon](https://neon.tech) Serverless PostgreSQL，无需本地 PostgreSQL。
+## 3. Configure Database (Neon)
 
-**获取连接串：**
-1. 登录 https://console.neon.tech
-2. 找到项目 `treadstone-dev`（或创建一个新项目）
-3. 复制连接串，格式为：
-   `postgresql://neondb_owner:xxx@ep-xxx.ap-southeast-1.aws.neon.tech/neondb?sslmode=require`
+The project uses [Neon](https://neon.tech) Serverless PostgreSQL — no local Postgres needed.
 
-**配置 .env：**
+Get the connection string from https://console.neon.tech, then:
 
 ```bash
 cp .env.example .env
 ```
 
-编辑 `.env`，将连接串改为 asyncpg 格式：
+Edit `.env` and set the connection string in asyncpg format:
 
-```bash
-# .env
+```
 TREADSTONE_DATABASE_URL=postgresql+asyncpg://neondb_owner:xxx@ep-xxx.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
 TREADSTONE_DEBUG=true
 ```
 
-注意：URL 中 `postgresql://` 改为 `postgresql+asyncpg://`，保留 `?sslmode=require`。
+The URL scheme must be `postgresql+asyncpg://` (not `postgresql://`). Keep `?sslmode=require`.
 
-## 4. 应用数据库迁移
+## 4. Apply Database Migrations
 
 ```bash
 make migrate
 ```
 
-Expected 输出：`INFO [alembic.runtime.migration] Context impl PostgresqlImpl.`（有 migration 时会列出具体迁移）
+Expected: `INFO [alembic.runtime.migration] Context impl PostgresqlImpl.` with migration details listed.
 
-## 5. 验证环境
+## 5. Verify Environment
 
 ```bash
 make test
 ```
 
-Expected：全部通过（4 passed 或更多，integration 测试被排除）。
+Expected: all tests pass (integration tests are excluded by default). If tests pass, the environment is ready.
 
-如果测试通过，环境已就绪。
+## 6. Local K8s Cluster (Sandbox Development)
 
-## 6. 本地 K8s 集群（沙箱开发）
+For sandbox-related features that require a real Kubernetes cluster, follow `deploy/README.md` — it covers Kind cluster creation, image building, Helm deployment, and smoke testing end-to-end.
 
-如果需要在本地运行沙箱相关功能，创建 Kind 集群：
-
-```bash
-make kind-create     # 创建 3 节点 Kind 集群（1 control-plane + 2 worker）
-```
-
-集群就绪后，部署全部组件：
+Quick start:
 
 ```bash
-make deploy-all ENV=dev
+make up   # One-command: Kind cluster + build + deploy
 ```
 
-验证：
-
-```bash
-kubectl get pods -n treadstone
-kubectl get pods -n agent-sandbox-system
-```
-
-不再需要时：
-
-```bash
-make kind-delete
-```
-
-> **注意：** Kind 集群仅用于沙箱编排开发。纯 API 开发（`make dev`）不需要 K8s 集群。
+Pure API development (`make dev`) does not require a K8s cluster.
 
 ---
 
-## 常见问题
+## Troubleshooting
 
-**`uv sync` 失败：**
-- 确认 Python 3.12+ 已安装：`python3 --version`
-- 尝试：`uv python install 3.12`
+**`uv sync` fails:**
+- Confirm Python 3.12+: `python3 --version`
+- Try: `uv python install 3.12`
 
-**数据库连接失败（`could not connect`）：**
-- 检查 `.env` 中的连接串是否正确
-- 确认 URL 使用 `postgresql+asyncpg://` 而非 `postgresql://`
-- Neon 免费项目会自动挂起，第一次连接可能慢（~1s 冷启动）
+**Database connection fails (`could not connect`):**
+- Check the connection string in `.env`
+- Confirm the URL uses `postgresql+asyncpg://` not `postgresql://`
+- Neon free-tier projects auto-suspend; first connection may be slow (~1s cold start)
 
-**`alembic upgrade head` 报 `authentication failed`：**
-- `.env` 未加载：确认 `.env` 文件在项目根目录
-- 连接串中密码含特殊字符时需要 URL 编码
+**`alembic upgrade head` reports `authentication failed`:**
+- Confirm `.env` exists in the project root
+- URL-encode special characters in the password
