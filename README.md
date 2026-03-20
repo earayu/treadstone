@@ -1,60 +1,145 @@
 # Treadstone
 
-Sandbox + Skills 组合为可复用垂直 Agent 的开放平台与市场。
+**Agent-Native sandbox.** Run code, build projects, deploy environments.
 
-## 愿景
+> [!NOTE]
+> Treadstone is in early development. The vision and CLI examples below reflect
+> the direction we are building toward — not all features are implemented yet.
+> See [Status](#status) for what works today.
 
-当前 AI Agent 沙箱生态已形成 5 层架构（隔离原语 → 运行时/SDK → 平台服务 → 专项沙箱 → Agent 市场），但缺少一个将 **sandbox + skills 组合为可复用垂直 Agent** 并形成 marketplace 的开放平台。Treadstone 填补这一空白。
+## Why Treadstone?
 
-## 核心概念
+AI agents need isolated environments to execute code, install packages, run
+tests, and build software. Existing sandbox solutions are either designed for
+human developers to self-host (requiring a Kubernetes cluster and significant
+ops work) or locked behind proprietary APIs with no self-deploy option.
 
-- **Sandbox Template** — 预配置的沙箱环境模板
-- **Skill Pack** — 一组工具/能力定义（MCP server、函数、prompt）
-- **Agent = Template + Skills** — 组合产出一个垂直 Agent
-- **Marketplace** — 开发者发布 Template 和 Skill Pack，用户自由组合
+Treadstone takes a different approach: **an agent-native sandbox service** that
+agents interact with directly via CLI and SDK, while remaining fully open source
+and self-hostable.
 
-## 架构
+| | Self-host sandbox platforms | Proprietary sandbox APIs | **Treadstone** |
+|---|---|---|---|
+| **Audience** | Developers building platforms | Developers integrating SDKs | AI agents operating autonomously |
+| **Setup** | Deploy K8s + controllers + CRDs | Sign up for API key | `treadstone run "print('hello')"` |
+| **Self-host** | Yes | No | Yes |
+| **Managed option** | No | Yes | Yes |
+| **Multi-tenant** | Build it yourself | Built-in | Built-in |
 
-```
-┌─────────────────────────────────────────────────┐
-│            Treadstone Platform API               │
-├─────────────────────────────────────────────────┤
-│         Sandbox Orchestration Layer              │
-│       kubernetes-sigs/agent-sandbox (CRD)        │
-├─────────────────────────────────────────────────┤
-│          Sandbox Runtime Layer                   │
-│        agent-infra/sandbox (Docker)              │
-├─────────────────────────────────────────────────┤
-│           Isolation Layer                        │
-│         gVisor (K8s RuntimeClass)                │
-└─────────────────────────────────────────────────┘
-```
-
-## 技术栈
-
-- **后端**: Python 3.12+, FastAPI, SQLAlchemy async
-- **数据库**: [Neon](https://neon.tech) (Serverless PostgreSQL)
-- **包管理**: uv
-- **沙箱编排**: [kubernetes-sigs/agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox)
-- **沙箱运行时**: [agent-infra/sandbox](https://github.com/agent-infra/sandbox)
-- **隔离层**: gVisor
-
-## 开发
+## Quick Start
 
 ```bash
-make help             # 查看所有可用命令
-make dev              # 启动本地开发服务器 (热重载)
-make test             # 运行测试
-make lint             # 代码检查
-make format           # 自动格式化
-make migrate          # 运行数据库迁移
-make migration MSG=x  # 生成新迁移
-make build            # 构建 Docker 镜像
+# Execute code in a disposable sandbox
+treadstone run "print('hello world')"
+
+# Create a persistent development environment
+treadstone create --template aio --persist
+
+# Run a command inside an existing sandbox
+treadstone exec sb-3f8a -- npm install && npm test
+
+# Check sandbox status
+treadstone status sb-3f8a
+
+# Tear it down
+treadstone destroy sb-3f8a
 ```
 
-## 状态
+## Sandbox Templates
 
-项目处于早期设计阶段。详见 [docs/plans/](docs/zh-CN/plans/) 目录中的设计文档和实施计划。
+Treadstone ships with two built-in templates — no ecosystem to maintain, no
+marketplace to curate.
+
+### Code Runner
+
+Lightweight, stateless, ephemeral. Optimized for fast startup. Suitable for
+code execution, script evaluation, and one-off tasks.
+
+```bash
+treadstone run --template code-runner "import math; print(math.pi)"
+```
+
+### AIO (All-in-One)
+
+Full development environment with a complete toolchain. Supports persistent
+storage. Suitable for multi-step workflows, project scaffolding, and long-running
+tasks.
+
+```bash
+treadstone create --template aio --persist
+```
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────┐
+│  CLI / Python SDK / REST API                         │
+├──────────────────────────────────────────────────────┤
+│  Platform Service Layer          (Treadstone)        │
+│  Auth · API Keys · RBAC · Rate Limiting · Billing    │
+├──────────────────────────────────────────────────────┤
+│  Orchestration Layer                                 │
+│  Kubernetes · agent-sandbox CRD · WarmPool           │
+├──────────────────────────────────────────────────────┤
+│  Sandbox Runtime Layer                               │
+│  Container · gVisor Isolation · Persistent Volumes   │
+└──────────────────────────────────────────────────────┘
+```
+
+**Platform Service Layer** — Authentication, multi-tenancy, API key management,
+rate limiting, and usage metering. This is what turns an open-source sandbox
+runtime into a production-ready service.
+
+**Orchestration Layer** — Kubernetes-native scheduling via
+[agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) CRDs with
+warm pool pre-provisioning for fast startup.
+
+**Sandbox Runtime Layer** — Isolated container execution with gVisor secure
+runtime. Supports both ephemeral (no storage) and persistent (PVC-backed)
+sandbox modes.
+
+## Tech Stack
+
+| Component | Technology |
+|---|---|
+| Backend | Python 3.12+, FastAPI, SQLAlchemy (async), asyncpg |
+| Database | [Neon](https://neon.tech) Serverless PostgreSQL |
+| Orchestration | Kubernetes, [agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) CRD |
+| Isolation | [gVisor](https://gvisor.dev/) (K8s RuntimeClass) |
+| Runtime | [agent-infra/sandbox](https://github.com/agent-infra/sandbox) |
+| Package manager | [uv](https://github.com/astral-sh/uv) |
+| CI/CD | GitHub Actions → GHCR |
+
+## Status
+
+Treadstone is under active development. Here is what works today and what is
+coming next.
+
+| Phase | Scope | Status |
+|---|---|---|
+| **Phase 1** | User auth (JWT, OAuth, API keys), RBAC, invitation system | Done |
+| **Phase 2** | Sandbox CRUD, lifecycle management, K8s sync, HTTP proxy, subdomain routing | Done |
+| **Phase 3** | CLI, Python SDK, agent-facing developer experience | Planned |
+| **Phase 4** | Usage metering, billing (Stripe), quotas | Planned |
+| **Phase 5** | Managed hosting, production hardening, monitoring | Planned |
+
+Design documents and implementation plans are available in the
+[docs/](docs/zh-CN/plans/) directory.
+
+## Development
+
+```bash
+make help             # Show all available commands
+make dev              # Start local dev server (hot reload)
+make test             # Run tests
+make lint             # Lint check
+make format           # Auto-format
+make migrate          # Run database migrations
+make migration MSG=x  # Generate a new migration
+make build            # Build Docker image
+make up               # Spin up local Kind cluster + deploy
+make down             # Tear down local environment
+```
 
 ## License
 
