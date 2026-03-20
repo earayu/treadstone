@@ -25,6 +25,9 @@ serviceAccount:
   create: true
   name: ""
 
+migration:
+  enabled: true
+
 hpa:
   enabled: false
   minReplicas: 2

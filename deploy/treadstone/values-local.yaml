@@ -15,5 +15,8 @@ resources:
     cpu: 100m
     memory: 128Mi
 
+migration:
+  enabled: true
+
 hpa:
   enabled: false
