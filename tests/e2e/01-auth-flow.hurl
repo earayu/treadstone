@@ -1,5 +1,5 @@
 # Auth Flow: health → register → login → get user
-# Cookies persist automatically across requests within this file.
+# Self-contained: registers its own user, no external dependencies.
 
 # ── Health Check ─────────────────────────────────────────────────────────────
 
@@ -14,14 +14,14 @@ jsonpath "$.status" == "ok"
 POST {{base_url}}/v1/auth/register
 Content-Type: application/json
 {
-    "email": "{{test_email}}",
+    "email": "{{email_01}}",
     "password": "{{test_password}}"
 }
 HTTP 201
 [Captures]
 user_id: jsonpath "$.id"
 [Asserts]
-jsonpath "$.email" == "{{test_email}}"
+jsonpath "$.email" == "{{email_01}}"
 jsonpath "$.id" isString
 
 
@@ -29,7 +29,7 @@ jsonpath "$.id" isString
 
 POST {{base_url}}/v1/auth/login
 [FormParams]
-username: {{test_email}}
+username: {{email_01}}
 password: {{test_password}}
 HTTP *
 [Asserts]
@@ -42,5 +42,5 @@ cookie "session" exists
 GET {{base_url}}/v1/auth/user
 HTTP 200
 [Asserts]
-jsonpath "$.email" == "{{test_email}}"
+jsonpath "$.email" == "{{email_01}}"
 jsonpath "$.is_active" == true
