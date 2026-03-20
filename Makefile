@@ -1,4 +1,4 @@
-.PHONY: help install install-hooks dev test test-unit test-api test-integration test-all test-cov lint format migrate migration downgrade gen-openapi build clean ship up down deploy-infra deploy-runtime deploy-app deploy-all undeploy-app undeploy-runtime undeploy-all restart-app kind-create kind-delete port-forward
+.PHONY: help install install-hooks dev test test-unit test-api test-integration test-all test-e2e test-cov lint format migrate migration downgrade gen-openapi build clean ship up down deploy-infra deploy-runtime deploy-app deploy-all undeploy-app undeploy-runtime undeploy-all restart-app kind-create kind-delete port-forward
 
 # ── Development ──────────────────────────────────────────────────────────────
 
@@ -42,6 +42,9 @@ test-integration: ## Run integration tests only (needs real DB)
 
 test-all: ## Run all tests including integration (needs real DB)
 	uv run pytest tests/ -v -m ""
+
+test-e2e: ## Run E2E tests against deployed cluster (BASE_URL=http://localhost)
+	@bash scripts/e2e-test.sh
 
 test-cov: ## Run tests with coverage report
 	uv run pytest tests/ -v --cov=treadstone --cov-report=term-missing --cov-report=html

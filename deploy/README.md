@@ -20,6 +20,7 @@ Each layer's Helm chart provides `values-{local,demo,prod}.yaml`, selected via t
 - Kind installed (`brew install kind`)
 - kubectl installed (`brew install kubectl`)
 - Helm installed (`brew install helm`)
+- Hurl installed (`brew install hurl`) — for E2E tests
 - Neon database connection string ready
 
 ## Environment Configuration Files
@@ -120,7 +121,9 @@ curl http://localhost:8000/health
 
 ## Basic Validation (Smoke Test)
 
-The following commands can quickly verify that the deployment is working. Use `BASE_URL=http://localhost` with Ingress, or `BASE_URL=http://localhost:8000` with port-forward.
+**Automated**: Run `make test-e2e` to execute the full E2E test suite against the deployed service. Override the target with `make test-e2e BASE_URL=http://localhost:8000` when using port-forward.
+
+**Manual**: The following commands can quickly verify that the deployment is working. Use `BASE_URL=http://localhost` with Ingress, or `BASE_URL=http://localhost:8000` with port-forward.
 
 ```bash
 BASE_URL=http://localhost
@@ -238,6 +241,7 @@ make deploy-app        # Deploy app only
 make restart-app       # Rolling restart
 make port-forward      # Forward port to localhost:8000
 make undeploy-all      # Uninstall app + runtime
+make test-e2e          # Run E2E tests against deployed service
 make up                # One-command deploy (includes cluster creation for local)
 make down              # One-command teardown
 ```
