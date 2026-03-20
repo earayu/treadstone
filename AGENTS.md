@@ -8,7 +8,7 @@ Agent-native sandbox service. Run code, build projects, deploy environments — 
 - Database: Neon (Serverless PostgreSQL)
 - Package manager: uv
 - Linter/formatter: ruff
-- Testing: pytest + pytest-asyncio + httpx
+- Testing: pytest + pytest-asyncio + httpx; Hurl for E2E
 - Containerization: Docker
 - Orchestration: Kubernetes (Kind for dev, GKE/EKS/AKS for prod)
 
@@ -24,6 +24,7 @@ treadstone/        # Application source
   auth/            # Authentication
   services/        # Business logic
 tests/             # pytest test suites
+  e2e/             # Hurl E2E tests (run against deployed cluster)
 alembic/           # Database migrations
 deploy/            # Helm charts, Kind config, K8s manifests
 docs/              # Design docs and plans (zh-CN)
@@ -70,7 +71,9 @@ For K8s deployment (Kind cluster, Helm, smoke tests), see [`deploy/README.md`](d
   - `tests/unit/` — pure logic, no IO
   - `tests/api/` — API route tests via ASGITransport
   - `tests/integration/` — requires real DB, marked `@pytest.mark.integration`, excluded by default
+  - `tests/e2e/*.hurl` — E2E tests against a deployed cluster, written in [Hurl](https://hurl.dev) (run with `make test-e2e`)
 - Shared fixtures live in `tests/conftest.py`.
+- After `make up`, run `make test-e2e` to validate the deployment. Prefer this over manual curl exploration.
 
 ## OpenAPI / SDK Generation
 
@@ -100,6 +103,7 @@ Run `make help` for the full list. Key commands:
 |---------|---------|
 | `make dev` | Start dev server (localhost:8000, hot reload) |
 | `make test` | Run tests (excludes integration) |
+| `make test-e2e` | Run E2E tests against deployed cluster |
 | `make lint` / `make format` | Lint check / auto-format |
 | `make migrate` | Apply database migrations |
 | `make migration MSG=x` | Generate a new Alembic migration |

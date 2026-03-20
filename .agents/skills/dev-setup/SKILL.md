@@ -19,13 +19,14 @@ docker --version         # Container builds + Kind cluster
 kind --version           # Local K8s cluster (sandbox dev only)
 kubectl version --client # K8s CLI
 helm version --short     # Helm chart deployment
+hurl --version           # E2E testing (HTTP request runner)
 ```
 
 Install missing tools (macOS):
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
-brew install kind kubectl helm
+brew install kind kubectl helm hurl
 ```
 
 ## 2. Install Python Dependencies

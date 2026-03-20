@@ -104,7 +104,7 @@ If the change affects sandbox orchestration or deployment, verify on a local Kin
 
 ```bash
 make up          # build + deploy to Kind
-# ... run smoke tests from deploy/README.md ...
+make test-e2e    # run E2E tests against the cluster
 make down        # tear down when done
 ```
 
