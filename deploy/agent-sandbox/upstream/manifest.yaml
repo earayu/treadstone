@@ -72,6 +72,15 @@ spec:
         image: registry.k8s.io/agent-sandbox/agent-sandbox-controller:v0.2.1
         args:
         - --leader-elect=true
+        # VENDOR PATCH: --extensions added here (merged from extensions.yaml).
+        # Upstream applies manifest.yaml then extensions.yaml sequentially via
+        # `kubectl apply`, which idempotently updates this Deployment. Helm
+        # applies both files in one install and cannot CREATE the same Deployment
+        # twice, so we merge the flag here and remove the duplicate Deployment
+        # block from extensions.yaml.
+        # When upgrading upstream version: re-check extensions.yaml for any new
+        # Deployment args and re-apply this patch.
+        - --extensions
         ports:
         - name: metrics
           containerPort: 8080
