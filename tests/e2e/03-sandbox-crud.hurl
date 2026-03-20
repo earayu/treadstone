@@ -1,12 +1,20 @@
-# Sandbox CRUD: login → create API key → list templates → create sandbox
-#               → get detail → list → delete sandbox → delete key
-# Requires a registered user (run 01-auth-flow.hurl first via the wrapper).
+# Sandbox CRUD: register → login → create API key → list templates
+#               → create sandbox → get detail → list → delete sandbox → delete key
+# Self-contained: registers its own user, no external dependencies.
 
-# ── Login + Create API Key ───────────────────────────────────────────────────
+# ── Setup: Register + Login + API Key ────────────────────────────────────────
+
+POST {{base_url}}/v1/auth/register
+Content-Type: application/json
+{
+    "email": "{{email_03}}",
+    "password": "{{test_password}}"
+}
+HTTP 201
 
 POST {{base_url}}/v1/auth/login
 [FormParams]
-username: {{test_email}}
+username: {{email_03}}
 password: {{test_password}}
 HTTP *
 [Asserts]

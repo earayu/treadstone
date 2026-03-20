@@ -1,11 +1,19 @@
-# API Key: login → create key → list keys → use key for auth → delete key
-# Requires a registered user (run 01-auth-flow.hurl first via the wrapper).
+# API Key: register → login → create key → list keys → use key for auth → delete key
+# Self-contained: registers its own user, no external dependencies.
 
-# ── Login ────────────────────────────────────────────────────────────────────
+# ── Setup: Register + Login ─────────────────────────────────────────────────
+
+POST {{base_url}}/v1/auth/register
+Content-Type: application/json
+{
+    "email": "{{email_02}}",
+    "password": "{{test_password}}"
+}
+HTTP 201
 
 POST {{base_url}}/v1/auth/login
 [FormParams]
-username: {{test_email}}
+username: {{email_02}}
 password: {{test_password}}
 HTTP *
 [Asserts]
@@ -40,7 +48,7 @@ GET {{base_url}}/v1/me
 Authorization: Bearer {{api_key}}
 HTTP 200
 [Asserts]
-jsonpath "$.email" == "{{test_email}}"
+jsonpath "$.email" == "{{email_02}}"
 
 
 # ── Delete API Key ──────────────────────────────────────────────────────────
