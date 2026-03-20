@@ -9,13 +9,9 @@ service:
   type: ClusterIP
   port: 8000
 
-env:
-  TREADSTONE_DEBUG: "false"
-  TREADSTONE_AUTH_TYPE: "cookie"
-  TREADSTONE_SANDBOX_DOMAIN: ""
-  TREADSTONE_SANDBOX_NAMESPACE: "treadstone"
+env: {}
 
-envSecretRef: ""
+envSecretRef: treadstone-secrets
 
 resources:
   limits:

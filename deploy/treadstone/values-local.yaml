@@ -5,11 +5,7 @@ image:
   tag: latest
   pullPolicy: IfNotPresent
 
-env:
-  TREADSTONE_DEBUG: "true"
-  TREADSTONE_AUTH_TYPE: "cookie"
-  TREADSTONE_SANDBOX_DOMAIN: "sandbox.localhost"
-  TREADSTONE_SANDBOX_NAMESPACE: "treadstone"
+envSecretRef: treadstone-secrets
 
 resources:
   limits:

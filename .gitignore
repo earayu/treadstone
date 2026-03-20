@@ -9,6 +9,9 @@ build/
 .venv/
 .env
 .env.test
+.env.local
+.env.demo
+.env.prod
 
 .mypy_cache/
 .pytest_cache/

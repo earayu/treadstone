@@ -5,10 +5,6 @@ image:
   tag: ""
   pullPolicy: Always
 
-env:
-  TREADSTONE_DEBUG: "false"
-  TREADSTONE_AUTH_TYPE: "cookie"
-
 envSecretRef: treadstone-secrets
 
 resources:
