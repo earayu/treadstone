@@ -70,7 +70,7 @@ async def test_register_creates_user_in_db():
     """Register via API and verify user exists in real DB."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post(
-            "/api/auth/register",
+            "/v1/auth/register",
             json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
         )
     assert resp.status_code == 201
@@ -95,13 +95,13 @@ async def test_full_auth_flow():
     """End-to-end: register -> login -> get user -> change password -> login with new password."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         reg_resp = await client.post(
-            "/api/auth/register",
+            "/v1/auth/register",
             json={"email": TEST_EMAIL_2, "password": TEST_PASSWORD},
         )
         assert reg_resp.status_code == 201
 
         login_resp = await client.post(
-            "/api/auth/login",
+            "/v1/auth/login",
             data={"username": TEST_EMAIL_2, "password": TEST_PASSWORD},
         )
         assert login_resp.status_code in (200, 204)
@@ -109,23 +109,23 @@ async def test_full_auth_flow():
         assert session_cookie is not None
 
         client.cookies.set("session", session_cookie)
-        user_resp = await client.get("/api/auth/user")
+        user_resp = await client.get("/v1/auth/user")
         assert user_resp.status_code == 200
         assert user_resp.json()["email"] == TEST_EMAIL_2
 
         new_password = "NewStr0ng_Pass!"
         change_resp = await client.post(
-            "/api/auth/change-password",
+            "/v1/auth/change-password",
             json={"old_password": TEST_PASSWORD, "new_password": new_password},
         )
         assert change_resp.status_code == 200
 
-        logout_resp = await client.post("/api/auth/logout")
+        logout_resp = await client.post("/v1/auth/logout")
         assert logout_resp.status_code in (200, 204)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         login2_resp = await client.post(
-            "/api/auth/login",
+            "/v1/auth/login",
             data={"username": TEST_EMAIL_2, "password": new_password},
         )
         assert login2_resp.status_code in (200, 204)
@@ -136,16 +136,16 @@ async def test_full_auth_flow():
 async def test_duplicate_register_returns_400():
     """Registering same email twice returns 400."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        await client.post("/api/auth/register", json={"email": TEST_EMAIL, "password": TEST_PASSWORD})
-        resp = await client.post("/api/auth/register", json={"email": TEST_EMAIL, "password": TEST_PASSWORD})
+        await client.post("/v1/auth/register", json={"email": TEST_EMAIL, "password": TEST_PASSWORD})
+        resp = await client.post("/v1/auth/register", json={"email": TEST_EMAIL, "password": TEST_PASSWORD})
     assert resp.status_code == 400
 
 
 @pytest.mark.integration
 async def test_config_endpoint_returns_auth_info():
-    """/api/config returns auth configuration from real app."""
+    """/v1/config returns auth configuration from real app."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.get("/api/config")
+        resp = await client.get("/v1/config")
     assert resp.status_code == 200
     data = resp.json()
     assert data["auth"]["type"] == "cookie"
