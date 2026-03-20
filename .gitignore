@@ -23,6 +23,7 @@ htmlcov/
 *.sqlite3
 
 openapi.json
+reports/
 
 .DS_Store
 Thumbs.db
