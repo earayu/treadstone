@@ -1,4 +1,4 @@
-.PHONY: help install install-hooks dev test test-unit test-api test-integration test-all test-cov lint format migrate migration downgrade gen-openapi build clean ship up down deploy-infra deploy-runtime deploy-app deploy-all undeploy-app undeploy-runtime undeploy-all kind-create kind-delete
+.PHONY: help install install-hooks dev test test-unit test-api test-integration test-all test-cov lint format migrate migration downgrade gen-openapi build clean ship up down deploy-infra deploy-runtime deploy-app deploy-all undeploy-app undeploy-runtime undeploy-all restart-app kind-create kind-delete
 
 # ── Development ──────────────────────────────────────────────────────────────
 
@@ -88,12 +88,25 @@ deploy-runtime: ## Deploy sandbox templates + warmpool
 		-n treadstone -f deploy/sandbox-runtime/values-$(ENV).yaml \
 		--create-namespace
 
-deploy-app: ## Deploy Treadstone application
+deploy-app: ## Deploy Treadstone application (creates K8s secret from .env.<ENV>)
+	@ENV_FILE=".env.$(ENV)"; \
+	if [ ! -f "$$ENV_FILE" ]; then \
+		echo "Error: $$ENV_FILE not found. Run: cp .env.example .env.$(ENV)"; \
+		exit 1; \
+	fi; \
+	kubectl create namespace treadstone --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null; \
+	kubectl create secret generic treadstone-secrets \
+		-n treadstone \
+		--from-env-file="$$ENV_FILE" \
+		--dry-run=client -o yaml | kubectl apply -f -
 	helm upgrade --install treadstone deploy/treadstone \
 		-n treadstone -f deploy/treadstone/values-$(ENV).yaml \
 		--create-namespace
 
 deploy-all: deploy-infra deploy-runtime deploy-app ## Deploy everything (infra → runtime → app)
+
+restart-app: ## Rolling restart to pick up new env vars
+	kubectl rollout restart deployment/treadstone -n treadstone
 
 undeploy-app: ## Undeploy Treadstone application
 	helm uninstall treadstone -n treadstone 2>/dev/null || true
