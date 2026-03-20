@@ -115,3 +115,7 @@ GitHub 操作直接使用 `gh` CLI。
 - 绝不提交 .env、secrets 或凭证
 - 每个 PR 创建后，关联到 GitHub Project Board: `gh project item-add 5 --owner earayu --url <PR_URL>`
 - PR/Issue 创建后应在 Project Board（https://github.com/users/earayu/projects/5/views/1）中维护状态
+
+## Cursor Cloud specific instructions
+
+If you are a Cursor Cloud Agent, read [`cursor-cloud.md`](cursor-cloud.md) for environment-specific setup, testing, and K8s instructions.
