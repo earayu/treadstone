@@ -1,4 +1,4 @@
-.PHONY: help install install-hooks dev test test-unit test-all test-cov lint format migrate migration downgrade gen-openapi build clean ship deploy-infra deploy-runtime deploy-app deploy-all undeploy-app undeploy-runtime undeploy-all kind-create kind-delete
+.PHONY: help install install-hooks dev test test-unit test-api test-integration test-all test-cov lint format migrate migration downgrade gen-openapi build clean ship up down deploy-infra deploy-runtime deploy-app deploy-all undeploy-app undeploy-runtime undeploy-all kind-create kind-delete
 
 # ── Development ──────────────────────────────────────────────────────────────
 
@@ -16,20 +16,6 @@ install-hooks: ## Install git hooks (auto-called by install)
 dev: ## Start local dev server with hot reload
 	uv run uvicorn treadstone.main:app --reload --host 0.0.0.0 --port 8000
 
-# ── Testing ──────────────────────────────────────────────────────────────────
-
-test: ## Run tests (excludes integration)
-	uv run pytest tests/ -v
-
-test-unit: ## Run unit tests only
-	uv run pytest tests/unit/ -v
-
-test-all: ## Run all tests including integration (needs real DB)
-	uv run pytest tests/ -v -m ""
-
-test-cov: ## Run tests with coverage report
-	uv run pytest tests/ -v --cov=treadstone --cov-report=term-missing --cov-report=html
-
 # ── Code Quality ─────────────────────────────────────────────────────────────
 
 lint: ## Run linter and formatter check
@@ -39,6 +25,26 @@ lint: ## Run linter and formatter check
 format: ## Auto-format code
 	uv run ruff check --fix treadstone/ tests/
 	uv run ruff format treadstone/ tests/
+
+# ── Testing ──────────────────────────────────────────────────────────────────
+
+test: ## Run tests (excludes integration)
+	uv run pytest tests/ -v
+
+test-unit: ## Run unit tests only
+	uv run pytest tests/unit/ -v
+
+test-api: ## Run API tests only
+	uv run pytest tests/api/ -v
+
+test-integration: ## Run integration tests only (needs real DB)
+	uv run pytest tests/integration/ -v -m integration
+
+test-all: ## Run all tests including integration (needs real DB)
+	uv run pytest tests/ -v -m ""
+
+test-cov: ## Run tests with coverage report
+	uv run pytest tests/ -v --cov=treadstone --cov-report=term-missing --cov-report=html
 
 # ── Database ─────────────────────────────────────────────────────────────────
 
@@ -70,14 +76,14 @@ clean: ## Remove build artifacts and caches
 
 # ── Deploy (Helm) ────────────────────────────────────────────────────────────
 
-ENV ?= dev
+ENV ?= local
 
 deploy-infra: ## Deploy agent-sandbox controller (once per cluster)
 	helm upgrade --install agent-sandbox deploy/agent-sandbox \
 		-f deploy/agent-sandbox/values-$(ENV).yaml \
 		--create-namespace
 
-deploy-runtime: ## Deploy sandbox router + templates + warmpool
+deploy-runtime: ## Deploy sandbox templates + warmpool
 	helm upgrade --install sandbox-runtime deploy/sandbox-runtime \
 		-n treadstone -f deploy/sandbox-runtime/values-$(ENV).yaml \
 		--create-namespace
@@ -97,6 +103,14 @@ undeploy-runtime: ## Undeploy sandbox runtime
 
 undeploy-all: undeploy-app undeploy-runtime ## Undeploy app + runtime (keeps infra)
 	@echo "Note: agent-sandbox controller left in place. Run 'helm uninstall agent-sandbox' to remove."
+
+# ── Environment Lifecycle ─────────────────────────────────────────────────────
+
+up: ## Bring up full environment: make up / make up ENV=demo
+	@bash scripts/up.sh $(ENV)
+
+down: ## Tear down environment: make down / make down ENV=demo
+	@bash scripts/down.sh $(ENV)
 
 # ── Kind (local K8s) ─────────────────────────────────────────────────────────
 

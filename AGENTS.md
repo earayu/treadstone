@@ -30,45 +30,38 @@ docs/                # 设计文档和计划
 .agents/skills/      # AI Agent 可复用 skill
 ```
 
-## Essential Commands
+## Workflows
 
-所有项目命令通过 Makefile 暴露，运行 `make help` 查看全部。
+所有命令通过 Makefile 暴露，运行 `make help` 查看完整列表。
 
-```bash
-# Development
-make install         # 安装依赖 (首次设置)
-make dev             # 启动本地开发服务器 (热重载)
+### Quick Ship (small changes, docs, config)
 
-# Testing
-make test            # 运行测试（排除 integration）
-make test-unit       # 仅运行 unit 测试
-make test-all        # 运行全部测试（含 integration，需真实 DB）
-make test-cov        # 运行测试 + 覆盖率报告
-
-# Code Quality
-make lint            # 代码检查
-make format          # 自动格式化
-
-# Database
-make migrate         # 运行数据库迁移
-make migration MSG=x # 生成新迁移（MSG 必填）
-make downgrade       # 回滚上一次迁移
-
-# OpenAPI / SDK
-make gen-openapi     # 导出 openapi.json（不需要启动服务器）
-
-# Build
-make build           # 构建 Docker 镜像
-
-# Git & GitHub
-make ship MSG=x      # add + commit + push（MSG 必填，仅限功能分支）
+```
+git checkout -b feat/xxx → develop → make test → make ship MSG="feat: ..."
 ```
 
-GitHub 操作直接使用 `gh` CLI。
+### Full Feature Development
 
-**Skills：**
-- `.agents/skills/dev-setup/` — 首次设置本地环境（只需一次）
-- `.agents/skills/development-lifecycle/` — 日常功能开发生命周期（每次开发参考）
+```
+git checkout -b feat/xxx → TDD cycles (make test) → human review
+→ make up → verify on K8s → make ship MSG="feat: ..."
+```
+
+### Automation after ship
+
+- **pre-commit hook** automatically runs format + lint on every commit
+- **pre-push hook** blocks direct push to main
+- **CI** (lint, test, integration, build) runs automatically on PR
+- **GitHub Actions** automatically adds new PRs and Issues to the Project Board
+
+### Database Changes
+
+Edit `treadstone/models/` → `make migration MSG="..."` → `make migrate` → verify → commit migration files
+
+### Skills
+
+- `.agents/skills/dev-setup/` — first-time local environment setup
+- `.agents/skills/development-lifecycle/` — daily development lifecycle reference
 
 ## Code Conventions
 
@@ -113,8 +106,7 @@ GitHub 操作直接使用 `gh` CLI。
 - Conventional commits: feat:, fix:, chore:, docs:, test:, refactor:
 - 频繁提交，每个 commit 是一个小的逻辑单元
 - 绝不提交 .env、secrets 或凭证
-- 每个 PR 创建后，关联到 GitHub Project Board: `gh project item-add 5 --owner earayu --url <PR_URL>`
-- PR/Issue 创建后应在 Project Board（https://github.com/users/earayu/projects/5/views/1）中维护状态
+- PR 和 Issue 创建后会被 GitHub Actions 自动添加到 [Project Board](https://github.com/users/earayu/projects/5/views/1)
 
 ## Cursor Cloud specific instructions
 

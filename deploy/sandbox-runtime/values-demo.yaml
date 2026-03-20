@@ -1,0 +1,13 @@
+sandboxTemplate:
+  name: treadstone-sandbox
+  image: ghcr.io/agent-infra/sandbox:latest
+  containerPort: 8080
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+      ephemeral-storage: 512Mi
+
+warmPool:
+  enabled: false
+  replicas: 1

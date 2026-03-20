@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "=== pre-commit: format + lint ==="
+
+uv run ruff check --fix treadstone/ tests/
+uv run ruff format treadstone/ tests/
+
+# Re-stage files that were auto-formatted
+git diff --name-only | xargs -r git add
+
+if ! uv run ruff check treadstone/ tests/; then
+    echo "ERROR: Lint check failed. Fix issues above, then commit again."
+    exit 1
+fi
+
+if ! uv run ruff format --check treadstone/ tests/; then
+    echo "ERROR: Format check failed."
+    exit 1
+fi
+
+echo "pre-commit checks passed."
