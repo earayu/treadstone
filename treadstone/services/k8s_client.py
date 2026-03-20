@@ -293,14 +293,8 @@ _k8s_client: K8sClientProtocol | None = None
 def get_k8s_client() -> K8sClientProtocol:
     global _k8s_client
     if _k8s_client is None:
-        from treadstone.config import settings
-
-        if settings.debug:
-            logger.info("Using FakeK8sClient (debug mode)")
-            _k8s_client = FakeK8sClient()
-        else:
-            logger.info("Using Kr8sClient (production mode)")
-            _k8s_client = Kr8sClient()
+        logger.info("Using Kr8sClient")
+        _k8s_client = Kr8sClient()
     return _k8s_client
 
 
