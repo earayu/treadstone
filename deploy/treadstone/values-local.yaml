@@ -20,3 +20,12 @@ migration:
 
 hpa:
   enabled: false
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: ""
+      paths:
+        - path: /
+          pathType: Prefix

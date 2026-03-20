@@ -20,3 +20,13 @@ migration:
 
 hpa:
   enabled: false
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: demo.treadstone-ai.dev
+      paths:
+        - path: /
+          pathType: Prefix

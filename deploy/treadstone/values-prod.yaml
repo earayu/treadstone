@@ -23,3 +23,17 @@ hpa:
   minReplicas: 2
   maxReplicas: 10
   targetCPUUtilizationPercentage: 80
+
+ingress:
+  enabled: true
+  className: ""
+  annotations: {}
+  hosts:
+    - host: api.treadstone-ai.dev
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: treadstone-tls
+      hosts:
+        - api.treadstone-ai.dev

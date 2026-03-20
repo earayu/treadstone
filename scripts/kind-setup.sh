@@ -41,6 +41,24 @@ create_cluster() {
     kubectl cluster-info --context "kind-$CLUSTER_NAME"
 }
 
+install_ingress_nginx() {
+    if kubectl get namespace ingress-nginx &>/dev/null && \
+       kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --no-headers 2>/dev/null | grep -q Running; then
+        echo "ingress-nginx controller already running, skipping install."
+        return 0
+    fi
+
+    echo ""
+    echo "Installing ingress-nginx controller ..."
+    kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+    echo "Waiting for ingress-nginx to be ready (timeout 120s) ..."
+    kubectl wait --namespace ingress-nginx \
+        --for=condition=ready pod \
+        --selector=app.kubernetes.io/component=controller \
+        --timeout=120s
+    echo "ingress-nginx is ready."
+}
+
 verify_cluster() {
     echo ""
     echo "Verifying cluster nodes ..."
@@ -54,10 +72,11 @@ main() {
     echo ""
     check_prerequisites
     create_cluster
+    install_ingress_nginx
     verify_cluster
     echo ""
     echo "Next steps:"
-    echo "  make deploy-all ENV=dev"
+    echo "  make deploy-all ENV=local"
 }
 
 main "$@"

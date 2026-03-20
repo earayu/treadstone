@@ -1,4 +1,4 @@
-.PHONY: help install install-hooks dev test test-unit test-api test-integration test-all test-cov lint format migrate migration downgrade gen-openapi build clean ship up down deploy-infra deploy-runtime deploy-app deploy-all undeploy-app undeploy-runtime undeploy-all restart-app kind-create kind-delete
+.PHONY: help install install-hooks dev test test-unit test-api test-integration test-all test-cov lint format migrate migration downgrade gen-openapi build clean ship up down deploy-infra deploy-runtime deploy-app deploy-all undeploy-app undeploy-runtime undeploy-all restart-app kind-create kind-delete port-forward
 
 # ── Development ──────────────────────────────────────────────────────────────
 
@@ -107,6 +107,9 @@ deploy-all: deploy-infra deploy-runtime deploy-app ## Deploy everything (infra �
 
 restart-app: ## Rolling restart to pick up new env vars
 	kubectl rollout restart deployment/treadstone -n treadstone
+
+port-forward: ## Port-forward treadstone service to localhost:8000
+	kubectl -n treadstone port-forward svc/treadstone-treadstone 8000:8000
 
 undeploy-app: ## Undeploy Treadstone application
 	helm uninstall treadstone -n treadstone 2>/dev/null || true
