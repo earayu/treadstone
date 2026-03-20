@@ -1,13 +1,38 @@
-sandboxTemplate:
-  name: treadstone-sandbox
-  image: ghcr.io/agent-infra/sandbox:latest
-  containerPort: 8080
-  resources:
-    requests:
-      cpu: 250m
-      memory: 512Mi
-      ephemeral-storage: 512Mi
+image: ghcr.io/agent-infra/sandbox:latest
+containerPort: 8080
 
-warmPool:
-  enabled: false
-  replicas: 1
+sandboxTemplates:
+  - name: aio-sandbox-tiny
+    displayName: "AIO Sandbox Tiny"
+    description: "Lightweight sandbox for code execution and scripting"
+    cpu: { requests: "250m", limits: "500m" }
+    memory: { requests: "512Mi", limits: "1Gi" }
+    warmPool: { enabled: false, replicas: 1 }
+
+  - name: aio-sandbox-small
+    displayName: "AIO Sandbox Small"
+    description: "Small sandbox for simple development tasks"
+    cpu: { requests: "500m", limits: "1" }
+    memory: { requests: "1Gi", limits: "2Gi" }
+    warmPool: { enabled: false, replicas: 1 }
+
+  - name: aio-sandbox-medium
+    displayName: "AIO Sandbox Medium"
+    description: "General-purpose development environment"
+    cpu: { requests: "1", limits: "2" }
+    memory: { requests: "2Gi", limits: "4Gi" }
+    warmPool: { enabled: false, replicas: 1 }
+
+  - name: aio-sandbox-large
+    displayName: "AIO Sandbox Large"
+    description: "Full-featured sandbox with browser automation"
+    cpu: { requests: "2", limits: "4" }
+    memory: { requests: "4Gi", limits: "8Gi" }
+    warmPool: { enabled: false, replicas: 1 }
+
+  - name: aio-sandbox-xlarge
+    displayName: "AIO Sandbox XLarge"
+    description: "Heavy workloads with maximum resources"
+    cpu: { requests: "4", limits: "8" }
+    memory: { requests: "8Gi", limits: "16Gi" }
+    warmPool: { enabled: false, replicas: 1 }
