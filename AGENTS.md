@@ -1,6 +1,6 @@
 # Treadstone
 
-Sandbox + Skills 组合为可复用垂直 Agent 的开放平台与市场。
+Agent-native sandbox service. Run code, build projects, deploy environments — via CLI, SDK, or REST API. Open source and self-hostable.
 
 ## Tech Stack
 
@@ -15,99 +15,93 @@ Sandbox + Skills 组合为可复用垂直 Agent 的开放平台与市场。
 ## Project Structure
 
 ```
-treadstone/          # 应用源码
-  main.py            # FastAPI 入口
-  config.py          # pydantic-settings 配置
-  core/              # 数据库、共享工具
-  models/            # SQLAlchemy 模型
-  api/               # API 路由
-  auth/              # 认证
-  services/          # 业务逻辑
-tests/               # pytest 测试
-alembic/             # 数据库迁移
-deploy/              # K8s manifests
-docs/                # 设计文档和计划
-.agents/skills/      # AI Agent 可复用 skill
+treadstone/        # Application source
+  main.py          # FastAPI entrypoint
+  config.py        # pydantic-settings configuration
+  core/            # Database engine, shared utilities
+  models/          # SQLAlchemy models
+  api/             # API routers
+  auth/            # Authentication
+  services/        # Business logic
+tests/             # pytest test suites
+alembic/           # Database migrations
+deploy/            # Helm charts, Kind config, K8s manifests
+docs/              # Design docs and plans (zh-CN)
+.agents/skills/    # AI Agent reusable skills
 ```
 
-## Workflows
+## Skills
 
-所有命令通过 Makefile 暴露，运行 `make help` 查看完整列表。
+Skills provide step-by-step operational guides. AGENTS.md defines rules and conventions; skills define procedures.
 
-### Quick Ship (small changes, docs, config)
+| Skill | When to use |
+|-------|-------------|
+| `dev-setup` | First-time environment setup (once per clone) |
+| `dev-lifecycle` | Every feature/fix: branch, TDD, ship, PR, merge |
+| `database-migration` | Adding/modifying SQLAlchemy models and Alembic migrations |
+| `neon-postgres` | Neon-specific questions (branching, connection methods, SDKs) |
 
-```
-git checkout -b feat/xxx → develop → make test → make ship MSG="feat: ..."
-```
-
-### Full Feature Development
-
-```
-git checkout -b feat/xxx → TDD cycles (make test) → human review
-→ make up → verify on K8s → make ship MSG="feat: ..."
-```
-
-### Automation after ship
-
-- **pre-commit hook** automatically runs format + lint on every commit
-- **pre-push hook** blocks direct push to main
-- **CI** (lint, test, integration, build) runs automatically on PR
-- **GitHub Actions** automatically adds new PRs and Issues to the Project Board
-
-### Database Changes
-
-Edit `treadstone/models/` → `make migration MSG="..."` → `make migrate` → verify → commit migration files
-
-### Skills
-
-- `.agents/skills/dev-setup/` — first-time local environment setup
-- `.agents/skills/development-lifecycle/` — daily development lifecycle reference
+For K8s deployment (Kind cluster, Helm, smoke tests), see [`deploy/README.md`](deploy/README.md).
 
 ## Code Conventions
 
-- 用开发者的语言和开发者沟通，注释、commit message用英语。文档默认用中文放在docs/zh-CN目录。
-- **GitHub 上所有公开内容必须使用英文**：commit messages, PR title/body, Issue title/body, review comments, release notes。
-- Async everywhere: 所有 DB 操作、HTTP 调用、API handler 必须 async
-- TDD: 先写失败测试 → 实现 → 验证通过
-- DRY, YAGNI: 不做过早抽象
-- 所有函数签名必须有 type hints
-- Ruff rules: E, F, I, UP (见 pyproject.toml)
-- 行宽: 120
+- All code comments and commit messages in English. Docs default to Chinese in `docs/zh-CN/`.
+- **All GitHub-public content must be in English**: commit messages, PR titles/bodies, Issue titles/bodies, review comments, release notes.
+- Async everywhere: all DB operations, HTTP calls, and API handlers must be async.
+- TDD: write a failing test first, implement, verify it passes.
+- DRY, YAGNI: no premature abstraction.
+- All function signatures must have type hints.
+- Ruff rules: E, F, I, UP (see `pyproject.toml`). Line width: 120.
 
 ## Database
 
-- Neon Serverless PostgreSQL，连接串通过 TREADSTONE_DATABASE_URL 环境变量注入
-- SQLAlchemy async engine + asyncpg driver
-- Alembic 迁移（alembic 使用 sync URL，需去掉 +asyncpg）
-- 所有连接串必须带 ?sslmode=require（asyncpg 端通过 ssl context 处理，非 URL 参数）
+- Neon Serverless PostgreSQL. Connection string injected via `TREADSTONE_DATABASE_URL` env var.
+- SQLAlchemy async engine + asyncpg driver.
+- Alembic migrations (Alembic uses a sync URL — `env.py` strips `+asyncpg` automatically).
+- All connection strings must include `?sslmode=require`.
+- For model design conventions and the migration workflow, see the `database-migration` skill.
 
 ## Testing
 
-- pytest-asyncio，asyncio_mode = "auto"（无需手动标记 @pytest.mark.asyncio）
-- 用 httpx.AsyncClient + ASGITransport 测试 API（无需启动真实服务器）
-- 测试中用 monkeypatch 设置环境变量，不依赖 .env 文件
-- 测试三层结构：
-  - `tests/unit/` — 纯逻辑，无 IO
-  - `tests/api/` — API 路由测试，用 ASGITransport
-  - `tests/integration/` — 需要真实 DB，标记 @pytest.mark.integration，默认不运行
-- 共享 fixture 放在 `tests/conftest.py`（如 httpx client）
+- pytest-asyncio with `asyncio_mode = "auto"` (no need for `@pytest.mark.asyncio`).
+- API tests use `httpx.AsyncClient` + `ASGITransport` (no real server needed).
+- Use `monkeypatch` for env vars in tests — never depend on `.env` files.
+- Test directory structure:
+  - `tests/unit/` — pure logic, no IO
+  - `tests/api/` — API route tests via ASGITransport
+  - `tests/integration/` — requires real DB, marked `@pytest.mark.integration`, excluded by default
+- Shared fixtures live in `tests/conftest.py`.
 
 ## OpenAPI / SDK Generation
 
-- Code-first: 从 FastAPI 代码自动生成 OpenAPI spec，不维护静态 YAML
-- `make gen-openapi` 导出 `openapi.json`（构建产物，已加入 .gitignore）
-- 所有 API router 必须设置 `tags=["xxx"]`，SDK 方法名依赖 tag + 函数名
-- 未来生成前端 TypeScript SDK：`npx @hey-api/openapi-ts -i openapi.json -o src/client`
-- 未来生成 Python SDK：`openapi-python-client generate --path openapi.json`
+- Code-first: OpenAPI spec is auto-generated from FastAPI code. No static YAML to maintain.
+- `make gen-openapi` exports `openapi.json` (build artifact, gitignored).
+- All API routers must set `tags=["xxx"]` — SDK method names depend on tag + function name.
 
 ## Git Workflow
 
-- **永远不要直接 push 到 main 分支**，所有合并必须走 Pull Request
-- Conventional commits: feat:, fix:, chore:, docs:, test:, refactor:
-- 频繁提交，每个 commit 是一个小的逻辑单元
-- 绝不提交 .env、secrets 或凭证
-- PR 和 Issue 创建后会被 GitHub Actions 自动添加到 [Project Board](https://github.com/users/earayu/projects/5/views/1)
+- **Never push directly to main.** All merges go through Pull Requests.
+- Conventional Commits: `feat:`, `fix:`, `chore:`, `docs:`, `test:`, `refactor:`.
+- Commit frequently. Each commit should be one small logical unit.
+- Never commit `.env`, secrets, or credentials.
+- PRs and Issues are automatically added to the [Project Board](https://github.com/users/earayu/projects/5/views/1) by GitHub Actions.
 
-## Cursor Cloud specific instructions
+## Automation
 
-If you are a Cursor Cloud Agent, read [`cursor-cloud.md`](cursor-cloud.md) for environment-specific setup, testing, and K8s instructions.
+- **pre-commit hook**: auto-runs `ruff format` + `ruff check` on every commit.
+- **pre-push hook**: blocks direct push to main.
+- **CI** (GitHub Actions): lint + test (parallel) + integration (PR only) + build. Any failure blocks merge.
+
+## Quick Command Reference
+
+Run `make help` for the full list. Key commands:
+
+| Command | Purpose |
+|---------|---------|
+| `make dev` | Start dev server (localhost:8000, hot reload) |
+| `make test` | Run tests (excludes integration) |
+| `make lint` / `make format` | Lint check / auto-format |
+| `make migrate` | Apply database migrations |
+| `make migration MSG=x` | Generate a new Alembic migration |
+| `make up` / `make down` | Full K8s environment up/down (see `deploy/README.md`) |
+| `make ship MSG=x` | git add + commit + push (feature branches only) |

@@ -24,8 +24,6 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["uv", "run", "alembic", "upgrade", "head"]
           envFrom:
-            - configMapRef:
-                name: {{ include "treadstone.fullname" . }}-config
             {{- if .Values.envSecretRef }}
             - secretRef:
                 name: {{ .Values.envSecretRef }}
