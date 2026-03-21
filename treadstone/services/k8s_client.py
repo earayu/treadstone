@@ -1,9 +1,9 @@
 """K8s client for agent-sandbox CRD operations.
 
-Treadstone interacts with 3 CRD types from kubernetes-sigs/agent-sandbox:
-- SandboxClaim (extensions.agents.x-k8s.io) — Treadstone creates/deletes these
-- Sandbox (agents.x-k8s.io) — Created by Claim Controller, Treadstone watches + scales
-- SandboxTemplate (extensions.agents.x-k8s.io) — Read-only, pre-deployed by admin
+Treadstone uses dual-path sandbox provisioning:
+- SandboxClaim path (extensions.agents.x-k8s.io) — ephemeral sandboxes, WarmPool-eligible
+- Direct Sandbox path (agents.x-k8s.io) — persistent storage via volumeClaimTemplates
+- SandboxTemplate (extensions.agents.x-k8s.io) — Read-only config catalog
 
 Two implementations:
 - FakeK8sClient: In-memory stub for testing
@@ -41,7 +41,20 @@ class K8sClientProtocol(Protocol):
 
     async def get_sandbox_claim(self, name: str, namespace: str) -> dict[str, Any] | None: ...
 
-    # ── Sandbox (agents.x-k8s.io) — read + scale only ──
+    # ── Sandbox (agents.x-k8s.io) — direct create + read + scale ──
+    async def create_sandbox(
+        self,
+        name: str,
+        namespace: str,
+        image: str,
+        container_port: int,
+        resources: dict[str, Any],
+        volume_claim_templates: list[dict[str, Any]] | None = None,
+        shutdown_time: datetime | None = None,
+    ) -> dict[str, Any]: ...
+
+    async def delete_sandbox(self, name: str, namespace: str) -> bool: ...
+
     async def get_sandbox(self, name: str, namespace: str) -> dict[str, Any] | None: ...
 
     async def list_sandboxes(self, namespace: str) -> list[dict[str, Any]]: ...
@@ -108,7 +121,57 @@ class Kr8sClient:
         except Exception:
             return None
 
-    # ── Sandbox ──
+    # ── Sandbox (direct create) ──
+
+    async def create_sandbox(
+        self,
+        name: str,
+        namespace: str,
+        image: str,
+        container_port: int,
+        resources: dict[str, Any],
+        volume_claim_templates: list[dict[str, Any]] | None = None,
+        shutdown_time: datetime | None = None,
+    ) -> dict[str, Any]:
+        api = await self._get_api()
+        container: dict[str, Any] = {
+            "name": "sandbox",
+            "image": image,
+            "ports": [{"containerPort": container_port}],
+            "resources": resources,
+        }
+        if volume_claim_templates:
+            container["volumeMounts"] = [
+                {"name": vct["metadata"]["name"], "mountPath": "/home/gem/workspace"} for vct in volume_claim_templates
+            ]
+
+        manifest: dict[str, Any] = {
+            "apiVersion": f"{SANDBOX_API_GROUP}/{SANDBOX_API_VERSION}",
+            "kind": "Sandbox",
+            "metadata": {"name": name, "namespace": namespace},
+            "spec": {
+                "replicas": 1,
+                "podTemplate": {"spec": {"containers": [container], "restartPolicy": "OnFailure"}},
+            },
+        }
+        if volume_claim_templates:
+            manifest["spec"]["volumeClaimTemplates"] = volume_claim_templates
+        if shutdown_time:
+            manifest["spec"]["shutdownTime"] = format_shutdown_time(shutdown_time)
+
+        url = f"/apis/{SANDBOX_API_GROUP}/{SANDBOX_API_VERSION}/namespaces/{namespace}/sandboxes"
+        logger.info("K8s POST %s (name=%s, direct=true)", url, name)
+        async with api.call_api("POST", base=url, version="", json=manifest) as resp:
+            return resp.json()
+
+    async def delete_sandbox(self, name: str, namespace: str) -> bool:
+        api = await self._get_api()
+        url = f"/apis/{SANDBOX_API_GROUP}/{SANDBOX_API_VERSION}/namespaces/{namespace}/sandboxes/{name}"
+        logger.info("K8s DELETE %s", url)
+        async with api.call_api("DELETE", base=url, version="") as resp:
+            return resp.status_code < 400
+
+    # ── Sandbox (read + scale) ──
 
     async def get_sandbox(self, name: str, namespace: str) -> dict[str, Any] | None:
         api = await self._get_api()
@@ -148,25 +211,26 @@ class Kr8sClient:
         async with api.call_api("GET", base=url, version="") as resp:
             data = resp.json()
             items = data.get("items", [])
-            return [
-                {
-                    "name": t["metadata"]["name"],
-                    "display_name": t["metadata"].get("annotations", {}).get("display-name", t["metadata"]["name"]),
-                    "description": t["metadata"].get("annotations", {}).get("description", ""),
-                    "runtime_type": "aio",
-                    "resource_spec": _extract_resource_spec(t),
-                }
-                for t in items
-            ]
+            return [_parse_sandbox_template(t) for t in items]
 
 
-def _extract_resource_spec(template: dict) -> dict:
+def _parse_sandbox_template(template: dict) -> dict:
     containers = template.get("spec", {}).get("podTemplate", {}).get("spec", {}).get("containers", [])
+    image = ""
+    resource_spec: dict[str, str] = {}
     if containers:
+        image = containers[0].get("image", "")
         resources = containers[0].get("resources", {})
         requests = resources.get("requests", {})
-        return {"cpu": requests.get("cpu", ""), "memory": requests.get("memory", "")}
-    return {}
+        resource_spec = {"cpu": requests.get("cpu", ""), "memory": requests.get("memory", "")}
+    return {
+        "name": template["metadata"]["name"],
+        "display_name": template["metadata"].get("annotations", {}).get("display-name", template["metadata"]["name"]),
+        "description": template["metadata"].get("annotations", {}).get("description", ""),
+        "runtime_type": "aio",
+        "image": image,
+        "resource_spec": resource_spec,
+    }
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -181,12 +245,15 @@ def _make_ready_condition(status: str = "False", reason: str = "DependenciesNotR
 class FakeK8sClient:
     """In-memory stub for testing — simulates the agent-sandbox controller behavior."""
 
+    _DEFAULT_IMAGE = "ghcr.io/agent-infra/sandbox:latest"
+
     _DEFAULT_TEMPLATES: tuple[dict[str, Any], ...] = (
         {
             "name": "aio-sandbox-tiny",
             "display_name": "AIO Sandbox Tiny",
             "description": "Lightweight sandbox for code execution and scripting",
             "runtime_type": "aio",
+            "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "250m", "memory": "512Mi"},
         },
         {
@@ -194,6 +261,7 @@ class FakeK8sClient:
             "display_name": "AIO Sandbox Small",
             "description": "Small sandbox for simple development tasks",
             "runtime_type": "aio",
+            "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "500m", "memory": "1Gi"},
         },
         {
@@ -201,6 +269,7 @@ class FakeK8sClient:
             "display_name": "AIO Sandbox Medium",
             "description": "General-purpose development environment",
             "runtime_type": "aio",
+            "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "1", "memory": "2Gi"},
         },
         {
@@ -208,6 +277,7 @@ class FakeK8sClient:
             "display_name": "AIO Sandbox Large",
             "description": "Full-featured sandbox with browser automation",
             "runtime_type": "aio",
+            "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "2", "memory": "4Gi"},
         },
         {
@@ -215,6 +285,7 @@ class FakeK8sClient:
             "display_name": "AIO Sandbox XLarge",
             "description": "Heavy workloads with maximum resources",
             "runtime_type": "aio",
+            "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "4", "memory": "8Gi"},
         },
     )
@@ -262,6 +333,50 @@ class FakeK8sClient:
 
     async def get_sandbox_claim(self, name: str, namespace: str) -> dict[str, Any] | None:
         return self._claims.get(f"{namespace}/{name}")
+
+    # ── Sandbox (direct create) ──
+
+    async def create_sandbox(
+        self,
+        name: str,
+        namespace: str,
+        image: str,
+        container_port: int,
+        resources: dict[str, Any],
+        volume_claim_templates: list[dict[str, Any]] | None = None,
+        shutdown_time: datetime | None = None,
+    ) -> dict[str, Any]:
+        key = f"{namespace}/{name}"
+        sandbox: dict[str, Any] = {
+            "apiVersion": f"{SANDBOX_API_GROUP}/{SANDBOX_API_VERSION}",
+            "kind": "Sandbox",
+            "metadata": {"name": name, "namespace": namespace, "resourceVersion": "1"},
+            "spec": {
+                "replicas": 1,
+                "podTemplate": {
+                    "spec": {
+                        "containers": [{"name": "sandbox", "image": image, "resources": resources}],
+                    },
+                },
+            },
+            "status": {
+                "conditions": [_make_ready_condition("False", "DependenciesNotReady", "Pod does not exist")],
+                "serviceFQDN": f"{name}.{namespace}.svc.cluster.local",
+                "service": name,
+                "replicas": 0,
+            },
+        }
+        if volume_claim_templates:
+            sandbox["spec"]["volumeClaimTemplates"] = volume_claim_templates
+        if shutdown_time:
+            sandbox["spec"]["shutdownTime"] = format_shutdown_time(shutdown_time)
+        self._sandboxes[key] = sandbox
+        return sandbox
+
+    async def delete_sandbox(self, name: str, namespace: str) -> bool:
+        key = f"{namespace}/{name}"
+        self._sandboxes.pop(key, None)
+        return True
 
     async def get_sandbox(self, name: str, namespace: str) -> dict[str, Any] | None:
         return self._sandboxes.get(f"{namespace}/{name}")

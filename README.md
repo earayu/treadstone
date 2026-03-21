@@ -60,11 +60,11 @@ maintain, no marketplace to curate.
 | `aio-sandbox-xlarge` | 4 cores | 8 Gi | Heavy workloads |
 
 ```bash
-# Quick code execution with the smallest footprint
+# Quick code execution (ephemeral, WarmPool-accelerated)
 treadstone run --template aio-sandbox-tiny "import math; print(math.pi)"
 
-# Full development environment
-treadstone create --template aio-sandbox-large --persist
+# Full development environment with persistent storage
+treadstone create --template aio-sandbox-large --persist --storage 20Gi
 ```
 
 ## Architecture

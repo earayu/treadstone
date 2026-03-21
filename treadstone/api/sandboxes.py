@@ -21,6 +21,8 @@ class CreateSandboxRequest(BaseModel):
     labels: dict = Field(default_factory=dict)
     auto_stop_interval: int = 15
     auto_delete_interval: int = -1
+    persist: bool = False
+    storage_size: str = "10Gi"
 
 
 class SandboxResponse(BaseModel):
@@ -42,6 +44,8 @@ class SandboxDetailResponse(SandboxResponse):
     status_message: str | None = None
     endpoints: dict
     proxy_url: str
+    persist: bool = False
+    storage_size: str | None = None
     started_at: str | None = None
     stopped_at: str | None = None
 
@@ -73,6 +77,8 @@ def _to_detail(sb) -> dict:
             "status_message": sb.status_message,
             "endpoints": sb.endpoints or {},
             "proxy_url": f"/v1/sandboxes/{sb.id}/proxy",
+            "persist": sb.persist,
+            "storage_size": sb.storage_size,
             "started_at": str(sb.gmt_started) if sb.gmt_started else None,
             "stopped_at": str(sb.gmt_stopped) if sb.gmt_stopped else None,
         }
@@ -95,6 +101,8 @@ async def create_sandbox(
         labels=body.labels,
         auto_stop_interval=body.auto_stop_interval,
         auto_delete_interval=body.auto_delete_interval,
+        persist=body.persist,
+        storage_size=body.storage_size,
     )
     return _to_response(sandbox)
 

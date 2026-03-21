@@ -50,8 +50,19 @@ def _mock_k8s_client():
         return_value={"metadata": {"name": "test-sb"}, "status": {"sandbox": {"Name": "test-sb"}}}
     )
     k8s.delete_sandbox_claim = AsyncMock(return_value=True)
+    k8s.create_sandbox = AsyncMock(return_value={"metadata": {"name": "test-sb"}, "kind": "Sandbox"})
+    k8s.delete_sandbox = AsyncMock(return_value=True)
     k8s.scale_sandbox = AsyncMock(return_value=True)
     k8s.get_sandbox_claim = AsyncMock(return_value=None)
+    k8s.list_sandbox_templates = AsyncMock(
+        return_value=[
+            {
+                "name": "aio-sandbox-tiny",
+                "image": "ghcr.io/agent-infra/sandbox:latest",
+                "resource_spec": {"cpu": "250m", "memory": "512Mi"},
+            },
+        ]
+    )
     return k8s
 
 
@@ -195,3 +206,70 @@ class TestSandboxServiceStartStop:
 
         with pytest.raises(InvalidTransitionError):
             await service.start(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
+
+
+class TestDualPathProvisioning:
+    async def test_create_without_persist_uses_claim_path(self):
+        from treadstone.services.sandbox_service import SandboxService
+
+        session = _mock_session()
+        k8s = _mock_k8s_client()
+        service = SandboxService(session=session, k8s_client=k8s)
+
+        result = await service.create(
+            owner_id="user1234567890abcd",
+            template="aio-sandbox-tiny",
+            persist=False,
+        )
+
+        assert result.provision_mode == "claim"
+        assert result.persist is False
+        k8s.create_sandbox_claim.assert_called_once()
+        k8s.create_sandbox.assert_not_called()
+
+    async def test_create_with_persist_uses_direct_path(self):
+        from treadstone.services.sandbox_service import SandboxService
+
+        session = _mock_session()
+        k8s = _mock_k8s_client()
+        service = SandboxService(session=session, k8s_client=k8s)
+
+        result = await service.create(
+            owner_id="user1234567890abcd",
+            template="aio-sandbox-tiny",
+            persist=True,
+            storage_size="20Gi",
+        )
+
+        assert result.provision_mode == "direct"
+        assert result.persist is True
+        assert result.storage_size == "20Gi"
+        k8s.create_sandbox.assert_called_once()
+        k8s.create_sandbox_claim.assert_not_called()
+        call_kwargs = k8s.create_sandbox.call_args.kwargs
+        assert call_kwargs["volume_claim_templates"] is not None
+        assert call_kwargs["volume_claim_templates"][0]["spec"]["resources"]["requests"]["storage"] == "20Gi"
+
+    async def test_delete_claim_path_calls_delete_sandbox_claim(self):
+        from treadstone.services.sandbox_service import SandboxService
+
+        sb = _make_sandbox(status=SandboxStatus.READY, provision_mode="claim")
+        session = _mock_session(sb)
+        k8s = _mock_k8s_client()
+        service = SandboxService(session=session, k8s_client=k8s)
+
+        await service.delete(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
+        k8s.delete_sandbox_claim.assert_called_once()
+        k8s.delete_sandbox.assert_not_called()
+
+    async def test_delete_direct_path_calls_delete_sandbox(self):
+        from treadstone.services.sandbox_service import SandboxService
+
+        sb = _make_sandbox(status=SandboxStatus.READY, provision_mode="direct")
+        session = _mock_session(sb)
+        k8s = _mock_k8s_client()
+        service = SandboxService(session=session, k8s_client=k8s)
+
+        await service.delete(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
+        k8s.delete_sandbox.assert_called_once()
+        k8s.delete_sandbox_claim.assert_not_called()
