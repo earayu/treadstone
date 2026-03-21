@@ -133,12 +133,12 @@ async def test_full_auth_flow():
 
 
 @pytest.mark.integration
-async def test_duplicate_register_returns_400():
-    """Registering same email twice returns 400."""
+async def test_duplicate_register_returns_409():
+    """Registering same email twice returns 409 Conflict."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/v1/auth/register", json={"email": TEST_EMAIL, "password": TEST_PASSWORD})
         resp = await client.post("/v1/auth/register", json={"email": TEST_EMAIL, "password": TEST_PASSWORD})
-    assert resp.status_code == 400
+    assert resp.status_code == 409
 
 
 @pytest.mark.integration
