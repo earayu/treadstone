@@ -2,11 +2,23 @@ import secrets
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, status
-from pydantic import BaseModel, EmailStr
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from treadstone.api.deps import get_current_admin, get_current_user
+from treadstone.api.schemas import (
+    ApiKeyListResponse,
+    ApiKeyResponse,
+    ChangePasswordRequest,
+    CreateApiKeyRequest,
+    InviteRequest,
+    InviteResponse,
+    MessageResponse,
+    RegisterRequest,
+    RegisterResponse,
+    UserDetailResponse,
+    UserResponse,
+)
 from treadstone.config import settings
 from treadstone.core.database import get_session
 from treadstone.core.errors import BadRequestError, ConflictError, ForbiddenError, NotFoundError
@@ -20,14 +32,7 @@ router = APIRouter(prefix="/v1/auth", tags=["auth"])
 router.include_router(fastapi_users.get_auth_router(auth_backend))
 
 
-# ── Register ──
-class RegisterRequest(BaseModel):
-    email: EmailStr
-    password: str
-    invitation_token: str | None = None
-
-
-@router.post("/register", status_code=status.HTTP_201_CREATED)
+@router.post("/register", status_code=status.HTTP_201_CREATED, response_model=RegisterResponse)
 async def register(
     body: RegisterRequest,
     session: AsyncSession = Depends(get_session),
@@ -76,13 +81,7 @@ async def register(
     return {"id": user.id, "email": user.email, "role": user.role}
 
 
-# ── Invite ──
-class InviteRequest(BaseModel):
-    email: EmailStr
-    role: str = Role.RO.value
-
-
-@router.post("/invite", status_code=status.HTTP_201_CREATED)
+@router.post("/invite", status_code=status.HTTP_201_CREATED, response_model=InviteResponse)
 async def invite(
     body: InviteRequest,
     current_user: User = Depends(get_current_admin),
@@ -101,8 +100,7 @@ async def invite(
     return {"token": token, "email": body.email, "expires_at": str(inv.expires_at)}
 
 
-# ── Current user info ──
-@router.get("/user")
+@router.get("/user", response_model=UserDetailResponse)
 async def get_user(current_user: User = Depends(get_current_user)):
     return {
         "id": current_user.id,
@@ -113,8 +111,7 @@ async def get_user(current_user: User = Depends(get_current_user)):
     }
 
 
-# ── List users ──
-@router.get("/users")
+@router.get("/users", response_model=list[UserResponse])
 async def list_users(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
@@ -127,13 +124,7 @@ async def list_users(
     return [{"id": u.id, "email": u.email, "role": u.role} for u in users]
 
 
-# ── Change password ──
-class ChangePasswordRequest(BaseModel):
-    old_password: str
-    new_password: str
-
-
-@router.post("/change-password")
+@router.post("/change-password", response_model=MessageResponse)
 async def change_password(
     body: ChangePasswordRequest,
     current_user: User = Depends(get_current_user),
@@ -154,7 +145,6 @@ async def change_password(
     return {"detail": "Password changed"}
 
 
-# ── Delete user ──
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
     user_id: str,
@@ -176,13 +166,7 @@ async def delete_user(
     await session.commit()
 
 
-# ── API Key CRUD ──
-class CreateApiKeyRequest(BaseModel):
-    name: str = "default"
-    expires_in: int | None = None
-
-
-@router.post("/api-keys", status_code=status.HTTP_201_CREATED)
+@router.post("/api-keys", status_code=status.HTTP_201_CREATED, response_model=ApiKeyResponse)
 async def create_api_key(
     body: CreateApiKeyRequest,
     current_user: User = Depends(get_current_user),
@@ -211,7 +195,7 @@ async def create_api_key(
     }
 
 
-@router.get("/api-keys")
+@router.get("/api-keys", response_model=ApiKeyListResponse)
 async def list_api_keys(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),

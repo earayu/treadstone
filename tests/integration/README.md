@@ -46,7 +46,7 @@ uv run pytest tests/integration/ -v -m integration
 | `test_tables_exist` | Alembic migration correctly created user/oauth_account/invitation/api_key tables |
 | `test_register_creates_user_in_db` | Register API creates a user record in the real DB |
 | `test_full_auth_flow` | Full flow: register → login → get user → change password → login with new password |
-| `test_duplicate_register_returns_400` | Duplicate email registration returns 400 |
+| `test_duplicate_register_returns_409` | Duplicate email registration returns 409 Conflict |
 | `test_config_endpoint_returns_auth_info` | `/api/config` returns correct auth configuration |
 | `test_neon_connection_and_version` | Basic connectivity check (in `test_db.py`) |
 

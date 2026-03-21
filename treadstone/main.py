@@ -14,6 +14,7 @@ from treadstone.api.deps import get_current_user
 from treadstone.api.sandbox_proxy import router as sandbox_proxy_router
 from treadstone.api.sandbox_templates import router as sandbox_templates_router
 from treadstone.api.sandboxes import router as sandboxes_router
+from treadstone.api.schemas import HealthResponse, MeResponse
 from treadstone.config import settings
 from treadstone.core.errors import TreadstoneError
 from treadstone.core.users import auth_backend, fastapi_users, github_oauth_client, google_oauth_client
@@ -116,11 +117,11 @@ if github_oauth_client:
     )
 
 
-@app.get("/health", tags=["system"])
+@app.get("/health", tags=["system"], response_model=HealthResponse)
 async def health():
     return {"status": "ok"}
 
 
-@app.get("/v1/me", tags=["auth"])
+@app.get("/v1/me", tags=["auth"], response_model=MeResponse)
 async def me(user: User = Depends(get_current_user)):
     return {"id": user.id, "email": user.email, "role": user.role}
