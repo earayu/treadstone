@@ -30,7 +30,6 @@ class Settings(BaseSettings):
     sandbox_namespace: str = "treadstone"
     sandbox_port: int = 8080
     sandbox_proxy_timeout: float = 180.0
-    sandbox_image: str = "ghcr.io/agent-infra/sandbox:latest"
 
     # Subdomain-based sandbox routing (for browser Web UI access)
     # Dev: "sandbox.localhost"  →  {sandbox_id}.sandbox.localhost:8000

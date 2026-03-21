@@ -211,25 +211,26 @@ class Kr8sClient:
         async with api.call_api("GET", base=url, version="") as resp:
             data = resp.json()
             items = data.get("items", [])
-            return [
-                {
-                    "name": t["metadata"]["name"],
-                    "display_name": t["metadata"].get("annotations", {}).get("display-name", t["metadata"]["name"]),
-                    "description": t["metadata"].get("annotations", {}).get("description", ""),
-                    "runtime_type": "aio",
-                    "resource_spec": _extract_resource_spec(t),
-                }
-                for t in items
-            ]
+            return [_parse_sandbox_template(t) for t in items]
 
 
-def _extract_resource_spec(template: dict) -> dict:
+def _parse_sandbox_template(template: dict) -> dict:
     containers = template.get("spec", {}).get("podTemplate", {}).get("spec", {}).get("containers", [])
+    image = ""
+    resource_spec: dict[str, str] = {}
     if containers:
+        image = containers[0].get("image", "")
         resources = containers[0].get("resources", {})
         requests = resources.get("requests", {})
-        return {"cpu": requests.get("cpu", ""), "memory": requests.get("memory", "")}
-    return {}
+        resource_spec = {"cpu": requests.get("cpu", ""), "memory": requests.get("memory", "")}
+    return {
+        "name": template["metadata"]["name"],
+        "display_name": template["metadata"].get("annotations", {}).get("display-name", template["metadata"]["name"]),
+        "description": template["metadata"].get("annotations", {}).get("description", ""),
+        "runtime_type": "aio",
+        "image": image,
+        "resource_spec": resource_spec,
+    }
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -244,12 +245,15 @@ def _make_ready_condition(status: str = "False", reason: str = "DependenciesNotR
 class FakeK8sClient:
     """In-memory stub for testing — simulates the agent-sandbox controller behavior."""
 
+    _DEFAULT_IMAGE = "ghcr.io/agent-infra/sandbox:latest"
+
     _DEFAULT_TEMPLATES: tuple[dict[str, Any], ...] = (
         {
             "name": "aio-sandbox-tiny",
             "display_name": "AIO Sandbox Tiny",
             "description": "Lightweight sandbox for code execution and scripting",
             "runtime_type": "aio",
+            "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "250m", "memory": "512Mi"},
         },
         {
@@ -257,6 +261,7 @@ class FakeK8sClient:
             "display_name": "AIO Sandbox Small",
             "description": "Small sandbox for simple development tasks",
             "runtime_type": "aio",
+            "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "500m", "memory": "1Gi"},
         },
         {
@@ -264,6 +269,7 @@ class FakeK8sClient:
             "display_name": "AIO Sandbox Medium",
             "description": "General-purpose development environment",
             "runtime_type": "aio",
+            "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "1", "memory": "2Gi"},
         },
         {
@@ -271,6 +277,7 @@ class FakeK8sClient:
             "display_name": "AIO Sandbox Large",
             "description": "Full-featured sandbox with browser automation",
             "runtime_type": "aio",
+            "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "2", "memory": "4Gi"},
         },
         {
@@ -278,6 +285,7 @@ class FakeK8sClient:
             "display_name": "AIO Sandbox XLarge",
             "description": "Heavy workloads with maximum resources",
             "runtime_type": "aio",
+            "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "4", "memory": "8Gi"},
         },
     )

@@ -56,7 +56,11 @@ def _mock_k8s_client():
     k8s.get_sandbox_claim = AsyncMock(return_value=None)
     k8s.list_sandbox_templates = AsyncMock(
         return_value=[
-            {"name": "aio-sandbox-tiny", "resource_spec": {"cpu": "250m", "memory": "512Mi"}},
+            {
+                "name": "aio-sandbox-tiny",
+                "image": "ghcr.io/agent-infra/sandbox:latest",
+                "resource_spec": {"cpu": "250m", "memory": "512Mi"},
+            },
         ]
     )
     return k8s

@@ -117,6 +117,10 @@ class SandboxService:
         if tmpl is None:
             raise TemplateNotFoundError(template)
 
+        image = tmpl.get("image", "")
+        if not image:
+            raise TemplateNotFoundError(template)
+
         resource_requests = tmpl["resource_spec"]
         resources = {
             "requests": resource_requests,
@@ -138,7 +142,7 @@ class SandboxService:
         await self.k8s.create_sandbox(
             name=sandbox.name,
             namespace=sandbox.k8s_namespace,
-            image=settings.sandbox_image,
+            image=image,
             container_port=settings.sandbox_port,
             resources=resources,
             volume_claim_templates=volume_claim_templates,
