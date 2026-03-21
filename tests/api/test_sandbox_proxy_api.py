@@ -88,7 +88,7 @@ async def test_proxy_nonexistent_sandbox_returns_404(auth_client):
 async def test_proxy_stopped_sandbox_returns_409(auth_client):
     create_resp = await auth_client.post(
         "/v1/sandboxes",
-        json={"template": "python-dev", "name": "proxy-stopped-sb"},
+        json={"template": "aio-sandbox-tiny", "name": "proxy-stopped-sb"},
     )
     sandbox_id = create_resp.json()["id"]
 
@@ -109,7 +109,7 @@ async def test_proxy_stopped_sandbox_returns_409(auth_client):
 async def test_proxy_success_for_ready_sandbox(auth_client):
     create_resp = await auth_client.post(
         "/v1/sandboxes",
-        json={"template": "python-dev", "name": "proxy-ready-sb"},
+        json={"template": "aio-sandbox-tiny", "name": "proxy-ready-sb"},
     )
     sandbox_id = create_resp.json()["id"]
 

@@ -34,7 +34,7 @@ async def _create_sandbox(factory, **overrides) -> Sandbox:
         "id": "sb00000000test1234",
         "name": "test-sb",
         "owner_id": "user0001234567890",
-        "template": "python-dev",
+        "template": "aio-sandbox-tiny",
         "runtime_type": "aio",
         "labels": {},
         "auto_stop_interval": 15,
@@ -147,7 +147,7 @@ class TestReconcile:
     async def test_reconcile_updates_drift(self, session_factory):
         await _create_sandbox(session_factory, k8s_resource_version="old")
         k8s = FakeK8sClient()
-        await k8s.create_sandbox_claim("test-sb", "python-dev", "treadstone")
+        await k8s.create_sandbox_claim("test-sb", "aio-sandbox-tiny", "treadstone")
         k8s.simulate_sandbox_ready("test-sb", "treadstone")
 
         await reconcile("treadstone", k8s, session_factory)

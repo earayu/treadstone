@@ -61,9 +61,9 @@ async def test_list_templates_returns_items(auth_client):
     assert resp.status_code == 200
     data = resp.json()
     assert "items" in data
-    assert len(data["items"]) >= 2
+    assert len(data["items"]) == 5
     names = [t["name"] for t in data["items"]]
-    assert "python-dev" in names
+    assert "aio-sandbox-tiny" in names
 
 
 async def test_template_has_expected_fields(auth_client):
