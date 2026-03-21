@@ -1,4 +1,4 @@
-"""Unit tests for K8s client (FakeK8sClient) — SandboxClaim-based model."""
+"""Unit tests for K8s client (FakeK8sClient) — dual-path: SandboxClaim + direct Sandbox."""
 
 from datetime import UTC, datetime, timedelta
 
@@ -90,3 +90,74 @@ async def test_simulate_sandbox_ready():
     sb = await client.get_sandbox("sb-ready", "treadstone")
     ready_cond = [c for c in sb["status"]["conditions"] if c["type"] == "Ready"][0]
     assert ready_cond["status"] == "True"
+
+
+# ── Direct Sandbox creation (persist=true path) ──
+
+
+async def test_create_sandbox_direct():
+    client = FakeK8sClient()
+    sb = await client.create_sandbox(
+        name="direct-sb",
+        namespace="treadstone",
+        image="ghcr.io/agent-infra/sandbox:latest",
+        container_port=8080,
+        resources={"requests": {"cpu": "250m", "memory": "512Mi"}},
+        volume_claim_templates=[
+            {
+                "metadata": {"name": "workspace"},
+                "spec": {
+                    "accessModes": ["ReadWriteOnce"],
+                    "resources": {"requests": {"storage": "10Gi"}},
+                },
+            }
+        ],
+    )
+    assert sb["kind"] == "Sandbox"
+    assert sb["metadata"]["name"] == "direct-sb"
+    assert sb["spec"]["volumeClaimTemplates"] is not None
+    assert sb["status"]["serviceFQDN"] == "direct-sb.treadstone.svc.cluster.local"
+
+    fetched = await client.get_sandbox("direct-sb", "treadstone")
+    assert fetched is not None
+
+
+async def test_create_sandbox_direct_without_storage():
+    client = FakeK8sClient()
+    sb = await client.create_sandbox(
+        name="no-storage-sb",
+        namespace="treadstone",
+        image="ghcr.io/agent-infra/sandbox:latest",
+        container_port=8080,
+        resources={"requests": {"cpu": "250m", "memory": "512Mi"}},
+    )
+    assert sb["kind"] == "Sandbox"
+    assert "volumeClaimTemplates" not in sb["spec"]
+
+
+async def test_delete_sandbox_direct():
+    client = FakeK8sClient()
+    await client.create_sandbox(
+        name="del-direct",
+        namespace="treadstone",
+        image="ghcr.io/agent-infra/sandbox:latest",
+        container_port=8080,
+        resources={"requests": {"cpu": "250m", "memory": "512Mi"}},
+    )
+    result = await client.delete_sandbox("del-direct", "treadstone")
+    assert result is True
+    assert await client.get_sandbox("del-direct", "treadstone") is None
+
+
+async def test_direct_sandbox_in_list():
+    client = FakeK8sClient()
+    await client.create_sandbox_claim("claim-sb", "aio-sandbox-tiny", "treadstone")
+    await client.create_sandbox(
+        name="direct-sb",
+        namespace="treadstone",
+        image="ghcr.io/agent-infra/sandbox:latest",
+        container_port=8080,
+        resources={"requests": {"cpu": "1", "memory": "2Gi"}},
+    )
+    sbs = await client.list_sandboxes("treadstone")
+    assert len(sbs) == 2
