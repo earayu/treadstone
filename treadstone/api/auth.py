@@ -1,7 +1,7 @@
 import secrets
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from treadstone.api.deps import get_current_admin, get_current_user
 from treadstone.config import settings
 from treadstone.core.database import get_session
+from treadstone.core.errors import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from treadstone.core.users import auth_backend, fastapi_users
 from treadstone.models.api_key import ApiKey
 from treadstone.models.user import Invitation, Role, User, random_id, utc_now
@@ -38,17 +39,17 @@ async def register(
     invitation: Invitation | None = None
     if settings.register_mode == "invitation" and not is_first_user:
         if not body.invitation_token:
-            raise HTTPException(status_code=403, detail="Invitation token required")
+            raise ForbiddenError("Invitation token required")
         inv_result = await session.execute(select(Invitation).where(Invitation.token == body.invitation_token))
         invitation = inv_result.scalar_one_or_none()
         if not invitation or not invitation.is_valid():
-            raise HTTPException(status_code=403, detail="Invalid or expired invitation")
+            raise ForbiddenError("Invalid or expired invitation")
         if invitation.email != body.email:
-            raise HTTPException(status_code=403, detail="Invitation email mismatch")
+            raise ForbiddenError("Invitation email mismatch")
 
     existing = await session.execute(select(User).where(User.email == body.email))
     if existing.unique().scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise ConflictError("Email already registered")
 
     from fastapi_users.password import PasswordHelper
 
@@ -143,10 +144,10 @@ async def change_password(
     ph = PasswordHelper()
     valid, _ = ph.verify_and_update(body.old_password, current_user.hashed_password)
     if not valid:
-        raise HTTPException(status_code=400, detail="Wrong current password")
+        raise BadRequestError("Wrong current password")
     user = await session.get(User, current_user.id)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise NotFoundError("User", current_user.id)
     user.hashed_password = ph.hash(body.new_password)
     session.add(user)
     await session.commit()
@@ -161,16 +162,16 @@ async def delete_user(
     session: AsyncSession = Depends(get_session),
 ):
     if user_id == current_user.id:
-        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+        raise BadRequestError("Cannot delete yourself")
     target = await session.get(User, user_id)
     if not target:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise NotFoundError("User", user_id)
     if target.role == Role.ADMIN.value:
         admin_count_result = await session.execute(
             select(func.count()).select_from(User).where(User.role == Role.ADMIN.value)
         )
         if admin_count_result.scalar_one() <= 1:
-            raise HTTPException(status_code=400, detail="Cannot delete the last admin")
+            raise BadRequestError("Cannot delete the last admin")
     await session.delete(target)
     await session.commit()
 
@@ -244,7 +245,7 @@ async def delete_api_key(
     )
     api_key = result.scalar_one_or_none()
     if not api_key:
-        raise HTTPException(status_code=404, detail="API key not found")
+        raise NotFoundError("API key", key_id)
     api_key.gmt_deleted = utc_now()
     session.add(api_key)
     await session.commit()
