@@ -1,10 +1,17 @@
 """Sandbox CRUD API router — control plane endpoints."""
 
 from fastapi import APIRouter, Depends, Query, Request, status
-from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from treadstone.api.deps import get_current_user
+from treadstone.api.schemas import (
+    CreateSandboxRequest,
+    CreateSandboxTokenRequest,
+    SandboxDetailResponse,
+    SandboxListResponse,
+    SandboxResponse,
+    SandboxTokenResponse,
+)
 from treadstone.core.database import get_session
 from treadstone.core.errors import ForbiddenError, SandboxNotFoundError
 from treadstone.models.user import User
@@ -12,47 +19,6 @@ from treadstone.services.sandbox_service import SandboxService
 from treadstone.services.sandbox_token import create_sandbox_token
 
 router = APIRouter(prefix="/v1/sandboxes", tags=["sandboxes"])
-
-
-class CreateSandboxRequest(BaseModel):
-    template: str
-    name: str | None = None
-    runtime_type: str = "aio"
-    labels: dict = Field(default_factory=dict)
-    auto_stop_interval: int = 15
-    auto_delete_interval: int = -1
-    persist: bool = False
-    storage_size: str = "10Gi"
-
-
-class SandboxResponse(BaseModel):
-    id: str
-    name: str
-    template: str
-    runtime_type: str
-    status: str
-    labels: dict
-    auto_stop_interval: int
-    auto_delete_interval: int
-    created_at: str
-
-    model_config = {"from_attributes": True}
-
-
-class SandboxDetailResponse(SandboxResponse):
-    image: str | None = None
-    status_message: str | None = None
-    endpoints: dict
-    proxy_url: str
-    persist: bool = False
-    storage_size: str | None = None
-    started_at: str | None = None
-    stopped_at: str | None = None
-
-
-class SandboxListResponse(BaseModel):
-    items: list[SandboxResponse]
-    total: int
 
 
 def _to_response(sb) -> dict:
@@ -86,7 +52,7 @@ def _to_detail(sb) -> dict:
     return data
 
 
-@router.post("", status_code=status.HTTP_202_ACCEPTED)
+@router.post("", status_code=status.HTTP_202_ACCEPTED, response_model=SandboxResponse)
 async def create_sandbox(
     body: CreateSandboxRequest,
     user: User = Depends(get_current_user),
@@ -107,7 +73,7 @@ async def create_sandbox(
     return _to_response(sandbox)
 
 
-@router.get("")
+@router.get("", response_model=SandboxListResponse)
 async def list_sandboxes(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
@@ -124,7 +90,7 @@ async def list_sandboxes(
     return {"items": [_to_response(sb) for sb in sandboxes], "total": len(sandboxes)}
 
 
-@router.get("/{sandbox_id}")
+@router.get("/{sandbox_id}", response_model=SandboxDetailResponse)
 async def get_sandbox(
     request: Request,
     sandbox_id: str,
@@ -152,7 +118,7 @@ async def delete_sandbox(
     await service.delete(sandbox_id=sandbox_id, owner_id=user.id)
 
 
-@router.post("/{sandbox_id}/start")
+@router.post("/{sandbox_id}/start", response_model=SandboxDetailResponse)
 async def start_sandbox(
     sandbox_id: str,
     user: User = Depends(get_current_user),
@@ -163,7 +129,7 @@ async def start_sandbox(
     return _to_detail(sandbox)
 
 
-@router.post("/{sandbox_id}/stop")
+@router.post("/{sandbox_id}/stop", response_model=SandboxDetailResponse)
 async def stop_sandbox(
     sandbox_id: str,
     user: User = Depends(get_current_user),
@@ -174,11 +140,7 @@ async def stop_sandbox(
     return _to_detail(sandbox)
 
 
-class CreateSandboxTokenRequest(BaseModel):
-    expires_in: int = 3600
-
-
-@router.post("/{sandbox_id}/token", status_code=status.HTTP_201_CREATED)
+@router.post("/{sandbox_id}/token", status_code=status.HTTP_201_CREATED, response_model=SandboxTokenResponse)
 async def create_token(
     sandbox_id: str,
     body: CreateSandboxTokenRequest,

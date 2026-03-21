@@ -4,6 +4,7 @@ set -euo pipefail
 CLUSTER_NAME="treadstone"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 KIND_CONFIG="${SCRIPT_DIR}/../deploy/kind/kind-config.yaml"
+INGRESS_NGINX_VERSION="v1.12.1"
 
 check_prerequisites() {
     local missing=()
@@ -49,13 +50,13 @@ install_ingress_nginx() {
     fi
 
     echo ""
-    echo "Installing ingress-nginx controller ..."
-    kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
-    echo "Waiting for ingress-nginx to be ready (timeout 120s) ..."
+    echo "Installing ingress-nginx controller (${INGRESS_NGINX_VERSION}) ..."
+    kubectl apply -f "https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-${INGRESS_NGINX_VERSION}/deploy/static/provider/kind/deploy.yaml"
+    echo "Waiting for ingress-nginx to be ready (timeout 300s) ..."
     kubectl wait --namespace ingress-nginx \
         --for=condition=ready pod \
         --selector=app.kubernetes.io/component=controller \
-        --timeout=120s
+        --timeout=300s
     echo "ingress-nginx is ready."
 }
 
