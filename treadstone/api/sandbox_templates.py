@@ -12,7 +12,7 @@ router = APIRouter(prefix="/v1/sandbox-templates", tags=["sandbox-templates"])
 
 
 @router.get("", response_model=SandboxTemplateListResponse)
-async def list_templates(user: User = Depends(get_current_user)):
+async def list_sandbox_templates(user: User = Depends(get_current_user)):
     k8s = get_k8s_client()
     templates = await k8s.list_sandbox_templates(namespace=settings.sandbox_namespace)
     return {"items": templates}

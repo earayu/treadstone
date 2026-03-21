@@ -2,7 +2,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
@@ -10,16 +10,14 @@ from sqlalchemy.exc import IntegrityError
 
 from treadstone.api.auth import router as auth_router
 from treadstone.api.config import router as config_router
-from treadstone.api.deps import get_current_user
 from treadstone.api.sandbox_proxy import router as sandbox_proxy_router
 from treadstone.api.sandbox_templates import router as sandbox_templates_router
 from treadstone.api.sandboxes import router as sandboxes_router
-from treadstone.api.schemas import HealthResponse, MeResponse
+from treadstone.api.schemas import HealthResponse
 from treadstone.config import settings
 from treadstone.core.errors import TreadstoneError
 from treadstone.core.users import auth_backend, fastapi_users, github_oauth_client, google_oauth_client
 from treadstone.middleware.sandbox_subdomain import SandboxSubdomainMiddleware
-from treadstone.models.user import User
 from treadstone.services.sandbox_proxy import close_http_client
 
 logger = logging.getLogger(__name__)
@@ -120,8 +118,3 @@ if github_oauth_client:
 @app.get("/health", tags=["system"], response_model=HealthResponse)
 async def health():
     return {"status": "ok"}
-
-
-@app.get("/v1/me", tags=["auth"], response_model=MeResponse)
-async def me(user: User = Depends(get_current_user)):
-    return {"id": user.id, "email": user.email, "role": user.role}

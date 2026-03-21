@@ -65,8 +65,7 @@ Authorization: Bearer {{api_key}}
 HTTP 200
 [Asserts]
 jsonpath "$.id" == "{{sandbox_id}}"
-jsonpath "$.endpoints" exists
-jsonpath "$.proxy_url" isString
+jsonpath "$.urls.proxy" isString
 
 
 # ── List Sandboxes ──────────────────────────────────────────────────────────

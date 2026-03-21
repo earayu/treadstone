@@ -1,3 +1,7 @@
+---
+此文档已废弃，暂不准备实现
+---
+
 # Phase 4：Sandbox Template + Skill Pack 市场 实施计划
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.

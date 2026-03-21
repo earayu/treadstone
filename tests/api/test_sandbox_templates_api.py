@@ -71,5 +71,6 @@ async def test_template_has_expected_fields(auth_client):
     tmpl = resp.json()["items"][0]
     assert "name" in tmpl
     assert "display_name" in tmpl
-    assert "runtime_type" in tmpl
+    assert "image" in tmpl
     assert "resource_spec" in tmpl
+    assert "runtime_type" not in tmpl
