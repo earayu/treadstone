@@ -1,7 +1,7 @@
 import secrets
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +17,7 @@ from treadstone.api.schemas import (
     RegisterRequest,
     RegisterResponse,
     UserDetailResponse,
-    UserResponse,
+    UserListResponse,
 )
 from treadstone.config import settings
 from treadstone.core.database import get_session
@@ -97,7 +97,7 @@ async def invite(
     )
     session.add(inv)
     await session.commit()
-    return {"token": token, "email": body.email, "expires_at": str(inv.expires_at)}
+    return {"token": token, "email": body.email, "expires_at": inv.expires_at}
 
 
 @router.get("/user", response_model=UserDetailResponse)
@@ -111,17 +111,21 @@ async def get_user(current_user: User = Depends(get_current_user)):
     }
 
 
-@router.get("/users", response_model=list[UserResponse])
+@router.get("/users", response_model=UserListResponse)
 async def list_users(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    limit: int = Query(default=100, ge=1, le=1000, description="Maximum number of items to return."),
+    offset: int = Query(default=0, ge=0, description="Number of items to skip."),
 ):
     if current_user.role == Role.ADMIN.value:
         result = await session.execute(select(User))
-        users = result.unique().scalars().all()
+        users = list(result.unique().scalars().all())
     else:
         users = [current_user]
-    return [{"id": u.id, "email": u.email, "role": u.role} for u in users]
+    total = len(users)
+    page = users[offset : offset + limit]
+    return {"items": [{"id": u.id, "email": u.email, "role": u.role} for u in page], "total": total}
 
 
 @router.post("/change-password", response_model=MessageResponse)
@@ -190,8 +194,8 @@ async def create_api_key(
         "id": api_key.id,
         "name": api_key.name,
         "key": api_key.key,
-        "created_at": str(api_key.gmt_created),
-        "expires_at": str(api_key.gmt_expires) if api_key.gmt_expires else None,
+        "created_at": api_key.gmt_created,
+        "expires_at": api_key.gmt_expires,
     }
 
 
@@ -210,8 +214,8 @@ async def list_api_keys(
                 "id": k.id,
                 "name": k.name,
                 "key_prefix": k.key[:7] + "..." + k.key[-4:],
-                "created_at": str(k.gmt_created),
-                "expires_at": str(k.gmt_expires) if k.gmt_expires else None,
+                "created_at": k.gmt_created,
+                "expires_at": k.gmt_expires,
             }
             for k in keys
         ]

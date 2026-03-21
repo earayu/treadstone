@@ -56,7 +56,6 @@ class SandboxService:
         owner_id: str,
         template: str,
         name: str | None = None,
-        runtime_type: str = "aio",
         labels: dict | None = None,
         auto_stop_interval: int = 15,
         auto_delete_interval: int = -1,
@@ -71,7 +70,6 @@ class SandboxService:
         sandbox.name = sandbox_name
         sandbox.owner_id = owner_id
         sandbox.template = template
-        sandbox.runtime_type = runtime_type
         sandbox.labels = labels or {}
         sandbox.auto_stop_interval = auto_stop_interval
         sandbox.auto_delete_interval = auto_delete_interval

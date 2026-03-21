@@ -14,7 +14,6 @@ def _make_sandbox(**overrides) -> Sandbox:
         "name": "test-sandbox",
         "owner_id": "user1234567890abcd",
         "template": "aio-sandbox-tiny",
-        "runtime_type": "aio",
         "labels": {},
         "auto_stop_interval": 15,
         "auto_delete_interval": -1,

@@ -42,9 +42,9 @@ HTTP 200
 jsonpath "$.items" count >= 1
 
 
-# ── Use API Key Auth (GET /v1/me) ───────────────────────────────────────────
+# ── Use API Key Auth (GET /v1/auth/user) ────────────────────────────────────
 
-GET {{base_url}}/v1/me
+GET {{base_url}}/v1/auth/user
 Authorization: Bearer {{api_key}}
 HTTP 200
 [Asserts]
