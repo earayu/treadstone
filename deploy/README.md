@@ -172,7 +172,11 @@ curl -s -X POST $BASE_URL/v1/sandboxes \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"template":"treadstone-sandbox","name":"smoke-test-sb"}' | python3 -m json.tool
+```
 
+After the Sandbox is running, you can reach its **Web UI** in a browser. The exact URL depends on your subdomain / DNS setup; with local Kind and Ingress, open `http://<sandbox-name>.sandbox.localhost/` (for example, `http://api-sb-1774074700.sandbox.localhost/`).
+
+```bash
 # View K8s resources
 kubectl -n treadstone get sandboxclaims,sandboxes,pods
 

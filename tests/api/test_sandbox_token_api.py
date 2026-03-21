@@ -57,7 +57,7 @@ async def auth_client(db_session):
 
 
 async def test_create_sandbox_token(auth_client):
-    create_resp = await auth_client.post("/v1/sandboxes", json={"template": "python-dev", "name": "token-sb"})
+    create_resp = await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "token-sb"})
     sandbox_id = create_resp.json()["id"]
     resp = await auth_client.post(f"/v1/sandboxes/{sandbox_id}/token", json={"expires_in": 3600})
     assert resp.status_code == 201
@@ -68,7 +68,9 @@ async def test_create_sandbox_token(auth_client):
 
 
 async def test_sandbox_token_can_access_sandbox_detail(auth_client):
-    create_resp = await auth_client.post("/v1/sandboxes", json={"template": "python-dev", "name": "token-detail-sb"})
+    create_resp = await auth_client.post(
+        "/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "token-detail-sb"}
+    )
     sandbox_id = create_resp.json()["id"]
     token_resp = await auth_client.post(f"/v1/sandboxes/{sandbox_id}/token", json={"expires_in": 3600})
     token = token_resp.json()["token"]
@@ -83,7 +85,9 @@ async def test_sandbox_token_can_access_sandbox_detail(auth_client):
 
 
 async def test_sandbox_token_can_proxy(auth_client):
-    create_resp = await auth_client.post("/v1/sandboxes", json={"template": "python-dev", "name": "token-proxy-sb"})
+    create_resp = await auth_client.post(
+        "/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "token-proxy-sb"}
+    )
     sandbox_id = create_resp.json()["id"]
 
     async with _test_session_factory() as session:

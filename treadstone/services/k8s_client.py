@@ -183,18 +183,39 @@ class FakeK8sClient:
 
     _DEFAULT_TEMPLATES: tuple[dict[str, Any], ...] = (
         {
-            "name": "python-dev",
-            "display_name": "Python Development",
-            "description": "Python 3.12 with common data science libraries",
+            "name": "aio-sandbox-tiny",
+            "display_name": "AIO Sandbox Tiny",
+            "description": "Lightweight sandbox for code execution and scripting",
             "runtime_type": "aio",
-            "resource_spec": {"cpu": "2", "memory": "2Gi"},
+            "resource_spec": {"cpu": "250m", "memory": "512Mi"},
         },
         {
-            "name": "nodejs-dev",
-            "display_name": "Node.js Development",
-            "description": "Node.js 20 with npm/yarn/pnpm",
+            "name": "aio-sandbox-small",
+            "display_name": "AIO Sandbox Small",
+            "description": "Small sandbox for simple development tasks",
             "runtime_type": "aio",
-            "resource_spec": {"cpu": "2", "memory": "2Gi"},
+            "resource_spec": {"cpu": "500m", "memory": "1Gi"},
+        },
+        {
+            "name": "aio-sandbox-medium",
+            "display_name": "AIO Sandbox Medium",
+            "description": "General-purpose development environment",
+            "runtime_type": "aio",
+            "resource_spec": {"cpu": "1", "memory": "2Gi"},
+        },
+        {
+            "name": "aio-sandbox-large",
+            "display_name": "AIO Sandbox Large",
+            "description": "Full-featured sandbox with browser automation",
+            "runtime_type": "aio",
+            "resource_spec": {"cpu": "2", "memory": "4Gi"},
+        },
+        {
+            "name": "aio-sandbox-xlarge",
+            "display_name": "AIO Sandbox XLarge",
+            "description": "Heavy workloads with maximum resources",
+            "runtime_type": "aio",
+            "resource_spec": {"cpu": "4", "memory": "8Gi"},
         },
     )
 

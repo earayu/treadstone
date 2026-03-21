@@ -33,7 +33,7 @@ and self-hostable.
 treadstone run "print('hello world')"
 
 # Create a persistent development environment
-treadstone create --template aio --persist
+treadstone create --template aio-sandbox-large --persist
 
 # Run a command inside an existing sandbox
 treadstone exec sb-3f8a -- npm install && npm test
@@ -47,26 +47,24 @@ treadstone destroy sb-3f8a
 
 ## Sandbox Templates
 
-Treadstone ships with two built-in templates — no ecosystem to maintain, no
-marketplace to curate.
+Treadstone ships with five built-in size tiers — all powered by the same
+AIO (All-in-One) image with different resource allocations. No ecosystem to
+maintain, no marketplace to curate.
 
-### Code Runner
-
-Lightweight, stateless, ephemeral. Optimized for fast startup. Suitable for
-code execution, script evaluation, and one-off tasks.
-
-```bash
-treadstone run --template code-runner "import math; print(math.pi)"
-```
-
-### AIO (All-in-One)
-
-Full development environment with a complete toolchain. Supports persistent
-storage. Suitable for multi-step workflows, project scaffolding, and long-running
-tasks.
+| Template | CPU | Memory | Use Case |
+|----------|-----|--------|----------|
+| `aio-sandbox-tiny` | 0.25 core | 512 Mi | Code execution, script running |
+| `aio-sandbox-small` | 0.5 core | 1 Gi | Simple development tasks |
+| `aio-sandbox-medium` | 1 core | 2 Gi | General-purpose development |
+| `aio-sandbox-large` | 2 cores | 4 Gi | Full-featured + browser automation |
+| `aio-sandbox-xlarge` | 4 cores | 8 Gi | Heavy workloads |
 
 ```bash
-treadstone create --template aio --persist
+# Quick code execution with the smallest footprint
+treadstone run --template aio-sandbox-tiny "import math; print(math.pi)"
+
+# Full development environment
+treadstone create --template aio-sandbox-large --persist
 ```
 
 ## Architecture

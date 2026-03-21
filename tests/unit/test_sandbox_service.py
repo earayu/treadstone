@@ -13,7 +13,7 @@ def _make_sandbox(**overrides) -> Sandbox:
         "id": "sb1234567890abcdef",
         "name": "test-sandbox",
         "owner_id": "user1234567890abcd",
-        "template": "python-dev",
+        "template": "aio-sandbox-tiny",
         "runtime_type": "aio",
         "labels": {},
         "auto_stop_interval": 15,
@@ -65,13 +65,13 @@ class TestSandboxServiceCreate:
 
         result = await service.create(
             owner_id="user1234567890abcd",
-            template="python-dev",
+            template="aio-sandbox-tiny",
             name="my-sandbox",
         )
 
         assert result.status == SandboxStatus.CREATING
         assert result.owner_id == "user1234567890abcd"
-        assert result.template == "python-dev"
+        assert result.template == "aio-sandbox-tiny"
         assert result.k8s_sandbox_claim_name == "my-sandbox"
         session.add.assert_called_once()
         session.commit.assert_called()
@@ -85,12 +85,12 @@ class TestSandboxServiceCreate:
 
         await service.create(
             owner_id="user1234567890abcd",
-            template="python-dev",
+            template="aio-sandbox-tiny",
         )
 
         k8s.create_sandbox_claim.assert_called_once()
         call_kwargs = k8s.create_sandbox_claim.call_args
-        assert call_kwargs.kwargs["template_ref"] == "python-dev"
+        assert call_kwargs.kwargs["template_ref"] == "aio-sandbox-tiny"
 
 
 class TestSandboxServiceGet:

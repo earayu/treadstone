@@ -58,33 +58,33 @@ class TestCreateSandbox:
     async def test_create_returns_202(self, auth_client):
         resp = await auth_client.post(
             "/v1/sandboxes",
-            json={"template": "python-dev", "name": "my-sb"},
+            json={"template": "aio-sandbox-tiny", "name": "my-sb"},
         )
         assert resp.status_code == 202
         data = resp.json()
         assert data["name"] == "my-sb"
         assert data["status"] == "creating"
-        assert data["template"] == "python-dev"
+        assert data["template"] == "aio-sandbox-tiny"
         assert "id" in data
 
     async def test_create_auto_generates_name(self, auth_client):
         resp = await auth_client.post(
             "/v1/sandboxes",
-            json={"template": "python-dev"},
+            json={"template": "aio-sandbox-tiny"},
         )
         assert resp.status_code == 202
         assert resp.json()["name"].startswith("sb-")
 
     async def test_create_without_auth_returns_401(self, db_session):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            resp = await client.post("/v1/sandboxes", json={"template": "python-dev"})
+            resp = await client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny"})
         assert resp.status_code == 401
 
 
 class TestListSandboxes:
     async def test_list_returns_own_sandboxes(self, auth_client):
-        await auth_client.post("/v1/sandboxes", json={"template": "python-dev", "name": "list-sb-1"})
-        await auth_client.post("/v1/sandboxes", json={"template": "python-dev", "name": "list-sb-2"})
+        await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "list-sb-1"})
+        await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "list-sb-2"})
         resp = await auth_client.get("/v1/sandboxes")
         assert resp.status_code == 200
         data = resp.json()
@@ -95,11 +95,11 @@ class TestListSandboxes:
     async def test_list_with_label_filter(self, auth_client):
         await auth_client.post(
             "/v1/sandboxes",
-            json={"template": "python-dev", "name": "labeled-sb", "labels": {"env": "dev"}},
+            json={"template": "aio-sandbox-tiny", "name": "labeled-sb", "labels": {"env": "dev"}},
         )
         await auth_client.post(
             "/v1/sandboxes",
-            json={"template": "python-dev", "name": "no-label-sb"},
+            json={"template": "aio-sandbox-tiny", "name": "no-label-sb"},
         )
         resp = await auth_client.get("/v1/sandboxes?label=env:dev")
         assert resp.status_code == 200
@@ -109,7 +109,7 @@ class TestListSandboxes:
 
 class TestGetSandbox:
     async def test_get_existing_sandbox(self, auth_client):
-        create_resp = await auth_client.post("/v1/sandboxes", json={"template": "python-dev", "name": "get-sb"})
+        create_resp = await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "get-sb"})
         sandbox_id = create_resp.json()["id"]
         resp = await auth_client.get(f"/v1/sandboxes/{sandbox_id}")
         assert resp.status_code == 200
@@ -123,7 +123,7 @@ class TestGetSandbox:
 
 class TestDeleteSandbox:
     async def test_delete_from_creating_returns_204(self, auth_client):
-        create_resp = await auth_client.post("/v1/sandboxes", json={"template": "python-dev", "name": "del-sb"})
+        create_resp = await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "del-sb"})
         sandbox_id = create_resp.json()["id"]
         resp = await auth_client.delete(f"/v1/sandboxes/{sandbox_id}")
         assert resp.status_code == 204
@@ -136,13 +136,13 @@ class TestDeleteSandbox:
 
 class TestStartStopSandbox:
     async def test_start_from_creating_returns_409(self, auth_client):
-        create_resp = await auth_client.post("/v1/sandboxes", json={"template": "python-dev", "name": "start-sb"})
+        create_resp = await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "start-sb"})
         sandbox_id = create_resp.json()["id"]
         resp = await auth_client.post(f"/v1/sandboxes/{sandbox_id}/start")
         assert resp.status_code == 409
 
     async def test_stop_from_creating_returns_409(self, auth_client):
-        create_resp = await auth_client.post("/v1/sandboxes", json={"template": "python-dev", "name": "stop-sb"})
+        create_resp = await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "stop-sb"})
         sandbox_id = create_resp.json()["id"]
         resp = await auth_client.post(f"/v1/sandboxes/{sandbox_id}/stop")
         assert resp.status_code == 409
