@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from treadstone.core.errors import InvalidTransitionError
+from treadstone.core.errors import InvalidTransitionError, TemplateNotFoundError
 from treadstone.models.sandbox import Sandbox, SandboxStatus
 
 
@@ -273,3 +273,56 @@ class TestDualPathProvisioning:
         await service.delete(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
         k8s.delete_sandbox.assert_called_once()
         k8s.delete_sandbox_claim.assert_not_called()
+
+
+class TestTemplateValidation:
+    async def test_claim_path_rejects_invalid_template(self):
+        from treadstone.services.sandbox_service import SandboxService
+
+        session = _mock_session()
+        session.delete = AsyncMock()
+        k8s = _mock_k8s_client()
+        service = SandboxService(session=session, k8s_client=k8s)
+
+        with pytest.raises(TemplateNotFoundError):
+            await service.create(
+                owner_id="user1234567890abcd",
+                template="nonexistent-template",
+                persist=False,
+            )
+
+        k8s.create_sandbox_claim.assert_not_called()
+
+    async def test_direct_path_rejects_invalid_template(self):
+        from treadstone.services.sandbox_service import SandboxService
+
+        session = _mock_session()
+        session.delete = AsyncMock()
+        k8s = _mock_k8s_client()
+        service = SandboxService(session=session, k8s_client=k8s)
+
+        with pytest.raises(TemplateNotFoundError):
+            await service.create(
+                owner_id="user1234567890abcd",
+                template="nonexistent-template",
+                persist=True,
+            )
+
+        k8s.create_sandbox.assert_not_called()
+
+    async def test_invalid_template_cleans_up_db_record(self):
+        from treadstone.services.sandbox_service import SandboxService
+
+        session = _mock_session()
+        session.delete = AsyncMock()
+        k8s = _mock_k8s_client()
+        service = SandboxService(session=session, k8s_client=k8s)
+
+        with pytest.raises(TemplateNotFoundError):
+            await service.create(
+                owner_id="user1234567890abcd",
+                template="nonexistent-template",
+                persist=False,
+            )
+
+        session.delete.assert_called_once()

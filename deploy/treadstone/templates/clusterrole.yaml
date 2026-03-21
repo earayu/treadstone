@@ -26,7 +26,8 @@ rules:
       - get
       - list
       - watch
-  # Sandbox CRs: watch for state sync, patch for replicas (start/stop)
+  # Sandbox CRs: create/delete for direct path (persist=true),
+  # watch for state sync, patch for replicas (start/stop)
   - apiGroups:
       - agents.x-k8s.io
     resources:
@@ -35,6 +36,8 @@ rules:
       - get
       - list
       - watch
+      - create
+      - delete
       - patch
   # Sandbox status: read for Watch events
   - apiGroups:

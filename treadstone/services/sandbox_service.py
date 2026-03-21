@@ -103,6 +103,10 @@ class SandboxService:
                 await self._create_direct(sandbox, template, storage_size)
             else:
                 await self._create_via_claim(sandbox, template)
+        except TemplateNotFoundError:
+            await self.session.delete(sandbox)
+            await self.session.commit()
+            raise
         except Exception:
             logger.exception("Failed to create K8s resource for sandbox %s", sandbox_id)
             sandbox.status = SandboxStatus.ERROR
@@ -113,7 +117,16 @@ class SandboxService:
 
         return sandbox
 
+    async def _resolve_template(self, namespace: str, template: str) -> dict:
+        templates = await self.k8s.list_sandbox_templates(namespace=namespace)
+        tmpl = next((t for t in templates if t["name"] == template), None)
+        if tmpl is None:
+            raise TemplateNotFoundError(template)
+        return tmpl
+
     async def _create_via_claim(self, sandbox: Sandbox, template: str) -> None:
+        await self._resolve_template(sandbox.k8s_namespace, template)
+
         logger.info("Creating SandboxClaim %s (template=%s, ns=%s)", sandbox.name, template, sandbox.k8s_namespace)
         await self.k8s.create_sandbox_claim(
             name=sandbox.name,
@@ -122,10 +135,7 @@ class SandboxService:
         )
 
     async def _create_direct(self, sandbox: Sandbox, template: str, storage_size: str) -> None:
-        templates = await self.k8s.list_sandbox_templates(namespace=sandbox.k8s_namespace)
-        tmpl = next((t for t in templates if t["name"] == template), None)
-        if tmpl is None:
-            raise TemplateNotFoundError(template)
+        tmpl = await self._resolve_template(sandbox.k8s_namespace, template)
 
         image = tmpl.get("image", "")
         if not image:
