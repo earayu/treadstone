@@ -80,6 +80,24 @@ class TestCreateSandbox:
             resp = await client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny"})
         assert resp.status_code == 401
 
+    async def test_create_with_invalid_template_returns_404(self, auth_client):
+        resp = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "nonexistent-template", "name": "bad-tmpl-sb"},
+        )
+        assert resp.status_code == 404
+        assert resp.json()["error"]["code"] == "template_not_found"
+
+    async def test_create_with_persist_returns_202(self, auth_client):
+        resp = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": "persist-sb", "persist": True, "storage_size": "5Gi"},
+        )
+        assert resp.status_code == 202
+        data = resp.json()
+        assert data["name"] == "persist-sb"
+        assert data["status"] == "creating"
+
 
 class TestListSandboxes:
     async def test_list_returns_own_sandboxes(self, auth_client):
