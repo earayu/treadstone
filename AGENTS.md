@@ -54,6 +54,23 @@ For K8s deployment (Kind cluster, Helm, smoke tests), see [`deploy/README.md`](d
 - All function signatures must have type hints.
 - Ruff rules: E, F, I, UP (see `pyproject.toml`). Line width: 120.
 
+## Error Handling
+
+All API errors must return a consistent JSON envelope:
+
+```json
+{"error": {"code": "snake_case_code", "message": "Human-readable detail.", "status": 409}}
+```
+
+Rules:
+
+- **Never raise bare `HTTPException`** — always use a `TreadstoneError` subclass from `treadstone/core/errors.py`.
+- **Wrap every `session.commit()`** that can fail with a DB constraint (unique, FK, check) in `try/except IntegrityError`, rollback, and raise a domain-specific `TreadstoneError`.
+- **Catch external-service failures** (K8s API, HTTP proxy) — convert them to `TreadstoneError` subclasses, never let raw `ConnectionError`, `TimeoutError`, etc. escape to the client.
+- **Use the right HTTP status code**: 400 `BadRequestError` for invalid input, 404 `NotFoundError`, 409 `ConflictError` / `SandboxNameConflictError` for conflicts, 422 `ValidationError` for schema issues.
+- **Global fallback handlers** in `main.py` catch `RequestValidationError` (422), `IntegrityError` (409), and `Exception` (500), guaranteeing the envelope format even for unexpected errors. Service-level handlers should still be preferred for domain-specific messages.
+- **Always log before returning 5xx**: use `logger.exception(...)` so the stack trace is captured server-side, but never expose internal details to the client.
+
 ## Database
 
 - Neon Serverless PostgreSQL. Connection string injected via `TREADSTONE_DATABASE_URL` env var.

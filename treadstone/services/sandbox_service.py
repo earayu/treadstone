@@ -10,10 +10,16 @@ start/stop use scale_sandbox on the Sandbox CR regardless of path.
 import logging
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from treadstone.config import settings
-from treadstone.core.errors import InvalidTransitionError, SandboxNotFoundError, TemplateNotFoundError
+from treadstone.core.errors import (
+    InvalidTransitionError,
+    SandboxNameConflictError,
+    SandboxNotFoundError,
+    TemplateNotFoundError,
+)
 from treadstone.models.sandbox import Sandbox, SandboxStatus, is_valid_transition
 from treadstone.models.user import random_id, utc_now
 from treadstone.services.k8s_client import K8sClientProtocol, get_k8s_client
@@ -85,7 +91,11 @@ class SandboxService:
             sandbox.k8s_sandbox_claim_name = sandbox_name
 
         self.session.add(sandbox)
-        await self.session.commit()
+        try:
+            await self.session.commit()
+        except IntegrityError:
+            await self.session.rollback()
+            raise SandboxNameConflictError(sandbox_name)
         await self.session.refresh(sandbox)
 
         try:

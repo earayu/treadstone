@@ -10,14 +10,20 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from treadstone.api.deps import get_current_user
 from treadstone.core.database import get_session
-from treadstone.core.errors import ForbiddenError, SandboxNotFoundError, SandboxNotReadyError, SandboxUnreachableError
+from treadstone.core.errors import (
+    ForbiddenError,
+    SandboxNotFoundError,
+    SandboxNotReadyError,
+    SandboxUnreachableError,
+    ValidationError,
+)
 from treadstone.models.sandbox import Sandbox, SandboxStatus
 from treadstone.models.user import User
 from treadstone.services.sandbox_proxy import (
@@ -62,7 +68,7 @@ async def http_proxy(
     try:
         routing = resolve_routing(headers, path_sandbox_id=sandbox.k8s_sandbox_name or sandbox.name)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise ValidationError(str(exc)) from exc
 
     body = await request.body()
 

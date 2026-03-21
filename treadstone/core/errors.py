@@ -78,6 +78,34 @@ class SandboxTimeoutError(TreadstoneError):
         )
 
 
+class SandboxNameConflictError(TreadstoneError):
+    def __init__(self, name: str):
+        super().__init__(
+            code="sandbox_name_conflict",
+            message=f"A sandbox named '{name}' already exists.",
+            status=409,
+        )
+
+
+class NotFoundError(TreadstoneError):
+    def __init__(self, resource: str, identifier: str):
+        super().__init__(
+            code="not_found",
+            message=f"{resource} '{identifier}' not found.",
+            status=404,
+        )
+
+
+class ConflictError(TreadstoneError):
+    def __init__(self, message: str):
+        super().__init__(code="conflict", message=message, status=409)
+
+
+class BadRequestError(TreadstoneError):
+    def __init__(self, message: str):
+        super().__init__(code="bad_request", message=message, status=400)
+
+
 class ValidationError(TreadstoneError):
     def __init__(self, message: str = "Request validation failed"):
         super().__init__(code="validation_error", message=message, status=422)

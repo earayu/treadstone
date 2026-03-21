@@ -62,7 +62,7 @@ async def test_register_duplicate_email(db_session):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/v1/auth/register", json={"email": "a@b.com", "password": "Pass123!"})
         resp = await client.post("/v1/auth/register", json={"email": "a@b.com", "password": "Pass123!"})
-    assert resp.status_code == 400
+    assert resp.status_code == 409
 
 
 @pytest.mark.asyncio
