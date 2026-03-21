@@ -1,7 +1,10 @@
 """Sandbox lifecycle service layer.
 
-Handles create/get/list/delete/start/stop with state machine validation.
-Delegates to K8s via SandboxClaim (create/delete) and Sandbox scale (start/stop).
+Dual-path provisioning:
+- persist=False → SandboxClaim path (WarmPool-eligible, no storage)
+- persist=True  → Direct Sandbox CR path (with volumeClaimTemplates)
+
+start/stop use scale_sandbox on the Sandbox CR regardless of path.
 """
 
 import logging
@@ -10,12 +13,31 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from treadstone.config import settings
-from treadstone.core.errors import InvalidTransitionError, SandboxNotFoundError
+from treadstone.core.errors import InvalidTransitionError, SandboxNotFoundError, TemplateNotFoundError
 from treadstone.models.sandbox import Sandbox, SandboxStatus, is_valid_transition
 from treadstone.models.user import random_id, utc_now
 from treadstone.services.k8s_client import K8sClientProtocol, get_k8s_client
 
 logger = logging.getLogger(__name__)
+
+_RESOURCE_LIMITS_MULTIPLIER = 2
+
+
+def _build_resource_limits(requests: dict[str, str]) -> dict[str, str]:
+    """Derive resource limits from requests (2x multiplier for CPU, same ratio for memory)."""
+    limits: dict[str, str] = {}
+    cpu = requests.get("cpu", "")
+    if cpu.endswith("m"):
+        limits["cpu"] = f"{int(cpu[:-1]) * _RESOURCE_LIMITS_MULTIPLIER}m"
+    elif cpu:
+        limits["cpu"] = str(int(cpu) * _RESOURCE_LIMITS_MULTIPLIER)
+    mem = requests.get("memory", "")
+    if mem.endswith("Mi"):
+        val = int(mem[:-2]) * _RESOURCE_LIMITS_MULTIPLIER
+        limits["memory"] = f"{val}Mi" if val < 1024 else f"{val // 1024}Gi"
+    elif mem.endswith("Gi"):
+        limits["memory"] = f"{int(mem[:-2]) * _RESOURCE_LIMITS_MULTIPLIER}Gi"
+    return limits
 
 
 class SandboxService:
@@ -32,6 +54,8 @@ class SandboxService:
         labels: dict | None = None,
         auto_stop_interval: int = 15,
         auto_delete_interval: int = -1,
+        persist: bool = False,
+        storage_size: str = "10Gi",
     ) -> Sandbox:
         sandbox_id = "sb" + random_id()
         sandbox_name = name or f"sb-{random_id(8)}"
@@ -50,29 +74,75 @@ class SandboxService:
         sandbox.endpoints = {}
         sandbox.gmt_created = utc_now()
         sandbox.k8s_namespace = settings.sandbox_namespace
-        sandbox.k8s_sandbox_claim_name = sandbox_name
+        sandbox.persist = persist
+        sandbox.storage_size = storage_size if persist else None
+
+        if persist:
+            sandbox.provision_mode = "direct"
+            sandbox.k8s_sandbox_name = sandbox_name
+        else:
+            sandbox.provision_mode = "claim"
+            sandbox.k8s_sandbox_claim_name = sandbox_name
 
         self.session.add(sandbox)
         await self.session.commit()
         await self.session.refresh(sandbox)
 
         try:
-            logger.info("Creating SandboxClaim %s (template=%s, ns=%s)", sandbox_name, template, sandbox.k8s_namespace)
-            await self.k8s.create_sandbox_claim(
-                name=sandbox_name,
-                template_ref=template,
-                namespace=sandbox.k8s_namespace,
-            )
-            logger.info("SandboxClaim %s created successfully", sandbox_name)
+            if persist:
+                await self._create_direct(sandbox, template, storage_size)
+            else:
+                await self._create_via_claim(sandbox, template)
         except Exception:
-            logger.exception("Failed to create SandboxClaim for sandbox %s", sandbox_id)
+            logger.exception("Failed to create K8s resource for sandbox %s", sandbox_id)
             sandbox.status = SandboxStatus.ERROR
-            sandbox.status_message = "Failed to create SandboxClaim"
+            sandbox.status_message = f"Failed to create {'Sandbox CR' if persist else 'SandboxClaim'}"
             sandbox.version += 1
             self.session.add(sandbox)
             await self.session.commit()
 
         return sandbox
+
+    async def _create_via_claim(self, sandbox: Sandbox, template: str) -> None:
+        logger.info("Creating SandboxClaim %s (template=%s, ns=%s)", sandbox.name, template, sandbox.k8s_namespace)
+        await self.k8s.create_sandbox_claim(
+            name=sandbox.name,
+            template_ref=template,
+            namespace=sandbox.k8s_namespace,
+        )
+
+    async def _create_direct(self, sandbox: Sandbox, template: str, storage_size: str) -> None:
+        templates = await self.k8s.list_sandbox_templates(namespace=sandbox.k8s_namespace)
+        tmpl = next((t for t in templates if t["name"] == template), None)
+        if tmpl is None:
+            raise TemplateNotFoundError(template)
+
+        resource_requests = tmpl["resource_spec"]
+        resources = {
+            "requests": resource_requests,
+            "limits": _build_resource_limits(resource_requests),
+        }
+        volume_claim_templates = [
+            {
+                "metadata": {"name": "workspace"},
+                "spec": {
+                    "accessModes": ["ReadWriteOnce"],
+                    "resources": {"requests": {"storage": storage_size}},
+                },
+            }
+        ]
+
+        logger.info(
+            "Creating Sandbox CR %s (template=%s, persist=true, ns=%s)", sandbox.name, template, sandbox.k8s_namespace
+        )
+        await self.k8s.create_sandbox(
+            name=sandbox.name,
+            namespace=sandbox.k8s_namespace,
+            image=settings.sandbox_image,
+            container_port=settings.sandbox_port,
+            resources=resources,
+            volume_claim_templates=volume_claim_templates,
+        )
 
     async def get(self, sandbox_id: str, owner_id: str) -> Sandbox | None:
         result = await self.session.execute(
@@ -106,15 +176,19 @@ class SandboxService:
         self.session.add(sandbox)
         await self.session.commit()
 
-        claim_name = sandbox.k8s_sandbox_claim_name or sandbox.name
         try:
-            logger.info("Deleting SandboxClaim %s (ns=%s)", claim_name, sandbox.k8s_namespace)
-            await self.k8s.delete_sandbox_claim(name=claim_name, namespace=sandbox.k8s_namespace)
-            logger.info("SandboxClaim %s deleted successfully", claim_name)
+            if sandbox.provision_mode == "direct":
+                sb_name = sandbox.k8s_sandbox_name or sandbox.name
+                logger.info("Deleting Sandbox CR %s (ns=%s)", sb_name, sandbox.k8s_namespace)
+                await self.k8s.delete_sandbox(name=sb_name, namespace=sandbox.k8s_namespace)
+            else:
+                claim_name = sandbox.k8s_sandbox_claim_name or sandbox.name
+                logger.info("Deleting SandboxClaim %s (ns=%s)", claim_name, sandbox.k8s_namespace)
+                await self.k8s.delete_sandbox_claim(name=claim_name, namespace=sandbox.k8s_namespace)
         except Exception:
-            logger.exception("Failed to delete SandboxClaim for sandbox %s", sandbox_id)
+            logger.exception("Failed to delete K8s resource for sandbox %s", sandbox_id)
             sandbox.status = SandboxStatus.ERROR
-            sandbox.status_message = "Failed to delete SandboxClaim"
+            sandbox.status_message = "Failed to delete K8s resource"
             sandbox.version += 1
             self.session.add(sandbox)
             await self.session.commit()
@@ -137,7 +211,6 @@ class SandboxService:
         try:
             logger.info("Scaling sandbox %s to replicas=1 (ns=%s)", k8s_name, sandbox.k8s_namespace)
             await self.k8s.scale_sandbox(name=k8s_name, namespace=sandbox.k8s_namespace, replicas=1)
-            logger.info("Sandbox %s scaled to 1 successfully", k8s_name)
         except Exception:
             logger.exception("Failed to scale sandbox %s to 1", sandbox_id)
             sandbox.status = SandboxStatus.ERROR
@@ -166,7 +239,6 @@ class SandboxService:
         try:
             logger.info("Scaling sandbox %s to replicas=0 (ns=%s)", k8s_name, sandbox.k8s_namespace)
             await self.k8s.scale_sandbox(name=k8s_name, namespace=sandbox.k8s_namespace, replicas=0)
-            logger.info("Sandbox %s scaled to 0 successfully", k8s_name)
         except Exception:
             logger.exception("Failed to scale sandbox %s to 0", sandbox_id)
             sandbox.status = SandboxStatus.ERROR
