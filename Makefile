@@ -66,6 +66,13 @@ downgrade: ## Rollback last migration
 gen-openapi: ## Export openapi.json from FastAPI app (no server needed)
 	uv run python scripts/export_openapi.py
 
+gen-sdk: gen-openapi ## Generate Python SDK from OpenAPI spec
+	openapi-python-client generate \
+		--path openapi.json \
+		--config openapi-client-config.yaml \
+		--output-path sdk/python \
+		--overwrite
+
 # ── Build ────────────────────────────────────────────────────────────────────
 
 build: ## Build Docker image

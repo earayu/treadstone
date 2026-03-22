@@ -28,21 +28,55 @@ and self-hostable.
 
 ## Quick Start
 
+### Install
+
 ```bash
-# Execute code in a disposable sandbox
-treadstone run "print('hello world')"
+pip install git+https://github.com/earayu/treadstone.git
+```
 
-# Create a persistent development environment
-treadstone create --template aio-sandbox-large --persist
+### CLI
 
-# Run a command inside an existing sandbox
-treadstone exec sb-3f8a -- npm install && npm test
+```bash
+# Register and get an API key
+treadstone auth register --email you@example.com --password YourPass123!
+treadstone auth login --email you@example.com --password YourPass123!
+treadstone api-keys create --name my-key
 
-# Check sandbox status
-treadstone status sb-3f8a
+# Set your API key
+export TREADSTONE_API_KEY="sk-..."
+export TREADSTONE_BASE_URL="http://localhost:8000"
 
-# Tear it down
-treadstone destroy sb-3f8a
+# List available templates
+treadstone templates list
+
+# Create a sandbox
+treadstone sandboxes create --template aio-sandbox-tiny --name my-sandbox
+
+# List and inspect sandboxes
+treadstone sandboxes list
+treadstone sandboxes get <sandbox_id>
+
+# Create a persistent sandbox with storage
+treadstone sandboxes create --template aio-sandbox-large --persist --storage-size 20Gi
+
+# Lifecycle management
+treadstone sandboxes stop <sandbox_id>
+treadstone sandboxes start <sandbox_id>
+treadstone sandboxes delete <sandbox_id>
+
+# All commands support JSON output for automation
+treadstone --json sandboxes list
+```
+
+### Python SDK
+
+```python
+from treadstone_sdk import Client
+
+client = Client(base_url="http://localhost:8000")
+
+# All API operations are available as typed methods
+# See sdk/python/ for the full generated SDK
 ```
 
 ## Sandbox Templates
@@ -117,7 +151,7 @@ coming next.
 |---|---|---|
 | **Phase 1** | User auth (JWT, OAuth, API keys), RBAC, invitation system | Done |
 | **Phase 2** | Sandbox CRUD, lifecycle management, K8s sync, HTTP proxy, subdomain routing | Done |
-| **Phase 3** | CLI, Python SDK, agent-facing developer experience | Planned |
+| **Phase 3** | CLI, Python SDK, agent-facing developer experience | Done |
 | **Phase 4** | Usage metering, billing (Stripe), quotas | Planned |
 | **Phase 5** | Managed hosting, production hardening, monitoring | Planned |
 

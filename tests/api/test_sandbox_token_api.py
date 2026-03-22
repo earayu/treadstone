@@ -52,7 +52,7 @@ async def db_session():
 async def auth_client(db_session):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/v1/auth/register", json={"email": "token@test.com", "password": "Pass123!"})
-        await client.post("/v1/auth/login", data={"username": "token@test.com", "password": "Pass123!"})
+        await client.post("/v1/auth/login", json={"email": "token@test.com", "password": "Pass123!"})
         yield client
 
 

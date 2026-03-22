@@ -1,0 +1,143 @@
+"""Sandbox management commands."""
+
+from __future__ import annotations
+
+import click
+
+from treadstone.cli._client import require_auth
+from treadstone.cli._output import handle_error, is_json_mode, print_detail, print_json, print_table
+
+
+@click.group()
+def sandboxes() -> None:
+    """Manage sandboxes."""
+
+
+@sandboxes.command("create")
+@click.option("--template", required=True, help="Sandbox template name.")
+@click.option("--name", default=None, help="Sandbox name (auto-generated if omitted).")
+@click.option("--label", multiple=True, help="Labels in key:val format (repeatable).")
+@click.option("--persist", is_flag=True, default=False, help="Enable persistent storage.")
+@click.option("--storage-size", default="10Gi", help="PVC size when --persist is set.")
+@click.pass_context
+def create(
+    ctx: click.Context,
+    template: str,
+    name: str | None,
+    label: tuple[str, ...],
+    persist: bool,
+    storage_size: str,
+) -> None:
+    """Create a new sandbox."""
+    client = require_auth(ctx)
+    labels = {}
+    for lbl in label:
+        if ":" not in lbl:
+            click.echo(f"Error: Invalid label format '{lbl}'. Use key:val.", err=True)
+            raise SystemExit(1)
+        k, v = lbl.split(":", 1)
+        labels[k] = v
+    body: dict = {"template": template, "labels": labels, "persist": persist, "storage_size": storage_size}
+    if name:
+        body["name"] = name
+    resp = client.post("/v1/sandboxes", json=body)
+    handle_error(resp)
+    data = resp.json()
+    if is_json_mode(ctx):
+        print_json(data)
+    else:
+        print_detail(data, title="Sandbox Created")
+
+
+@sandboxes.command("list")
+@click.option("--label", default=None, help="Filter by label (key:val).")
+@click.option("--limit", default=100, type=int, help="Max results.")
+@click.option("--offset", default=0, type=int, help="Skip N results.")
+@click.pass_context
+def list_sandboxes(ctx: click.Context, label: str | None, limit: int, offset: int) -> None:
+    """List sandboxes."""
+    client = require_auth(ctx)
+    params: dict = {"limit": limit, "offset": offset}
+    if label:
+        params["label"] = label
+    resp = client.get("/v1/sandboxes", params=params)
+    handle_error(resp)
+    data = resp.json()
+    if is_json_mode(ctx):
+        print_json(data)
+    else:
+        items = data.get("items", [])
+        rows = [[s["id"], s["name"], s["template"], s["status"], s.get("created_at", "")] for s in items]
+        print_table(["ID", "Name", "Template", "Status", "Created"], rows, title=f"Sandboxes ({data['total']} total)")
+
+
+@sandboxes.command("get")
+@click.argument("sandbox_id")
+@click.pass_context
+def get_sandbox(ctx: click.Context, sandbox_id: str) -> None:
+    """Get sandbox details."""
+    client = require_auth(ctx)
+    resp = client.get(f"/v1/sandboxes/{sandbox_id}")
+    handle_error(resp)
+    data = resp.json()
+    if is_json_mode(ctx):
+        print_json(data)
+    else:
+        print_detail(data, title=f"Sandbox {sandbox_id}")
+
+
+@sandboxes.command("delete")
+@click.argument("sandbox_id")
+@click.pass_context
+def delete_sandbox(ctx: click.Context, sandbox_id: str) -> None:
+    """Delete a sandbox."""
+    client = require_auth(ctx)
+    resp = client.delete(f"/v1/sandboxes/{sandbox_id}")
+    handle_error(resp)
+    click.echo(f"Sandbox {sandbox_id} deleted.")
+
+
+@sandboxes.command("start")
+@click.argument("sandbox_id")
+@click.pass_context
+def start_sandbox(ctx: click.Context, sandbox_id: str) -> None:
+    """Start a stopped sandbox."""
+    client = require_auth(ctx)
+    resp = client.post(f"/v1/sandboxes/{sandbox_id}/start")
+    handle_error(resp)
+    data = resp.json()
+    if is_json_mode(ctx):
+        print_json(data)
+    else:
+        click.echo(f"Sandbox {sandbox_id} starting.")
+
+
+@sandboxes.command("stop")
+@click.argument("sandbox_id")
+@click.pass_context
+def stop_sandbox(ctx: click.Context, sandbox_id: str) -> None:
+    """Stop a running sandbox."""
+    client = require_auth(ctx)
+    resp = client.post(f"/v1/sandboxes/{sandbox_id}/stop")
+    handle_error(resp)
+    data = resp.json()
+    if is_json_mode(ctx):
+        print_json(data)
+    else:
+        click.echo(f"Sandbox {sandbox_id} stopping.")
+
+
+@sandboxes.command("token")
+@click.argument("sandbox_id")
+@click.option("--expires-in", default=3600, type=int, help="Token lifetime in seconds.")
+@click.pass_context
+def create_token(ctx: click.Context, sandbox_id: str, expires_in: int) -> None:
+    """Create an access token for a sandbox."""
+    client = require_auth(ctx)
+    resp = client.post(f"/v1/sandboxes/{sandbox_id}/token", json={"expires_in": expires_in})
+    handle_error(resp)
+    data = resp.json()
+    if is_json_mode(ctx):
+        print_json(data)
+    else:
+        print_detail(data, title="Sandbox Token")

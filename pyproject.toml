@@ -1,22 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "treadstone"
 version = "0.1.0"
-description = "Add your description here"
+description = "Agent-native sandbox service. Run code, build projects, deploy environments."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.18.4",
     "asyncpg>=0.31.0",
+    "click>=8.1",
     "fastapi>=0.135.1",
     "httpx>=0.28.1",
     "kr8s>=0.20.15",
     "psycopg2-binary>=2.9.11",
     "pydantic-settings>=2.13.1",
     "pyjwt>=2.12.1",
+    "rich>=14.0",
     "sqlalchemy[asyncio]>=2.0.48",
     "uvicorn[standard]>=0.42.0",
     "websockets>=16.0",
 ]
+
+[project.scripts]
+treadstone = "treadstone.cli.main:cli"
 
 [dependency-groups]
 dev = [
@@ -37,6 +46,7 @@ dev = [
 [tool.ruff]
 target-version = "py312"
 line-length = 120
+extend-exclude = ["sdk/"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
