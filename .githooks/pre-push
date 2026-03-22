@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 #
-# Prevent direct pushes to the main branch.
-# All changes must go through Pull Requests.
+# Prevent direct pushes to the remote `main` branch.
+# All branch updates to main must go through Pull Requests.
+#
+# Tag pushes (e.g. git push origin v0.1.1) are allowed from any local branch.
 
-branch="$(git symbolic-ref --short HEAD 2>/dev/null)"
-
-if [ "$branch" = "main" ]; then
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ -z "$remote_ref" ] && continue
+  if [[ "$remote_ref" == "refs/heads/main" ]]; then
     echo ""
-    echo "ERROR: Direct push to 'main' is not allowed."
+    echo "ERROR: Direct push to remote 'main' is not allowed."
     echo "       Please create a feature branch and open a Pull Request."
     echo ""
     exit 1
-fi
+  fi
+done
