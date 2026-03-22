@@ -145,6 +145,7 @@ jobs:
         run: uv sync --frozen && uv pip install pyinstaller
 
       - name: Build binary
+        shell: bash
         run: |
           uv run pyinstaller \
             --onefile \
