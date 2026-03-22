@@ -107,14 +107,76 @@ jobs:
         env:
           PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
 
+  # ── CLI binaries → GitHub Release assets ──
+  build-binaries:
+    needs: [lint, test]
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: treadstone-linux-amd64
+          - os: macos-latest
+            artifact_name: treadstone-darwin-arm64
+          - os: macos-13
+            artifact_name: treadstone-darwin-amd64
+          - os: windows-latest
+            artifact_name: treadstone-windows-amd64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Set version from tag
+        shell: python
+        run: |
+          import re, pathlib, os
+          ver = os.environ["GITHUB_REF_NAME"].lstrip("v")
+          p = pathlib.Path("pyproject.toml")
+          p.write_text(re.sub(r"(?m)^version = .*", f'version = "{ver}"', p.read_text()))
+
+      - name: Install dependencies + PyInstaller
+        run: uv sync --frozen && uv pip install pyinstaller
+
+      - name: Build binary
+        run: |
+          uv run pyinstaller \
+            --onefile \
+            --name treadstone \
+            --exclude-module sqlalchemy \
+            --exclude-module asyncpg \
+            --exclude-module fastapi \
+            --exclude-module uvicorn \
+            --exclude-module alembic \
+            treadstone/cli/__main__.py
+
+      - name: Rename binary
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            mv dist/treadstone.exe "dist/${{ matrix.artifact_name }}"
+          else
+            mv dist/treadstone "dist/${{ matrix.artifact_name }}"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist/${{ matrix.artifact_name }}
+
   # ── GitHub Release ──
   github-release:
-    needs: [docker, publish-cli, publish-sdk]
+    needs: [docker, publish-cli, publish-sdk, build-binaries]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+          merge-multiple: true
 
       - name: Generate changelog
         id: changelog
@@ -135,7 +197,17 @@ jobs:
             echo "## Install"
             echo ""
             echo '```bash'
-            echo "# CLI"
+            echo "# Standalone binary (no Python required)"
+            echo "# macOS (Apple Silicon)"
+            echo "curl -L https://github.com/${{ github.repository }}/releases/download/v$VERSION/treadstone-darwin-arm64 -o treadstone && chmod +x treadstone"
+            echo ""
+            echo "# macOS (Intel)"
+            echo "curl -L https://github.com/${{ github.repository }}/releases/download/v$VERSION/treadstone-darwin-amd64 -o treadstone && chmod +x treadstone"
+            echo ""
+            echo "# Linux"
+            echo "curl -L https://github.com/${{ github.repository }}/releases/download/v$VERSION/treadstone-linux-amd64 -o treadstone && chmod +x treadstone"
+            echo ""
+            echo "# Python / pip"
             echo "pip install treadstone==$VERSION"
             echo ""
             echo "# SDK"
@@ -151,3 +223,4 @@ jobs:
         with:
           body: ${{ steps.changelog.outputs.body }}
           generate_release_notes: false
+          files: artifacts/*
