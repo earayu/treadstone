@@ -102,9 +102,9 @@ async def test_full_auth_flow():
 
         login_resp = await client.post(
             "/v1/auth/login",
-            data={"username": TEST_EMAIL_2, "password": TEST_PASSWORD},
+            json={"email": TEST_EMAIL_2, "password": TEST_PASSWORD},
         )
-        assert login_resp.status_code in (200, 204)
+        assert login_resp.status_code == 200
         session_cookie = login_resp.cookies.get("session")
         assert session_cookie is not None
 
@@ -121,14 +121,14 @@ async def test_full_auth_flow():
         assert change_resp.status_code == 200
 
         logout_resp = await client.post("/v1/auth/logout")
-        assert logout_resp.status_code in (200, 204)
+        assert logout_resp.status_code == 200
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         login2_resp = await client.post(
             "/v1/auth/login",
-            data={"username": TEST_EMAIL_2, "password": new_password},
+            json={"email": TEST_EMAIL_2, "password": new_password},
         )
-        assert login2_resp.status_code in (200, 204)
+        assert login2_resp.status_code == 200
         assert login2_resp.cookies.get("session") is not None
 
 

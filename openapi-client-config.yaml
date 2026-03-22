@@ -1,0 +1,5 @@
+project_name_override: treadstone-sdk
+package_name_override: treadstone_sdk
+post_hooks:
+  - "ruff check --fix ."
+  - "ruff format ."

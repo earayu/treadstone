@@ -46,6 +46,7 @@ def _check_sandbox_token_scope(request: Request, sandbox_id: str) -> None:
 @router.api_route(
     "/{sandbox_id}/proxy/{path:path}",
     methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+    include_in_schema=False,
 )
 async def http_proxy(
     request: Request,

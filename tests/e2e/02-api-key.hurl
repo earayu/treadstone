@@ -12,12 +12,12 @@ Content-Type: application/json
 HTTP 201
 
 POST {{base_url}}/v1/auth/login
-[FormParams]
-username: {{email_02}}
-password: {{test_password}}
-HTTP *
-[Asserts]
-status < 300
+Content-Type: application/json
+{
+    "email": "{{email_02}}",
+    "password": "{{test_password}}"
+}
+HTTP 200
 
 
 # ── Create API Key ───────────────────────────────────────────────────────────

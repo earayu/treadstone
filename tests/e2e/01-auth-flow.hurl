@@ -28,12 +28,13 @@ jsonpath "$.id" isString
 # ── Login ────────────────────────────────────────────────────────────────────
 
 POST {{base_url}}/v1/auth/login
-[FormParams]
-username: {{email_01}}
-password: {{test_password}}
-HTTP *
+Content-Type: application/json
+{
+    "email": "{{email_01}}",
+    "password": "{{test_password}}"
+}
+HTTP 200
 [Asserts]
-status < 300
 cookie "session" exists
 
 

@@ -12,12 +12,12 @@ Content-Type: application/json
 HTTP 201
 
 POST {{base_url}}/v1/auth/login
-[FormParams]
-username: {{email_04}}
-password: {{test_password}}
-HTTP *
-[Asserts]
-status < 300
+Content-Type: application/json
+{
+    "email": "{{email_04}}",
+    "password": "{{test_password}}"
+}
+HTTP 200
 
 
 # ── Change Password ─────────────────────────────────────────────────────────
@@ -36,10 +36,11 @@ jsonpath "$.detail" == "Password changed"
 # ── Login with New Password ─────────────────────────────────────────────────
 
 POST {{base_url}}/v1/auth/login
-[FormParams]
-username: {{email_04}}
-password: {{new_password}}
-HTTP *
+Content-Type: application/json
+{
+    "email": "{{email_04}}",
+    "password": "{{new_password}}"
+}
+HTTP 200
 [Asserts]
-status < 300
 cookie "session" exists

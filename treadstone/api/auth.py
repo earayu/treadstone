@@ -1,7 +1,8 @@
 import secrets
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi_users.password import PasswordHelper
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +14,8 @@ from treadstone.api.schemas import (
     CreateApiKeyRequest,
     InviteRequest,
     InviteResponse,
+    LoginRequest,
+    LoginResponse,
     MessageResponse,
     RegisterRequest,
     RegisterResponse,
@@ -22,14 +25,57 @@ from treadstone.api.schemas import (
 from treadstone.config import settings
 from treadstone.core.database import get_session
 from treadstone.core.errors import BadRequestError, ConflictError, ForbiddenError, NotFoundError
-from treadstone.core.users import auth_backend, fastapi_users
+from treadstone.core.users import COOKIE_MAX_AGE, get_jwt_strategy
 from treadstone.models.api_key import ApiKey
 from treadstone.models.user import Invitation, Role, User, random_id, utc_now
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
 
-# ── fastapi-users built-in login / logout ──
-router.include_router(fastapi_users.get_auth_router(auth_backend))
+
+@router.post("/login", response_model=LoginResponse)
+async def login(
+    body: LoginRequest,
+    session: AsyncSession = Depends(get_session),
+):
+    """Authenticate with email + password, set session cookie."""
+    result = await session.execute(select(User).where(User.email == body.email))
+    user = result.unique().scalar_one_or_none()
+
+    if user is None or not user.is_active:
+        raise BadRequestError("Invalid email or password")
+
+    ph = PasswordHelper()
+    valid, _ = ph.verify_and_update(body.password, user.hashed_password)
+    if not valid:
+        raise BadRequestError("Invalid email or password")
+
+    strategy = get_jwt_strategy()
+    token = await strategy.write_token(user)
+
+    response = Response(
+        content='{"detail":"Login successful"}',
+        media_type="application/json",
+    )
+    response.set_cookie(
+        key="session",
+        value=token,
+        max_age=COOKIE_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=False,
+    )
+    return response
+
+
+@router.post("/logout", response_model=MessageResponse)
+async def logout():
+    """Clear the session cookie."""
+    response = Response(
+        content='{"detail":"Logout successful"}',
+        media_type="application/json",
+    )
+    response.delete_cookie(key="session")
+    return response
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED, response_model=RegisterResponse)
@@ -55,8 +101,6 @@ async def register(
     existing = await session.execute(select(User).where(User.email == body.email))
     if existing.unique().scalar_one_or_none():
         raise ConflictError("Email already registered")
-
-    from fastapi_users.password import PasswordHelper
 
     ph = PasswordHelper()
     hashed = ph.hash(body.password)
@@ -134,8 +178,6 @@ async def change_password(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    from fastapi_users.password import PasswordHelper
-
     ph = PasswordHelper()
     valid, _ = ph.verify_and_update(body.old_password, current_user.hashed_password)
     if not valid:

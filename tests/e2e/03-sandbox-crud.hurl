@@ -13,12 +13,12 @@ Content-Type: application/json
 HTTP 201
 
 POST {{base_url}}/v1/auth/login
-[FormParams]
-username: {{email_03}}
-password: {{test_password}}
-HTTP *
-[Asserts]
-status < 300
+Content-Type: application/json
+{
+    "email": "{{email_03}}",
+    "password": "{{test_password}}"
+}
+HTTP 200
 
 POST {{base_url}}/v1/auth/api-keys
 Content-Type: application/json

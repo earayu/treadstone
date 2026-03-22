@@ -105,6 +105,15 @@ class SandboxTemplateListResponse(BaseModel):
 # ── Auth ─────────────────────────────────────────────────────────────────────
 
 
+class LoginRequest(BaseModel):
+    email: str = Field(..., examples=["user@example.com"])
+    password: str = Field(..., examples=["MySecretPass123!"])
+
+
+class LoginResponse(BaseModel):
+    detail: str = Field(..., examples=["Login successful"])
+
+
 class RegisterRequest(BaseModel):
     email: str = Field(..., examples=["user@example.com"])
     password: str = Field(..., examples=["MySecretPass123!"])
