@@ -117,7 +117,8 @@ jobs:
             artifact_name: treadstone-linux-amd64
           - os: macos-latest
             artifact_name: treadstone-darwin-arm64
-          - os: macos-13
+          # macos-13 retired Dec 2025; Intel macOS builds use macos-15-intel (x86_64).
+          - os: macos-15-intel
             artifact_name: treadstone-darwin-amd64
           - os: windows-latest
             artifact_name: treadstone-windows-amd64.exe
