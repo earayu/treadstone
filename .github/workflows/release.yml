@@ -1,0 +1,153 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+env:
+  REGISTRY: ghcr.io
+  TREADSTONE_IMAGE: ghcr.io/${{ github.repository_owner }}/treadstone
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  # ── Gate: lint + test must pass before any publishing ──
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: make lint
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: uv run pytest tests/ -v
+        env:
+          TREADSTONE_DATABASE_URL: "postgresql+asyncpg://fake:fake@localhost/fake?sslmode=require"
+
+  # ── Docker image → GHCR ──
+  docker:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.TREADSTONE_IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # ── CLI (treadstone) → PyPI ──
+  publish-cli:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    environment: pypi
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Set version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
+
+      - run: uv build
+      - run: uv publish --token "$PYPI_API_TOKEN"
+        env:
+          PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+
+  # ── SDK (treadstone-sdk) → PyPI ──
+  publish-sdk:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    environment: pypi
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: pip install poetry-core
+
+      - name: Set version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          sed -i "s/^version = .*/version = \"$VERSION\"/" sdk/python/pyproject.toml
+
+      - name: Build SDK
+        working-directory: sdk/python
+        run: uv build
+
+      - name: Publish SDK
+        working-directory: sdk/python
+        run: uv publish --token "$PYPI_API_TOKEN"
+        env:
+          PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+
+  # ── GitHub Release ──
+  github-release:
+    needs: [docker, publish-cli, publish-sdk]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git tag --sort=-v:refname | head -2 | tail -1)
+          if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "$GITHUB_REF_NAME" ]; then
+            LOG=$(git log --oneline --no-decorate -20)
+          else
+            LOG=$(git log --oneline --no-decorate "$PREV_TAG".."$GITHUB_REF_NAME")
+          fi
+          VERSION="${GITHUB_REF_NAME#v}"
+          {
+            echo "body<<CHANGELOG_EOF"
+            echo "## What's Changed"
+            echo ""
+            echo "$LOG" | sed 's/^/- /'
+            echo ""
+            echo "## Install"
+            echo ""
+            echo '```bash'
+            echo "# CLI"
+            echo "pip install treadstone==$VERSION"
+            echo ""
+            echo "# SDK"
+            echo "pip install treadstone-sdk==$VERSION"
+            echo ""
+            echo "# Docker"
+            echo "docker pull ghcr.io/${{ github.repository_owner }}/treadstone:$VERSION"
+            echo '```'
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          body: ${{ steps.changelog.outputs.body }}
+          generate_release_notes: false

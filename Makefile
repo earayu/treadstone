@@ -147,3 +147,13 @@ ship: ## AI commit & push: make ship MSG="feat: add user model"
 	git add -A
 	git commit -m "$(MSG)"
 	git push
+
+# ── Release ─────────────────────────────────────────────────────────────────
+
+release: ## Tag a release: make release V=0.2.0
+	@if [ -z "$(V)" ]; then echo "Usage: make release V=0.2.0"; exit 1; fi
+	@if [ "$$(git symbolic-ref --short HEAD)" != "main" ]; then echo "Error: Must be on main to release."; exit 1; fi
+	@echo "Tagging v$(V) and pushing — this will trigger Docker + PyPI + GitHub Release..."
+	git tag "v$(V)"
+	git push origin "v$(V)"
+	@echo "✓ Release v$(V) triggered. Watch: gh run watch"

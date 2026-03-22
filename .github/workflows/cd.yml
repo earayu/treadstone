@@ -46,8 +46,8 @@ jobs:
         with:
           images: ${{ env.TREADSTONE_IMAGE }}
           tags: |
-            type=sha,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=main
+            type=sha,prefix=main-
 
       - uses: docker/build-push-action@v6
         with:
