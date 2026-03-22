@@ -35,7 +35,6 @@ jobs:
   # ── Docker image → GHCR ──
   docker:
     needs: [lint, test]
-    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -66,7 +65,6 @@ jobs:
   publish-cli:
     needs: [lint, test]
     runs-on: ubuntu-latest
-    continue-on-error: true
     environment: pypi
     steps:
       - uses: actions/checkout@v4
@@ -79,7 +77,15 @@ jobs:
           sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
 
       - run: uv build
-      - run: uv publish --token "$PYPI_API_TOKEN"
+      - name: Publish to PyPI
+        run: |
+          uv publish --token "$PYPI_API_TOKEN" 2>&1 | tee /tmp/publish.log || {
+            if grep -q "File already exists" /tmp/publish.log; then
+              echo "::warning::Version already exists on PyPI — skipping (idempotent)"
+            else
+              exit 1
+            fi
+          }
         env:
           PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
 
@@ -87,7 +93,6 @@ jobs:
   publish-sdk:
     needs: [lint, test]
     runs-on: ubuntu-latest
-    continue-on-error: true
     environment: pypi
     steps:
       - uses: actions/checkout@v4
@@ -106,7 +111,14 @@ jobs:
 
       - name: Publish SDK
         working-directory: sdk/python
-        run: uv publish --token "$PYPI_API_TOKEN"
+        run: |
+          uv publish --token "$PYPI_API_TOKEN" 2>&1 | tee /tmp/publish-sdk.log || {
+            if grep -q "File already exists" /tmp/publish-sdk.log; then
+              echo "::warning::SDK version already exists on PyPI — skipping (idempotent)"
+            else
+              exit 1
+            fi
+          }
         env:
           PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
 
@@ -175,7 +187,6 @@ jobs:
   # ── GitHub Release ──
   github-release:
     needs: [docker, publish-cli, publish-sdk, build-binaries]
-    if: always() && needs.build-binaries.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -185,6 +196,7 @@ jobs:
       - name: Download binaries
         uses: actions/download-artifact@v4
         with:
+          pattern: treadstone-*
           path: artifacts/
           merge-multiple: true
 
