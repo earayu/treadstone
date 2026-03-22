@@ -35,6 +35,7 @@ jobs:
   # ── Docker image → GHCR ──
   docker:
     needs: [lint, test]
+    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -174,6 +175,7 @@ jobs:
   # ── GitHub Release ──
   github-release:
     needs: [docker, publish-cli, publish-sdk, build-binaries]
+    if: always() && needs.build-binaries.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

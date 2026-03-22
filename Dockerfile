@@ -4,11 +4,10 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir uv
 
-# hatchling validates readme from pyproject.toml during the install phase
 COPY pyproject.toml uv.lock README.md ./
+COPY treadstone/ treadstone/
 RUN uv sync --frozen --no-dev
 
-COPY treadstone/ treadstone/
 COPY alembic/ alembic/
 COPY alembic.ini .
 
