@@ -7,10 +7,6 @@ image:
 
 envSecretRef: treadstone-secrets
 
-service:
-  type: LoadBalancer
-  port: 8000
-
 resources:
   limits:
     cpu: 500m
@@ -26,4 +22,12 @@ hpa:
   enabled: false
 
 ingress:
-  enabled: false
+  enabled: true
+  className: alb
+  annotations:
+    alb.ingress.kubernetes.io/order: "1"
+  hosts:
+    - host: demo.treadstone-ai.dev
+      paths:
+        - path: /
+          pathType: Prefix
