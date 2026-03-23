@@ -25,7 +25,15 @@ def sandboxes() -> None:
 
 @sandboxes.command("create")
 @click.option("--template", required=True, help="Sandbox template name.")
-@click.option("--name", default=None, help="Sandbox name (auto-generated if omitted).")
+@click.option(
+    "--name",
+    default=None,
+    help=(
+        "Sandbox name (auto-generated if omitted). Must be 1-55 characters of lowercase letters, "
+        "numbers, or hyphens; must start and end with a letter or number. "
+        "This keeps sandbox-{name} within DNS label limits."
+    ),
+)
 @click.option("--label", multiple=True, help="Labels in key:val format (repeatable).")
 @click.option("--persist", is_flag=True, default=False, help="Enable persistent storage.")
 @click.option("--storage-size", default="10Gi", help="PVC size when --persist is set.")
@@ -39,6 +47,10 @@ def create(
     storage_size: str,
 ) -> None:
     """Create a new sandbox from a template.
+
+    Custom names must be 1-55 characters of lowercase letters, numbers, or
+    hyphens, and must start and end with a letter or number. This keeps
+    browser URLs like sandbox-{name}.treadstone-ai.dev within DNS label limits.
 
     \b
     Examples:

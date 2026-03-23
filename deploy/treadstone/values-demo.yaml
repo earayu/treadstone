@@ -31,7 +31,12 @@ ingress:
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
     alb.ingress.kubernetes.io/ssl-redirect: "true"
-    alb.ingress.kubernetes.io/certificate-id: "24059672-cn-hangzhou"
+    alb.ingress.kubernetes.io/certificate-id: "24067085-cn-hangzhou"
+    alb.ingress.kubernetes.io/healthcheck-enabled: "true"
+    alb.ingress.kubernetes.io/healthcheck-method: GET
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
+    alb.ingress.kubernetes.io/healthcheck-httpcode: http_2xx
   hosts:
     - host: demo.treadstone-ai.dev
       paths:

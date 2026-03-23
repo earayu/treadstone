@@ -26,23 +26,44 @@ def test_web_port_suffix(api_base: str, expected_suffix: str) -> None:
     assert _web_port_suffix(api_base) == expected_suffix
 
 
+def _fake_settings(**overrides):
+    defaults = {"sandbox_domain": "sandbox.localhost", "sandbox_subdomain_prefix": "sandbox-"}
+    defaults.update(overrides)
+    return SimpleNamespace(**defaults)
+
+
 def test_build_urls_web_omits_port_for_plain_localhost(monkeypatch) -> None:
-    monkeypatch.setattr("treadstone.api.sandboxes.settings", SimpleNamespace(sandbox_domain="sandbox.localhost"))
+    monkeypatch.setattr("treadstone.api.sandboxes.settings", _fake_settings())
     sb = SimpleNamespace(id="1", name="sbx")
     urls = _build_urls(sb, "http://localhost/")
-    assert urls["web"] == "http://sbx.sandbox.localhost"
+    assert urls["web"] == "http://sandbox-sbx.sandbox.localhost"
     assert urls["proxy"] == "http://localhost/v1/sandboxes/1/proxy"
 
 
 def test_build_urls_web_includes_port_for_dev_server(monkeypatch) -> None:
-    monkeypatch.setattr("treadstone.api.sandboxes.settings", SimpleNamespace(sandbox_domain="sandbox.localhost"))
+    monkeypatch.setattr("treadstone.api.sandboxes.settings", _fake_settings())
     sb = SimpleNamespace(id="1", name="sbx")
     urls = _build_urls(sb, "http://localhost:8000/")
-    assert urls["web"] == "http://sbx.sandbox.localhost:8000"
+    assert urls["web"] == "http://sandbox-sbx.sandbox.localhost:8000"
 
 
 def test_build_urls_web_includes_port_for_port_forward(monkeypatch) -> None:
-    monkeypatch.setattr("treadstone.api.sandboxes.settings", SimpleNamespace(sandbox_domain="sandbox.localhost"))
+    monkeypatch.setattr("treadstone.api.sandboxes.settings", _fake_settings())
     sb = SimpleNamespace(id="1", name="sbx")
     urls = _build_urls(sb, "http://127.0.0.1:12345/")
-    assert urls["web"] == "http://sbx.sandbox.localhost:12345"
+    assert urls["web"] == "http://sandbox-sbx.sandbox.localhost:12345"
+
+
+def test_build_urls_prod_domain(monkeypatch) -> None:
+    monkeypatch.setattr("treadstone.api.sandboxes.settings", _fake_settings(sandbox_domain="treadstone-ai.dev"))
+    sb = SimpleNamespace(id="sb123", name="my-project")
+    urls = _build_urls(sb, "https://api.treadstone-ai.dev/")
+    assert urls["web"] == "https://sandbox-my-project.treadstone-ai.dev"
+    assert urls["proxy"] == "https://api.treadstone-ai.dev/v1/sandboxes/sb123/proxy"
+
+
+def test_build_urls_web_none_when_domain_empty(monkeypatch) -> None:
+    monkeypatch.setattr("treadstone.api.sandboxes.settings", _fake_settings(sandbox_domain=""))
+    sb = SimpleNamespace(id="1", name="sbx")
+    urls = _build_urls(sb, "http://localhost/")
+    assert urls["web"] is None

@@ -32,10 +32,15 @@ class Settings(BaseSettings):
     sandbox_proxy_timeout: float = 180.0
 
     # Subdomain-based sandbox routing (for browser Web UI access)
-    # Dev: "sandbox.localhost"  →  {name}.sandbox.localhost[:port] when the API URL has a non-default port
-    # Prod: "sandbox.example.com"  →  {name}.sandbox.example.com
+    # Dev: "sandbox.localhost"  →  sandbox-{name}.sandbox.localhost[:port]
+    # Prod: "treadstone-ai.dev" →  sandbox-{name}.treadstone-ai.dev
     # Empty string disables subdomain routing.
     sandbox_domain: str = ""
+
+    # Only subdomains starting with this prefix are treated as sandbox Web UI
+    # traffic.  Non-matching subdomains (api, www, docs, …) pass through to
+    # the normal FastAPI app.  Override via TREADSTONE_SANDBOX_SUBDOMAIN_PREFIX.
+    sandbox_subdomain_prefix: str = "sandbox-"
 
     model_config = {"env_prefix": "TREADSTONE_", "env_file": ".env", "env_file_encoding": "utf-8"}
 

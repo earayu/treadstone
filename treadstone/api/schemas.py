@@ -6,16 +6,29 @@ generate rich OpenAPI specs with examples.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+SANDBOX_NAME_MAX_LENGTH = 55
+SANDBOX_NAME_PATTERN = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,53}[a-z0-9])?$")
+SANDBOX_NAME_RULE = (
+    "Sandbox name must be 1-55 characters of lowercase letters, numbers, or hyphens, "
+    "and must start and end with a letter or number."
+)
+SANDBOX_NAME_DESCRIPTION = (
+    "Optional custom sandbox name. "
+    f"{SANDBOX_NAME_RULE} "
+    "This keeps browser URLs like `sandbox-{name}.treadstone-ai.dev` within DNS label limits."
+)
 
 # ── Sandbox ──────────────────────────────────────────────────────────────────
 
 
 class CreateSandboxRequest(BaseModel):
     template: str = Field(..., examples=["aio-sandbox-tiny"])
-    name: str | None = Field(default=None, examples=["my-sandbox"])
+    name: str | None = Field(default=None, examples=["my-sandbox"], description=SANDBOX_NAME_DESCRIPTION)
     labels: dict = Field(default_factory=dict, examples=[{"env": "dev"}])
     auto_stop_interval: int = Field(
         default=15, examples=[15], description="Minutes of inactivity before the sandbox is automatically stopped."
@@ -31,6 +44,15 @@ class CreateSandboxRequest(BaseModel):
         examples=["10Gi"],
         description="Persistent volume size (only effective when persist=true).",
     )
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not SANDBOX_NAME_PATTERN.fullmatch(value):
+            raise ValueError(SANDBOX_NAME_RULE)
+        return value
 
 
 class SandboxUrls(BaseModel):

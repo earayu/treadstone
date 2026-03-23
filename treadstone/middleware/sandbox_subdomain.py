@@ -1,12 +1,13 @@
 """
 ASGI middleware for subdomain-based sandbox routing.
 
-When sandbox_domain is configured (e.g. "sandbox.localhost"), requests to
-  {sandbox_id}.sandbox.localhost
+When sandbox_domain is configured (e.g. "treadstone-ai.dev"), requests to
+  sandbox-{name}.treadstone-ai.dev
 are transparently proxied to the corresponding sandbox pod, supporting
 both HTTP and WebSocket.
 
-Requests to other hosts pass through to the normal FastAPI app unchanged.
+Only subdomains that start with ``sandbox_subdomain_prefix`` (default
+``sandbox-``) are intercepted; all other hosts pass through unchanged.
 """
 
 from __future__ import annotations
@@ -30,11 +31,15 @@ from treadstone.services.sandbox_proxy import (
 logger = logging.getLogger(__name__)
 
 
-def extract_sandbox_id(host: str, sandbox_domain: str) -> str | None:
-    """Extract sandbox_id from Host header.
+def extract_sandbox_name(host: str, sandbox_domain: str, prefix: str = "sandbox-") -> str | None:
+    """Return the sandbox name from a Host header, or None.
 
-    "sb-123.sandbox.localhost:8000" with domain "sandbox.localhost"
-    → returns "sb-123"
+    "sandbox-foobar.treadstone-ai.dev" with domain "treadstone-ai.dev"
+    → returns "foobar"
+
+    Only subdomains that start with *prefix* are recognised.  Subdomains
+    like "api.treadstone-ai.dev" or "www.treadstone-ai.dev" are ignored
+    because they don't carry the prefix.
     """
     host_no_port = host.split(":")[0].lower()
     domain = sandbox_domain.lower()
@@ -42,14 +47,17 @@ def extract_sandbox_id(host: str, sandbox_domain: str) -> str | None:
     if not host_no_port.endswith(f".{domain}"):
         return None
 
-    prefix = host_no_port[: -(len(domain) + 1)]
-    if not prefix or "." in prefix:
+    subdomain = host_no_port[: -(len(domain) + 1)]
+    if not subdomain or "." in subdomain:
         return None
-    return prefix
+    if not subdomain.startswith(prefix):
+        return None
+    name = subdomain[len(prefix) :]
+    return name if name else None
 
 
 class SandboxSubdomainMiddleware:
-    """ASGI middleware that intercepts requests to *.sandbox_domain and proxies them."""
+    """ASGI middleware that intercepts requests to {prefix}*.sandbox_domain and proxies them."""
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -64,16 +72,18 @@ class SandboxSubdomainMiddleware:
             return
 
         host = self._get_host(scope)
-        sandbox_id = extract_sandbox_id(host, settings.sandbox_domain) if host else None
+        sandbox_name = (
+            extract_sandbox_name(host, settings.sandbox_domain, settings.sandbox_subdomain_prefix) if host else None
+        )
 
-        if sandbox_id is None:
+        if sandbox_name is None:
             await self.app(scope, receive, send)
             return
 
         if scope["type"] == "http":
-            await self._handle_http(scope, receive, send, sandbox_id)
+            await self._handle_http(scope, receive, send, sandbox_name)
         else:
-            await self._handle_websocket(scope, receive, send, sandbox_id)
+            await self._handle_websocket(scope, receive, send, sandbox_name)
 
     @staticmethod
     def _get_host(scope: Scope) -> str | None:
@@ -82,7 +92,7 @@ class SandboxSubdomainMiddleware:
                 return value.decode("latin-1")
         return None
 
-    async def _handle_http(self, scope: Scope, receive: Receive, send: Send, sandbox_id: str) -> None:
+    async def _handle_http(self, scope: Scope, receive: Receive, send: Send, sandbox_name: str) -> None:
         request = Request(scope, receive)
         path = scope.get("path", "/")
         query_string = scope.get("query_string", b"").decode("latin-1")
@@ -97,8 +107,8 @@ class SandboxSubdomainMiddleware:
         body = b"".join(body_parts)
 
         full_path = f"{path}?{query_string}" if query_string else path
-        target_url = build_sandbox_url(sandbox_id, full_path)
-        logger.info("Subdomain proxy %s %s → %s", request.method, sandbox_id, target_url)
+        target_url = build_sandbox_url(sandbox_name, full_path)
+        logger.info("Subdomain proxy %s %s → %s", request.method, sandbox_name, target_url)
 
         client = await get_http_client()
         outgoing = _filter_request_headers(headers)
@@ -119,20 +129,20 @@ class SandboxSubdomainMiddleware:
         )
         await streaming(scope, receive, send)
 
-    async def _handle_websocket(self, scope: Scope, receive: Receive, send: Send, sandbox_id: str) -> None:
+    async def _handle_websocket(self, scope: Scope, receive: Receive, send: Send, sandbox_name: str) -> None:
         websocket = WebSocket(scope, receive, send)
         path = scope.get("path", "/")
         query_string = scope.get("query_string", b"").decode("latin-1")
         if query_string:
             path = f"{path}?{query_string}"
-        logger.info("Subdomain WS proxy %s → %s", sandbox_id, path)
+        logger.info("Subdomain WS proxy %s → %s", sandbox_name, path)
 
         await websocket.accept()
 
         try:
             await proxy_websocket(
                 client_ws=websocket,
-                sandbox_id=sandbox_id,
+                sandbox_id=sandbox_name,
                 path=path,
             )
         except Exception:
