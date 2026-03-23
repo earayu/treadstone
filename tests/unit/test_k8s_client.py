@@ -1,8 +1,40 @@
-"""Unit tests for K8s client (FakeK8sClient) — dual-path: SandboxClaim + direct Sandbox."""
+"""Unit tests for K8s clients — fake flow behavior and real client request wiring."""
 
 from datetime import UTC, datetime, timedelta
 
-from treadstone.services.k8s_client import FakeK8sClient, format_shutdown_time
+from treadstone.services.k8s_client import (
+    WATCH_TIMEOUT_SECONDS,
+    FakeK8sClient,
+    Kr8sClient,
+    format_shutdown_time,
+)
+
+
+class _EmptyStreamResponse:
+    async def aiter_lines(self):
+        for line in ():
+            yield line
+
+
+class _RecordedCall:
+    def __init__(self, recorder: list[dict], payload: dict):
+        self._recorder = recorder
+        self._payload = payload
+
+    async def __aenter__(self):
+        self._recorder.append(self._payload)
+        return _EmptyStreamResponse()
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+
+class _RecordingAPI:
+    def __init__(self):
+        self.calls: list[dict] = []
+
+    def call_api(self, method: str, **kwargs):
+        return _RecordedCall(self.calls, {"method": method, **kwargs})
 
 
 async def test_list_sandbox_templates():
@@ -161,3 +193,28 @@ async def test_direct_sandbox_in_list():
     )
     sbs = await client.list_sandboxes("treadstone-local")
     assert len(sbs) == 2
+
+
+async def test_watch_sandboxes_passes_query_params_separately():
+    client = Kr8sClient()
+    api = _RecordingAPI()
+
+    async def fake_get_api():
+        return api
+
+    client._get_api = fake_get_api  # type: ignore[method-assign]
+
+    events = [event async for event in client.watch_sandboxes("treadstone-prod", resource_version="123")]
+
+    assert events == []
+    assert len(api.calls) == 1
+    call = api.calls[0]
+    assert call["method"] == "GET"
+    assert call["base"] == "/apis/agents.x-k8s.io/v1alpha1/namespaces/treadstone-prod/sandboxes"
+    assert call["version"] == ""
+    assert call["stream"] is True
+    assert call["params"] == {
+        "watch": "true",
+        "timeoutSeconds": str(WATCH_TIMEOUT_SECONDS),
+        "resourceVersion": "123",
+    }

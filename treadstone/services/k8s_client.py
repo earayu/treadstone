@@ -219,11 +219,9 @@ class Kr8sClient:
         params = {"watch": "true", "timeoutSeconds": str(WATCH_TIMEOUT_SECONDS)}
         if resource_version:
             params["resourceVersion"] = resource_version
-        query = "&".join(f"{k}={v}" for k, v in params.items())
-        watch_url = f"{url}?{query}"
 
         logger.info("Starting K8s Watch on %s (rv=%s)", url, resource_version or "<latest>")
-        async with api.call_api("GET", base=watch_url, version="", stream=True) as resp:
+        async with api.call_api("GET", base=url, version="", params=params, stream=True) as resp:
             async for line in resp.aiter_lines():
                 line = line.strip()
                 if not line:
