@@ -106,6 +106,11 @@ Rules:
 - Never commit `.env`, secrets, or credentials.
 - PRs and Issues are automatically added to the [Project Board](https://github.com/users/earayu/projects/5/views/1) by GitHub Actions.
 
+## Release
+
+- **Process:** On `main`, run `make release V=x.y.z` (e.g. `make release V=0.1.4`). This creates and pushes tag `vx.y.z`, which triggers [`.github/workflows/release.yml`](.github/workflows/release.yml): Docker → GHCR, `treadstone` + `treadstone-sdk` → PyPI, CLI binaries + GitHub Release assets. Watch with `gh run watch` or the Actions tab.
+- **Agents:** Prefer **`make release V=…`** for tagging and publishing. Do not hand-craft `git tag` / `git push origin v…` or `gh release create` unless fixing a broken release—the Makefile enforces `main` and documents the intended flow.
+
 ## Automation
 
 - **pre-commit hook**: auto-runs `ruff format` + `ruff check` on every commit.
@@ -126,3 +131,4 @@ Run `make help` for the full list. Key commands:
 | `make migration MSG=x` | Generate a new Alembic migration |
 | `make up` / `make down` | Full K8s environment up/down (see `deploy/README.md`) |
 | `make ship MSG=x` | git add + commit + push (feature branches only) |
+| `make release V=x.y.z` | Tag `vx.y.z` on `main` and push (triggers full release pipeline) |
