@@ -32,8 +32,8 @@ class Settings(BaseSettings):
     sandbox_proxy_timeout: float = 180.0
 
     # Subdomain-based sandbox routing (for browser Web UI access)
-    # Dev: "sandbox.localhost"  →  {sandbox_id}.sandbox.localhost:8000
-    # Prod: "sandbox.example.com"  →  {sandbox_id}.sandbox.example.com
+    # Dev: "sandbox.localhost"  →  {name}.sandbox.localhost[:port] when the API URL has a non-default port
+    # Prod: "sandbox.example.com"  →  {name}.sandbox.example.com
     # Empty string disables subdomain routing.
     sandbox_domain: str = ""
 

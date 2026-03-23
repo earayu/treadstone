@@ -1,4 +1,6 @@
 image: ghcr.io/agent-infra/sandbox:latest
+# For users in mainland China:
+# image: enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
 containerPort: 8080
 
 sandboxTemplates:
@@ -7,7 +9,7 @@ sandboxTemplates:
     description: "Lightweight sandbox for code execution and scripting"
     cpu: { requests: "250m", limits: "500m" }
     memory: { requests: "512Mi", limits: "1Gi" }
-    warmPool: { enabled: false, replicas: 1 }
+    warmPool: { enabled: true, replicas: 1 }
 
   - name: aio-sandbox-small
     displayName: "AIO Sandbox Small"
