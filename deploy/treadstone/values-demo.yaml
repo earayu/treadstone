@@ -7,6 +7,10 @@ image:
 
 envSecretRef: treadstone-secrets
 
+service:
+  type: LoadBalancer
+  port: 8000
+
 resources:
   limits:
     cpu: 500m
@@ -22,11 +26,4 @@ hpa:
   enabled: false
 
 ingress:
-  enabled: true
-  className: nginx
-  annotations: {}
-  hosts:
-    - host: demo.treadstone-ai.dev
-      paths:
-        - path: /
-          pathType: Prefix
+  enabled: false
