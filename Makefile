@@ -21,10 +21,14 @@ dev: ## Start local dev server with hot reload
 lint: ## Run linter and formatter check
 	uv run ruff check treadstone/ tests/
 	uv run ruff format --check treadstone/ tests/
+	uv run ruff check --config cli/pyproject.toml cli/treadstone_cli/
+	uv run ruff format --check --config cli/pyproject.toml cli/treadstone_cli/
 
 format: ## Auto-format code
 	uv run ruff check --fix treadstone/ tests/
 	uv run ruff format treadstone/ tests/
+	uv run ruff check --fix --config cli/pyproject.toml cli/treadstone_cli/
+	uv run ruff format --config cli/pyproject.toml cli/treadstone_cli/
 
 # ── Testing ──────────────────────────────────────────────────────────────────
 

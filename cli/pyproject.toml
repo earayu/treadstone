@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "treadstone-cli"
+version = "0.1.0"
+description = "CLI for the Treadstone sandbox service."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.1",
+    "httpx>=0.28.1",
+    "rich>=14.0",
+]
+
+[project.scripts]
+treadstone = "treadstone_cli.main:cli"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
