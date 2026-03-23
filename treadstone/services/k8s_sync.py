@@ -12,6 +12,7 @@ Status derivation from real Sandbox CR (agents.x-k8s.io):
 """
 
 import asyncio
+import contextlib
 import logging
 from datetime import UTC, datetime
 
@@ -20,11 +21,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from treadstone.config import settings
 from treadstone.models.sandbox import Sandbox, SandboxStatus, is_valid_transition
-from treadstone.services.k8s_client import K8sClientProtocol
+from treadstone.services.k8s_client import K8sClientProtocol, WatchExpiredError
 
 logger = logging.getLogger(__name__)
 
 RECONCILE_INTERVAL = 300  # 5 minutes
+WATCH_RESTART_BACKOFF = 5  # seconds to wait before restarting Watch after unexpected failure
 
 
 def derive_status_from_sandbox_cr(cr: dict) -> tuple[str, str]:
@@ -147,11 +149,17 @@ async def reconcile(
     namespace: str,
     k8s_client: K8sClientProtocol,
     session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """One-shot List + DB comparison for drift correction."""
+) -> str:
+    """One-shot List + DB comparison for drift correction.
+
+    Returns the list-level resourceVersion, which can be used as a starting point for Watch.
+    """
     logger.info("Starting reconciliation for namespace %s", namespace)
 
-    sandbox_crs = await k8s_client.list_sandboxes(namespace)
+    list_response = await k8s_client.list_sandboxes_with_metadata(namespace)
+    list_rv = list_response.get("metadata", {}).get("resourceVersion", "")
+    sandbox_crs = list_response.get("items", [])
+
     cr_map: dict[str, dict] = {}
     for cr in sandbox_crs:
         name = cr.get("metadata", {}).get("name")
@@ -189,7 +197,41 @@ async def reconcile(
             elif cr_rv != sandbox.k8s_resource_version:
                 await _update_sync_metadata(session, sandbox.id, cr_rv, message)
 
-    logger.info("Reconciliation complete. %d unmanaged CRs in K8s.", len(cr_map))
+    logger.info("Reconciliation complete. %d unmanaged CRs in K8s. list_rv=%s", len(cr_map), list_rv)
+    return list_rv
+
+
+async def watch_loop(
+    namespace: str,
+    k8s_client: K8sClientProtocol,
+    session_factory: async_sessionmaker[AsyncSession],
+    resource_version: str,
+) -> None:
+    """Consume Watch events and update DB in real time. Raises WatchExpiredError on 410."""
+    logger.info("Watch loop starting from rv=%s", resource_version)
+    async for event_type, cr_object in k8s_client.watch_sandboxes(namespace, resource_version):
+        try:
+            await handle_watch_event(event_type, cr_object, session_factory)
+        except Exception:
+            logger.exception("Error handling Watch event for %s", cr_object.get("metadata", {}).get("name"))
+        rv = cr_object.get("metadata", {}).get("resourceVersion", "")
+        if rv:
+            resource_version = rv
+    logger.info("Watch stream ended (server closed connection)")
+
+
+async def _periodic_reconcile(
+    namespace: str,
+    k8s_client: K8sClientProtocol,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Periodic reconciliation as a safety net alongside Watch."""
+    while True:
+        await asyncio.sleep(RECONCILE_INTERVAL)
+        try:
+            await reconcile(namespace, k8s_client, session_factory)
+        except Exception:
+            logger.exception("Periodic reconciliation failed")
 
 
 async def start_sync_loop(
@@ -197,14 +239,35 @@ async def start_sync_loop(
     k8s_client: K8sClientProtocol,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Run periodic reconciliation. Watch integration is deferred to real K8s client."""
+    """Run Watch + periodic reconciliation concurrently.
+
+    On startup and after each Watch failure: reconcile (List) to get a consistent
+    resourceVersion, then start Watch from that point. Periodic reconciliation
+    runs as a safety net to catch any missed Watch events.
+    """
     try:
         while True:
             try:
-                await reconcile(namespace, k8s_client, session_factory)
+                list_rv = await reconcile(namespace, k8s_client, session_factory)
             except Exception:
-                logger.exception("Reconciliation failed")
-            await asyncio.sleep(RECONCILE_INTERVAL)
+                logger.exception("Initial reconciliation failed, retrying in %ds", WATCH_RESTART_BACKOFF)
+                await asyncio.sleep(WATCH_RESTART_BACKOFF)
+                continue
+
+            reconcile_task = asyncio.create_task(_periodic_reconcile(namespace, k8s_client, session_factory))
+            try:
+                await watch_loop(namespace, k8s_client, session_factory, list_rv)
+                # Watch stream ended normally (server timeout) — restart
+                logger.info("Watch stream ended, restarting")
+            except WatchExpiredError:
+                logger.info("Watch resourceVersion expired (410), re-listing")
+            except Exception:
+                logger.exception("Watch loop failed, restarting in %ds", WATCH_RESTART_BACKOFF)
+                await asyncio.sleep(WATCH_RESTART_BACKOFF)
+            finally:
+                reconcile_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await reconcile_task
     except asyncio.CancelledError:
         logger.info("Sync loop shutting down")
 

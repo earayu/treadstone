@@ -11,7 +11,9 @@ Two implementations:
 """
 
 import asyncio
+import json
 import logging
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any, Protocol, runtime_checkable
 
@@ -23,6 +25,12 @@ SANDBOX_API_GROUP = "agents.x-k8s.io"
 SANDBOX_API_VERSION = "v1alpha1"
 TEMPLATE_API_GROUP = "extensions.agents.x-k8s.io"
 TEMPLATE_API_VERSION = "v1alpha1"
+
+WATCH_TIMEOUT_SECONDS = 300
+
+
+class WatchExpiredError(Exception):
+    """Raised when the K8s API returns 410 Gone for an expired resourceVersion."""
 
 
 def format_shutdown_time(dt: datetime) -> str:
@@ -58,6 +66,12 @@ class K8sClientProtocol(Protocol):
     async def get_sandbox(self, name: str, namespace: str) -> dict[str, Any] | None: ...
 
     async def list_sandboxes(self, namespace: str) -> list[dict[str, Any]]: ...
+
+    async def list_sandboxes_with_metadata(self, namespace: str) -> dict[str, Any]: ...
+
+    async def watch_sandboxes(
+        self, namespace: str, resource_version: str = ""
+    ) -> AsyncIterator[tuple[str, dict[str, Any]]]: ...
 
     async def scale_sandbox(self, name: str, namespace: str, replicas: int) -> bool: ...
 
@@ -189,6 +203,50 @@ class Kr8sClient:
             data = resp.json()
             return data.get("items", [])
 
+    async def list_sandboxes_with_metadata(self, namespace: str) -> dict[str, Any]:
+        """List sandboxes and return the full response including list-level metadata."""
+        api = await self._get_api()
+        url = f"/apis/{SANDBOX_API_GROUP}/{SANDBOX_API_VERSION}/namespaces/{namespace}/sandboxes"
+        async with api.call_api("GET", base=url, version="") as resp:
+            return resp.json()
+
+    async def watch_sandboxes(
+        self, namespace: str, resource_version: str = ""
+    ) -> AsyncIterator[tuple[str, dict[str, Any]]]:
+        """Stream Watch events for Sandbox CRs. Raises WatchExpiredError on 410 Gone."""
+        api = await self._get_api()
+        url = f"/apis/{SANDBOX_API_GROUP}/{SANDBOX_API_VERSION}/namespaces/{namespace}/sandboxes"
+        params = {"watch": "true", "timeoutSeconds": str(WATCH_TIMEOUT_SECONDS)}
+        if resource_version:
+            params["resourceVersion"] = resource_version
+        query = "&".join(f"{k}={v}" for k, v in params.items())
+        watch_url = f"{url}?{query}"
+
+        logger.info("Starting K8s Watch on %s (rv=%s)", url, resource_version or "<latest>")
+        async with api.call_api("GET", base=watch_url, version="", stream=True) as resp:
+            async for line in resp.aiter_lines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    logger.warning("Malformed Watch event line, skipping: %s", line[:200])
+                    continue
+
+                event_type = event.get("type", "")
+                obj = event.get("object", {})
+
+                if event_type == "ERROR":
+                    code = obj.get("code", 0)
+                    if code == 410:
+                        raise WatchExpiredError(obj.get("message", "resourceVersion expired"))
+                    logger.error("Watch ERROR event: %s", obj.get("message", event))
+                    continue
+
+                if event_type in ("ADDED", "MODIFIED", "DELETED"):
+                    yield event_type, obj
+
     async def scale_sandbox(self, name: str, namespace: str, replicas: int) -> bool:
         api = await self._get_api()
         url = f"/apis/{SANDBOX_API_GROUP}/{SANDBOX_API_VERSION}/namespaces/{namespace}/sandboxes/{name}/scale"
@@ -288,6 +346,7 @@ class FakeK8sClient:
         self._templates: list[dict[str, Any]] = list(self._DEFAULT_TEMPLATES)
         self._claims: dict[str, dict[str, Any]] = {}
         self._sandboxes: dict[str, dict[str, Any]] = {}
+        self._watch_queue: asyncio.Queue[tuple[str, dict[str, Any]] | None] = asyncio.Queue()
 
     async def create_sandbox_claim(
         self, name: str, template_ref: str, namespace: str, shutdown_time: datetime | None = None
@@ -377,6 +436,33 @@ class FakeK8sClient:
 
     async def list_sandboxes(self, namespace: str) -> list[dict[str, Any]]:
         return [sb for key, sb in self._sandboxes.items() if key.startswith(f"{namespace}/")]
+
+    async def list_sandboxes_with_metadata(self, namespace: str) -> dict[str, Any]:
+        items = await self.list_sandboxes(namespace)
+        max_rv = "0"
+        for item in items:
+            rv = item.get("metadata", {}).get("resourceVersion", "0")
+            if int(rv) > int(max_rv):
+                max_rv = rv
+        return {"metadata": {"resourceVersion": max_rv}, "items": items}
+
+    async def watch_sandboxes(
+        self, namespace: str, resource_version: str = ""
+    ) -> AsyncIterator[tuple[str, dict[str, Any]]]:
+        """Yield events from the test queue. Send None to stop the stream."""
+        while True:
+            event = await self._watch_queue.get()
+            if event is None:
+                return
+            yield event
+
+    def enqueue_watch_event(self, event_type: str, cr_object: dict[str, Any]) -> None:
+        """Inject a Watch event for testing."""
+        self._watch_queue.put_nowait((event_type, cr_object))
+
+    def stop_watch(self) -> None:
+        """Signal the fake watch stream to stop."""
+        self._watch_queue.put_nowait(None)
 
     async def scale_sandbox(self, name: str, namespace: str, replicas: int) -> bool:
         key = f"{namespace}/{name}"

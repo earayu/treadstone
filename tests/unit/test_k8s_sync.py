@@ -1,5 +1,7 @@
 """Unit tests for K8s Watch + Reconciliation — conditions-based status derivation."""
 
+import asyncio
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -7,7 +9,7 @@ from treadstone.core.database import Base
 from treadstone.models.sandbox import Sandbox, SandboxStatus
 from treadstone.models.user import User, utc_now
 from treadstone.services.k8s_client import FakeK8sClient
-from treadstone.services.k8s_sync import derive_status_from_sandbox_cr, handle_watch_event, reconcile
+from treadstone.services.k8s_sync import derive_status_from_sandbox_cr, handle_watch_event, reconcile, watch_loop
 
 
 @pytest.fixture
@@ -150,11 +152,12 @@ class TestReconcile:
         await k8s.create_sandbox_claim("test-sb", "aio-sandbox-tiny", "treadstone-local")
         k8s.simulate_sandbox_ready("test-sb", "treadstone-local")
 
-        await reconcile("treadstone-local", k8s, session_factory)
+        rv = await reconcile("treadstone-local", k8s, session_factory)
 
         async with session_factory() as session:
             sb = await session.get(Sandbox, "sb00000000test1234")
             assert sb.status == SandboxStatus.READY
+        assert rv != ""
 
     async def test_reconcile_missing_cr_marks_error(self, session_factory):
         await _create_sandbox(session_factory, status=SandboxStatus.READY)
@@ -175,3 +178,87 @@ class TestReconcile:
         async with session_factory() as session:
             sb = await session.get(Sandbox, "sb00000000test1234")
             assert sb.status == SandboxStatus.DELETED
+
+    async def test_reconcile_returns_resource_version(self, session_factory):
+        k8s = FakeK8sClient()
+        await k8s.create_sandbox_claim("some-sb", "aio-sandbox-tiny", "treadstone-local")
+        k8s.simulate_sandbox_ready("some-sb", "treadstone-local")
+
+        rv = await reconcile("treadstone-local", k8s, session_factory)
+        assert rv.isdigit()
+
+
+class TestWatchLoop:
+    async def test_watch_event_updates_db(self, session_factory):
+        """Watch MODIFIED event should transition sandbox from CREATING to READY."""
+        await _create_sandbox(session_factory)
+        k8s = FakeK8sClient()
+
+        cr = {
+            "metadata": {"name": "test-sb", "namespace": "treadstone-local", "resourceVersion": "50"},
+            "spec": {"replicas": 1},
+            "status": {
+                "conditions": [_cond("True", "DependenciesReady", "ok")],
+                "serviceFQDN": "test-sb.treadstone-local.svc.cluster.local",
+            },
+        }
+        k8s.enqueue_watch_event("MODIFIED", cr)
+        k8s.stop_watch()
+
+        await watch_loop("treadstone-local", k8s, session_factory, resource_version="1")
+
+        async with session_factory() as session:
+            sb = await session.get(Sandbox, "sb00000000test1234")
+            assert sb.status == SandboxStatus.READY
+            assert sb.k8s_resource_version == "50"
+
+    async def test_watch_multiple_events(self, session_factory):
+        """Multiple Watch events should be processed in order."""
+        await _create_sandbox(session_factory)
+        k8s = FakeK8sClient()
+
+        cr_ready = {
+            "metadata": {"name": "test-sb", "namespace": "treadstone-local", "resourceVersion": "10"},
+            "spec": {"replicas": 1},
+            "status": {"conditions": [_cond("True", "DependenciesReady", "ok")]},
+        }
+        cr_stopped = {
+            "metadata": {"name": "test-sb", "namespace": "treadstone-local", "resourceVersion": "11"},
+            "spec": {"replicas": 0},
+            "status": {"conditions": [_cond("True", "DependenciesReady", "scaled down")]},
+        }
+        k8s.enqueue_watch_event("MODIFIED", cr_ready)
+        k8s.enqueue_watch_event("MODIFIED", cr_stopped)
+        k8s.stop_watch()
+
+        await watch_loop("treadstone-local", k8s, session_factory, resource_version="1")
+
+        async with session_factory() as session:
+            sb = await session.get(Sandbox, "sb00000000test1234")
+            assert sb.status == SandboxStatus.STOPPED
+            assert sb.k8s_resource_version == "11"
+
+    async def test_watch_deleted_event(self, session_factory):
+        """Watch DELETED event for a DELETING sandbox should mark it DELETED."""
+        await _create_sandbox(session_factory, status=SandboxStatus.DELETING)
+        k8s = FakeK8sClient()
+
+        cr = {"metadata": {"name": "test-sb", "namespace": "treadstone-local", "resourceVersion": "99"}}
+        k8s.enqueue_watch_event("DELETED", cr)
+        k8s.stop_watch()
+
+        await watch_loop("treadstone-local", k8s, session_factory, resource_version="1")
+
+        async with session_factory() as session:
+            sb = await session.get(Sandbox, "sb00000000test1234")
+            assert sb.status == SandboxStatus.DELETED
+
+    async def test_watch_loop_completes_on_stream_end(self, session_factory):
+        """Watch loop should return gracefully when the stream ends."""
+        k8s = FakeK8sClient()
+        k8s.stop_watch()
+
+        await asyncio.wait_for(
+            watch_loop("treadstone-local", k8s, session_factory, resource_version="0"),
+            timeout=2.0,
+        )
