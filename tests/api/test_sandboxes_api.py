@@ -98,6 +98,36 @@ class TestCreateSandbox:
         assert data["name"] == "persist-sb"
         assert data["status"] == "creating"
 
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "BadName",
+            "-leading-dash",
+            "trailing-dash-",
+            "has_underscore",
+            "has.dot",
+            "a" * 56,
+        ],
+    )
+    async def test_create_with_invalid_name_returns_422(self, auth_client, name):
+        resp = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": name},
+        )
+        assert resp.status_code == 422
+        data = resp.json()
+        assert data["error"]["code"] == "validation_error"
+        assert "Sandbox name must be 1-55 characters" in data["error"]["message"]
+
+    async def test_create_accepts_name_at_max_length(self, auth_client):
+        name = "a" * 55
+        resp = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": name},
+        )
+        assert resp.status_code == 202
+        assert resp.json()["name"] == name
+
 
 class TestListSandboxes:
     async def test_list_returns_own_sandboxes(self, auth_client):

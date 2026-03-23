@@ -41,6 +41,8 @@ treadstone config set api_key ts_live_xxxxxxxxxxxx
 
 # Create a sandbox
 treadstone sandboxes create --template default --name my-sandbox
+# Name rules: 1-55 chars, lowercase letters/numbers/hyphens only,
+# and must start/end with a letter or number.
 
 # List sandboxes
 treadstone sb list
@@ -132,6 +134,9 @@ treadstone auth delete-user <user-id>    # Delete a user (admin)
 ### `sandboxes` (alias: `sb`)
 
 Create and manage sandboxes.
+
+Custom sandbox names must be 1-55 characters of lowercase letters, numbers, or hyphens. They must start and end
+with a letter or number. This keeps browser URLs like `sandbox-{name}.treadstone-ai.dev` within DNS label limits.
 
 ```bash
 treadstone sb create --template default --name my-box

@@ -1,4 +1,4 @@
-"""API tests for subdomain-based sandbox routing."""
+"""API tests for subdomain-based sandbox routing (prefix-based)."""
 
 from unittest.mock import AsyncMock, patch
 
@@ -58,6 +58,7 @@ def _capture_mock():
 
 def _enable_subdomain(monkeypatch, domain: str = "sandbox.localhost"):
     monkeypatch.setenv("TREADSTONE_SANDBOX_DOMAIN", domain)
+    monkeypatch.setenv("TREADSTONE_SANDBOX_SUBDOMAIN_PREFIX", "sandbox-")
     monkeypatch.setenv("TREADSTONE_SANDBOX_NAMESPACE", "default")
     monkeypatch.setenv("TREADSTONE_SANDBOX_PORT", "8080")
     from treadstone.config import Settings
@@ -82,6 +83,7 @@ class TestSubdomainDisabled:
 
 class TestSubdomainRouting:
     async def test_subdomain_proxies_to_sandbox(self, client: AsyncClient, monkeypatch):
+        """sandbox-mybox.sandbox.localhost → mybox.default.svc.cluster.local"""
         _enable_subdomain(monkeypatch)
         mock_client, captured = _capture_mock()
 
@@ -89,11 +91,11 @@ class TestSubdomainRouting:
             with patch("treadstone.middleware.sandbox_subdomain.get_http_client", return_value=mock_client):
                 resp = await client.get(
                     "/v1/docs",
-                    headers={"Host": "sb-test.sandbox.localhost:8000"},
+                    headers={"Host": "sandbox-mybox.sandbox.localhost:8000"},
                 )
 
         assert resp.status_code == 200
-        assert "sb-test.default.svc.cluster.local:8080/v1/docs" in captured["url"]
+        assert "mybox.default.svc.cluster.local:8080/v1/docs" in captured["url"]
 
     async def test_subdomain_root_path(self, client: AsyncClient, monkeypatch):
         _enable_subdomain(monkeypatch)
@@ -103,10 +105,20 @@ class TestSubdomainRouting:
             with patch("treadstone.middleware.sandbox_subdomain.get_http_client", return_value=mock_client):
                 resp = await client.get(
                     "/",
-                    headers={"Host": "sb-test.sandbox.localhost:8000"},
+                    headers={"Host": "sandbox-mybox.sandbox.localhost:8000"},
                 )
 
         assert resp.status_code == 200
+
+    async def test_non_sandbox_subdomain_falls_through(self, client: AsyncClient, monkeypatch):
+        """api.sandbox.localhost does NOT have the sandbox- prefix → falls through."""
+        _enable_subdomain(monkeypatch)
+        resp = await client.get(
+            "/health",
+            headers={"Host": "api.sandbox.localhost:8000"},
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"status": "ok"}
 
     async def test_non_subdomain_falls_through(self, client: AsyncClient, monkeypatch):
         _enable_subdomain(monkeypatch)
@@ -137,7 +149,7 @@ class TestSubdomainRouting:
             with patch("treadstone.middleware.sandbox_subdomain.get_http_client", return_value=mock_client):
                 resp = await client.get(
                     "/",
-                    headers={"Host": "sb-down.sandbox.localhost:8000"},
+                    headers={"Host": "sandbox-down.sandbox.localhost:8000"},
                 )
 
         assert resp.status_code == 502

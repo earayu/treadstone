@@ -53,7 +53,9 @@ def _build_urls(sb, base_url: str) -> dict:
             scheme = parsed.scheme
         else:
             scheme = "https" if base.startswith("https") else "http"
-        web = f"{scheme}://{sb.name}.{settings.sandbox_domain}{_web_port_suffix(base)}"
+        web = (
+            f"{scheme}://{settings.sandbox_subdomain_prefix}{sb.name}.{settings.sandbox_domain}{_web_port_suffix(base)}"
+        )
     return {"proxy": proxy, "web": web}
 
 
