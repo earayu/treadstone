@@ -26,6 +26,8 @@ ingress:
   className: alb
   annotations:
     alb.ingress.kubernetes.io/order: "1"
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/certificate-id: "24059672-cn-hangzhou"
   hosts:
     - host: demo.treadstone-ai.dev
       paths:
