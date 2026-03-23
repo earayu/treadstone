@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import click
 
-from treadstone.cli._client import build_client, effective_api_key, effective_base_url, get_base_url
-from treadstone.cli._output import friendly_exception_handler, handle_error, is_json_mode, print_json
+from treadstone_cli._client import build_client, effective_api_key, effective_base_url, get_base_url
+from treadstone_cli._output import friendly_exception_handler, handle_error, is_json_mode, print_json
 
 _STATIC_EPILOG = """\b
 Configuration (highest to lowest priority):
@@ -54,7 +54,7 @@ class _TreadstoneGroup(click.Group):
     default=None,
     help="Base URL of the Treadstone server (env: TREADSTONE_BASE_URL).",
 )
-@click.version_option(package_name="treadstone")
+@click.version_option(package_name="treadstone-cli")
 @click.pass_context
 def cli(ctx: click.Context, json_output: bool, api_key: str | None, base_url: str | None) -> None:
     """Treadstone CLI — manage sandboxes, templates, and API keys.
@@ -88,11 +88,11 @@ def health(ctx: click.Context) -> None:
         click.echo(f"Server is {status}")
 
 
-from treadstone.cli.api_keys import api_keys  # noqa: E402
-from treadstone.cli.auth import auth  # noqa: E402
-from treadstone.cli.config_cmd import config  # noqa: E402
-from treadstone.cli.sandboxes import sandboxes  # noqa: E402
-from treadstone.cli.templates import templates  # noqa: E402
+from treadstone_cli.api_keys import api_keys  # noqa: E402
+from treadstone_cli.auth import auth  # noqa: E402
+from treadstone_cli.config_cmd import config  # noqa: E402
+from treadstone_cli.sandboxes import sandboxes  # noqa: E402
+from treadstone_cli.templates import templates  # noqa: E402
 
 cli.add_command(auth)
 cli.add_command(api_keys, "api-keys")

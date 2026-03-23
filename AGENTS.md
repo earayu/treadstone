@@ -15,7 +15,7 @@ Agent-native sandbox service. Run code, build projects, deploy environments — 
 ## Project Structure
 
 ```
-treadstone/        # Application source
+treadstone/        # Server application source
   main.py          # FastAPI entrypoint
   config.py        # pydantic-settings configuration
   core/            # Database engine, shared utilities
@@ -23,6 +23,9 @@ treadstone/        # Application source
   api/             # API routers
   auth/            # Authentication
   services/        # Business logic
+cli/               # CLI package (standalone, published as treadstone-cli)
+  treadstone_cli/  # CLI source (click + httpx + rich)
+sdk/python/        # Python SDK (published as treadstone-sdk)
 tests/             # pytest test suites
   e2e/             # Hurl E2E tests (run against deployed cluster)
 alembic/           # Database migrations

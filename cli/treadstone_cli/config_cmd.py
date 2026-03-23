@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import click
 
-from treadstone.cli._client import CONFIG_DIR, CONFIG_FILE, _read_config
+from treadstone_cli._client import CONFIG_DIR, CONFIG_FILE, _read_config
 
 
 def _write_config(data: dict[str, dict[str, str]]) -> None:

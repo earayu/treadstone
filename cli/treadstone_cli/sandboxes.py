@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import click
 
-from treadstone.cli._client import require_auth
-from treadstone.cli._output import handle_error, is_json_mode, print_detail, print_json, print_table
+from treadstone_cli._client import require_auth
+from treadstone_cli._output import handle_error, is_json_mode, print_detail, print_json, print_table
 
 
 @click.group()

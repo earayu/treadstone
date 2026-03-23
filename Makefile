@@ -21,10 +21,14 @@ dev: ## Start local dev server with hot reload
 lint: ## Run linter and formatter check
 	uv run ruff check treadstone/ tests/
 	uv run ruff format --check treadstone/ tests/
+	cd cli && uv run ruff check treadstone_cli/
+	cd cli && uv run ruff format --check treadstone_cli/
 
 format: ## Auto-format code
 	uv run ruff check --fix treadstone/ tests/
 	uv run ruff format treadstone/ tests/
+	cd cli && uv run ruff check --fix treadstone_cli/
+	cd cli && uv run ruff format treadstone_cli/
 
 # ── Testing ──────────────────────────────────────────────────────────────────
 
