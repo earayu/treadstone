@@ -10,7 +10,16 @@ from treadstone.cli._output import handle_error, is_json_mode, print_detail, pri
 
 @click.group()
 def auth() -> None:
-    """Authentication and user management."""
+    """Authentication and user management.
+
+    Register, log in, manage users, and change passwords.
+
+    \b
+    Quick start:
+      treadstone auth register          Create a new account
+      treadstone auth login             Log in (saves session)
+      treadstone auth whoami            Verify current identity
+    """
 
 
 @auth.command("login")
@@ -18,7 +27,10 @@ def auth() -> None:
 @click.option("--password", required=True, prompt=True, hide_input=True, help="Account password.")
 @click.pass_context
 def login(ctx: click.Context, email: str, password: str) -> None:
-    """Log in with email and password."""
+    """Log in with email and password.
+
+    If --email or --password are not provided, you will be prompted interactively.
+    """
     client = build_client(ctx)
     resp = client.post("/v1/auth/login", json={"email": email, "password": password})
     handle_error(resp)
@@ -48,7 +60,10 @@ def logout(ctx: click.Context) -> None:
 @click.option("--invitation-token", default=None, help="Invitation token (required in invitation mode).")
 @click.pass_context
 def register(ctx: click.Context, email: str, password: str, invitation_token: str | None) -> None:
-    """Register a new account."""
+    """Register a new account.
+
+    In invitation-only mode, an --invitation-token is required.
+    """
     client = build_client(ctx)
     body: dict = {"email": email, "password": password}
     if invitation_token:
@@ -98,7 +113,7 @@ def change_password(ctx: click.Context, old_password: str, new_password: str) ->
 @click.option("--role", default="ro", help="Role for the invitee (admin or ro).")
 @click.pass_context
 def invite(ctx: click.Context, email: str, role: str) -> None:
-    """Invite a new user (admin only)."""
+    """Generate an invitation token for a new user (admin only)."""
     client = require_auth(ctx)
     resp = client.post("/v1/auth/invite", json={"email": email, "role": role})
     handle_error(resp)
@@ -114,7 +129,7 @@ def invite(ctx: click.Context, email: str, role: str) -> None:
 @click.option("--offset", default=0, type=int, help="Skip N results.")
 @click.pass_context
 def list_users(ctx: click.Context, limit: int, offset: int) -> None:
-    """List users."""
+    """List all registered users (admin only)."""
     client = require_auth(ctx)
     resp = client.get("/v1/auth/users", params={"limit": limit, "offset": offset})
     handle_error(resp)

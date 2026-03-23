@@ -10,13 +10,20 @@ from treadstone.cli._output import handle_error, is_json_mode, print_json, print
 
 @click.group()
 def templates() -> None:
-    """Manage sandbox templates."""
+    """Manage sandbox templates.
+
+    Templates define the runtime environment (image, CPU, memory) for sandboxes.
+
+    \b
+    Examples:
+      treadstone templates list
+    """
 
 
 @templates.command("list")
 @click.pass_context
 def list_templates(ctx: click.Context) -> None:
-    """List available sandbox templates."""
+    """List all available sandbox templates with resource specs."""
     client = require_auth(ctx)
     resp = client.get("/v1/sandbox-templates")
     handle_error(resp)
