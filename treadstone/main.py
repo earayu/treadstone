@@ -43,7 +43,16 @@ async def lifespan(app: FastAPI):
 
 logging.basicConfig(level=logging.DEBUG if settings.debug else logging.WARNING)
 
-app = FastAPI(title=settings.app_name, generate_unique_id_function=custom_generate_unique_id, lifespan=lifespan)
+app = FastAPI(
+    title=settings.app_name,
+    generate_unique_id_function=custom_generate_unique_id,
+    lifespan=lifespan,
+    servers=[
+        {"url": "https://api.treadstone-ai.dev", "description": "Production"},
+        {"url": "https://demo.treadstone-ai.dev", "description": "Demo"},
+        {"url": "http://localhost:8000", "description": "Local development"},
+    ],
+)
 
 
 @app.exception_handler(TreadstoneError)

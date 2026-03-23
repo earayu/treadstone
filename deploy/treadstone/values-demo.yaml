@@ -25,7 +25,13 @@ ingress:
   enabled: true
   className: alb
   annotations:
-    alb.ingress.kubernetes.io/order: "1"
+    alb.ingress.kubernetes.io/group.name: treadstone
+    alb.ingress.kubernetes.io/order: "2"
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "true"
+    alb.ingress.kubernetes.io/certificate-id: "24059672-cn-hangzhou"
   hosts:
     - host: demo.treadstone-ai.dev
       paths:

@@ -22,8 +22,10 @@ echo ""
 echo "Deploying Helm charts (ENV=$ENV) ..."
 make deploy-all ENV="$ENV"
 
+NS="treadstone-${ENV}"
+
 echo ""
 echo "Up complete (ENV=$ENV)."
 if [ "$ENV" = "local" ]; then
-    echo "Verify with: kubectl get pods -n treadstone"
+    echo "Verify with: kubectl get pods -n $NS"
 fi

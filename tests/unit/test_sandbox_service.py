@@ -22,7 +22,7 @@ def _make_sandbox(**overrides) -> Sandbox:
         "endpoints": {},
         "k8s_sandbox_claim_name": "test-sandbox",
         "k8s_sandbox_name": "test-sandbox",
-        "k8s_namespace": "treadstone",
+        "k8s_namespace": "treadstone-local",
     }
     defaults.update(overrides)
     sb = Sandbox()
@@ -172,7 +172,7 @@ class TestSandboxServiceStartStop:
 
         result = await service.start(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
         assert result.status == SandboxStatus.CREATING
-        k8s.scale_sandbox.assert_called_once_with(name="test-sandbox", namespace="treadstone", replicas=1)
+        k8s.scale_sandbox.assert_called_once_with(name="test-sandbox", namespace="treadstone-local", replicas=1)
 
     async def test_stop_calls_scale_sandbox_0(self):
         from treadstone.services.sandbox_service import SandboxService
@@ -184,7 +184,7 @@ class TestSandboxServiceStartStop:
 
         result = await service.stop(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
         assert result.status == SandboxStatus.STOPPED
-        k8s.scale_sandbox.assert_called_once_with(name="test-sandbox", namespace="treadstone", replicas=0)
+        k8s.scale_sandbox.assert_called_once_with(name="test-sandbox", namespace="treadstone-local", replicas=0)
 
     async def test_start_from_ready_raises(self):
         from treadstone.services.sandbox_service import SandboxService

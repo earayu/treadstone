@@ -15,7 +15,7 @@ import httpx
 CONFIG_DIR = Path.home() / ".config" / "treadstone"
 CONFIG_FILE = CONFIG_DIR / "config.toml"
 
-_DEFAULT_BASE_URL = "http://localhost:8000"
+_DEFAULT_BASE_URL = "https://api.treadstone-ai.dev"
 
 
 def _read_config() -> dict[str, str]:

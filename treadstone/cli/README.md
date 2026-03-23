@@ -90,7 +90,7 @@ treadstone config path
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `TREADSTONE_BASE_URL` | Base URL of the Treadstone server | `http://localhost:8000` |
+| `TREADSTONE_BASE_URL` | Base URL of the Treadstone server | `https://api.treadstone-ai.dev` |
 | `TREADSTONE_API_KEY` | API key for authentication | (none) |
 
 ### Global flags

@@ -88,14 +88,20 @@ clean: ## Remove build artifacts and caches
 
 ENV ?= local
 
+# Every environment gets its own namespace and Helm release name:
+# local → treadstone-local, demo → treadstone-demo, prod → treadstone-prod
+NS          := treadstone-$(ENV)
+APP_RELEASE := treadstone-$(ENV)
+RT_RELEASE  := sandbox-runtime-$(ENV)
+
 deploy-infra: ## Deploy agent-sandbox controller (once per cluster)
 	helm upgrade --install agent-sandbox deploy/agent-sandbox \
 		-f deploy/agent-sandbox/values-$(ENV).yaml \
 		--create-namespace
 
 deploy-runtime: ## Deploy sandbox templates + warmpool
-	helm upgrade --install sandbox-runtime deploy/sandbox-runtime \
-		-n treadstone -f deploy/sandbox-runtime/values-$(ENV).yaml \
+	helm upgrade --install $(RT_RELEASE) deploy/sandbox-runtime \
+		-n $(NS) -f deploy/sandbox-runtime/values-$(ENV).yaml \
 		--create-namespace
 
 deploy-app: ## Deploy Treadstone application (creates K8s secret from .env.<ENV>)
@@ -104,28 +110,28 @@ deploy-app: ## Deploy Treadstone application (creates K8s secret from .env.<ENV>
 		echo "Error: $$ENV_FILE not found. Run: cp .env.example .env.$(ENV)"; \
 		exit 1; \
 	fi; \
-	kubectl create namespace treadstone --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null; \
+	kubectl create namespace $(NS) --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null; \
 	kubectl create secret generic treadstone-secrets \
-		-n treadstone \
+		-n $(NS) \
 		--from-env-file="$$ENV_FILE" \
 		--dry-run=client -o yaml | kubectl apply -f -
-	helm upgrade --install treadstone deploy/treadstone \
-		-n treadstone -f deploy/treadstone/values-$(ENV).yaml \
+	helm upgrade --install $(APP_RELEASE) deploy/treadstone \
+		-n $(NS) -f deploy/treadstone/values-$(ENV).yaml \
 		--create-namespace
 
 deploy-all: deploy-infra deploy-runtime deploy-app ## Deploy everything (infra → runtime → app)
 
 restart-app: ## Rolling restart to pick up new env vars
-	kubectl rollout restart deployment/treadstone -n treadstone
+	kubectl rollout restart deployment/$(APP_RELEASE)-treadstone -n $(NS)
 
 port-forward: ## Port-forward treadstone service to localhost:8000
-	kubectl -n treadstone port-forward svc/treadstone-treadstone 8000:8000
+	kubectl -n $(NS) port-forward svc/$(APP_RELEASE)-treadstone 8000:8000
 
 undeploy-app: ## Undeploy Treadstone application
-	helm uninstall treadstone -n treadstone 2>/dev/null || true
+	helm uninstall $(APP_RELEASE) -n $(NS) 2>/dev/null || true
 
 undeploy-runtime: ## Undeploy sandbox runtime
-	helm uninstall sandbox-runtime -n treadstone 2>/dev/null || true
+	helm uninstall $(RT_RELEASE) -n $(NS) 2>/dev/null || true
 
 undeploy-all: undeploy-app undeploy-runtime ## Undeploy app + runtime (keeps infra)
 	@echo "Note: agent-sandbox controller left in place. Run 'helm uninstall agent-sandbox' to remove."

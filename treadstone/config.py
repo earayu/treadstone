@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     logto_app_id: str = ""
 
     # Sandbox proxy defaults (overridable per-request via X-Sandbox-* headers)
-    sandbox_namespace: str = "treadstone"
+    sandbox_namespace: str = "treadstone-local"
     sandbox_port: int = 8080
     sandbox_proxy_timeout: float = 180.0
 

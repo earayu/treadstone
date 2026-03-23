@@ -1,8 +1,8 @@
 replicaCount: 2
 
 image:
-  repository: ""
-  tag: ""
+  repository: ghcr.io/earayu/treadstone
+  tag: latest
   pullPolicy: Always
 
 envSecretRef: treadstone-secrets
@@ -26,14 +26,17 @@ hpa:
 
 ingress:
   enabled: true
-  className: ""
-  annotations: {}
+  className: alb
+  annotations:
+    alb.ingress.kubernetes.io/group.name: treadstone
+    alb.ingress.kubernetes.io/order: "1"
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "true"
+    alb.ingress.kubernetes.io/certificate-id: "24064579-cn-hangzhou"
   hosts:
     - host: api.treadstone-ai.dev
       paths:
         - path: /
           pathType: Prefix
-  tls:
-    - secretName: treadstone-tls
-      hosts:
-        - api.treadstone-ai.dev

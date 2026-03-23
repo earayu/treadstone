@@ -97,8 +97,9 @@ make deploy-app ENV=local       # App + Secret + Migration
 ### 4. Verify Deployment
 
 ```bash
-kubectl get pods -n treadstone
-kubectl -n treadstone rollout status deploy/treadstone-treadstone --timeout=60s
+# Replace <ENV> with local/demo/prod; namespace = treadstone-<ENV>
+kubectl get pods -n treadstone-local
+kubectl -n treadstone-local rollout status deploy/treadstone-local-treadstone --timeout=60s
 ```
 
 ## Accessing the Service
@@ -177,8 +178,8 @@ curl -s -X POST $BASE_URL/v1/sandboxes \
 After the Sandbox is running, you can reach its **Web UI** in a browser. The exact URL depends on your subdomain / DNS setup; with local Kind and Ingress, open `http://<sandbox-name>.sandbox.localhost/` (for example, `http://api-sb-1774074700.sandbox.localhost/`).
 
 ```bash
-# View K8s resources
-kubectl -n treadstone get sandboxclaims,sandboxes,pods
+# View K8s resources (replace treadstone-local with your namespace)
+kubectl -n treadstone-local get sandboxclaims,sandboxes,pods
 
 # Clean up
 curl -s -X DELETE $BASE_URL/v1/sandboxes/{sandbox_id} \
@@ -216,18 +217,36 @@ make kind-delete
 
 | Config | local | demo | prod |
 |--------|-------|------|------|
+| K8s Namespace | `treadstone-local` | `treadstone-demo` | `treadstone-prod` |
+| Helm release (app) | `treadstone-local` | `treadstone-demo` | `treadstone-prod` |
+| Helm release (runtime) | `sandbox-runtime-local` | `sandbox-runtime-demo` | `sandbox-runtime-prod` |
 | Image source | Local build | `ghcr.io/earayu/treadstone` | Specified by CI/CD |
 | Replicas | 1 | 1 | 2 |
 | HPA | Off | Off | On (2–10) |
 | Ingress | `localhost` | `demo.treadstone-ai.dev` | `api.treadstone-ai.dev` + TLS |
+| ALB Group | — | `treadstone` (order 2) | `treadstone` (order 1) |
 | DB migration | Auto (Helm hook) | Auto | Auto |
+
+### Multi-Environment Isolation
+
+Every environment runs in its own namespace (`treadstone-local` / `treadstone-demo` / `treadstone-prod`).
+Each namespace has its own independent Deployment, Service, and K8s Secret — deploying one environment never touches another.
+
+Both share a **single AWS ALB** via `alb.ingress.kubernetes.io/group.name: treadstone`.
+The ALB controller merges their Ingress rules into one load balancer with host-based routing:
+
+- `demo.treadstone-ai.dev` → Service in `treadstone-demo` namespace
+- `api.treadstone-ai.dev` → Service in `treadstone-prod` namespace (order 1 = higher priority)
+
+Before deploying prod, fill in `alb.ingress.kubernetes.io/certificate-arn` in `values-prod.yaml`
+with the ACM certificate ARN for `api.treadstone-ai.dev`.
 
 ## Troubleshooting
 
 | Symptom | Cause | Solution |
 |---------|-------|----------|
 | Templates API returns `python-dev` / `nodejs-dev` | `TREADSTONE_DEBUG=true` in `.env` | Set to `false` and recreate the Secret |
-| API returns 500 + `column "xxx" does not exist` | Database is missing new columns | Migration Job should run automatically; manual fix: `kubectl -n treadstone exec deploy/treadstone-treadstone -- uv run alembic upgrade head` |
+| API returns 500 + `column "xxx" does not exist` | Database is missing new columns | Migration Job should run automatically; manual fix: `kubectl -n treadstone-<ENV> exec deploy/treadstone-<ENV>-treadstone -- uv run alembic upgrade head` |
 | Pod stuck not Ready | Image pull failure | For local: run `kind load docker-image` first; for remote: check image registry permissions |
 | `curl localhost` connection refused | ingress-nginx not ready or port conflict | Rebuild cluster with `make kind-delete && make kind-create`, or use `make port-forward` |
 | 403 Forbidden in pod logs | Insufficient RBAC permissions | Confirm the Helm chart deployed ClusterRole + ClusterRoleBinding |
