@@ -169,6 +169,7 @@ jobs:
           uv run pyinstaller \
             --onefile \
             --name treadstone \
+            --copy-metadata treadstone-cli \
             treadstone_cli/__main__.py
 
       - name: Rename binary
