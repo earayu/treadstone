@@ -10,7 +10,17 @@ from treadstone.cli._output import handle_error, is_json_mode, print_detail, pri
 
 @click.group()
 def sandboxes() -> None:
-    """Manage sandboxes."""
+    """Manage sandboxes.
+
+    Create, list, start, stop, and delete sandboxes. Use 'sb' as a shorthand.
+
+    \b
+    Examples:
+      treadstone sandboxes create --template default --name my-box
+      treadstone sb list
+      treadstone sb get <sandbox-id>
+      treadstone sb delete <sandbox-id>
+    """
 
 
 @sandboxes.command("create")
@@ -28,7 +38,14 @@ def create(
     persist: bool,
     storage_size: str,
 ) -> None:
-    """Create a new sandbox."""
+    """Create a new sandbox from a template.
+
+    \b
+    Examples:
+      treadstone sb create --template default
+      treadstone sb create --template python --name dev-box --label env:dev
+      treadstone sb create --template node --persist --storage-size 20Gi
+    """
     client = require_auth(ctx)
     labels = {}
     for lbl in label:
@@ -55,7 +72,13 @@ def create(
 @click.option("--offset", default=0, type=int, help="Skip N results.")
 @click.pass_context
 def list_sandboxes(ctx: click.Context, label: str | None, limit: int, offset: int) -> None:
-    """List sandboxes."""
+    """List sandboxes with optional filtering.
+
+    \b
+    Examples:
+      treadstone sb list
+      treadstone sb list --label env:prod --limit 10
+    """
     client = require_auth(ctx)
     params: dict = {"limit": limit, "offset": offset}
     if label:
@@ -75,7 +98,7 @@ def list_sandboxes(ctx: click.Context, label: str | None, limit: int, offset: in
 @click.argument("sandbox_id")
 @click.pass_context
 def get_sandbox(ctx: click.Context, sandbox_id: str) -> None:
-    """Get sandbox details."""
+    """Show detailed information about a sandbox."""
     client = require_auth(ctx)
     resp = client.get(f"/v1/sandboxes/{sandbox_id}")
     handle_error(resp)
@@ -132,7 +155,11 @@ def stop_sandbox(ctx: click.Context, sandbox_id: str) -> None:
 @click.option("--expires-in", default=3600, type=int, help="Token lifetime in seconds.")
 @click.pass_context
 def create_token(ctx: click.Context, sandbox_id: str, expires_in: int) -> None:
-    """Create an access token for a sandbox."""
+    """Create a short-lived access token for a sandbox.
+
+    The token can be used to connect to the sandbox directly (e.g. via
+    WebSocket) without needing the main API key.
+    """
     client = require_auth(ctx)
     resp = client.post(f"/v1/sandboxes/{sandbox_id}/token", json={"expires_in": expires_in})
     handle_error(resp)

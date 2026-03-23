@@ -10,7 +10,16 @@ from treadstone.cli._output import handle_error, is_json_mode, print_json, print
 
 @click.group()
 def api_keys() -> None:
-    """Manage API keys."""
+    """Manage API keys.
+
+    API keys provide long-lived authentication tokens for programmatic access.
+
+    \b
+    Examples:
+      treadstone api-keys create --name ci-bot
+      treadstone api-keys list
+      treadstone api-keys delete <key-id>
+    """
 
 
 @api_keys.command("create")
@@ -18,7 +27,10 @@ def api_keys() -> None:
 @click.option("--expires-in", default=None, type=int, help="Key lifetime in seconds.")
 @click.pass_context
 def create_key(ctx: click.Context, name: str, expires_in: int | None) -> None:
-    """Create a new API key."""
+    """Create a new API key.
+
+    The full key is shown only once — store it securely.
+    """
     client = require_auth(ctx)
     body: dict = {"name": name}
     if expires_in is not None:
@@ -37,7 +49,7 @@ def create_key(ctx: click.Context, name: str, expires_in: int | None) -> None:
 @api_keys.command("list")
 @click.pass_context
 def list_keys(ctx: click.Context) -> None:
-    """List API keys."""
+    """List all API keys for the current user."""
     client = require_auth(ctx)
     resp = client.get("/v1/auth/api-keys")
     handle_error(resp)
@@ -54,7 +66,7 @@ def list_keys(ctx: click.Context) -> None:
 @click.argument("key_id")
 @click.pass_context
 def delete_key(ctx: click.Context, key_id: str) -> None:
-    """Delete an API key."""
+    """Revoke and delete an API key."""
     client = require_auth(ctx)
     resp = client.delete(f"/v1/auth/api-keys/{key_id}")
     handle_error(resp)
