@@ -6,7 +6,7 @@ ENV="${1:-local}"
 echo "=== Treadstone Down (ENV=$ENV) ==="
 echo ""
 
-make undeploy-all
+make undeploy-all ENV="$ENV"
 
 if [ "$ENV" = "local" ]; then
     echo ""

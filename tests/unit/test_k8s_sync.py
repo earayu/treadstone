@@ -44,7 +44,7 @@ async def _create_sandbox(factory, **overrides) -> Sandbox:
         "endpoints": {},
         "k8s_sandbox_claim_name": "test-sb",
         "k8s_sandbox_name": "test-sb",
-        "k8s_namespace": "treadstone",
+        "k8s_namespace": "treadstone-local",
         "gmt_created": utc_now(),
     }
     defaults.update(overrides)
@@ -101,11 +101,11 @@ class TestHandleWatchEvent:
     async def test_modified_creating_to_ready(self, session_factory):
         await _create_sandbox(session_factory)
         cr = {
-            "metadata": {"name": "test-sb", "namespace": "treadstone", "resourceVersion": "100"},
+            "metadata": {"name": "test-sb", "namespace": "treadstone-local", "resourceVersion": "100"},
             "spec": {"replicas": 1},
             "status": {
                 "conditions": [{"type": "Ready", "status": "True", "reason": "DependenciesReady", "message": "ok"}],
-                "serviceFQDN": "test-sb.treadstone.svc.cluster.local",
+                "serviceFQDN": "test-sb.treadstone-local.svc.cluster.local",
             },
         }
         await handle_watch_event("MODIFIED", cr, session_factory)
@@ -118,7 +118,7 @@ class TestHandleWatchEvent:
 
     async def test_deleted_from_deleting_marks_deleted(self, session_factory):
         await _create_sandbox(session_factory, status=SandboxStatus.DELETING)
-        cr = {"metadata": {"name": "test-sb", "namespace": "treadstone", "resourceVersion": "200"}}
+        cr = {"metadata": {"name": "test-sb", "namespace": "treadstone-local", "resourceVersion": "200"}}
         await handle_watch_event("DELETED", cr, session_factory)
 
         async with session_factory() as session:
@@ -127,7 +127,7 @@ class TestHandleWatchEvent:
 
     async def test_deleted_from_ready_marks_error(self, session_factory):
         await _create_sandbox(session_factory, status=SandboxStatus.READY)
-        cr = {"metadata": {"name": "test-sb", "namespace": "treadstone", "resourceVersion": "300"}}
+        cr = {"metadata": {"name": "test-sb", "namespace": "treadstone-local", "resourceVersion": "300"}}
         await handle_watch_event("DELETED", cr, session_factory)
 
         async with session_factory() as session:
@@ -136,7 +136,7 @@ class TestHandleWatchEvent:
 
     async def test_unknown_cr_ignored(self, session_factory):
         cr = {
-            "metadata": {"name": "unknown-cr", "namespace": "treadstone", "resourceVersion": "500"},
+            "metadata": {"name": "unknown-cr", "namespace": "treadstone-local", "resourceVersion": "500"},
             "spec": {"replicas": 1},
             "status": {"conditions": [_cond("True", "DependenciesReady")]},
         }
@@ -147,10 +147,10 @@ class TestReconcile:
     async def test_reconcile_updates_drift(self, session_factory):
         await _create_sandbox(session_factory, k8s_resource_version="old")
         k8s = FakeK8sClient()
-        await k8s.create_sandbox_claim("test-sb", "aio-sandbox-tiny", "treadstone")
-        k8s.simulate_sandbox_ready("test-sb", "treadstone")
+        await k8s.create_sandbox_claim("test-sb", "aio-sandbox-tiny", "treadstone-local")
+        k8s.simulate_sandbox_ready("test-sb", "treadstone-local")
 
-        await reconcile("treadstone", k8s, session_factory)
+        await reconcile("treadstone-local", k8s, session_factory)
 
         async with session_factory() as session:
             sb = await session.get(Sandbox, "sb00000000test1234")
@@ -160,7 +160,7 @@ class TestReconcile:
         await _create_sandbox(session_factory, status=SandboxStatus.READY)
         k8s = FakeK8sClient()
 
-        await reconcile("treadstone", k8s, session_factory)
+        await reconcile("treadstone-local", k8s, session_factory)
 
         async with session_factory() as session:
             sb = await session.get(Sandbox, "sb00000000test1234")
@@ -170,7 +170,7 @@ class TestReconcile:
         await _create_sandbox(session_factory, status=SandboxStatus.DELETING)
         k8s = FakeK8sClient()
 
-        await reconcile("treadstone", k8s, session_factory)
+        await reconcile("treadstone-local", k8s, session_factory)
 
         async with session_factory() as session:
             sb = await session.get(Sandbox, "sb00000000test1234")
