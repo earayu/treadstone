@@ -200,6 +200,16 @@ jobs:
           path: artifacts/
           merge-multiple: true
 
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          sha256sum * > checksums.txt
+
+      - name: Add install scripts
+        run: |
+          cp scripts/install.sh  artifacts/install.sh
+          cp scripts/install.ps1 artifacts/install.ps1
+
       - name: Generate changelog
         id: changelog
         run: |
@@ -218,26 +228,37 @@ jobs:
             echo ""
             echo "## Install"
             echo ""
+            echo "**macOS / Linux — one-liner:**"
             echo '```bash'
-            echo "# Standalone binary (no Python required)"
-            echo "# macOS (Apple Silicon)"
-            echo "curl -L https://github.com/${{ github.repository }}/releases/download/v$VERSION/treadstone-darwin-arm64 -o treadstone && chmod +x treadstone"
+            echo "curl -fsSL https://github.com/${{ github.repository }}/releases/download/v$VERSION/install.sh | sh"
+            echo '```'
             echo ""
-            echo "# macOS (Intel)"
-            echo "curl -L https://github.com/${{ github.repository }}/releases/download/v$VERSION/treadstone-darwin-amd64 -o treadstone && chmod +x treadstone"
+            echo "**Windows — PowerShell:**"
+            echo '```powershell'
+            echo "irm https://github.com/${{ github.repository }}/releases/download/v$VERSION/install.ps1 | iex"
+            echo '```'
             echo ""
-            echo "# Linux"
-            echo "curl -L https://github.com/${{ github.repository }}/releases/download/v$VERSION/treadstone-linux-amd64 -o treadstone && chmod +x treadstone"
-            echo ""
-            echo "# Python / pip"
+            echo "**pip:**"
+            echo '```bash'
             echo "pip install treadstone==$VERSION"
+            echo '```'
             echo ""
-            echo "# SDK"
-            echo "pip install treadstone-sdk==$VERSION"
-            echo ""
-            echo "# Docker"
+            echo "**Docker:**"
+            echo '```bash'
             echo "docker pull ghcr.io/${{ github.repository_owner }}/treadstone:$VERSION"
             echo '```'
+            echo ""
+            echo "**Manual download:**"
+            echo '```bash'
+            echo "# macOS (Apple Silicon)"
+            echo "curl -fsSL https://github.com/${{ github.repository }}/releases/download/v$VERSION/treadstone-darwin-arm64 -o treadstone && chmod +x treadstone"
+            echo "# macOS (Intel)"
+            echo "curl -fsSL https://github.com/${{ github.repository }}/releases/download/v$VERSION/treadstone-darwin-amd64 -o treadstone && chmod +x treadstone"
+            echo "# Linux"
+            echo "curl -fsSL https://github.com/${{ github.repository }}/releases/download/v$VERSION/treadstone-linux-amd64 -o treadstone && chmod +x treadstone"
+            echo '```'
+            echo ""
+            echo "> SHA-256 checksums available in \`checksums.txt\`."
             echo "CHANGELOG_EOF"
           } >> "$GITHUB_OUTPUT"
 
