@@ -1,5 +1,7 @@
 """Sandbox CRUD API router — control plane endpoints."""
 
+from urllib.parse import urlparse
+
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,19 +24,36 @@ from treadstone.services.sandbox_token import create_sandbox_token
 router = APIRouter(prefix="/v1/sandboxes", tags=["sandboxes"])
 
 
+def _web_port_suffix(api_base: str) -> str:
+    """Port to mirror on *.sandbox_domain web URLs, or empty if not needed.
+
+    When the API is reached on a non-default port (e.g. dev :8000, kubectl
+    port-forward), the browser-facing subdomain URL must use the same port.
+    When the URL uses the default port or omits it (e.g. local Ingress on
+    80/443), no suffix is added.
+    """
+    parsed = urlparse(str(api_base).rstrip("/"))
+    port = parsed.port
+    if port is None:
+        return ""
+    if parsed.scheme == "http" and port == 80:
+        return ""
+    if parsed.scheme == "https" and port == 443:
+        return ""
+    return f":{port}"
+
+
 def _build_urls(sb, base_url: str) -> dict:
     base = str(base_url).rstrip("/")
     proxy = f"{base}/v1/sandboxes/{sb.id}/proxy"
     web = None
     if settings.sandbox_domain:
-        scheme = "https" if base.startswith("https") else "http"
-        port_suffix = ""
-        if "localhost" in base:
-            try:
-                port_suffix = f":{base.rsplit(':', 1)[1].rstrip('/')}"
-            except (IndexError, ValueError):
-                pass
-        web = f"{scheme}://{sb.name}.{settings.sandbox_domain}{port_suffix}"
+        parsed = urlparse(base)
+        if parsed.scheme in ("http", "https"):
+            scheme = parsed.scheme
+        else:
+            scheme = "https" if base.startswith("https") else "http"
+        web = f"{scheme}://{sb.name}.{settings.sandbox_domain}{_web_port_suffix(base)}"
     return {"proxy": proxy, "web": web}
 
 

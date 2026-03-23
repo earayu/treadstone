@@ -1,3 +1,5 @@
+# image: ghcr.io/agent-infra/sandbox:latest
+# For users in mainland China:
 image: enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
 containerPort: 8080
 

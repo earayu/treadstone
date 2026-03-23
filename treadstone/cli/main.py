@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import click
 
-from treadstone.cli._client import build_client
+from treadstone.cli._client import build_client, effective_api_key, effective_base_url, get_base_url
 from treadstone.cli._output import friendly_exception_handler, handle_error, is_json_mode, print_json
 
-_EPILOG = """\b
+_STATIC_EPILOG = """\b
 Configuration (highest to lowest priority):
   CLI flags       --api-key, --base-url
   Env vars        TREADSTONE_API_KEY, TREADSTONE_BASE_URL
@@ -23,7 +23,24 @@ Examples:
 """
 
 
-@click.group(epilog=_EPILOG)
+class _TreadstoneGroup(click.Group):
+    """Custom group that appends a live config summary to the help output."""
+
+    def format_epilog(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
+        super().format_epilog(ctx, formatter)
+        url, source = effective_base_url()
+        api_key = effective_api_key()
+        api_key_status = "configured" if api_key else "not set"
+        with formatter.section("Active configuration"):
+            formatter.write_dl(
+                [
+                    ("Base URL", f"{url}  [{source}]"),
+                    ("API key", api_key_status),
+                ]
+            )
+
+
+@click.group(cls=_TreadstoneGroup, epilog=_STATIC_EPILOG)
 @click.option("--json", "json_output", is_flag=True, default=False, help="Output in JSON format.")
 @click.option(
     "--api-key",
@@ -58,6 +75,9 @@ def cli(ctx: click.Context, json_output: bool, api_key: str | None, base_url: st
 def health(ctx: click.Context) -> None:
     """Check if the Treadstone server is reachable and healthy."""
     client = build_client(ctx)
+    base_url = get_base_url(ctx)
+    if not is_json_mode(ctx):
+        click.echo(f"Connecting to {base_url} ...")
     resp = client.get("/health")
     handle_error(resp)
     data = resp.json()

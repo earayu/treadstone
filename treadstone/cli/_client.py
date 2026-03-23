@@ -5,6 +5,7 @@ Priority: CLI flags > environment variables > config file.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -36,6 +37,26 @@ def get_base_url(ctx: click.Context) -> str:
 
 def get_api_key(ctx: click.Context) -> str | None:
     return ctx.obj.get("api_key") or _read_config().get("api_key")
+
+
+def effective_base_url() -> tuple[str, str]:
+    """Return (url, source) without requiring a Click context.
+
+    Source is one of: 'env', 'file', 'default'.
+    Used for displaying configuration in help text.
+    """
+    env = os.environ.get("TREADSTONE_BASE_URL")
+    if env:
+        return env.rstrip("/"), "env"
+    cfg = _read_config().get("base_url")
+    if cfg:
+        return cfg.rstrip("/"), "file"
+    return _DEFAULT_BASE_URL, "default"
+
+
+def effective_api_key() -> str | None:
+    """Return API key without requiring a Click context."""
+    return os.environ.get("TREADSTONE_API_KEY") or _read_config().get("api_key")
 
 
 def build_client(ctx: click.Context) -> httpx.Client:
