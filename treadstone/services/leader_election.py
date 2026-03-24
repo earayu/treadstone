@@ -36,7 +36,7 @@ class LeaseStoreProtocol(Protocol):
 
 def format_lease_time(dt: datetime) -> str:
     """Format Lease timestamps as RFC3339."""
-    return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 def parse_lease_time(value: str | None) -> datetime | None:
