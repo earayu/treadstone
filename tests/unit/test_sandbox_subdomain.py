@@ -1,6 +1,6 @@
-"""Unit tests for sandbox subdomain extraction (prefix-based)."""
+"""Unit tests for sandbox subdomain extraction and auth-header stripping."""
 
-from treadstone.middleware.sandbox_subdomain import extract_sandbox_name
+from treadstone.middleware.sandbox_subdomain import _strip_internal_auth, extract_sandbox_name
 
 
 class TestExtractSandboxName:
@@ -47,3 +47,25 @@ class TestExtractSandboxName:
 
     def test_custom_prefix_no_match(self):
         assert extract_sandbox_name("sandbox-foo.treadstone-ai.dev", "treadstone-ai.dev", prefix="sb-") is None
+
+
+class TestStripInternalAuth:
+    def test_preserves_authorization_and_app_session_cookie(self):
+        headers = {
+            "authorization": "Bearer app-token",
+            "cookie": "ts_bui=treadstone-cookie; session=app-session; csrftoken=abc123",
+        }
+
+        filtered = _strip_internal_auth(headers)
+
+        assert filtered["authorization"] == "Bearer app-token"
+        assert filtered["cookie"] == "session=app-session; csrftoken=abc123"
+
+    def test_preserves_quoted_cookie_values(self):
+        headers = {
+            "cookie": 'prefs="a b"; ts_bui=treadstone-cookie; json="{\\"foo\\": \\"bar baz\\"}"',
+        }
+
+        filtered = _strip_internal_auth(headers)
+
+        assert filtered["cookie"] == 'prefs="a b"; json="{\\"foo\\": \\"bar baz\\"}"'

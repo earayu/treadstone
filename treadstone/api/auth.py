@@ -46,6 +46,35 @@ def _default_api_key_scope() -> ApiKeyScope:
     return ApiKeyScope()
 
 
+async def authenticate_email_password(session: AsyncSession, email: str, password: str) -> User:
+    result = await session.execute(select(User).where(User.email == email))
+    user = result.unique().scalar_one_or_none()
+
+    if user is None or not user.is_active:
+        raise BadRequestError("Invalid email or password")
+
+    ph = PasswordHelper()
+    valid, _ = ph.verify_and_update(password, user.hashed_password)
+    if not valid:
+        raise BadRequestError("Invalid email or password")
+
+    return user
+
+
+async def write_session_cookie(response: Response, user: User) -> str:
+    strategy = get_jwt_strategy()
+    token = await strategy.write_token(user)
+    response.set_cookie(
+        key="session",
+        value=token,
+        max_age=COOKIE_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=cookie_transport.cookie_secure,
+    )
+    return token
+
+
 async def _validate_owned_sandbox_ids(session: AsyncSession, owner_id: str, sandbox_ids: list[str]) -> list[str]:
     if not sandbox_ids:
         return []
@@ -116,32 +145,13 @@ async def login(
     session: AsyncSession = Depends(get_session),
 ):
     """Authenticate with email + password, set session cookie."""
-    result = await session.execute(select(User).where(User.email == body.email))
-    user = result.unique().scalar_one_or_none()
-
-    if user is None or not user.is_active:
-        raise BadRequestError("Invalid email or password")
-
-    ph = PasswordHelper()
-    valid, _ = ph.verify_and_update(body.password, user.hashed_password)
-    if not valid:
-        raise BadRequestError("Invalid email or password")
-
-    strategy = get_jwt_strategy()
-    token = await strategy.write_token(user)
+    user = await authenticate_email_password(session, str(body.email), body.password)
 
     response = Response(
         content='{"detail":"Login successful"}',
         media_type="application/json",
     )
-    response.set_cookie(
-        key="session",
-        value=token,
-        max_age=COOKIE_MAX_AGE,
-        httponly=True,
-        samesite="lax",
-        secure=cookie_transport.cookie_secure,
-    )
+    await write_session_cookie(response, user)
     return response
 
 

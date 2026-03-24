@@ -36,6 +36,8 @@ from .sandbox_response_labels import SandboxResponseLabels
 from .sandbox_template_list_response import SandboxTemplateListResponse
 from .sandbox_template_response import SandboxTemplateResponse
 from .sandbox_urls import SandboxUrls
+from .sandbox_web_link_response import SandboxWebLinkResponse
+from .sandbox_web_link_status_response import SandboxWebLinkStatusResponse
 from .update_api_key_request import UpdateApiKeyRequest
 from .user_detail_response import UserDetailResponse
 from .user_list_response import UserListResponse
@@ -80,6 +82,8 @@ __all__ = (
     "SandboxTemplateListResponse",
     "SandboxTemplateResponse",
     "SandboxUrls",
+    "SandboxWebLinkResponse",
+    "SandboxWebLinkStatusResponse",
     "UpdateApiKeyRequest",
     "UserDetailResponse",
     "UserListResponse",
