@@ -1,3 +1,5 @@
+from urllib.parse import urlparse
+
 from pydantic_settings import BaseSettings
 
 _DEFAULT_JWT_SECRET = "CHANGE_ME_IN_PROD"
@@ -9,6 +11,7 @@ class Settings(BaseSettings):
     app_name: str = "treadstone"
     debug: bool = False
     database_url: str = "postgresql+asyncpg://user:pass@ep-xxx.us-east-2.aws.neon.tech/treadstone?sslmode=require"
+    api_base_url: str = "http://localhost:8000"
 
     # Auth
     auth_type: str = "cookie"  # cookie | auth0 | authing | logto | none
@@ -66,6 +69,13 @@ def is_local_sandbox_domain(domain: str) -> bool:
     return host == "localhost" or host.endswith(".localhost")
 
 
+def is_local_hostname(host: str | None) -> bool:
+    if host is None:
+        return False
+    normalized = host.strip().lower()
+    return normalized in {"localhost", "127.0.0.1", "::1"} or normalized.endswith(".localhost")
+
+
 def validate_runtime_settings(cfg: Settings) -> None:
     if cfg.jwt_secret == _DEFAULT_JWT_SECRET or len(cfg.jwt_secret) < _MIN_JWT_SECRET_LENGTH:
         raise RuntimeError(
@@ -80,7 +90,9 @@ def validate_runtime_settings(cfg: Settings) -> None:
         )
 
     if cfg.sandbox_domain and not is_local_sandbox_domain(cfg.sandbox_domain):
-        raise RuntimeError(
-            "Sandbox subdomain Web UI is not enabled for non-local domains yet. "
-            "Use a localhost sandbox domain until browser session hardening is implemented."
-        )
+        parsed = urlparse(cfg.api_base_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc or is_local_hostname(parsed.hostname):
+            raise RuntimeError(
+                "TREADSTONE_API_BASE_URL must be set to the public API origin "
+                "when sandbox Web UI subdomains are enabled."
+            )

@@ -92,7 +92,13 @@ class CreateSandboxRequest(BaseModel):
 
 class SandboxUrls(BaseModel):
     proxy: str = Field(..., examples=["http://localhost:8000/v1/sandboxes/sb-abc123def456/proxy"])
-    web: str | None = Field(default=None, examples=["http://my-sandbox.sandbox.localhost:8000"])
+    web: str | None = Field(
+        default=None,
+        examples=["http://sandbox-my-sandbox.sandbox.localhost:8000/_treadstone/open?token=swlabc123"],
+        description=(
+            "Recommended browser entry URL. When a sandbox web link is enabled, this is the shareable hand-off URL."
+        ),
+    )
 
 
 class SandboxResponse(BaseModel):
@@ -127,6 +133,19 @@ class SandboxDetailResponse(SandboxResponse):
 class SandboxListResponse(BaseModel):
     items: list[SandboxResponse]
     total: int = Field(..., examples=[1])
+
+
+class SandboxWebLinkResponse(BaseModel):
+    web_url: str = Field(..., examples=["https://sandbox-demo.treadstone-ai.dev/"])
+    open_link: str = Field(..., examples=["https://sandbox-demo.treadstone-ai.dev/_treadstone/open?token=swlabc123"])
+    expires_at: datetime = Field(..., examples=["2026-03-31T12:00:00+00:00"])
+
+
+class SandboxWebLinkStatusResponse(BaseModel):
+    web_url: str = Field(..., examples=["https://sandbox-demo.treadstone-ai.dev/"])
+    enabled: bool = Field(..., examples=[True])
+    expires_at: datetime | None = Field(default=None, examples=["2026-03-31T12:00:00+00:00"])
+    last_used_at: datetime | None = Field(default=None, examples=[None])
 
 
 # ── Sandbox Templates ────────────────────────────────────────────────────────

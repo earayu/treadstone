@@ -54,6 +54,25 @@ async def auth_client(db_session):
         yield client
 
 
+def _enable_subdomain(monkeypatch, domain: str = "sandbox.localhost", api_base_url: str = "http://test"):
+    monkeypatch.setenv("TREADSTONE_SANDBOX_DOMAIN", domain)
+    monkeypatch.setenv("TREADSTONE_SANDBOX_SUBDOMAIN_PREFIX", "sandbox-")
+    monkeypatch.setenv("TREADSTONE_SANDBOX_NAMESPACE", "default")
+    monkeypatch.setenv("TREADSTONE_SANDBOX_PORT", "8080")
+    monkeypatch.setenv("TREADSTONE_API_BASE_URL", api_base_url)
+    monkeypatch.setenv("TREADSTONE_JWT_SECRET", "test-jwt-secret-should-be-32-bytes!")
+    from treadstone.config import Settings
+
+    s = Settings()
+    monkeypatch.setattr("treadstone.api.browser.settings", s)
+    monkeypatch.setattr("treadstone.api.sandboxes.settings", s)
+    monkeypatch.setattr("treadstone.core.users.settings", s)
+    monkeypatch.setattr("treadstone.middleware.sandbox_subdomain.settings", s)
+    monkeypatch.setattr("treadstone.services.sandbox_service.settings", s)
+    monkeypatch.setattr("treadstone.services.browser_auth.settings", s)
+    monkeypatch.setattr("treadstone.services.sandbox_proxy.settings", s)
+
+
 class TestCreateSandbox:
     async def test_create_returns_202(self, auth_client):
         resp = await auth_client.post(
@@ -97,6 +116,19 @@ class TestCreateSandbox:
         data = resp.json()
         assert data["name"] == "persist-sb"
         assert data["status"] == "creating"
+
+    async def test_create_with_subdomain_returns_shareable_web_entry_url(self, auth_client, monkeypatch):
+        _enable_subdomain(monkeypatch)
+
+        resp = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": "handoff-sb"},
+        )
+
+        assert resp.status_code == 202
+        assert resp.json()["urls"]["web"].startswith(
+            "http://sandbox-handoff-sb.sandbox.localhost/_treadstone/open?token=swl"
+        )
 
     @pytest.mark.parametrize(
         "name",
@@ -199,6 +231,18 @@ class TestGetSandbox:
         resp = await auth_client.get(f"/v1/sandboxes/{sandbox_id}")
         assert resp.status_code == 200
         assert resp.json()["id"] == sandbox_id
+
+    async def test_get_returns_current_shareable_web_url_when_web_link_is_enabled(self, auth_client, monkeypatch):
+        _enable_subdomain(monkeypatch)
+        create_resp = await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "get-web"})
+        sandbox_id = create_resp.json()["id"]
+
+        resp = await auth_client.get(f"/v1/sandboxes/{sandbox_id}")
+
+        assert resp.status_code == 200
+        assert resp.json()["urls"]["web"].startswith(
+            "http://sandbox-get-web.sandbox.localhost/_treadstone/open?token=swl"
+        )
 
     async def test_get_nonexistent_returns_404(self, auth_client):
         resp = await auth_client.get("/v1/sandboxes/sb-nonexistent1234")

@@ -53,14 +53,26 @@ def test_validate_runtime_settings_rejects_external_oidc():
         validate_runtime_settings(s)
 
 
-def test_validate_runtime_settings_rejects_public_sandbox_domain():
+def test_validate_runtime_settings_allows_public_sandbox_domain():
     s = Settings(
         _env_file=None,
         database_url=DB_URL,
         jwt_secret="x" * 32,
         sandbox_domain="treadstone-ai.dev",
+        api_base_url="https://api.treadstone-ai.dev",
     )
-    with pytest.raises(RuntimeError, match="Sandbox subdomain Web UI"):
+    validate_runtime_settings(s)
+
+
+def test_validate_runtime_settings_rejects_public_sandbox_domain_with_local_api_base_url():
+    s = Settings(
+        _env_file=None,
+        database_url=DB_URL,
+        jwt_secret="x" * 32,
+        sandbox_domain="treadstone-ai.dev",
+        api_base_url="http://localhost:8000",
+    )
+    with pytest.raises(RuntimeError, match="TREADSTONE_API_BASE_URL"):
         validate_runtime_settings(s)
 
 

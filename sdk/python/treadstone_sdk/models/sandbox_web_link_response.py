@@ -1,71 +1,66 @@
 from __future__ import annotations
 
+import datetime
 from collections.abc import Mapping
-from typing import Any, TypeVar, cast
+from typing import Any, TypeVar
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
+from dateutil.parser import isoparse
 
-from ..types import UNSET, Unset
-
-T = TypeVar("T", bound="SandboxUrls")
+T = TypeVar("T", bound="SandboxWebLinkResponse")
 
 
 @_attrs_define
-class SandboxUrls:
+class SandboxWebLinkResponse:
     """
     Attributes:
-        proxy (str):
-        web (None | str | Unset): Recommended browser entry URL. When a sandbox web link is enabled, this is the
-            shareable hand-off URL.
+        web_url (str):
+        open_link (str):
+        expires_at (datetime.datetime):
     """
 
-    proxy: str
-    web: None | str | Unset = UNSET
+    web_url: str
+    open_link: str
+    expires_at: datetime.datetime
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        proxy = self.proxy
+        web_url = self.web_url
 
-        web: None | str | Unset
-        if isinstance(self.web, Unset):
-            web = UNSET
-        else:
-            web = self.web
+        open_link = self.open_link
+
+        expires_at = self.expires_at.isoformat()
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
             {
-                "proxy": proxy,
+                "web_url": web_url,
+                "open_link": open_link,
+                "expires_at": expires_at,
             }
         )
-        if web is not UNSET:
-            field_dict["web"] = web
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
-        proxy = d.pop("proxy")
+        web_url = d.pop("web_url")
 
-        def _parse_web(data: object) -> None | str | Unset:
-            if data is None:
-                return data
-            if isinstance(data, Unset):
-                return data
-            return cast(None | str | Unset, data)
+        open_link = d.pop("open_link")
 
-        web = _parse_web(d.pop("web", UNSET))
+        expires_at = isoparse(d.pop("expires_at"))
 
-        sandbox_urls = cls(
-            proxy=proxy,
-            web=web,
+        sandbox_web_link_response = cls(
+            web_url=web_url,
+            open_link=open_link,
+            expires_at=expires_at,
         )
 
-        sandbox_urls.additional_properties = d
-        return sandbox_urls
+        sandbox_web_link_response.additional_properties = d
+        return sandbox_web_link_response
 
     @property
     def additional_keys(self) -> list[str]:

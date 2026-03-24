@@ -1,5 +1,5 @@
 import hashlib
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
@@ -48,7 +48,10 @@ class ApiKey(Base):
     def is_expired(self) -> bool:
         if self.gmt_expires is None:
             return False
-        return utc_now() >= self.gmt_expires
+        expires_at = self.gmt_expires
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=UTC)
+        return utc_now() >= expires_at
 
 
 class ApiKeySandboxGrant(Base):
