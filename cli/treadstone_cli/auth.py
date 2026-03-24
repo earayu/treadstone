@@ -3,8 +3,17 @@
 from __future__ import annotations
 
 import click
+import httpx
 
-from treadstone_cli._client import build_client, require_auth
+from treadstone_cli._client import (
+    build_client,
+    build_session_client,
+    clear_session,
+    get_base_url,
+    get_session_token,
+    require_auth,
+    save_session,
+)
 from treadstone_cli._output import handle_error, is_json_mode, print_detail, print_json, print_table
 
 
@@ -12,13 +21,15 @@ from treadstone_cli._output import handle_error, is_json_mode, print_detail, pri
 def auth() -> None:
     """Authentication and user management.
 
-    Register, log in, manage users, and change passwords.
+    Register, log in, manage users, and change passwords. Successful logins
+    save a local control-plane session for the active base URL.
 
     \b
     Quick start:
-      treadstone auth register          Create a new account
-      treadstone auth login             Log in (saves session)
-      treadstone auth whoami            Verify current identity
+      treadstone auth register                        Create a new account
+      treadstone auth login                           Save a local session
+      treadstone auth whoami                          Verify current identity
+      treadstone api-keys create --name agent --save Create a reusable API key
     """
 
 
@@ -29,29 +40,49 @@ def auth() -> None:
 def login(ctx: click.Context, email: str, password: str) -> None:
     """Log in with email and password.
 
-    If --email or --password are not provided, you will be prompted interactively.
+    If --email or --password are not provided, you will be prompted
+    interactively. On success, the CLI stores the returned session cookie and
+    reuses it for future control-plane commands until you run logout.
     """
     client = build_client(ctx)
     resp = client.post("/v1/auth/login", json={"email": email, "password": password})
     handle_error(resp)
     data = resp.json()
+    session_token = resp.cookies.get("session")
+    if not session_token:
+        raise click.ClickException("Login succeeded but no session cookie was returned.")
+    base_url = get_base_url(ctx)
+    save_session(base_url, session_token)
     if is_json_mode(ctx):
-        print_json(data)
+        print_json({**data, "base_url": base_url, "session_saved": True})
     else:
-        click.echo("Login successful.")
+        click.echo(f"Login successful. Saved session for {base_url}.")
 
 
 @auth.command("logout")
 @click.pass_context
 def logout(ctx: click.Context) -> None:
-    """Log out (clear session cookie)."""
-    client = build_client(ctx)
-    resp = client.post("/v1/auth/logout")
-    handle_error(resp)
-    if is_json_mode(ctx):
-        print_json(resp.json())
+    """Log out and clear the saved local session for the active base URL."""
+    base_url = get_base_url(ctx)
+    session_token = get_session_token(ctx)
+    if session_token:
+        client = build_session_client(base_url, session_token)
+        try:
+            resp = client.post("/v1/auth/logout")
+            handle_error(resp)
+            data = resp.json()
+        except httpx.HTTPError:
+            data = {"detail": "Logout successful"}
     else:
-        click.echo("Logged out.")
+        data = {"detail": "Logout successful"}
+    session_cleared = clear_session(base_url)
+    if is_json_mode(ctx):
+        print_json({**data, "base_url": base_url, "session_cleared": session_cleared})
+    else:
+        if session_cleared:
+            click.echo(f"Logged out. Cleared saved session for {base_url}.")
+        else:
+            click.echo(f"No saved session for {base_url}.")
 
 
 @auth.command("register")
@@ -80,7 +111,7 @@ def register(ctx: click.Context, email: str, password: str, invitation_token: st
 @auth.command("whoami")
 @click.pass_context
 def whoami(ctx: click.Context) -> None:
-    """Show current user info."""
+    """Show the current user resolved from the active API key or saved session."""
     client = require_auth(ctx)
     resp = client.get("/v1/auth/user")
     handle_error(resp)
@@ -98,7 +129,7 @@ def whoami(ctx: click.Context) -> None:
 )
 @click.pass_context
 def change_password(ctx: click.Context, old_password: str, new_password: str) -> None:
-    """Change your password."""
+    """Change your password for the current account."""
     client = require_auth(ctx)
     resp = client.post("/v1/auth/change-password", json={"old_password": old_password, "new_password": new_password})
     handle_error(resp)
@@ -129,7 +160,10 @@ def invite(ctx: click.Context, email: str, role: str) -> None:
 @click.option("--offset", default=0, type=int, help="Skip N results.")
 @click.pass_context
 def list_users(ctx: click.Context, limit: int, offset: int) -> None:
-    """List all registered users (admin only)."""
+    """List users visible to the current account.
+
+    Admin accounts can see all users. Non-admin accounts only see themselves.
+    """
     client = require_auth(ctx)
     resp = client.get("/v1/auth/users", params={"limit": limit, "offset": offset})
     handle_error(resp)
@@ -146,7 +180,7 @@ def list_users(ctx: click.Context, limit: int, offset: int) -> None:
 @click.argument("user_id")
 @click.pass_context
 def delete_user(ctx: click.Context, user_id: str) -> None:
-    """Delete a user (admin only)."""
+    """Delete a user by user ID (admin only)."""
     client = require_auth(ctx)
     resp = client.delete(f"/v1/auth/users/{user_id}")
     handle_error(resp)

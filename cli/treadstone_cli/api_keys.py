@@ -5,7 +5,7 @@ from __future__ import annotations
 import click
 from click.core import ParameterSource
 
-from treadstone_cli._client import require_auth
+from treadstone_cli._client import CONFIG_FILE, require_auth, set_config_value
 from treadstone_cli._output import handle_error, is_json_mode, print_json, print_table
 
 
@@ -14,10 +14,13 @@ def api_keys() -> None:
     """Manage API keys.
 
     API keys provide long-lived authentication tokens for programmatic access.
+    Use them when you need a reusable non-interactive credential instead of a
+    saved login session.
 
     \b
     Examples:
       treadstone api-keys create --name ci-bot
+      treadstone api-keys create --name agent --save
       treadstone api-keys create --no-control-plane --data-plane selected --sandbox-id sb123
       treadstone api-keys list
       treadstone api-keys update <key-id> --data-plane none
@@ -55,6 +58,12 @@ def _build_scope(control_plane: bool | None, data_plane: str | None, sandbox_ids
     help="Configure data plane access.",
 )
 @click.option("--sandbox-id", "sandbox_ids", multiple=True, help="Allowlist sandbox ID when --data-plane selected.")
+@click.option(
+    "--save",
+    is_flag=True,
+    default=False,
+    help="Save the new key as the default api_key in local CLI config.",
+)
 @click.pass_context
 def create_key(
     ctx: click.Context,
@@ -63,10 +72,12 @@ def create_key(
     control_plane: bool | None,
     data_plane: str | None,
     sandbox_ids: tuple[str, ...],
+    save: bool,
 ) -> None:
     """Create a new API key.
 
-    The full key is shown only once — store it securely.
+    The full key is shown only once. Use --save to store it as the default
+    local api_key for future commands.
     """
     client = require_auth(ctx)
     body: dict = {"name": name}
@@ -78,12 +89,16 @@ def create_key(
     resp = client.post("/v1/auth/api-keys", json=body)
     handle_error(resp)
     data = resp.json()
+    if save:
+        set_config_value("api_key", data["key"])
     if is_json_mode(ctx):
-        print_json(data)
+        print_json({**data, "saved_to_config": save, "config_file": str(CONFIG_FILE) if save else None})
     else:
         click.echo(f"API Key created: {data['key']}")
         click.echo(f"  ID: {data['id']}  Name: {data['name']}")
         click.echo("  Store this key securely — it won't be shown again.")
+        if save:
+            click.echo(f"  Saved as the default api_key in {CONFIG_FILE}.")
 
 
 @api_keys.command("list")

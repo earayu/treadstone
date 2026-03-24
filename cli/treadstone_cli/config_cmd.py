@@ -9,19 +9,7 @@ from __future__ import annotations
 
 import click
 
-from treadstone_cli._client import CONFIG_DIR, CONFIG_FILE, _read_config
-
-
-def _write_config(data: dict[str, dict[str, str]]) -> None:
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    lines: list[str] = []
-    for section, kvs in data.items():
-        lines.append(f"[{section}]")
-        for k, v in kvs.items():
-            lines.append(f'{k} = "{v}"')
-        lines.append("")
-    CONFIG_FILE.write_text("\n".join(lines))
-
+import treadstone_cli._client as client_state
 
 _VALID_KEYS = ("base_url", "api_key")
 
@@ -32,7 +20,8 @@ def config() -> None:
 
     Configuration is stored in ~/.config/treadstone/config.toml and provides
     default values for --base-url and --api-key so they don't need to be
-    repeated on every command invocation.
+    repeated on every command invocation. Saved login sessions live in a
+    separate local state file and are not managed by this command group.
 
     \b
     Priority (highest to lowest):
@@ -58,19 +47,7 @@ def set_value(key: str, value: str) -> None:
       treadstone config set base_url https://my-server.example.com
       treadstone config set api_key ts_live_xxxxxxxxxxxx
     """
-    try:
-        import tomllib
-    except ModuleNotFoundError:
-        import tomli as tomllib  # type: ignore[no-redef]
-
-    raw: dict[str, dict[str, str]] = {}
-    if CONFIG_FILE.exists():
-        with open(CONFIG_FILE, "rb") as f:
-            raw = tomllib.load(f)  # type: ignore[assignment]
-
-    section = raw.setdefault("default", {})
-    section[key] = value
-    _write_config(raw)
+    client_state.set_config_value(key, value)
     click.echo(f"Set {key} = {value}")
 
 
@@ -84,7 +61,7 @@ def get_value(key: str | None) -> None:
       treadstone config get              Show all config values
       treadstone config get base_url     Show only base_url
     """
-    data = _read_config()
+    data = client_state._read_config()
     if not data:
         click.echo("No configuration set. Run 'treadstone config set <key> <value>' to get started.")
         return
@@ -115,26 +92,10 @@ def unset_value(key: str) -> None:
     Example:
       treadstone config unset api_key
     """
-    try:
-        import tomllib
-    except ModuleNotFoundError:
-        import tomli as tomllib  # type: ignore[no-redef]
-
-    if not CONFIG_FILE.exists():
+    if client_state.unset_config_value(key):
+        click.echo(f"Unset {key}.")
+    else:
         click.echo(f"{key} is not set.")
-        return
-
-    with open(CONFIG_FILE, "rb") as f:
-        raw: dict[str, dict[str, str]] = tomllib.load(f)  # type: ignore[assignment]
-
-    section = raw.get("default", {})
-    if key not in section:
-        click.echo(f"{key} is not set.")
-        return
-
-    del section[key]
-    _write_config(raw)
-    click.echo(f"Unset {key}.")
 
 
 @config.command("path")
@@ -145,8 +106,8 @@ def show_path() -> None:
     Example:
       treadstone config path
     """
-    exists = CONFIG_FILE.exists()
-    click.echo(str(CONFIG_FILE))
+    exists = client_state.CONFIG_FILE.exists()
+    click.echo(str(client_state.CONFIG_FILE))
     if not exists:
         click.echo("  (file does not exist yet)")
 
