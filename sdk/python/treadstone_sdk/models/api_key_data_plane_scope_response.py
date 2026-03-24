@@ -1,66 +1,62 @@
 from __future__ import annotations
 
-import datetime
 from collections.abc import Mapping
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
-from dateutil.parser import isoparse
 
-T = TypeVar("T", bound="SandboxTokenResponse")
+from ..models.api_key_data_plane_mode import ApiKeyDataPlaneMode
+from ..types import UNSET, Unset
+
+T = TypeVar("T", bound="ApiKeyDataPlaneScopeResponse")
 
 
 @_attrs_define
-class SandboxTokenResponse:
+class ApiKeyDataPlaneScopeResponse:
     """
     Attributes:
-        token (str):
-        sandbox_id (str):
-        expires_at (datetime.datetime):
+        mode (ApiKeyDataPlaneMode):
+        sandbox_ids (list[str] | Unset):
     """
 
-    token: str
-    sandbox_id: str
-    expires_at: datetime.datetime
+    mode: ApiKeyDataPlaneMode
+    sandbox_ids: list[str] | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        token = self.token
+        mode = self.mode.value
 
-        sandbox_id = self.sandbox_id
-
-        expires_at = self.expires_at.isoformat()
+        sandbox_ids: list[str] | Unset = UNSET
+        if not isinstance(self.sandbox_ids, Unset):
+            sandbox_ids = self.sandbox_ids
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
             {
-                "token": token,
-                "sandbox_id": sandbox_id,
-                "expires_at": expires_at,
+                "mode": mode,
             }
         )
+        if sandbox_ids is not UNSET:
+            field_dict["sandbox_ids"] = sandbox_ids
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
-        token = d.pop("token")
+        mode = ApiKeyDataPlaneMode(d.pop("mode"))
 
-        sandbox_id = d.pop("sandbox_id")
+        sandbox_ids = cast(list[str], d.pop("sandbox_ids", UNSET))
 
-        expires_at = isoparse(d.pop("expires_at"))
-
-        sandbox_token_response = cls(
-            token=token,
-            sandbox_id=sandbox_id,
-            expires_at=expires_at,
+        api_key_data_plane_scope_response = cls(
+            mode=mode,
+            sandbox_ids=sandbox_ids,
         )
 
-        sandbox_token_response.additional_properties = d
-        return sandbox_token_response
+        api_key_data_plane_scope_response.additional_properties = d
+        return api_key_data_plane_scope_response
 
     @property
     def additional_keys(self) -> list[str]:

@@ -6,16 +6,16 @@ import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
-from ...models.create_sandbox_token_request import CreateSandboxTokenRequest
+from ...models.api_key_summary import ApiKeySummary
 from ...models.http_validation_error import HTTPValidationError
-from ...models.sandbox_token_response import SandboxTokenResponse
+from ...models.update_api_key_request import UpdateApiKeyRequest
 from ...types import UNSET, Response, Unset
 
 
 def _get_kwargs(
-    sandbox_id: str,
+    key_id: str,
     *,
-    body: CreateSandboxTokenRequest,
+    body: UpdateApiKeyRequest,
     user_db: Any | Unset = UNSET,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
@@ -27,9 +27,9 @@ def _get_kwargs(
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
     _kwargs: dict[str, Any] = {
-        "method": "post",
-        "url": "/v1/sandboxes/{sandbox_id}/token".format(
-            sandbox_id=quote(str(sandbox_id), safe=""),
+        "method": "patch",
+        "url": "/v1/auth/api-keys/{key_id}".format(
+            key_id=quote(str(key_id), safe=""),
         ),
         "params": params,
     }
@@ -44,11 +44,11 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> HTTPValidationError | SandboxTokenResponse | None:
-    if response.status_code == 201:
-        response_201 = SandboxTokenResponse.from_dict(response.json())
+) -> ApiKeySummary | HTTPValidationError | None:
+    if response.status_code == 200:
+        response_200 = ApiKeySummary.from_dict(response.json())
 
-        return response_201
+        return response_200
 
     if response.status_code == 422:
         response_422 = HTTPValidationError.from_dict(response.json())
@@ -63,7 +63,7 @@ def _parse_response(
 
 def _build_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[HTTPValidationError | SandboxTokenResponse]:
+) -> Response[ApiKeySummary | HTTPValidationError]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -73,29 +73,29 @@ def _build_response(
 
 
 def sync_detailed(
-    sandbox_id: str,
+    key_id: str,
     *,
     client: AuthenticatedClient,
-    body: CreateSandboxTokenRequest,
+    body: UpdateApiKeyRequest,
     user_db: Any | Unset = UNSET,
-) -> Response[HTTPValidationError | SandboxTokenResponse]:
-    """Create Sandbox Token Endpoint
+) -> Response[ApiKeySummary | HTTPValidationError]:
+    """Update Api Key
 
     Args:
-        sandbox_id (str):
+        key_id (str):
         user_db (Any | Unset):
-        body (CreateSandboxTokenRequest):
+        body (UpdateApiKeyRequest):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[HTTPValidationError | SandboxTokenResponse]
+        Response[ApiKeySummary | HTTPValidationError]
     """
 
     kwargs = _get_kwargs(
-        sandbox_id=sandbox_id,
+        key_id=key_id,
         body=body,
         user_db=user_db,
     )
@@ -108,29 +108,29 @@ def sync_detailed(
 
 
 def sync(
-    sandbox_id: str,
+    key_id: str,
     *,
     client: AuthenticatedClient,
-    body: CreateSandboxTokenRequest,
+    body: UpdateApiKeyRequest,
     user_db: Any | Unset = UNSET,
-) -> HTTPValidationError | SandboxTokenResponse | None:
-    """Create Sandbox Token Endpoint
+) -> ApiKeySummary | HTTPValidationError | None:
+    """Update Api Key
 
     Args:
-        sandbox_id (str):
+        key_id (str):
         user_db (Any | Unset):
-        body (CreateSandboxTokenRequest):
+        body (UpdateApiKeyRequest):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        HTTPValidationError | SandboxTokenResponse
+        ApiKeySummary | HTTPValidationError
     """
 
     return sync_detailed(
-        sandbox_id=sandbox_id,
+        key_id=key_id,
         client=client,
         body=body,
         user_db=user_db,
@@ -138,29 +138,29 @@ def sync(
 
 
 async def asyncio_detailed(
-    sandbox_id: str,
+    key_id: str,
     *,
     client: AuthenticatedClient,
-    body: CreateSandboxTokenRequest,
+    body: UpdateApiKeyRequest,
     user_db: Any | Unset = UNSET,
-) -> Response[HTTPValidationError | SandboxTokenResponse]:
-    """Create Sandbox Token Endpoint
+) -> Response[ApiKeySummary | HTTPValidationError]:
+    """Update Api Key
 
     Args:
-        sandbox_id (str):
+        key_id (str):
         user_db (Any | Unset):
-        body (CreateSandboxTokenRequest):
+        body (UpdateApiKeyRequest):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[HTTPValidationError | SandboxTokenResponse]
+        Response[ApiKeySummary | HTTPValidationError]
     """
 
     kwargs = _get_kwargs(
-        sandbox_id=sandbox_id,
+        key_id=key_id,
         body=body,
         user_db=user_db,
     )
@@ -171,30 +171,30 @@ async def asyncio_detailed(
 
 
 async def asyncio(
-    sandbox_id: str,
+    key_id: str,
     *,
     client: AuthenticatedClient,
-    body: CreateSandboxTokenRequest,
+    body: UpdateApiKeyRequest,
     user_db: Any | Unset = UNSET,
-) -> HTTPValidationError | SandboxTokenResponse | None:
-    """Create Sandbox Token Endpoint
+) -> ApiKeySummary | HTTPValidationError | None:
+    """Update Api Key
 
     Args:
-        sandbox_id (str):
+        key_id (str):
         user_db (Any | Unset):
-        body (CreateSandboxTokenRequest):
+        body (UpdateApiKeyRequest):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        HTTPValidationError | SandboxTokenResponse
+        ApiKeySummary | HTTPValidationError
     """
 
     return (
         await asyncio_detailed(
-            sandbox_id=sandbox_id,
+            key_id=key_id,
             client=client,
             body=body,
             user_db=user_db,

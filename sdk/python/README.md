@@ -5,30 +5,17 @@ A client library for accessing treadstone
 First, create a client:
 
 ```python
-from treadstone_sdk import AuthenticatedClient, TREADSTONE_API_URL
+from treadstone_sdk import Client
 
-client = AuthenticatedClient(base_url=TREADSTONE_API_URL, token="ts_live_xxxxxxxxxxxx")
+client = Client(base_url="https://api.example.com")
 ```
 
-`TREADSTONE_API_URL` points to the production endpoint (`https://api.treadstone-ai.dev`).
-You can override it with any URL:
+If the endpoints you're going to hit require authentication, use `AuthenticatedClient` instead:
 
 ```python
 from treadstone_sdk import AuthenticatedClient
 
-# Demo environment
-client = AuthenticatedClient(base_url="https://demo.treadstone-ai.dev", token="ts_live_xxxxxxxxxxxx")
-
-# Local development
-client = AuthenticatedClient(base_url="http://localhost:8000", token="ts_live_xxxxxxxxxxxx")
-```
-
-For unauthenticated endpoints (e.g. `/health`), use the plain `Client`:
-
-```python
-from treadstone_sdk import Client, TREADSTONE_API_URL
-
-client = Client(base_url=TREADSTONE_API_URL)
+client = AuthenticatedClient(base_url="https://api.example.com", token="SuperSecretToken")
 ```
 
 Now call your endpoint and use your models:

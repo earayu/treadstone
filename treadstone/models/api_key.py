@@ -1,8 +1,9 @@
 import hashlib
 from datetime import datetime
+from enum import StrEnum
 
-from sqlalchemy import DateTime, ForeignKey, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from treadstone.core.database import Base
 from treadstone.models.user import random_id, utc_now
@@ -16,6 +17,12 @@ def build_api_key_preview(secret: str) -> str:
     return f"{secret[:7]}...{secret[-4:]}"
 
 
+class ApiKeyDataPlaneMode(StrEnum):
+    NONE = "none"
+    ALL = "all"
+    SELECTED = "selected"
+
+
 class ApiKey(Base):
     __tablename__ = "api_key"
 
@@ -24,11 +31,37 @@ class ApiKey(Base):
     key_preview: Mapped[str] = mapped_column(String(16), nullable=False)
     name: Mapped[str] = mapped_column(String(256), nullable=False, default="default")
     user_id: Mapped[str] = mapped_column(String(24), ForeignKey("user.id", ondelete="cascade"), nullable=False)
+    control_plane_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    data_plane_mode: Mapped[str] = mapped_column(String(16), nullable=False, default=ApiKeyDataPlaneMode.ALL.value)
     gmt_created: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    gmt_updated: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     gmt_expires: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     gmt_deleted: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sandbox_grants: Mapped[list["ApiKeySandboxGrant"]] = relationship(
+        "ApiKeySandboxGrant",
+        back_populates="api_key",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="ApiKeySandboxGrant.gmt_created",
+    )
 
     def is_expired(self) -> bool:
         if self.gmt_expires is None:
             return False
         return utc_now() >= self.gmt_expires
+
+
+class ApiKeySandboxGrant(Base):
+    __tablename__ = "api_key_sandbox_grant"
+    __table_args__ = (UniqueConstraint("api_key_id", "sandbox_id", name="uq_api_key_sandbox_grant_key_sandbox"),)
+
+    id: Mapped[str] = mapped_column(String(24), primary_key=True, default=lambda: "akg" + random_id())
+    api_key_id: Mapped[str] = mapped_column(
+        String(24), ForeignKey("api_key.id", ondelete="cascade"), nullable=False, index=True
+    )
+    sandbox_id: Mapped[str] = mapped_column(
+        String(24), ForeignKey("sandbox.id", ondelete="cascade"), nullable=False, index=True
+    )
+    gmt_created: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    api_key: Mapped["ApiKey"] = relationship("ApiKey", back_populates="sandbox_grants")

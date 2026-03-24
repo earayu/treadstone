@@ -1,25 +1,18 @@
 from __future__ import annotations
 
-from typing import Literal, TypedDict
+from typing import Literal
 
-import jwt
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from treadstone.core.database import get_session
 from treadstone.core.errors import AuthInvalidError, AuthRequiredError, ForbiddenError
 from treadstone.core.users import fastapi_users
-from treadstone.models.api_key import ApiKey, hash_api_key_secret
+from treadstone.models.api_key import ApiKey, ApiKeyDataPlaneMode, ApiKeySandboxGrant, hash_api_key_secret
 from treadstone.models.user import Role, User
-from treadstone.services.sandbox_token import verify_sandbox_token
-
-
-class SandboxTokenPayload(TypedDict):
-    sandbox_id: str
-    user_id: str
-
 
 bearer_scheme = HTTPBearer(auto_error=False)
 optional_cookie_user = fastapi_users.current_user(optional=True, active=True)
@@ -27,11 +20,11 @@ optional_cookie_user = fastapi_users.current_user(optional=True, active=True)
 
 def _set_auth_context(
     request: Request,
-    credential_type: Literal["cookie", "api_key", "sandbox_token"],
-    sandbox_token_payload: SandboxTokenPayload | None = None,
+    credential_type: Literal["cookie", "api_key"],
+    api_key: ApiKey | None = None,
 ) -> None:
     request.state.credential_type = credential_type
-    request.state.sandbox_token_payload = sandbox_token_payload
+    request.state.api_key_id = api_key.id if api_key is not None else None
 
 
 async def _get_active_user(session: AsyncSession, user_id: str) -> User | None:
@@ -39,9 +32,11 @@ async def _get_active_user(session: AsyncSession, user_id: str) -> User | None:
     return result.unique().scalar_one_or_none()
 
 
-async def _authenticate_api_key_value(session: AsyncSession, secret: str) -> User | None:
+async def _authenticate_api_key_value(session: AsyncSession, secret: str) -> tuple[ApiKey, User] | None:
     result = await session.execute(
-        select(ApiKey).where(
+        select(ApiKey)
+        .options(selectinload(ApiKey.sandbox_grants))
+        .where(
             ApiKey.key_hash == hash_api_key_secret(secret),
             ApiKey.gmt_deleted.is_(None),
         )
@@ -49,7 +44,10 @@ async def _authenticate_api_key_value(session: AsyncSession, secret: str) -> Use
     api_key = result.scalar_one_or_none()
     if api_key is None or api_key.is_expired():
         return None
-    return await _get_active_user(session, api_key.user_id)
+    user = await _get_active_user(session, api_key.user_id)
+    if user is None:
+        return None
+    return api_key, user
 
 
 async def get_current_control_plane_user(
@@ -63,11 +61,14 @@ async def get_current_control_plane_user(
         if not credentials.credentials.startswith("sk-"):
             raise AuthInvalidError("Control plane endpoints accept API keys or session cookies.")
 
-        user = await _authenticate_api_key_value(session, credentials.credentials)
-        if user is None:
+        auth_result = await _authenticate_api_key_value(session, credentials.credentials)
+        if auth_result is None:
             raise AuthInvalidError("Invalid or expired API key.")
+        api_key, user = auth_result
+        if not api_key.control_plane_enabled:
+            raise ForbiddenError("This API key does not have control plane access.")
 
-        _set_auth_context(request, "api_key")
+        _set_auth_context(request, "api_key", api_key)
         return user
 
     if cookie_user is None:
@@ -77,31 +78,40 @@ async def get_current_control_plane_user(
     return cookie_user
 
 
-async def get_current_sandbox_token_user(
+async def get_current_data_plane_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     session: AsyncSession = Depends(get_session),
     cookie_user: User | None = Depends(optional_cookie_user),
 ) -> User:
-    """Data plane auth accepts only sandbox-scoped JWTs."""
+    """Data plane auth accepts only API keys with data plane access."""
     if credentials is None:
         if cookie_user is not None:
-            raise AuthInvalidError("Sandbox Token required for data plane access.")
-        raise AuthRequiredError("Sandbox Token required.")
+            raise AuthInvalidError("API Key required for data plane access.")
+        raise AuthRequiredError("API Key required.")
 
-    if credentials.credentials.startswith("sk-"):
-        raise AuthInvalidError("Sandbox Token required for data plane access.")
+    if not credentials.credentials.startswith("sk-"):
+        raise AuthInvalidError("API Key required for data plane access.")
 
-    try:
-        payload = verify_sandbox_token(credentials.credentials)
-    except jwt.InvalidTokenError as exc:
-        raise AuthInvalidError("Invalid or expired Sandbox Token.") from exc
+    auth_result = await _authenticate_api_key_value(session, credentials.credentials)
+    if auth_result is None:
+        raise AuthInvalidError("Invalid or expired API key.")
+    api_key, user = auth_result
+    if api_key.data_plane_mode == ApiKeyDataPlaneMode.NONE.value:
+        raise ForbiddenError("This API key does not have data plane access.")
 
-    user = await _get_active_user(session, payload["user_id"])
-    if user is None:
-        raise AuthInvalidError("Invalid or expired Sandbox Token.")
+    sandbox_id = request.path_params.get("sandbox_id")
+    if sandbox_id and api_key.data_plane_mode == ApiKeyDataPlaneMode.SELECTED.value:
+        result = await session.execute(
+            select(ApiKeySandboxGrant.sandbox_id).where(
+                ApiKeySandboxGrant.api_key_id == api_key.id,
+                ApiKeySandboxGrant.sandbox_id == sandbox_id,
+            )
+        )
+        if result.scalar_one_or_none() is None:
+            raise ForbiddenError("This API key does not have access to this sandbox.")
 
-    _set_auth_context(request, "sandbox_token", payload)
+    _set_auth_context(request, "api_key", api_key)
     return user
 
 

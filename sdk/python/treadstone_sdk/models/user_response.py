@@ -6,6 +6,8 @@ from typing import Any, TypeVar
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
+from ..models.role import Role
+
 T = TypeVar("T", bound="UserResponse")
 
 
@@ -15,12 +17,12 @@ class UserResponse:
     Attributes:
         id (str):
         email (str):
-        role (str):
+        role (Role):
     """
 
     id: str
     email: str
-    role: str
+    role: Role
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -28,7 +30,7 @@ class UserResponse:
 
         email = self.email
 
-        role = self.role
+        role = self.role.value
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
@@ -49,7 +51,7 @@ class UserResponse:
 
         email = d.pop("email")
 
-        role = d.pop("role")
+        role = Role(d.pop("role"))
 
         user_response = cls(
             id=id,

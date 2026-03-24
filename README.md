@@ -81,16 +81,21 @@ client = Client(base_url="http://localhost:8000")
 
 ## Authentication Model
 
-Treadstone currently uses three credential types with explicit boundaries:
+Treadstone currently uses two credential types:
 
-- **Session Cookie** and **API Key** authenticate the **control plane** APIs
-  (account management, sandbox CRUD, template catalog, and sandbox token minting).
-- **Sandbox Token** is a short-lived JWT scoped to a single sandbox and is used
-  only for **data plane** access such as the sandbox HTTP proxy.
+- **Session Cookie** authenticates browser-oriented control plane flows.
+- **API Key** authenticates programmatic access across both the **control plane**
+  and **data plane**.
 
-This is an intentional v1 tradeoff: API keys currently have the same control
-plane capabilities as cookie sessions. Fine-grained API key scopes will be
-added in a future release.
+API keys default to full user access, but can now be narrowed with coarse
+scopes:
+
+- `control_plane`: enable or disable account and sandbox management APIs
+- `data_plane.mode = all | none | selected`
+- `data_plane.sandbox_ids`: restrict data plane access to specific sandboxes
+
+This keeps the default API/CLI/SDK path simple while leaving room for finer
+grained scopes in a future release.
 
 ## Sandbox Templates
 

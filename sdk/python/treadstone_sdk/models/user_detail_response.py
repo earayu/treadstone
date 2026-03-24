@@ -6,6 +6,7 @@ from typing import Any, TypeVar, cast
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
+from ..models.role import Role
 from ..types import UNSET, Unset
 
 T = TypeVar("T", bound="UserDetailResponse")
@@ -17,14 +18,14 @@ class UserDetailResponse:
     Attributes:
         id (str):
         email (str):
-        role (str):
+        role (Role):
         is_active (bool):
         username (None | str | Unset):
     """
 
     id: str
     email: str
-    role: str
+    role: Role
     is_active: bool
     username: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
@@ -34,7 +35,7 @@ class UserDetailResponse:
 
         email = self.email
 
-        role = self.role
+        role = self.role.value
 
         is_active = self.is_active
 
@@ -66,7 +67,7 @@ class UserDetailResponse:
 
         email = d.pop("email")
 
-        role = d.pop("role")
+        role = Role(d.pop("role"))
 
         is_active = d.pop("is_active")
 

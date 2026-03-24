@@ -12,33 +12,41 @@ if TYPE_CHECKING:
     from ..models.api_key_scope import ApiKeyScope
 
 
-T = TypeVar("T", bound="CreateApiKeyRequest")
+T = TypeVar("T", bound="UpdateApiKeyRequest")
 
 
 @_attrs_define
-class CreateApiKeyRequest:
+class UpdateApiKeyRequest:
     """
     Attributes:
-        name (str | Unset):  Default: 'default'.
-        expires_in (int | None | Unset): Key lifetime in seconds.
+        name (None | str | Unset):
+        expires_in (int | None | Unset): Reset the key lifetime from now in seconds.
+        clear_expiration (bool | Unset):  Default: False.
         scope (ApiKeyScope | None | Unset):
     """
 
-    name: str | Unset = "default"
+    name: None | str | Unset = UNSET
     expires_in: int | None | Unset = UNSET
+    clear_expiration: bool | Unset = False
     scope: ApiKeyScope | None | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         from ..models.api_key_scope import ApiKeyScope
 
-        name = self.name
+        name: None | str | Unset
+        if isinstance(self.name, Unset):
+            name = UNSET
+        else:
+            name = self.name
 
         expires_in: int | None | Unset
         if isinstance(self.expires_in, Unset):
             expires_in = UNSET
         else:
             expires_in = self.expires_in
+
+        clear_expiration = self.clear_expiration
 
         scope: dict[str, Any] | None | Unset
         if isinstance(self.scope, Unset):
@@ -55,6 +63,8 @@ class CreateApiKeyRequest:
             field_dict["name"] = name
         if expires_in is not UNSET:
             field_dict["expires_in"] = expires_in
+        if clear_expiration is not UNSET:
+            field_dict["clear_expiration"] = clear_expiration
         if scope is not UNSET:
             field_dict["scope"] = scope
 
@@ -65,7 +75,15 @@ class CreateApiKeyRequest:
         from ..models.api_key_scope import ApiKeyScope
 
         d = dict(src_dict)
-        name = d.pop("name", UNSET)
+
+        def _parse_name(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        name = _parse_name(d.pop("name", UNSET))
 
         def _parse_expires_in(data: object) -> int | None | Unset:
             if data is None:
@@ -75,6 +93,8 @@ class CreateApiKeyRequest:
             return cast(int | None | Unset, data)
 
         expires_in = _parse_expires_in(d.pop("expires_in", UNSET))
+
+        clear_expiration = d.pop("clear_expiration", UNSET)
 
         def _parse_scope(data: object) -> ApiKeyScope | None | Unset:
             if data is None:
@@ -93,14 +113,15 @@ class CreateApiKeyRequest:
 
         scope = _parse_scope(d.pop("scope", UNSET))
 
-        create_api_key_request = cls(
+        update_api_key_request = cls(
             name=name,
             expires_in=expires_in,
+            clear_expiration=clear_expiration,
             scope=scope,
         )
 
-        create_api_key_request.additional_properties = d
-        return create_api_key_request
+        update_api_key_request.additional_properties = d
+        return update_api_key_request
 
     @property
     def additional_keys(self) -> list[str]:
