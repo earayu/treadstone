@@ -54,4 +54,16 @@ rules:
     verbs:
       - get
       - patch
+  # Lease objects: leader election for singleton background sync
+  - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
 {{- end }}

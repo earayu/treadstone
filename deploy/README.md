@@ -32,7 +32,7 @@ cp .env.example .env.local
 # Edit .env.local and fill in at minimum:
 #   TREADSTONE_DATABASE_URL   — Neon connection string
 #   TREADSTONE_JWT_SECRET     — JWT secret
-#   TREADSTONE_DEBUG=false    — Must be false, otherwise FakeK8sClient will be used
+#   TREADSTONE_LEADER_ELECTION_ENABLED=true  — Recommended for every K8s environment
 ```
 
 ## One-Command Deployment (Recommended)

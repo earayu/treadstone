@@ -31,6 +31,15 @@ class Settings(BaseSettings):
     sandbox_port: int = 8080
     sandbox_proxy_timeout: float = 180.0
 
+    # Leader election for singleton background sync tasks in multi-replica deploys
+    leader_election_enabled: bool = False
+    leader_election_lease_name: str = "treadstone-sync-leader"
+    leader_election_lease_duration_seconds: int = 15
+    leader_election_renew_interval_seconds: int = 5
+    leader_election_retry_interval_seconds: int = 2
+    pod_name: str = ""
+    pod_namespace: str = ""
+
     # Subdomain-based sandbox routing (for browser Web UI access)
     # Dev: "sandbox.localhost"  →  sandbox-{name}.sandbox.localhost[:port]
     # Prod: "treadstone-ai.dev" →  sandbox-{name}.treadstone-ai.dev
