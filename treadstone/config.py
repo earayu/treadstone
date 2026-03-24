@@ -1,5 +1,9 @@
 from pydantic_settings import BaseSettings
 
+_DEFAULT_JWT_SECRET = "CHANGE_ME_IN_PROD"
+_MIN_JWT_SECRET_LENGTH = 32
+_UNSUPPORTED_OIDC_AUTH_TYPES = {"auth0", "authing", "logto"}
+
 
 class Settings(BaseSettings):
     app_name: str = "treadstone"
@@ -9,7 +13,7 @@ class Settings(BaseSettings):
     # Auth
     auth_type: str = "cookie"  # cookie | auth0 | authing | logto | none
     register_mode: str = "unlimited"  # unlimited | invitation
-    jwt_secret: str = "CHANGE_ME_IN_PROD"
+    jwt_secret: str = _DEFAULT_JWT_SECRET
     oauth_redirect_url: str = "http://localhost:3000/auth/callback"
 
     # OAuth Social
@@ -55,3 +59,28 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def is_local_sandbox_domain(domain: str) -> bool:
+    host = domain.strip().lower()
+    return host == "localhost" or host.endswith(".localhost")
+
+
+def validate_runtime_settings(cfg: Settings) -> None:
+    if cfg.jwt_secret == _DEFAULT_JWT_SECRET or len(cfg.jwt_secret) < _MIN_JWT_SECRET_LENGTH:
+        raise RuntimeError(
+            "TREADSTONE_JWT_SECRET must be set to a non-default value at least "
+            f"{_MIN_JWT_SECRET_LENGTH} characters long."
+        )
+
+    if cfg.auth_type in _UNSUPPORTED_OIDC_AUTH_TYPES:
+        raise RuntimeError(
+            f"TREADSTONE_AUTH_TYPE={cfg.auth_type!r} is not supported yet. "
+            "External OIDC bearer auth is disabled until principal mapping is implemented."
+        )
+
+    if cfg.sandbox_domain and not is_local_sandbox_domain(cfg.sandbox_domain):
+        raise RuntimeError(
+            "Sandbox subdomain Web UI is not enabled for non-local domains yet. "
+            "Use a localhost sandbox domain until browser session hardening is implemented."
+        )

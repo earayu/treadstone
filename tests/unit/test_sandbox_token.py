@@ -5,6 +5,7 @@ import time
 import jwt
 import pytest
 
+from treadstone.services import sandbox_token as sandbox_token_service
 from treadstone.services.sandbox_token import create_sandbox_token, verify_sandbox_token
 
 
@@ -34,9 +35,7 @@ def test_verify_invalid_token():
 
 
 def test_verify_wrong_type_raises():
-    from treadstone.config import settings
-
     payload = {"sandbox_id": "sb-1", "user_id": "u-1", "type": "other", "exp": time.time() + 3600}
-    token = jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
+    token = jwt.encode(payload, sandbox_token_service.settings.jwt_secret, algorithm="HS256")
     with pytest.raises(jwt.InvalidTokenError, match="Not a sandbox token"):
         verify_sandbox_token(token)

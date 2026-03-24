@@ -1,12 +1,15 @@
+from datetime import timedelta
+
 import pytest
 from fastapi_users.db import SQLAlchemyUserDatabase
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from treadstone.api import auth as auth_api
 from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
-from treadstone.models.user import OAuthAccount, User
+from treadstone.models.user import Invitation, OAuthAccount, User, utc_now
 
 _test_session_factory = None
 
@@ -83,6 +86,14 @@ async def test_login_wrong_password(db_session):
 
 
 @pytest.mark.asyncio
+async def test_register_invalid_email_returns_422(db_session):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post("/v1/auth/register", json={"email": "not-an-email", "password": "Pass123!"})
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "validation_error"
+
+
+@pytest.mark.asyncio
 async def test_get_user_after_login(db_session):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/v1/auth/register", json={"email": "me@b.com", "password": "Pass123!"})
@@ -91,3 +102,41 @@ async def test_get_user_after_login(db_session):
         resp = await client.get("/v1/auth/user", cookies=cookies)
     assert resp.status_code == 200
     assert resp.json()["email"] == "me@b.com"
+
+
+@pytest.mark.asyncio
+async def test_register_with_invalid_invitation_role_does_not_500(db_session, monkeypatch):
+    monkeypatch.setattr(auth_api.settings, "register_mode", "invitation")
+
+    async with _test_session_factory() as session:
+        admin = User(
+            email="admin@test.com",
+            hashed_password="hashed",
+            is_active=True,
+            is_superuser=True,
+            is_verified=True,
+            role="admin",
+        )
+        invitation = Invitation(
+            email="invitee@test.com",
+            token="bad-role-token",
+            created_by="admin@test.com",
+            expires_at=utc_now() + timedelta(days=1),
+            role="not-a-role",
+        )
+        session.add(admin)
+        session.add(invitation)
+        await session.commit()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post(
+            "/v1/auth/register",
+            json={
+                "email": "invitee@test.com",
+                "password": "Pass123!",
+                "invitation_token": "bad-role-token",
+            },
+        )
+
+    assert resp.status_code == 403
+    assert resp.json()["error"]["code"] == "forbidden"

@@ -1,4 +1,6 @@
-from treadstone.config import Settings
+import pytest
+
+from treadstone.config import Settings, validate_runtime_settings
 
 DB_URL = "postgresql+asyncpg://x:y@host/db?sslmode=require"
 
@@ -31,3 +33,42 @@ def test_oauth_defaults_empty():
     s = Settings(_env_file=None, database_url=DB_URL)
     assert s.google_oauth_client_id == ""
     assert s.github_oauth_client_secret == ""
+
+
+def test_validate_runtime_settings_rejects_default_secret():
+    s = Settings(_env_file=None, database_url=DB_URL)
+    with pytest.raises(RuntimeError, match="TREADSTONE_JWT_SECRET"):
+        validate_runtime_settings(s)
+
+
+def test_validate_runtime_settings_rejects_short_secret():
+    s = Settings(_env_file=None, database_url=DB_URL, jwt_secret="too-short-secret")
+    with pytest.raises(RuntimeError, match="TREADSTONE_JWT_SECRET"):
+        validate_runtime_settings(s)
+
+
+def test_validate_runtime_settings_rejects_external_oidc():
+    s = Settings(_env_file=None, database_url=DB_URL, jwt_secret="x" * 32, auth_type="logto")
+    with pytest.raises(RuntimeError, match="not supported yet"):
+        validate_runtime_settings(s)
+
+
+def test_validate_runtime_settings_rejects_public_sandbox_domain():
+    s = Settings(
+        _env_file=None,
+        database_url=DB_URL,
+        jwt_secret="x" * 32,
+        sandbox_domain="treadstone-ai.dev",
+    )
+    with pytest.raises(RuntimeError, match="Sandbox subdomain Web UI"):
+        validate_runtime_settings(s)
+
+
+def test_validate_runtime_settings_allows_local_sandbox_domain():
+    s = Settings(
+        _env_file=None,
+        database_url=DB_URL,
+        jwt_secret="x" * 32,
+        sandbox_domain="sandbox.localhost",
+    )
+    validate_runtime_settings(s)

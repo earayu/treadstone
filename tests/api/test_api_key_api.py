@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
+from treadstone.models.api_key import ApiKey, build_api_key_preview, hash_api_key_secret
 from treadstone.models.user import OAuthAccount, User
 
 _test_session_factory = None
@@ -61,6 +62,20 @@ async def test_create_api_key(auth_client):
     assert data["name"] == "test-key"
     assert data["key"].startswith("sk-")
     assert "id" in data
+
+    async with _test_session_factory() as session:
+        api_key = await session.get(ApiKey, data["id"])
+
+    assert api_key is not None
+    assert api_key.key_hash == hash_api_key_secret(data["key"])
+    assert api_key.key_preview == build_api_key_preview(data["key"])
+    assert api_key.key_hash != data["key"]
+
+
+async def test_create_api_key_invalid_expiration_returns_422(auth_client):
+    resp = await auth_client.post("/v1/auth/api-keys", json={"name": "bad-key", "expires_in": 0})
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "validation_error"
 
 
 async def test_list_api_keys(auth_client):

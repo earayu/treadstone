@@ -6,7 +6,7 @@ from fastapi_users.password import PasswordHelper
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from treadstone.api.deps import get_current_admin, get_current_user
+from treadstone.api.deps import get_current_admin, get_current_control_plane_user
 from treadstone.api.schemas import (
     ApiKeyListResponse,
     ApiKeyResponse,
@@ -25,8 +25,8 @@ from treadstone.api.schemas import (
 from treadstone.config import settings
 from treadstone.core.database import get_session
 from treadstone.core.errors import BadRequestError, ConflictError, ForbiddenError, NotFoundError
-from treadstone.core.users import COOKIE_MAX_AGE, get_jwt_strategy
-from treadstone.models.api_key import ApiKey
+from treadstone.core.users import COOKIE_MAX_AGE, cookie_transport, get_jwt_strategy
+from treadstone.models.api_key import ApiKey, build_api_key_preview, hash_api_key_secret
 from treadstone.models.user import Invitation, Role, User, random_id, utc_now
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
@@ -62,7 +62,7 @@ async def login(
         max_age=COOKIE_MAX_AGE,
         httponly=True,
         samesite="lax",
-        secure=False,
+        secure=cookie_transport.cookie_secure,
     )
     return response
 
@@ -105,7 +105,10 @@ async def register(
     ph = PasswordHelper()
     hashed = ph.hash(body.password)
 
-    role = Role.ADMIN if is_first_user else (Role(invitation.role) if invitation else Role.RO)
+    try:
+        role = Role.ADMIN if is_first_user else (Role(invitation.role) if invitation else Role.RO)
+    except ValueError as exc:
+        raise ForbiddenError("Invalid invitation role") from exc
     user = User(
         email=body.email,
         hashed_password=hashed,
@@ -145,7 +148,7 @@ async def invite(
 
 
 @router.get("/user", response_model=UserDetailResponse)
-async def get_user(current_user: User = Depends(get_current_user)):
+async def get_user(current_user: User = Depends(get_current_control_plane_user)):
     return {
         "id": current_user.id,
         "email": current_user.email,
@@ -157,7 +160,7 @@ async def get_user(current_user: User = Depends(get_current_user)):
 
 @router.get("/users", response_model=UserListResponse)
 async def list_users(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
     limit: int = Query(default=100, ge=1, le=1000, description="Maximum number of items to return."),
     offset: int = Query(default=0, ge=0, description="Number of items to skip."),
@@ -175,7 +178,7 @@ async def list_users(
 @router.post("/change-password", response_model=MessageResponse)
 async def change_password(
     body: ChangePasswordRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
 ):
     ph = PasswordHelper()
@@ -215,7 +218,7 @@ async def delete_user(
 @router.post("/api-keys", status_code=status.HTTP_201_CREATED, response_model=ApiKeyResponse)
 async def create_api_key(
     body: CreateApiKeyRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
 ):
     key_value = "sk-" + secrets.token_hex(24)
@@ -224,7 +227,8 @@ async def create_api_key(
         gmt_expires = utc_now() + timedelta(seconds=body.expires_in)
     api_key = ApiKey(
         id="key" + random_id(),
-        key=key_value,
+        key_hash=hash_api_key_secret(key_value),
+        key_preview=build_api_key_preview(key_value),
         name=body.name,
         user_id=current_user.id,
         gmt_expires=gmt_expires,
@@ -235,7 +239,7 @@ async def create_api_key(
     return {
         "id": api_key.id,
         "name": api_key.name,
-        "key": api_key.key,
+        "key": key_value,
         "created_at": api_key.gmt_created,
         "expires_at": api_key.gmt_expires,
     }
@@ -243,7 +247,7 @@ async def create_api_key(
 
 @router.get("/api-keys", response_model=ApiKeyListResponse)
 async def list_api_keys(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
 ):
     result = await session.execute(
@@ -255,7 +259,7 @@ async def list_api_keys(
             {
                 "id": k.id,
                 "name": k.name,
-                "key_prefix": k.key[:7] + "..." + k.key[-4:],
+                "key_prefix": k.key_preview,
                 "created_at": k.gmt_created,
                 "expires_at": k.gmt_expires,
             }
@@ -267,7 +271,7 @@ async def list_api_keys(
 @router.delete("/api-keys/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_api_key(
     key_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
 ):
     result = await session.execute(

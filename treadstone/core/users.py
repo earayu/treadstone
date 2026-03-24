@@ -79,7 +79,7 @@ cookie_transport = CookieTransport(
     cookie_max_age=COOKIE_MAX_AGE,
     cookie_httponly=True,
     cookie_samesite="lax",
-    cookie_secure=False,  # True in production with HTTPS
+    cookie_secure=not settings.debug,
 )
 
 
