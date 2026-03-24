@@ -46,7 +46,7 @@ treadstone sandboxes list
 # Create a browser hand-off URL for a human
 treadstone sandboxes web enable <sandbox-id>
 
-# Print the AI-oriented usage guide
+# Print the built-in agent skill
 treadstone guide agent
 treadstone --skills
 ```
@@ -108,7 +108,7 @@ treadstone config path
 | `--base-url URL` | Override the server URL |
 | `--api-key KEY` | Override the API key |
 | `--json` | Output responses as JSON (useful for scripting) |
-| `--skills` | Print the built-in AI usage guide |
+| `--skills` | Print the built-in agent skill in `SKILL.md` format |
 | `--version` | Show CLI version |
 | `--help` | Show help message |
 

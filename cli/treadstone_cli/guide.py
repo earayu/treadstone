@@ -20,5 +20,5 @@ def guide() -> None:
 
 @guide.command("agent")
 def agent_guide() -> None:
-    """Print the agent-oriented usage guide."""
+    """Print the built-in agent skill in SKILL.md format."""
     click.echo(AGENT_GUIDE.rstrip())
