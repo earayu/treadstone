@@ -123,6 +123,9 @@ def test_guide_agent_matches_skills_flag(runner: CliRunner) -> None:
     assert guide_result.exit_code == 0
     assert skills_result.exit_code == 0
     assert guide_result.output == skills_result.output
+    assert guide_result.output.startswith("---\nname: treadstone-cli\n")
+    assert "description:" in guide_result.output
+    assert "# Treadstone CLI" in guide_result.output
     assert "SANDBOX_ID arguments always require the sandbox ID" in guide_result.output
 
 
