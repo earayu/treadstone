@@ -38,6 +38,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Set versions from tag
+        run: python scripts/set_release_versions.py "${{ github.ref_name }}"
 
       - uses: docker/login-action@v3
         with:
@@ -70,11 +72,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
 
-      - name: Set version from tag
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          sed -i "s/^version = .*/version = \"$VERSION\"/" cli/pyproject.toml
+      - name: Set versions from tag
+        run: python scripts/set_release_versions.py "${{ github.ref_name }}"
 
       - name: Build CLI
         working-directory: cli
@@ -103,11 +102,8 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: pip install poetry-core
 
-      - name: Set version from tag
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          sed -i "s/^version = .*/version = \"$VERSION\"/" sdk/python/pyproject.toml
+      - name: Set versions from tag
+        run: python scripts/set_release_versions.py "${{ github.ref_name }}"
 
       - name: Build SDK
         working-directory: sdk/python
@@ -146,17 +142,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
 
-      - name: Set version from tag
-        shell: python
-        run: |
-          import os
-          import re
-          from pathlib import Path
-
-          ver = os.environ["GITHUB_REF_NAME"].lstrip("v")
-          p = Path("cli/pyproject.toml")
-          text = p.read_text(encoding="utf-8")
-          p.write_text(re.sub(r"(?m)^version = .*", f'version = "{ver}"', text), encoding="utf-8")
+      - name: Set versions from tag
+        run: python scripts/set_release_versions.py "${{ github.ref_name }}"
 
       - name: Install CLI dependencies + PyInstaller
         working-directory: cli
