@@ -11,6 +11,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
+from treadstone.models.api_key import ApiKeyDataPlaneMode
 from treadstone.models.user import Role
 
 SANDBOX_NAME_MAX_LENGTH = 55
@@ -128,16 +129,6 @@ class SandboxListResponse(BaseModel):
     total: int = Field(..., examples=[1])
 
 
-class CreateSandboxTokenRequest(BaseModel):
-    expires_in: int = Field(default=3600, ge=1, le=86400, examples=[3600], description="Token lifetime in seconds.")
-
-
-class SandboxTokenResponse(BaseModel):
-    token: str = Field(..., examples=["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."])
-    sandbox_id: str = Field(..., examples=["sb-abc123def456"])
-    expires_at: datetime = Field(..., examples=["2026-03-21T13:00:00+00:00"])
-
-
 # ── Sandbox Templates ────────────────────────────────────────────────────────
 
 
@@ -216,6 +207,38 @@ class MessageResponse(BaseModel):
     detail: str = Field(..., examples=["Password changed"])
 
 
+class ApiKeyDataPlaneScope(BaseModel):
+    mode: ApiKeyDataPlaneMode = Field(default=ApiKeyDataPlaneMode.ALL, examples=["all"])
+    sandbox_ids: list[str] = Field(default_factory=list, examples=[["sb-abc123def456", "sb-def456ghi789"]])
+
+    @model_validator(mode="after")
+    def validate_mode_and_sandbox_ids(self) -> ApiKeyDataPlaneScope:
+        self.sandbox_ids = list(dict.fromkeys(self.sandbox_ids))
+        if self.mode == ApiKeyDataPlaneMode.SELECTED:
+            if not self.sandbox_ids:
+                raise ValueError("sandbox_ids must be provided when data_plane.mode=selected.")
+            return self
+
+        if self.sandbox_ids:
+            raise ValueError("sandbox_ids is only allowed when data_plane.mode=selected.")
+        return self
+
+
+class ApiKeyScope(BaseModel):
+    control_plane: bool = Field(default=True, examples=[True])
+    data_plane: ApiKeyDataPlaneScope = Field(default_factory=ApiKeyDataPlaneScope)
+
+
+class ApiKeyDataPlaneScopeResponse(BaseModel):
+    mode: ApiKeyDataPlaneMode = Field(..., examples=["all"])
+    sandbox_ids: list[str] = Field(default_factory=list, examples=[["sb-abc123def456", "sb-def456ghi789"]])
+
+
+class ApiKeyScopeResponse(BaseModel):
+    control_plane: bool = Field(..., examples=[True])
+    data_plane: ApiKeyDataPlaneScopeResponse
+
+
 class CreateApiKeyRequest(BaseModel):
     name: str = Field(default="default", examples=["my-api-key"])
     expires_in: int | None = Field(
@@ -225,6 +248,28 @@ class CreateApiKeyRequest(BaseModel):
         examples=[86400],
         description="Key lifetime in seconds.",
     )
+    scope: ApiKeyScope | None = Field(default=None)
+
+
+class UpdateApiKeyRequest(BaseModel):
+    name: str | None = Field(default=None, examples=["renamed-key"])
+    expires_in: int | None = Field(
+        default=None,
+        ge=1,
+        le=31536000,
+        examples=[86400],
+        description="Reset the key lifetime from now in seconds.",
+    )
+    clear_expiration: bool = Field(default=False, examples=[False])
+    scope: ApiKeyScope | None = Field(default=None)
+
+    @model_validator(mode="after")
+    def validate_patch_request(self) -> UpdateApiKeyRequest:
+        if self.expires_in is not None and self.clear_expiration:
+            raise ValueError("expires_in and clear_expiration cannot be used together.")
+        if self.name is None and self.expires_in is None and not self.clear_expiration and self.scope is None:
+            raise ValueError("At least one field must be provided.")
+        return self
 
 
 class ApiKeyResponse(BaseModel):
@@ -232,7 +277,9 @@ class ApiKeyResponse(BaseModel):
     name: str = Field(..., examples=["my-api-key"])
     key: str = Field(..., examples=["sk-0123456789abcdef0123456789abcdef01234567"])
     created_at: datetime = Field(..., examples=["2026-03-21T12:00:00+00:00"])
+    updated_at: datetime = Field(..., examples=["2026-03-21T12:00:00+00:00"])
     expires_at: datetime | None = Field(default=None, examples=[None])
+    scope: ApiKeyScopeResponse
 
 
 class ApiKeySummary(BaseModel):
@@ -240,7 +287,9 @@ class ApiKeySummary(BaseModel):
     name: str = Field(..., examples=["my-api-key"])
     key_prefix: str = Field(..., examples=["sk-0123...cdef"])
     created_at: datetime = Field(..., examples=["2026-03-21T12:00:00+00:00"])
+    updated_at: datetime = Field(..., examples=["2026-03-21T12:00:00+00:00"])
     expires_at: datetime | None = Field(default=None, examples=[None])
+    scope: ApiKeyScopeResponse
 
 
 class ApiKeyListResponse(BaseModel):

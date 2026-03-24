@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import datetime
 from collections.abc import Mapping
-from typing import Any, TypeVar, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 from dateutil.parser import isoparse
 
 from ..types import UNSET, Unset
+
+if TYPE_CHECKING:
+    from ..models.api_key_scope_response import ApiKeyScopeResponse
+
 
 T = TypeVar("T", bound="ApiKeyResponse")
 
@@ -21,6 +25,8 @@ class ApiKeyResponse:
         name (str):
         key (str):
         created_at (datetime.datetime):
+        updated_at (datetime.datetime):
+        scope (ApiKeyScopeResponse):
         expires_at (datetime.datetime | None | Unset):
     """
 
@@ -28,6 +34,8 @@ class ApiKeyResponse:
     name: str
     key: str
     created_at: datetime.datetime
+    updated_at: datetime.datetime
+    scope: ApiKeyScopeResponse
     expires_at: datetime.datetime | None | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -39,6 +47,10 @@ class ApiKeyResponse:
         key = self.key
 
         created_at = self.created_at.isoformat()
+
+        updated_at = self.updated_at.isoformat()
+
+        scope = self.scope.to_dict()
 
         expires_at: None | str | Unset
         if isinstance(self.expires_at, Unset):
@@ -56,6 +68,8 @@ class ApiKeyResponse:
                 "name": name,
                 "key": key,
                 "created_at": created_at,
+                "updated_at": updated_at,
+                "scope": scope,
             }
         )
         if expires_at is not UNSET:
@@ -65,6 +79,8 @@ class ApiKeyResponse:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
+        from ..models.api_key_scope_response import ApiKeyScopeResponse
+
         d = dict(src_dict)
         id = d.pop("id")
 
@@ -73,6 +89,10 @@ class ApiKeyResponse:
         key = d.pop("key")
 
         created_at = isoparse(d.pop("created_at"))
+
+        updated_at = isoparse(d.pop("updated_at"))
+
+        scope = ApiKeyScopeResponse.from_dict(d.pop("scope"))
 
         def _parse_expires_at(data: object) -> datetime.datetime | None | Unset:
             if data is None:
@@ -96,6 +116,8 @@ class ApiKeyResponse:
             name=name,
             key=key,
             created_at=created_at,
+            updated_at=updated_at,
+            scope=scope,
             expires_at=expires_at,
         )
 

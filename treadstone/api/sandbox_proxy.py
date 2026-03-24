@@ -9,10 +9,9 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from treadstone.api.deps import get_current_sandbox_token_user
+from treadstone.api.deps import get_current_data_plane_user
 from treadstone.core.database import get_session
 from treadstone.core.errors import (
-    ForbiddenError,
     SandboxNotFoundError,
     SandboxNotReadyError,
     SandboxUnreachableError,
@@ -30,13 +29,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/sandboxes", tags=["sandbox-proxy"])
 
 
-def _check_sandbox_token_scope(request: Request, sandbox_id: str) -> None:
-    """If authenticated via Sandbox Token, enforce that it matches the target sandbox."""
-    payload = getattr(request.state, "sandbox_token_payload", None)
-    if payload and payload["sandbox_id"] != sandbox_id:
-        raise ForbiddenError("Sandbox Token scope mismatch: token is for a different sandbox")
-
-
 @router.api_route(
     "/{sandbox_id}/proxy/{path:path}",
     methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
@@ -46,11 +38,9 @@ async def http_proxy(
     request: Request,
     sandbox_id: str,
     path: str,
-    user: User = Depends(get_current_sandbox_token_user),
+    user: User = Depends(get_current_data_plane_user),
     session: AsyncSession = Depends(get_session),
 ) -> StreamingResponse:
-    _check_sandbox_token_scope(request, sandbox_id)
-
     result = await session.execute(select(Sandbox).where(Sandbox.id == sandbox_id, Sandbox.owner_id == user.id))
     sandbox = result.scalar_one_or_none()
     if sandbox is None:

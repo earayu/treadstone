@@ -147,10 +147,6 @@ treadstone sb get <sandbox-id>
 treadstone sb start <sandbox-id>
 treadstone sb stop <sandbox-id>
 treadstone sb delete <sandbox-id>
-treadstone sb token <sandbox-id>                    # Get an access token
-treadstone sb token <sandbox-id> --expires-in 7200  # Custom TTL
-```
-
 ### `templates`
 
 List available sandbox templates.
@@ -166,7 +162,9 @@ Manage long-lived API keys.
 ```bash
 treadstone api-keys create --name ci-bot
 treadstone api-keys create --name temp --expires-in 86400  # 24h
+treadstone api-keys create --no-control-plane --data-plane selected --sandbox-id sb123
 treadstone api-keys list
+treadstone api-keys update <key-id> --data-plane none
 treadstone api-keys delete <key-id>
 ```
 

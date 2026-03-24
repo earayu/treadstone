@@ -8,18 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from treadstone.api.deps import get_current_control_plane_user
 from treadstone.api.schemas import (
     CreateSandboxRequest,
-    CreateSandboxTokenRequest,
     SandboxDetailResponse,
     SandboxListResponse,
     SandboxResponse,
-    SandboxTokenResponse,
 )
 from treadstone.config import settings
 from treadstone.core.database import get_session
 from treadstone.core.errors import SandboxNotFoundError, ValidationError
 from treadstone.models.user import User
 from treadstone.services.sandbox_service import SandboxService
-from treadstone.services.sandbox_token import create_sandbox_token
 
 router = APIRouter(prefix="/v1/sandboxes", tags=["sandboxes"])
 
@@ -186,23 +183,3 @@ async def stop_sandbox(
     service = SandboxService(session=session)
     sandbox = await service.stop(sandbox_id=sandbox_id, owner_id=user.id)
     return _to_detail(sandbox, str(request.base_url))
-
-
-@router.post("/{sandbox_id}/token", status_code=status.HTTP_201_CREATED, response_model=SandboxTokenResponse)
-async def create_sandbox_token_endpoint(
-    sandbox_id: str,
-    body: CreateSandboxTokenRequest,
-    user: User = Depends(get_current_control_plane_user),
-    session: AsyncSession = Depends(get_session),
-):
-    service = SandboxService(session=session)
-    sandbox = await service.get(sandbox_id=sandbox_id, owner_id=user.id)
-    if sandbox is None:
-        raise SandboxNotFoundError(sandbox_id)
-
-    token, expires_at = create_sandbox_token(
-        sandbox_id=sandbox.id,
-        user_id=user.id,
-        expires_in=body.expires_in,
-    )
-    return {"token": token, "sandbox_id": sandbox.id, "expires_at": expires_at}

@@ -162,23 +162,3 @@ def stop_sandbox(ctx: click.Context, sandbox_id: str) -> None:
         print_json(data)
     else:
         click.echo(f"Sandbox {sandbox_id} stopping.")
-
-
-@sandboxes.command("token")
-@click.argument("sandbox_id")
-@click.option("--expires-in", default=3600, type=int, help="Token lifetime in seconds.")
-@click.pass_context
-def create_token(ctx: click.Context, sandbox_id: str, expires_in: int) -> None:
-    """Create a short-lived access token for a sandbox.
-
-    The token can be used to connect to the sandbox directly (e.g. via
-    WebSocket) without needing the main API key.
-    """
-    client = require_auth(ctx)
-    resp = client.post(f"/v1/sandboxes/{sandbox_id}/token", json={"expires_in": expires_in})
-    handle_error(resp)
-    data = resp.json()
-    if is_json_mode(ctx):
-        print_json(data)
-    else:
-        print_detail(data, title="Sandbox Token")

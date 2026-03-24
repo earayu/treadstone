@@ -6,6 +6,7 @@ from typing import Any, TypeVar
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
+from ..models.role import Role
 from ..types import UNSET, Unset
 
 T = TypeVar("T", bound="InviteRequest")
@@ -16,17 +17,19 @@ class InviteRequest:
     """
     Attributes:
         email (str):
-        role (str | Unset):  Default: 'ro'.
+        role (Role | Unset):
     """
 
     email: str
-    role: str | Unset = "ro"
+    role: Role | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         email = self.email
 
-        role = self.role
+        role: str | Unset = UNSET
+        if not isinstance(self.role, Unset):
+            role = self.role.value
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
@@ -45,7 +48,12 @@ class InviteRequest:
         d = dict(src_dict)
         email = d.pop("email")
 
-        role = d.pop("role", UNSET)
+        _role = d.pop("role", UNSET)
+        role: Role | Unset
+        if isinstance(_role, Unset):
+            role = UNSET
+        else:
+            role = Role(_role)
 
         invite_request = cls(
             email=email,
