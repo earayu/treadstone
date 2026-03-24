@@ -205,6 +205,10 @@ treadstone --json sandboxes web enable <sandbox-id>
 treadstone --json api-keys list
 ```
 
+`treadstone sandboxes web enable <sandbox-id>` is idempotent: it returns the
+current active browser hand-off URL when one already exists. If you need a new
+hand-off URL, disable web access first and then enable it again.
+
 ## Error handling
 
 The CLI displays user-friendly error messages instead of stack traces:
