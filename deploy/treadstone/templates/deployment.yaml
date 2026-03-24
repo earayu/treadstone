@@ -24,6 +24,15 @@ spec:
             - name: http
               containerPort: 8000
               protocol: TCP
+          env:
+            - name: TREADSTONE_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: TREADSTONE_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
           envFrom:
             {{- if .Values.envSecretRef }}
             - secretRef:

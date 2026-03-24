@@ -1,6 +1,7 @@
 import asyncio
 import logging
-from contextlib import asynccontextmanager
+import os
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -34,11 +35,51 @@ async def lifespan(app: FastAPI):
     from treadstone.core.database import async_session
     from treadstone.services.k8s_client import get_k8s_client
     from treadstone.services.k8s_sync import start_sync_loop
+    from treadstone.services.leader_election import K8sLeaseStore, LeaderElector
+    from treadstone.services.sync_supervisor import LeaderControlledSyncSupervisor
 
+    if settings.leader_election_enabled:
+        holder_identity = settings.pod_name or os.getenv("HOSTNAME") or "treadstone-api"
+        lease_namespace = settings.pod_namespace or settings.sandbox_namespace
+        elector = LeaderElector(
+            lease_store=K8sLeaseStore(),
+            namespace=lease_namespace,
+            lease_name=settings.leader_election_lease_name,
+            holder_identity=holder_identity,
+            lease_duration_seconds=settings.leader_election_lease_duration_seconds,
+            renew_interval_seconds=settings.leader_election_renew_interval_seconds,
+            retry_interval_seconds=settings.leader_election_retry_interval_seconds,
+        )
+        supervisor = LeaderControlledSyncSupervisor(
+            elector=elector,
+            sync_loop_factory=lambda: start_sync_loop(settings.sandbox_namespace, get_k8s_client(), async_session),
+        )
+        logger.info(
+            "Leader election enabled for K8s sync loop (lease=%s, namespace=%s, holder=%s)",
+            settings.leader_election_lease_name,
+            lease_namespace,
+            holder_identity,
+        )
+        sync_task = asyncio.create_task(supervisor.run())
+        try:
+            yield
+        finally:
+            await supervisor.shutdown()
+            sync_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await sync_task
+            await close_http_client()
+        return
+
+    logger.info("Leader election disabled; starting K8s sync loop directly")
     sync_task = asyncio.create_task(start_sync_loop(settings.sandbox_namespace, get_k8s_client(), async_session))
-    yield
-    sync_task.cancel()
-    await close_http_client()
+    try:
+        yield
+    finally:
+        sync_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await sync_task
+        await close_http_client()
 
 
 logging.basicConfig(level=logging.DEBUG if settings.debug else logging.WARNING)
