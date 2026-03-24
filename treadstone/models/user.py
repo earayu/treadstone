@@ -58,7 +58,10 @@ class Invitation(Base):
     role: Mapped[str] = mapped_column(String(16), nullable=False, default=Role.RO.value)
 
     def is_valid(self) -> bool:
-        return not self.is_used and utc_now() < self.expires_at
+        expires_at = self.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=UTC)
+        return not self.is_used and utc_now() < expires_at
 
     async def use(self, session) -> None:
         self.is_used = True

@@ -49,6 +49,7 @@ jobs:
         run: make gen-openapi
         env:
           TREADSTONE_DATABASE_URL: "postgresql+asyncpg://fake:fake@localhost/fake?sslmode=require"
+          TREADSTONE_JWT_SECRET: "ci-jwt-secret-for-openapi-export-1234"
 
   build:
     runs-on: ubuntu-latest

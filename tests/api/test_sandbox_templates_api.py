@@ -50,10 +50,11 @@ async def auth_client(db_session):
         yield client
 
 
-async def test_list_templates_requires_auth(db_session):
+async def test_list_templates_is_public(db_session):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.get("/v1/sandbox-templates")
-    assert resp.status_code == 401
+    assert resp.status_code == 200
+    assert len(resp.json()["items"]) == 5
 
 
 async def test_list_templates_returns_items(auth_client):

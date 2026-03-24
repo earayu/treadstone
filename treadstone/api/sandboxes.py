@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from treadstone.api.deps import get_current_user
+from treadstone.api.deps import get_current_control_plane_user
 from treadstone.api.schemas import (
     CreateSandboxRequest,
     CreateSandboxTokenRequest,
@@ -16,7 +16,7 @@ from treadstone.api.schemas import (
 )
 from treadstone.config import settings
 from treadstone.core.database import get_session
-from treadstone.core.errors import ForbiddenError, SandboxNotFoundError
+from treadstone.core.errors import SandboxNotFoundError, ValidationError
 from treadstone.models.user import User
 from treadstone.services.sandbox_service import SandboxService
 from treadstone.services.sandbox_token import create_sandbox_token
@@ -88,11 +88,23 @@ def _to_detail(sb, base_url: str) -> dict:
     return data
 
 
+def _parse_label_filters(labels: list[str]) -> dict[str, str]:
+    parsed: dict[str, str] = {}
+    for item in labels:
+        if ":" not in item:
+            raise ValidationError("Each label filter must use key:value format.")
+        key, value = item.split(":", 1)
+        if not key or not value:
+            raise ValidationError("Each label filter must use key:value format.")
+        parsed[key] = value
+    return parsed
+
+
 @router.post("", status_code=status.HTTP_202_ACCEPTED, response_model=SandboxResponse)
 async def create_sandbox(
     request: Request,
     body: CreateSandboxRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
 ):
     service = SandboxService(session=session)
@@ -104,7 +116,7 @@ async def create_sandbox(
         auto_stop_interval=body.auto_stop_interval,
         auto_delete_interval=body.auto_delete_interval,
         persist=body.persist,
-        storage_size=body.storage_size,
+        storage_size=body.storage_size or "10Gi",
     )
     return _to_response(sandbox, str(request.base_url))
 
@@ -112,17 +124,13 @@ async def create_sandbox(
 @router.get("", response_model=SandboxListResponse)
 async def list_sandboxes(
     request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
     label: list[str] = Query(default=[]),
     limit: int = Query(default=100, ge=1, le=1000, description="Maximum number of items to return."),
     offset: int = Query(default=0, ge=0, description="Number of items to skip."),
 ):
-    labels_dict: dict[str, str] = {}
-    for lbl in label:
-        if ":" in lbl:
-            k, v = lbl.split(":", 1)
-            labels_dict[k] = v
+    labels_dict = _parse_label_filters(label)
 
     service = SandboxService(session=session)
     sandboxes = await service.list_by_owner(owner_id=user.id, labels=labels_dict or None)
@@ -136,13 +144,9 @@ async def list_sandboxes(
 async def get_sandbox(
     request: Request,
     sandbox_id: str,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
 ):
-    payload = getattr(request.state, "sandbox_token_payload", None)
-    if payload and payload["sandbox_id"] != sandbox_id:
-        raise ForbiddenError("Sandbox Token scope mismatch: token is for a different sandbox")
-
     service = SandboxService(session=session)
     sandbox = await service.get(sandbox_id=sandbox_id, owner_id=user.id)
     if sandbox is None:
@@ -153,7 +157,7 @@ async def get_sandbox(
 @router.delete("/{sandbox_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_sandbox(
     sandbox_id: str,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
 ):
     service = SandboxService(session=session)
@@ -164,7 +168,7 @@ async def delete_sandbox(
 async def start_sandbox(
     request: Request,
     sandbox_id: str,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
 ):
     service = SandboxService(session=session)
@@ -176,7 +180,7 @@ async def start_sandbox(
 async def stop_sandbox(
     request: Request,
     sandbox_id: str,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
 ):
     service = SandboxService(session=session)
@@ -188,7 +192,7 @@ async def stop_sandbox(
 async def create_sandbox_token_endpoint(
     sandbox_id: str,
     body: CreateSandboxTokenRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
 ):
     service = SandboxService(session=session)

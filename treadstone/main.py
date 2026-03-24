@@ -15,7 +15,7 @@ from treadstone.api.sandbox_proxy import router as sandbox_proxy_router
 from treadstone.api.sandbox_templates import router as sandbox_templates_router
 from treadstone.api.sandboxes import router as sandboxes_router
 from treadstone.api.schemas import HealthResponse
-from treadstone.config import settings
+from treadstone.config import settings, validate_runtime_settings
 from treadstone.core.errors import TreadstoneError
 from treadstone.core.users import auth_backend, fastapi_users, github_oauth_client, google_oauth_client
 from treadstone.middleware.sandbox_subdomain import SandboxSubdomainMiddleware
@@ -83,6 +83,8 @@ async def lifespan(app: FastAPI):
 
 
 logging.basicConfig(level=logging.DEBUG if settings.debug else logging.WARNING)
+
+validate_runtime_settings(settings)
 
 app = FastAPI(
     title=settings.app_name,

@@ -12,6 +12,7 @@ from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
 from treadstone.models.user import OAuthAccount, User
+from treadstone.services.sandbox_token import create_sandbox_token
 
 _test_session_factory = None
 
@@ -67,7 +68,15 @@ async def test_create_sandbox_token(auth_client):
     assert "expires_at" in data
 
 
-async def test_sandbox_token_can_access_sandbox_detail(auth_client):
+async def test_create_sandbox_token_invalid_expiration_returns_422(auth_client):
+    create_resp = await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "token-exp-sb"})
+    sandbox_id = create_resp.json()["id"]
+    resp = await auth_client.post(f"/v1/sandboxes/{sandbox_id}/token", json={"expires_in": 0})
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "validation_error"
+
+
+async def test_sandbox_token_cannot_access_control_plane(auth_client):
     create_resp = await auth_client.post(
         "/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "token-detail-sb"}
     )
@@ -80,8 +89,27 @@ async def test_sandbox_token_can_access_sandbox_detail(auth_client):
             f"/v1/sandboxes/{sandbox_id}",
             headers={"Authorization": f"Bearer {token}"},
         )
-    assert resp.status_code == 200
-    assert resp.json()["id"] == sandbox_id
+    assert resp.status_code == 401
+    assert resp.json()["error"]["code"] == "auth_invalid"
+
+
+async def test_sandbox_token_cannot_mint_new_tokens(auth_client):
+    create_resp = await auth_client.post(
+        "/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "token-mint-sb"}
+    )
+    sandbox_id = create_resp.json()["id"]
+    token_resp = await auth_client.post(f"/v1/sandboxes/{sandbox_id}/token", json={"expires_in": 3600})
+    token = token_resp.json()["token"]
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post(
+            f"/v1/sandboxes/{sandbox_id}/token",
+            json={"expires_in": 3600},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert resp.status_code == 401
+    assert resp.json()["error"]["code"] == "auth_invalid"
 
 
 async def test_sandbox_token_can_proxy(auth_client):
@@ -126,3 +154,29 @@ async def test_sandbox_token_can_proxy(auth_client):
 async def test_sandbox_token_nonexistent_sandbox_returns_404(auth_client):
     resp = await auth_client.post("/v1/sandboxes/sb-nonexistent1234/token", json={"expires_in": 3600})
     assert resp.status_code == 404
+
+
+async def test_sandbox_token_for_nonexistent_target_returns_404(auth_client):
+    token, _ = create_sandbox_token("sb-nonexistent1234", "user" + "1" * 16, expires_in=3600)
+
+    async with _test_session_factory() as session:
+        user = User(
+            id="user" + "1" * 16,
+            email="nonexistent-target@test.com",
+            hashed_password="hashed",
+            is_active=True,
+            is_superuser=False,
+            is_verified=True,
+            role="ro",
+        )
+        session.add(user)
+        await session.commit()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get(
+            "/v1/sandboxes/sb-nonexistent1234/proxy/healthz",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "sandbox_not_found"

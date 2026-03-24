@@ -12,6 +12,7 @@ from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
 from treadstone.models.user import OAuthAccount, User
+from treadstone.services.sandbox_token import create_sandbox_token
 
 _test_session_factory = None
 
@@ -80,7 +81,12 @@ async def test_proxy_without_auth_returns_401(db_session):
 
 
 async def test_proxy_nonexistent_sandbox_returns_404(auth_client):
-    resp = await auth_client.get("/v1/sandboxes/sb-nonexistent1234/proxy/healthz")
+    user_resp = await auth_client.get("/v1/auth/user")
+    token, _ = create_sandbox_token("sb-nonexistent1234", user_resp.json()["id"], expires_in=3600)
+    resp = await auth_client.get(
+        "/v1/sandboxes/sb-nonexistent1234/proxy/healthz",
+        headers={"Authorization": f"Bearer {token}"},
+    )
     assert resp.status_code == 404
     assert resp.json()["error"]["code"] == "sandbox_not_found"
 
@@ -101,7 +107,13 @@ async def test_proxy_stopped_sandbox_returns_409(auth_client):
         session.add(sb)
         await session.commit()
 
-    resp = await auth_client.get(f"/v1/sandboxes/{sandbox_id}/proxy/healthz")
+    token_resp = await auth_client.post(f"/v1/sandboxes/{sandbox_id}/token", json={"expires_in": 3600})
+    token = token_resp.json()["token"]
+
+    resp = await auth_client.get(
+        f"/v1/sandboxes/{sandbox_id}/proxy/healthz",
+        headers={"Authorization": f"Bearer {token}"},
+    )
     assert resp.status_code == 409
     assert resp.json()["error"]["code"] == "sandbox_not_ready"
 
@@ -125,7 +137,67 @@ async def test_proxy_success_for_ready_sandbox(auth_client):
         body=b'{"ok": true}',
         headers={"content-type": "application/json"},
     )
+    token_resp = await auth_client.post(f"/v1/sandboxes/{sandbox_id}/token", json={"expires_in": 3600})
+    token = token_resp.json()["token"]
+
     with patch("treadstone.services.sandbox_proxy._http_client", mock_client):
-        resp = await auth_client.get(f"/v1/sandboxes/{sandbox_id}/proxy/healthz")
+        resp = await auth_client.get(
+            f"/v1/sandboxes/{sandbox_id}/proxy/healthz",
+            headers={"Authorization": f"Bearer {token}"},
+        )
     assert resp.status_code == 200
     assert resp.json() == {"ok": True}
+
+
+async def test_proxy_cookie_auth_returns_401_auth_invalid(auth_client):
+    create_resp = await auth_client.post(
+        "/v1/sandboxes",
+        json={"template": "aio-sandbox-tiny", "name": "proxy-cookie-sb"},
+    )
+    sandbox_id = create_resp.json()["id"]
+    resp = await auth_client.get(f"/v1/sandboxes/{sandbox_id}/proxy/healthz")
+    assert resp.status_code == 401
+    assert resp.json()["error"]["code"] == "auth_invalid"
+
+
+async def test_proxy_api_key_auth_returns_401_auth_invalid(auth_client):
+    create_resp = await auth_client.post(
+        "/v1/sandboxes",
+        json={"template": "aio-sandbox-tiny", "name": "proxy-api-key-sb"},
+    )
+    sandbox_id = create_resp.json()["id"]
+    key_resp = await auth_client.post("/v1/auth/api-keys", json={"name": "proxy-key"})
+    api_key = key_resp.json()["key"]
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get(
+            f"/v1/sandboxes/{sandbox_id}/proxy/healthz",
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+    assert resp.status_code == 401
+    assert resp.json()["error"]["code"] == "auth_invalid"
+
+
+async def test_proxy_scope_mismatch_returns_403(auth_client):
+    first_resp = await auth_client.post(
+        "/v1/sandboxes",
+        json={"template": "aio-sandbox-tiny", "name": "proxy-scope-one"},
+    )
+    second_resp = await auth_client.post(
+        "/v1/sandboxes",
+        json={"template": "aio-sandbox-tiny", "name": "proxy-scope-two"},
+    )
+    first_id = first_resp.json()["id"]
+    second_id = second_resp.json()["id"]
+
+    token_resp = await auth_client.post(f"/v1/sandboxes/{first_id}/token", json={"expires_in": 3600})
+    token = token_resp.json()["token"]
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get(
+            f"/v1/sandboxes/{second_id}/proxy/healthz",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert resp.status_code == 403
+    assert resp.json()["error"]["code"] == "forbidden"

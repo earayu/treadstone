@@ -1,10 +1,4 @@
-"""
-Sandbox proxy API router — transparent HTTP reverse proxy to sandbox pods.
-
-Requires authentication and verifies sandbox ownership + ready status before proxying.
-
-  /v1/sandboxes/{sandbox_id}/proxy/{path}
-"""
+"""Sandbox proxy API router — transparent HTTP reverse proxy to sandbox pods."""
 
 from __future__ import annotations
 
@@ -15,7 +9,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from treadstone.api.deps import get_current_user
+from treadstone.api.deps import get_current_sandbox_token_user
 from treadstone.core.database import get_session
 from treadstone.core.errors import (
     ForbiddenError,
@@ -52,7 +46,7 @@ async def http_proxy(
     request: Request,
     sandbox_id: str,
     path: str,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_sandbox_token_user),
     session: AsyncSession = Depends(get_session),
 ) -> StreamingResponse:
     _check_sandbox_token_scope(request, sandbox_id)

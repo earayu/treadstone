@@ -79,6 +79,19 @@ client = Client(base_url="http://localhost:8000")
 # See sdk/python/ for the full generated SDK
 ```
 
+## Authentication Model
+
+Treadstone currently uses three credential types with explicit boundaries:
+
+- **Session Cookie** and **API Key** authenticate the **control plane** APIs
+  (account management, sandbox CRUD, template catalog, and sandbox token minting).
+- **Sandbox Token** is a short-lived JWT scoped to a single sandbox and is used
+  only for **data plane** access such as the sandbox HTTP proxy.
+
+This is an intentional v1 tradeoff: API keys currently have the same control
+plane capabilities as cookie sessions. Fine-grained API key scopes will be
+added in a future release.
+
 ## Sandbox Templates
 
 Treadstone ships with five built-in size tiers — all powered by the same

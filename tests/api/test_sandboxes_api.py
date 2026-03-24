@@ -128,6 +128,38 @@ class TestCreateSandbox:
         assert resp.status_code == 202
         assert resp.json()["name"] == name
 
+    async def test_create_with_storage_size_without_persist_returns_422(self, auth_client):
+        resp = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": "bad-storage", "storage_size": "5Gi"},
+        )
+        assert resp.status_code == 422
+        assert resp.json()["error"]["code"] == "validation_error"
+
+    async def test_create_with_invalid_storage_size_returns_422(self, auth_client):
+        resp = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": "bad-storage-size", "persist": True, "storage_size": "5GB"},
+        )
+        assert resp.status_code == 422
+        assert resp.json()["error"]["code"] == "validation_error"
+
+    async def test_create_with_invalid_auto_stop_interval_returns_422(self, auth_client):
+        resp = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": "bad-stop", "auto_stop_interval": 0},
+        )
+        assert resp.status_code == 422
+        assert resp.json()["error"]["code"] == "validation_error"
+
+    async def test_create_with_invalid_auto_delete_interval_returns_422(self, auth_client):
+        resp = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": "bad-delete", "auto_delete_interval": 0},
+        )
+        assert resp.status_code == 422
+        assert resp.json()["error"]["code"] == "validation_error"
+
 
 class TestListSandboxes:
     async def test_list_returns_own_sandboxes(self, auth_client):
@@ -153,6 +185,11 @@ class TestListSandboxes:
         assert resp.status_code == 200
         items = resp.json()["items"]
         assert all(item.get("labels", {}).get("env") == "dev" for item in items)
+
+    async def test_list_with_invalid_label_filter_returns_422(self, auth_client):
+        resp = await auth_client.get("/v1/sandboxes?label=invalid")
+        assert resp.status_code == 422
+        assert resp.json()["error"]["code"] == "validation_error"
 
 
 class TestGetSandbox:

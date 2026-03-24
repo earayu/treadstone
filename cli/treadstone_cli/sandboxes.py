@@ -66,7 +66,9 @@ def create(
             raise SystemExit(1)
         k, v = lbl.split(":", 1)
         labels[k] = v
-    body: dict = {"template": template, "labels": labels, "persist": persist, "storage_size": storage_size}
+    body: dict = {"template": template, "labels": labels, "persist": persist}
+    if persist:
+        body["storage_size"] = storage_size
     if name:
         body["name"] = name
     resp = client.post("/v1/sandboxes", json=body)
