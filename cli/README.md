@@ -24,28 +24,31 @@ sudo mv treadstone /usr/local/bin/
 
 ```bash
 # Check that the server is reachable
-treadstone health
+treadstone system health
 
 # Register an account (first time only)
 treadstone auth register
 
-# Log in
+# Log in and save a local session for the active base URL
 treadstone auth login
 
-# Create an API key for non-interactive use
-treadstone api-keys create --name my-key
-# Save the key — it is shown only once
-
-# Store the key in config so you don't have to pass it every time
-treadstone config set api_key ts_live_xxxxxxxxxxxx
+# Create an API key for non-interactive use and save it locally
+treadstone api-keys create --name my-key --save
 
 # Create a sandbox
-treadstone sandboxes create --template default --name my-sandbox
+treadstone sandboxes create --template aio-sandbox-tiny --name my-sandbox
 # Name rules: 1-55 chars, lowercase letters/numbers/hyphens only,
 # and must start/end with a letter or number.
 
 # List sandboxes
-treadstone sb list
+treadstone sandboxes list
+
+# Create a browser hand-off URL for a human
+treadstone sandboxes web enable <sandbox-id>
+
+# Print the AI-oriented usage guide
+treadstone guide agent
+treadstone --skills
 ```
 
 ## Configuration
@@ -57,6 +60,9 @@ The CLI reads configuration from three sources, in order of priority:
 | 1 (highest) | CLI flags | `--base-url https://... --api-key ts_...` |
 | 2 | Environment variables | `TREADSTONE_BASE_URL`, `TREADSTONE_API_KEY` |
 | 3 (lowest) | Config file | `~/.config/treadstone/config.toml` |
+
+Saved login sessions are stored separately in `~/.config/treadstone/session.json`
+and are only used when no API key is configured for the active base URL.
 
 ### Config file
 
@@ -102,17 +108,18 @@ treadstone config path
 | `--base-url URL` | Override the server URL |
 | `--api-key KEY` | Override the API key |
 | `--json` | Output responses as JSON (useful for scripting) |
+| `--skills` | Print the built-in AI usage guide |
 | `--version` | Show CLI version |
 | `--help` | Show help message |
 
 ## Commands
 
-### `health`
+### `system`
 
-Check if the server is reachable and healthy.
+Inspect server reachability and other platform-wide state.
 
 ```bash
-treadstone health
+treadstone system health
 # Server is healthy
 ```
 
@@ -122,12 +129,12 @@ Authentication and user management.
 
 ```bash
 treadstone auth register                 # Create a new account
-treadstone auth login                    # Log in interactively
-treadstone auth logout                   # Log out
-treadstone auth whoami                   # Show current user info
+treadstone auth login                    # Log in and save a local session
+treadstone auth logout                   # Clear the saved session for this base URL
+treadstone auth whoami                   # Show the current user via API key or session
 treadstone auth change-password          # Change your password
 treadstone auth invite --email user@example.com   # Invite a user (admin)
-treadstone auth users                    # List all users (admin)
+treadstone auth users                    # Admins see all users; non-admins see themselves
 treadstone auth delete-user <user-id>    # Delete a user (admin)
 ```
 
@@ -139,14 +146,17 @@ Custom sandbox names must be 1-55 characters of lowercase letters, numbers, or h
 with a letter or number. This keeps browser URLs like `sandbox-{name}.treadstone-ai.dev` within DNS label limits.
 
 ```bash
-treadstone sb create --template default --name my-box
-treadstone sb create --template python --label env:dev --persist
-treadstone sb list
-treadstone sb list --label env:prod --limit 10
-treadstone sb get <sandbox-id>
-treadstone sb start <sandbox-id>
-treadstone sb stop <sandbox-id>
-treadstone sb delete <sandbox-id>
+treadstone sandboxes create --template aio-sandbox-tiny --name my-box
+treadstone sandboxes create --template aio-sandbox-medium --label env:dev --persist
+treadstone sandboxes list
+treadstone sandboxes list --label env:prod --label team:agent --limit 10
+treadstone sandboxes get <sandbox-id>
+treadstone sandboxes start <sandbox-id>
+treadstone sandboxes stop <sandbox-id>
+treadstone sandboxes delete <sandbox-id>
+treadstone sandboxes web enable <sandbox-id>
+treadstone sandboxes web status <sandbox-id>
+treadstone sandboxes web disable <sandbox-id>
 ```
 
 ### `templates`
@@ -163,6 +173,7 @@ Manage long-lived API keys.
 
 ```bash
 treadstone api-keys create --name ci-bot
+treadstone api-keys create --name ci-bot --save
 treadstone api-keys create --name temp --expires-in 86400  # 24h
 treadstone api-keys create --no-control-plane --data-plane selected --sandbox-id sb123
 treadstone api-keys list
@@ -188,8 +199,9 @@ treadstone config path
 Pass `--json` before any command to get machine-readable JSON output:
 
 ```bash
-treadstone --json sb list
-treadstone --json health
+treadstone --json sandboxes list
+treadstone --json system health
+treadstone --json sandboxes web enable <sandbox-id>
 treadstone --json api-keys list
 ```
 
@@ -212,6 +224,6 @@ Common errors:
 |-------|-------|-----|
 | Connection refused | Server not running or wrong URL | Check `treadstone config get base_url` |
 | Request timed out | Server slow or unreachable | Retry, or check network |
-| No API key configured | Missing authentication | `treadstone config set api_key <key>` |
+| No authentication configured | Missing API key and no saved session | `treadstone auth login` or `treadstone config set api_key <key>` |
 | HTTP 401 | Invalid or expired API key | Create a new key with `treadstone api-keys create` |
-| HTTP 404 | Resource not found | Verify the ID is correct |
+| HTTP 404 | Resource not found | Verify the resource ID is correct; sandbox names are not accepted where `SANDBOX_ID` is required |

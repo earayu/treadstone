@@ -3,9 +3,9 @@
 **Agent-Native sandbox.** Run code, build projects, deploy environments.
 
 > [!NOTE]
-> Treadstone is in early development. The vision and CLI examples below reflect
-> the direction we are building toward — not all features are implemented yet.
-> See [Status](#status) for what works today.
+> Treadstone is in early development. The CLI commands in this README reflect
+> what works today. Future ergonomic commands are called out explicitly when
+> they are still part of the product vision.
 
 ## Why Treadstone?
 
@@ -37,13 +37,17 @@ pip install git+https://github.com/earayu/treadstone.git
 ### CLI
 
 ```bash
-# Register and get an API key
+# Check that the server is reachable
+treadstone system health
+
+# Register and log in
 treadstone auth register --email you@example.com --password YourPass123!
 treadstone auth login --email you@example.com --password YourPass123!
-treadstone api-keys create --name my-key
 
-# Set your API key
-export TREADSTONE_API_KEY="sk-..."
+# Create and save an API key for non-interactive use
+treadstone api-keys create --name my-key --save
+
+# Optional: override the server URL explicitly
 export TREADSTONE_BASE_URL="http://localhost:8000"
 
 # List available templates
@@ -56,6 +60,9 @@ treadstone sandboxes create --template aio-sandbox-tiny --name my-sandbox
 treadstone sandboxes list
 treadstone sandboxes get <sandbox_id>
 
+# Generate a browser hand-off URL for a human
+treadstone sandboxes web enable <sandbox_id>
+
 # Create a persistent sandbox with storage
 treadstone sandboxes create --template aio-sandbox-large --persist --storage-size 20Gi
 
@@ -63,6 +70,10 @@ treadstone sandboxes create --template aio-sandbox-large --persist --storage-siz
 treadstone sandboxes stop <sandbox_id>
 treadstone sandboxes start <sandbox_id>
 treadstone sandboxes delete <sandbox_id>
+
+# Print the built-in AI usage guide
+treadstone guide agent
+treadstone --skills
 
 # All commands support JSON output for automation
 treadstone --json sandboxes list
@@ -83,9 +94,14 @@ client = Client(base_url="http://localhost:8000")
 
 Treadstone currently uses two credential types:
 
-- **Session Cookie** authenticates browser-oriented control plane flows.
+- **Session Cookie** authenticates browser-oriented control plane flows. In the
+  CLI, `treadstone auth login` saves the session locally for the active base
+  URL.
 - **API Key** authenticates programmatic access across both the **control plane**
   and **data plane**.
+
+For protected CLI commands, API keys take precedence. If no API key is set, the
+CLI falls back to the saved login session for the active base URL.
 
 API keys default to full user access, but can now be narrowed with coarse
 scopes:
@@ -111,11 +127,20 @@ maintain, no marketplace to curate.
 | `aio-sandbox-large` | 2 cores | 4 Gi | Full-featured + browser automation |
 | `aio-sandbox-xlarge` | 4 cores | 8 Gi | Heavy workloads |
 
-```bash
-# Quick code execution (ephemeral, WarmPool-accelerated)
-treadstone run --template aio-sandbox-tiny "import math; print(math.pi)"
+Current CLI examples:
 
-# Full development environment with persistent storage
+```bash
+# Lightweight sandbox
+treadstone sandboxes create --template aio-sandbox-tiny --name quick-demo
+
+# Persistent development environment
+treadstone sandboxes create --template aio-sandbox-large --name dev-box --persist --storage-size 20Gi
+```
+
+Future ergonomic goal (not implemented yet):
+
+```bash
+treadstone run --template aio-sandbox-tiny "import math; print(math.pi)"
 treadstone create --template aio-sandbox-large --persist --storage 20Gi
 ```
 

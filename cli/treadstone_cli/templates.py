@@ -13,6 +13,7 @@ def templates() -> None:
     """Manage sandbox templates.
 
     Templates define the runtime environment (image, CPU, memory) for sandboxes.
+    List templates before creating a sandbox when you need a valid template name.
 
     \b
     Examples:
