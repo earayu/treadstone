@@ -7,7 +7,7 @@ Command-line interface for the Treadstone sandbox service.
 ### From PyPI
 
 ```bash
-pip install treadstone
+pip install treadstone-cli
 ```
 
 ### Pre-built binary
@@ -147,6 +147,8 @@ treadstone sb get <sandbox-id>
 treadstone sb start <sandbox-id>
 treadstone sb stop <sandbox-id>
 treadstone sb delete <sandbox-id>
+```
+
 ### `templates`
 
 List available sandbox templates.
