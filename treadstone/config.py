@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     app_name: str = "treadstone"
     debug: bool = False
     database_url: str = "postgresql+asyncpg://user:pass@ep-xxx.us-east-2.aws.neon.tech/treadstone?sslmode=require"
+    # Public API origin used in browser bootstrap redirects and public sandbox Web UI flows.
     api_base_url: str = "http://localhost:8000"
 
     # Auth

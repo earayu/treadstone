@@ -1,11 +1,22 @@
 import copy
 from datetime import UTC, datetime, timedelta
 
-from treadstone.services.leader_election import K8sLeaseConflictError, LeaderElector, LeadershipState
+from treadstone.services.leader_election import (
+    K8sLeaseConflictError,
+    LeaderElector,
+    LeadershipState,
+    format_lease_time,
+)
 
 
 def _ts(dt: datetime) -> str:
-    return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
+def test_format_lease_time_uses_microseconds():
+    now = datetime(2026, 3, 24, 4, 0, 1, 234567, tzinfo=UTC)
+
+    assert format_lease_time(now) == "2026-03-24T04:00:01.234567Z"
 
 
 class FakeLeaseStore:

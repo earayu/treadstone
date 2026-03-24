@@ -17,6 +17,11 @@ def test_settings_override():
     assert s.debug is True
 
 
+def test_settings_api_base_url_default():
+    s = Settings(_env_file=None, database_url=DB_URL)
+    assert s.api_base_url == "http://localhost:8000"
+
+
 def test_auth_defaults():
     s = Settings(_env_file=None, database_url=DB_URL)
     assert s.auth_type == "cookie"
