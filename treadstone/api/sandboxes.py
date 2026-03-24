@@ -161,6 +161,19 @@ async def _upsert_web_link(
     return link
 
 
+async def _ensure_active_web_link(
+    session: AsyncSession,
+    sandbox,
+    user_id: str,
+    *,
+    ttl_seconds: int = OPEN_LINK_TTL_SECONDS,
+) -> SandboxWebLink:
+    link = await _load_active_web_link(session, sandbox.id)
+    if link is not None:
+        return link
+    return await _upsert_web_link(session, sandbox, user_id, ttl_seconds=ttl_seconds)
+
+
 def _parse_label_filters(labels: list[str]) -> dict[str, str]:
     parsed: dict[str, str] = {}
     for item in labels:
@@ -281,7 +294,7 @@ async def create_sandbox_web_link(
         raise SandboxNotFoundError(sandbox_id)
 
     web_url = _get_web_url(sandbox, str(request.base_url))
-    link = await _upsert_web_link(session, sandbox, user.id)
+    link = await _ensure_active_web_link(session, sandbox, user.id)
     return {
         "web_url": web_url,
         "open_link": build_open_link_url(web_url, link.id),

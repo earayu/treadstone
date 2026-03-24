@@ -189,19 +189,19 @@ class TestSubdomainRouting:
         assert status_resp.json()["enabled"] is True
         assert "open_link" not in status_resp.json()
 
-    async def test_recreating_web_link_invalidates_previous_link(self, auth_client: AsyncClient, monkeypatch):
+    async def test_enabling_existing_web_link_returns_same_link(self, auth_client: AsyncClient, monkeypatch):
         _enable_subdomain(monkeypatch)
         sandbox_id = await _create_ready_sandbox(auth_client)
         first = (await auth_client.post(f"/v1/sandboxes/{sandbox_id}/web-link")).json()["open_link"]
         second = (await auth_client.post(f"/v1/sandboxes/{sandbox_id}/web-link")).json()["open_link"]
 
-        assert first != second
+        assert first == second
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="https://api.localhost") as client:
             first_resp = await client.get(first, follow_redirects=False)
             second_resp = await client.get(second, follow_redirects=False)
 
-        assert first_resp.status_code == 401
+        assert first_resp.status_code == 303
         assert second_resp.status_code == 303
 
     async def test_delete_web_link_revokes_open_link(self, auth_client: AsyncClient, monkeypatch):
@@ -238,7 +238,7 @@ class TestSubdomainRouting:
         assert first_open.status_code == 401
         assert second_open.status_code == 303
 
-    async def test_rotating_web_link_clears_last_used_at(self, auth_client: AsyncClient, monkeypatch):
+    async def test_enabling_existing_web_link_preserves_last_used_at(self, auth_client: AsyncClient, monkeypatch):
         _enable_subdomain(monkeypatch)
         sandbox_id = await _create_ready_sandbox(auth_client)
         first_link = (await auth_client.post(f"/v1/sandboxes/{sandbox_id}/web-link")).json()["open_link"]
@@ -252,9 +252,9 @@ class TestSubdomainRouting:
 
         assert first_status.status_code == 200
         assert first_status.json()["last_used_at"] is not None
-        assert second_link != first_link
+        assert second_link == first_link
         assert second_status.status_code == 200
-        assert second_status.json()["last_used_at"] is None
+        assert second_status.json()["last_used_at"] == first_status.json()["last_used_at"]
 
     async def test_browser_login_page_can_log_in_and_continue(self, auth_client: AsyncClient, monkeypatch):
         _enable_subdomain(monkeypatch)

@@ -244,6 +244,16 @@ class TestGetSandbox:
             "http://sandbox-get-web.sandbox.localhost/_treadstone/open?token=swl"
         )
 
+    async def test_web_enable_returns_same_current_shareable_url_created_with_sandbox(self, auth_client, monkeypatch):
+        _enable_subdomain(monkeypatch)
+        create_resp = await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "get-web"})
+        sandbox_id = create_resp.json()["id"]
+
+        enable_resp = await auth_client.post(f"/v1/sandboxes/{sandbox_id}/web-link")
+
+        assert enable_resp.status_code == 200
+        assert enable_resp.json()["open_link"] == create_resp.json()["urls"]["web"]
+
     async def test_get_nonexistent_returns_404(self, auth_client):
         resp = await auth_client.get("/v1/sandboxes/sb-nonexistent1234")
         assert resp.status_code == 404

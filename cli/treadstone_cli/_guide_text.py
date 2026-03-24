@@ -116,6 +116,7 @@ Useful fields to extract:
 - If a protected command says no authentication is configured, run `treadstone auth login` or provide an API key.
 - If a sandbox command fails with not found, verify the value comes from `sandboxes list`
   and is a sandbox ID rather than the sandbox name.
-- If you need a fresh browser hand-off URL, run `treadstone sandboxes web enable SANDBOX_ID` again.
+- If you need a fresh browser hand-off URL, run `treadstone sandboxes web disable SANDBOX_ID`
+  and then `treadstone sandboxes web enable SANDBOX_ID`.
 - If a machine-readable workflow is hard to follow from human output, rerun the command with `--json`.
 """

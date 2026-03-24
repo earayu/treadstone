@@ -204,7 +204,7 @@ def web() -> None:
 @click.argument("sandbox_id", metavar="SANDBOX_ID")
 @click.pass_context
 def enable_web(ctx: click.Context, sandbox_id: str) -> None:
-    """Enable a browser hand-off URL for a sandbox."""
+    """Ensure a browser hand-off URL exists for a sandbox."""
     client = require_auth(ctx)
     resp = client.post(f"/v1/sandboxes/{sandbox_id}/web-link")
     handle_error(resp)
