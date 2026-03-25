@@ -4,25 +4,34 @@ Command-line interface for the Treadstone sandbox service.
 
 ## Installation
 
-### From PyPI
+### Recommended: release installer
+
+```bash
+curl -fsSL https://github.com/earayu/treadstone/releases/latest/download/install.sh | sh
+```
+
+Windows PowerShell:
+
+```powershell
+irm https://github.com/earayu/treadstone/releases/latest/download/install.ps1 | iex
+```
+
+The installer downloads the correct binary for your platform and verifies checksums when available.
+
+### Alternative: PyPI
 
 ```bash
 pip install treadstone-cli
 ```
 
-### Pre-built binary
-
-Download the latest release from [GitHub Releases](https://github.com/earayu/treadstone/releases). The binary is self-contained and does not require Python.
-
-```bash
-# macOS / Linux
-chmod +x treadstone
-sudo mv treadstone /usr/local/bin/
-```
-
 ## Quick start
 
+### Human workflow
+
 ```bash
+# Optional: point the CLI at your own deployment
+export TREADSTONE_BASE_URL="http://localhost:8000"
+
 # Check that the server is reachable
 treadstone system health
 
@@ -51,13 +60,23 @@ treadstone guide agent
 treadstone --skills
 ```
 
-For automation and AI agents, prefer JSON output and capture the returned sandbox ID:
+### Agent workflow
+
+For automation and AI agents, prefer JSON output and capture the returned sandbox ID from command output.
 
 ```bash
+treadstone --json system health
+treadstone auth register --email agent@example.com --password YourPass123!
+treadstone auth login --email agent@example.com --password YourPass123!
+treadstone --json api-keys create --name automation --save
+
 treadstone --json templates list
 treadstone --json sandboxes create --template aio-sandbox-tiny --name my-sandbox
-treadstone --json sandboxes list
+treadstone --json sandboxes get <sandbox-id>
 treadstone --json sandboxes web enable <sandbox-id>
+
+treadstone guide agent
+treadstone --skills
 ```
 
 Treat `name` as a human-readable label only. Follow-up sandbox commands require
