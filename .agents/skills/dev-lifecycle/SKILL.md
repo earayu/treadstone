@@ -24,7 +24,7 @@ Branch naming: `feat/`, `fix/`, `chore/`, `refactor/`, `docs/`, `test/`.
 
 ## Step 2: TDD Cycle
 
-Repeat per unit of work — keep iterations small.
+Repeat per unit of work — keep iterations small. For docs-only changes, do not invent fake tests; instead verify examples against the source of truth (`Makefile`, CLI help, workflows, or code) and run lightweight checks such as `git diff --check`.
 
 1. **Write a failing test** in the appropriate directory (`tests/unit/`, `tests/api/`, or `tests/integration/`). See the Testing section in `AGENTS.md` for which directory to use.
 
@@ -41,6 +41,15 @@ Repeat per unit of work — keep iterations small.
    ```
 
 5. **Refactor** if needed, re-run `make test` to confirm nothing broke.
+
+### Docs-Only Changes
+
+For `README.md`, `AGENTS.md`, `.agents/skills/*/SKILL.md`, or similar documentation-only work:
+
+- Still use a feature branch and PR
+- Prefer `docs:` commit messages
+- Validate commands and paths against the current repo before editing
+- Run `git diff --check` before shipping
 
 ## Step 3: Ship to Feature Branch
 

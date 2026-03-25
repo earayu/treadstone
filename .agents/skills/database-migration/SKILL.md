@@ -5,10 +5,10 @@ description: Database model design and Alembic migration workflow for Treadstone
 
 # Database Model & Migration Workflow
 
-All schema changes flow through this pipeline — never modify a production database by hand:
+All schema changes flow through this pipeline — never modify a shared database by hand:
 
 ```
-SQLAlchemy model → Alembic autogenerate → review migration → apply to test branch → verify → apply to production
+SQLAlchemy model → Alembic autogenerate → review migration → apply to test branch → verify → apply to target environment
 ```
 
 Quick reference:
@@ -105,6 +105,14 @@ If you skip this, `alembic revision --autogenerate` generates an empty migration
 
 ## Step 3: Write a Test for the Model
 
+Prefer the smallest test that proves the schema change matters:
+
+- `tests/unit/` for model shape / helper logic
+- `tests/integration/` for real DB constraints, indexes, and query behavior
+- `tests/api/` when the schema change is surfaced through an API contract
+
+A lightweight unit test is the minimum; use integration coverage when the migration changes persistence behavior.
+
 ```python
 # tests/unit/test_example_model.py
 from treadstone.models.example import Example
@@ -154,7 +162,7 @@ Open the generated file in `alembic/versions/` and verify:
 Never migrate production directly. Neon branches are instant, copy-on-write clones — use one as a staging environment.
 
 ```
-Production (main branch)
+Shared branch / environment
     └── Test branch (fork, apply migration here first)
 ```
 
@@ -163,15 +171,16 @@ Production (main branch)
    ```bash
    TREADSTONE_DATABASE_URL="<test-branch-url>" make migrate
    ```
-3. Run integration tests:
+3. Run the most relevant verification:
    ```bash
-   make test-all
+   make test-integration
    ```
-4. If tests pass, apply to production:
+   If the change also affects API or unit behavior, run `make test-all`.
+4. If tests pass, apply to the shared target branch / environment:
    ```bash
-   make migrate   # with .env pointing to production
+   make migrate
    ```
-5. If tests fail, fix and retry. Use `make downgrade` or reset the branch via Neon Console.
+5. If tests fail, fix and retry. Use `make downgrade` or reset the Neon branch from its parent.
 
 ---
 
@@ -203,9 +212,10 @@ To reset a Neon test branch entirely, use the Neon Console "Reset from parent" f
 - [ ] Model defined in `treadstone/models/<name>.py` with type hints
 - [ ] Model imported in `treadstone/models/__init__.py`
 - [ ] Unit test written and passing
+- [ ] Integration/API coverage added when the schema change affects real DB behavior
 - [ ] Migration generated with `make migration MSG="..."`
 - [ ] Migration file reviewed manually
 - [ ] Migration applied to Neon test branch
-- [ ] Integration tests passing (`make test-all`)
-- [ ] Migration applied to production
+- [ ] Relevant verification passing (`make test-integration` or `make test-all`)
+- [ ] Migration applied to the target shared environment
 - [ ] Committed together: model + migration + tests

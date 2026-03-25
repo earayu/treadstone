@@ -41,20 +41,34 @@ This runs `uv sync` (creates `.venv`, installs all deps) and configures git hook
 
 The project uses [Neon](https://neon.tech) Serverless PostgreSQL — no local Postgres needed.
 
-Get the connection string from https://console.neon.tech, then:
+For local API development (`make dev`), start from:
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and set the connection string in asyncpg format:
+Edit `.env` and set at least:
 
 ```
 TREADSTONE_DATABASE_URL=postgresql+asyncpg://neondb_owner:xxx@ep-xxx.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
-TREADSTONE_DEBUG=true
+TREADSTONE_JWT_SECRET=CHANGE_ME
 ```
 
 The URL scheme must be `postgresql+asyncpg://` (not `postgresql://`). Keep `?sslmode=require`.
+
+For local Kubernetes deployment (`make up`), also prepare:
+
+```bash
+cp .env.example .env.local
+```
+
+Then set:
+
+```
+TREADSTONE_DATABASE_URL=postgresql+asyncpg://...
+TREADSTONE_JWT_SECRET=CHANGE_ME
+TREADSTONE_LEADER_ELECTION_ENABLED=true
+```
 
 ## 4. Apply Database Migrations
 
@@ -72,6 +86,14 @@ make test
 
 Expected: all tests pass (integration tests are excluded by default). If tests pass, the environment is ready.
 
+Optional API sanity check:
+
+```bash
+make dev
+# In another terminal:
+curl http://localhost:8000/health
+```
+
 ## 6. Local K8s Cluster (Sandbox Development)
 
 For sandbox-related features that require a real Kubernetes cluster, follow `deploy/README.md` — it covers Kind cluster creation, image building, Helm deployment, and smoke testing end-to-end.
@@ -80,6 +102,7 @@ Quick start:
 
 ```bash
 make up   # One-command: Kind cluster + build + deploy
+make test-e2e
 ```
 
 Pure API development (`make dev`) does not require a K8s cluster.
@@ -100,3 +123,8 @@ Pure API development (`make dev`) does not require a K8s cluster.
 **`alembic upgrade head` reports `authentication failed`:**
 - Confirm `.env` exists in the project root
 - URL-encode special characters in the password
+
+**`make up` fails before app startup:**
+- Confirm `.env.local` exists
+- Confirm `TREADSTONE_JWT_SECRET` is set
+- Confirm `TREADSTONE_LEADER_ELECTION_ENABLED=true` for the K8s environment

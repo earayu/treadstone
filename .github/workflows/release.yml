@@ -217,27 +217,30 @@ jobs:
             echo ""
             echo "## Install"
             echo ""
-            echo "**macOS / Linux — one-liner:**"
+            echo "Use the release installer script if you want the simplest path."
+            echo "It selects the right binary for your platform and verifies checksums when available."
+            echo ""
+            echo "**macOS / Linux**"
             echo '```bash'
             echo "curl -fsSL https://github.com/${{ github.repository }}/releases/download/v$VERSION/install.sh | sh"
             echo '```'
             echo ""
-            echo "**Windows — PowerShell:**"
+            echo "**Windows PowerShell**"
             echo '```powershell'
             echo "irm https://github.com/${{ github.repository }}/releases/download/v$VERSION/install.ps1 | iex"
             echo '```'
             echo ""
-            echo "**pip:**"
+            echo "**Alternative: PyPI**"
             echo '```bash'
             echo "pip install treadstone-cli==$VERSION"
             echo '```'
             echo ""
-            echo "**Docker:**"
+            echo "**Docker image**"
             echo '```bash'
             echo "docker pull ghcr.io/${{ github.repository_owner }}/treadstone:$VERSION"
             echo '```'
             echo ""
-            echo "**Manual download:**"
+            echo "**Manual binary download**"
             echo '```bash'
             echo "# macOS (Apple Silicon)"
             echo "curl -fsSL https://github.com/${{ github.repository }}/releases/download/v$VERSION/treadstone-darwin-arm64 -o treadstone && chmod +x treadstone"

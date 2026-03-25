@@ -1,6 +1,19 @@
 # Treadstone
 
-Agent-native sandbox service. Run code, build projects, deploy environments — via CLI, SDK, or REST API. Open source and self-hostable.
+Agent-native sandbox platform for AI agents. Run code, build projects, deploy environments, and hand off browser sessions via CLI, SDK, or REST API. Open source and self-hostable.
+
+## Start Here
+
+Use the matching local skill before you act:
+
+| If you need to... | Use |
+|-------|-------------|
+| Set up this repo for the first time | `dev-setup` |
+| Make any shippable change | `dev-lifecycle` |
+| Add or change SQLAlchemy models / Alembic migrations | `database-migration` |
+| Answer Neon-specific questions or plan Neon usage | `neon-postgres` |
+
+Skills live under `.agents/skills/*/SKILL.md`. AGENTS.md defines repo facts and guardrails; skills define procedures.
 
 ## Tech Stack
 
@@ -27,16 +40,18 @@ cli/               # CLI package (standalone, published as treadstone-cli)
   treadstone_cli/  # CLI source (click + httpx + rich)
 sdk/python/        # Python SDK (published as treadstone-sdk)
 tests/             # pytest test suites
+  api/             # FastAPI route tests via ASGITransport
+  unit/            # Pure logic / model / helper tests
+  integration/     # Real DB tests, excluded by default
   e2e/             # Hurl E2E tests (run against deployed cluster)
 alembic/           # Database migrations
 deploy/            # Helm charts, Kind config, K8s manifests
 docs/              # Design docs and plans (zh-CN)
+scripts/           # Helper scripts (release, install, deploy, E2E)
 .agents/skills/    # AI Agent reusable skills
 ```
 
 ## Skills
-
-Skills provide step-by-step operational guides. AGENTS.md defines rules and conventions; skills define procedures.
 
 | Skill | When to use |
 |-------|-------------|
@@ -51,6 +66,7 @@ For K8s deployment (Kind cluster, Helm, smoke tests), see [`deploy/README.md`](d
 
 - All code comments and commit messages in English. Docs default to Chinese in `docs/zh-CN/`.
 - **All GitHub-public content must be in English**: commit messages, PR titles/bodies, Issue titles/bodies, review comments, release notes.
+- Root-facing docs such as `README.md`, `AGENTS.md`, and `.agents/skills/*/SKILL.md` should stay concise and easy for both humans and agents to scan.
 - Async everywhere: all DB operations, HTTP calls, and API handlers must be async.
 - TDD: write a failing test first, implement, verify it passes.
 - DRY, YAGNI: no premature abstraction.
@@ -80,6 +96,7 @@ Rules:
 - SQLAlchemy async engine + asyncpg driver.
 - Alembic migrations (Alembic uses a sync URL — `env.py` strips `+asyncpg` automatically).
 - All connection strings must include `?sslmode=require`.
+- For local `make dev`, use `.env`. For Kubernetes deployment, use `.env.<ENV>` such as `.env.local`.
 - For model design conventions and the migration workflow, see the `database-migration` skill.
 
 ## Testing
@@ -93,6 +110,7 @@ Rules:
   - `tests/integration/` — requires real DB, marked `@pytest.mark.integration`, excluded by default
   - `tests/e2e/*.hurl` — E2E tests against a deployed cluster, written in [Hurl](https://hurl.dev) (run with `make test-e2e`)
 - Shared fixtures live in `tests/conftest.py`.
+- `make test` excludes integration tests via pytest config; use `make test-integration` or `make test-all` when real DB coverage is needed.
 - After `make up`, run `make test-e2e` to validate the deployment. Prefer this over manual curl exploration.
 
 ## OpenAPI / SDK Generation
@@ -111,14 +129,16 @@ Rules:
 
 ## Release
 
-- **Process:** On `main`, run `make release V=x.y.z` (e.g. `make release V=0.1.4`). This creates and pushes tag `vx.y.z`, which triggers [`.github/workflows/release.yml`](.github/workflows/release.yml): Docker → GHCR, `treadstone` + `treadstone-sdk` → PyPI, CLI binaries + GitHub Release assets. Watch with `gh run watch` or the Actions tab.
+- **Process:** On `main`, run `make release V=x.y.z` (e.g. `make release V=0.1.4`). This creates and pushes tag `vx.y.z`, which triggers [`.github/workflows/release.yml`](.github/workflows/release.yml): Docker image → GHCR, `treadstone-cli` + `treadstone-sdk` → PyPI, CLI binaries + install scripts → GitHub Release assets. Watch with `gh run watch` or the Actions tab.
 - **Agents:** Prefer **`make release V=…`** for tagging and publishing. Do not hand-craft `git tag` / `git push origin v…` or `gh release create` unless fixing a broken release—the Makefile enforces `main` and documents the intended flow.
 
 ## Automation
 
 - **pre-commit hook**: auto-runs `ruff format` + `ruff check` on every commit.
 - **pre-push hook**: blocks direct push to main.
-- **CI** (GitHub Actions): lint + test (parallel) + integration (PR only) + build. Any failure blocks merge.
+- **CI** (GitHub Actions): lint + test + openapi + build on pushes/PRs, plus integration on PRs. Any failure blocks merge.
+- **CD** (`.github/workflows/cd.yml`): pushes the `main` image to GHCR on changes to deployable server files.
+- **Release** (`.github/workflows/release.yml`): publishes tagged releases and GitHub Release assets on `v*` tags.
 
 ## Quick Command Reference
 
@@ -128,10 +148,12 @@ Run `make help` for the full list. Key commands:
 |---------|---------|
 | `make dev` | Start dev server (localhost:8000, hot reload) |
 | `make test` | Run tests (excludes integration) |
+| `make test-all` | Run all tests including integration |
 | `make test-e2e` | Run E2E tests against deployed cluster |
 | `make lint` / `make format` | Lint check / auto-format |
 | `make migrate` | Apply database migrations |
 | `make migration MSG=x` | Generate a new Alembic migration |
+| `make gen-openapi` | Export `openapi.json` from the FastAPI app |
 | `make up` / `make down` | Full K8s environment up/down (see `deploy/README.md`) |
 | `make ship MSG=x` | git add + commit + push (feature branches only) |
 | `make release V=x.y.z` | Tag `vx.y.z` on `main` and push (triggers full release pipeline) |
