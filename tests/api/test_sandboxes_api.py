@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
+from treadstone.models.sandbox import Sandbox
 from treadstone.models.user import OAuthAccount, User
 
 _test_session_factory = None
@@ -51,6 +52,14 @@ async def auth_client(db_session):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/v1/auth/register", json={"email": "sandbox@test.com", "password": "Pass123!"})
         await client.post("/v1/auth/login", json={"email": "sandbox@test.com", "password": "Pass123!"})
+        yield client
+
+
+@pytest.fixture
+async def second_auth_client(db_session):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post("/v1/auth/register", json={"email": "other@test.com", "password": "Pass123!"})
+        await client.post("/v1/auth/login", json={"email": "other@test.com", "password": "Pass123!"})
         yield client
 
 
@@ -126,9 +135,29 @@ class TestCreateSandbox:
         )
 
         assert resp.status_code == 202
-        assert resp.json()["urls"]["web"].startswith(
-            "http://sandbox-handoff-sb.sandbox.localhost/_treadstone/open?token=swl"
+        data = resp.json()
+        assert data["urls"]["web"].startswith(
+            f"http://sandbox-{data['id']}.sandbox.localhost/_treadstone/open?token=swl"
         )
+
+    async def test_create_same_name_for_different_users_succeeds(self, auth_client, second_auth_client):
+        first = await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "shared-name"})
+        second = await second_auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": "shared-name"},
+        )
+
+        assert first.status_code == 202
+        assert second.status_code == 202
+        assert first.json()["id"] != second.json()["id"]
+
+    async def test_create_same_name_for_same_user_returns_409(self, auth_client):
+        first = await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "taken-name"})
+        second = await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "taken-name"})
+
+        assert first.status_code == 202
+        assert second.status_code == 409
+        assert second.json()["error"]["code"] == "sandbox_name_conflict"
 
     @pytest.mark.parametrize(
         "name",
@@ -241,7 +270,7 @@ class TestGetSandbox:
 
         assert resp.status_code == 200
         assert resp.json()["urls"]["web"].startswith(
-            "http://sandbox-get-web.sandbox.localhost/_treadstone/open?token=swl"
+            f"http://sandbox-{sandbox_id}.sandbox.localhost/_treadstone/open?token=swl"
         )
 
     async def test_web_enable_returns_same_current_shareable_url_created_with_sandbox(self, auth_client, monkeypatch):
@@ -271,6 +300,30 @@ class TestDeleteSandbox:
         resp = await auth_client.delete("/v1/sandboxes/sb-nonexistent1234")
         assert resp.status_code == 404
         assert resp.json()["error"]["code"] == "sandbox_not_found"
+
+    async def test_delete_revokes_active_web_link(self, auth_client, monkeypatch):
+        _enable_subdomain(monkeypatch)
+        create_resp = await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "del-web"})
+        sandbox_id = create_resp.json()["id"]
+
+        delete_resp = await auth_client.delete(f"/v1/sandboxes/{sandbox_id}")
+        status_resp = await auth_client.get(f"/v1/sandboxes/{sandbox_id}/web-link")
+
+        assert delete_resp.status_code == 204
+        assert status_resp.status_code == 200
+        assert status_resp.json()["enabled"] is False
+
+    async def test_delete_keeps_row_until_sync_removes_it(self, auth_client):
+        create_resp = await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "del-row"})
+        sandbox_id = create_resp.json()["id"]
+
+        delete_resp = await auth_client.delete(f"/v1/sandboxes/{sandbox_id}")
+
+        assert delete_resp.status_code == 204
+        async with _test_session_factory() as session:
+            sandbox = await session.get(Sandbox, sandbox_id)
+            assert sandbox is not None
+            assert sandbox.status == "deleting"
 
 
 class TestStartStopSandbox:

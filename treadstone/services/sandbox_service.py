@@ -21,6 +21,7 @@ from treadstone.core.errors import (
     TemplateNotFoundError,
 )
 from treadstone.models.sandbox import Sandbox, SandboxStatus, is_valid_transition
+from treadstone.models.sandbox_web_link import SandboxWebLink
 from treadstone.models.user import random_id, utc_now
 from treadstone.services.k8s_client import K8sClientProtocol, get_k8s_client
 
@@ -83,10 +84,10 @@ class SandboxService:
 
         if persist:
             sandbox.provision_mode = "direct"
-            sandbox.k8s_sandbox_name = sandbox_name
+            sandbox.k8s_sandbox_name = sandbox_id
         else:
             sandbox.provision_mode = "claim"
-            sandbox.k8s_sandbox_claim_name = sandbox_name
+            sandbox.k8s_sandbox_claim_name = sandbox_id
 
         self.session.add(sandbox)
         try:
@@ -125,9 +126,10 @@ class SandboxService:
     async def _create_via_claim(self, sandbox: Sandbox, template: str) -> None:
         await self._resolve_template(sandbox.k8s_namespace, template)
 
-        logger.info("Creating SandboxClaim %s (template=%s, ns=%s)", sandbox.name, template, sandbox.k8s_namespace)
+        claim_name = sandbox.k8s_sandbox_claim_name or sandbox.id
+        logger.info("Creating SandboxClaim %s (template=%s, ns=%s)", claim_name, template, sandbox.k8s_namespace)
         await self.k8s.create_sandbox_claim(
-            name=sandbox.name,
+            name=claim_name,
             template_ref=template,
             namespace=sandbox.k8s_namespace,
         )
@@ -154,11 +156,12 @@ class SandboxService:
             }
         ]
 
+        k8s_name = sandbox.k8s_sandbox_name or sandbox.id
         logger.info(
-            "Creating Sandbox CR %s (template=%s, persist=true, ns=%s)", sandbox.name, template, sandbox.k8s_namespace
+            "Creating Sandbox CR %s (template=%s, persist=true, ns=%s)", k8s_name, template, sandbox.k8s_namespace
         )
         await self.k8s.create_sandbox(
-            name=sandbox.name,
+            name=k8s_name,
             namespace=sandbox.k8s_namespace,
             image=image,
             container_port=settings.sandbox_port,
@@ -173,10 +176,7 @@ class SandboxService:
         return result.scalar_one_or_none()
 
     async def list_by_owner(self, owner_id: str, labels: dict | None = None) -> list[Sandbox]:
-        stmt = select(Sandbox).where(
-            Sandbox.owner_id == owner_id,
-            Sandbox.status != SandboxStatus.DELETED,
-        )
+        stmt = select(Sandbox).where(Sandbox.owner_id == owner_id)
         result = await self.session.execute(stmt)
         sandboxes = list(result.scalars().all())
 
@@ -196,15 +196,27 @@ class SandboxService:
         sandbox.status = SandboxStatus.DELETING
         sandbox.version += 1
         self.session.add(sandbox)
+
+        link_result = await self.session.execute(
+            select(SandboxWebLink).where(
+                SandboxWebLink.sandbox_id == sandbox.id,
+                SandboxWebLink.gmt_deleted.is_(None),
+            )
+        )
+        link = link_result.scalar_one_or_none()
+        if link is not None:
+            link.gmt_deleted = utc_now()
+            link.gmt_updated = utc_now()
+            self.session.add(link)
         await self.session.commit()
 
         try:
             if sandbox.provision_mode == "direct":
-                sb_name = sandbox.k8s_sandbox_name or sandbox.name
+                sb_name = sandbox.k8s_sandbox_name or sandbox.id
                 logger.info("Deleting Sandbox CR %s (ns=%s)", sb_name, sandbox.k8s_namespace)
                 await self.k8s.delete_sandbox(name=sb_name, namespace=sandbox.k8s_namespace)
             else:
-                claim_name = sandbox.k8s_sandbox_claim_name or sandbox.name
+                claim_name = sandbox.k8s_sandbox_claim_name or sandbox.id
                 logger.info("Deleting SandboxClaim %s (ns=%s)", claim_name, sandbox.k8s_namespace)
                 await self.k8s.delete_sandbox_claim(name=claim_name, namespace=sandbox.k8s_namespace)
         except Exception:
@@ -229,7 +241,7 @@ class SandboxService:
         self.session.add(sandbox)
         await self.session.commit()
 
-        k8s_name = sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.name
+        k8s_name = sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.id
         try:
             logger.info("Scaling sandbox %s to replicas=1 (ns=%s)", k8s_name, sandbox.k8s_namespace)
             await self.k8s.scale_sandbox(name=k8s_name, namespace=sandbox.k8s_namespace, replicas=1)
@@ -257,7 +269,7 @@ class SandboxService:
         self.session.add(sandbox)
         await self.session.commit()
 
-        k8s_name = sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.name
+        k8s_name = sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.id
         try:
             logger.info("Scaling sandbox %s to replicas=0 (ns=%s)", k8s_name, sandbox.k8s_namespace)
             await self.k8s.scale_sandbox(name=k8s_name, namespace=sandbox.k8s_namespace, replicas=0)

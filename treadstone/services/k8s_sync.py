@@ -97,14 +97,14 @@ async def handle_watch_event(
 
         if event_type == "DELETED":
             if sandbox.status == SandboxStatus.DELETING:
-                target_status = SandboxStatus.DELETED
+                await _delete_sandbox_row(session, sandbox.id)
             else:
                 logger.warning("Unexpected DELETED event for %s (status=%s), marking error", sandbox.id, sandbox.status)
-                target_status = SandboxStatus.ERROR
-
-            rows = await _optimistic_update(session, sandbox.id, sandbox.version, target_status, resource_version=cr_rv)
-            if rows == 0:
-                logger.debug("Optimistic lock conflict for %s, skipping", sandbox.id)
+                rows = await _optimistic_update(
+                    session, sandbox.id, sandbox.version, SandboxStatus.ERROR, resource_version=cr_rv
+                )
+                if rows == 0:
+                    logger.debug("Optimistic lock conflict for %s, skipping", sandbox.id)
             return
 
         if event_type in ("ADDED", "MODIFIED"):
@@ -167,18 +167,16 @@ async def reconcile(
             cr_map[name] = cr
 
     async with session_factory() as session:
-        result = await session.execute(
-            select(Sandbox).where(Sandbox.status != SandboxStatus.DELETED, Sandbox.k8s_namespace == namespace)
-        )
+        result = await session.execute(select(Sandbox).where(Sandbox.k8s_namespace == namespace))
         sandboxes = result.scalars().all()
 
         for sandbox in sandboxes:
-            cr_key = sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.name
+            cr_key = sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.id
             cr = cr_map.pop(cr_key, None)
 
             if cr is None:
                 if sandbox.status == SandboxStatus.DELETING:
-                    await _optimistic_update(session, sandbox.id, sandbox.version, SandboxStatus.DELETED)
+                    await _delete_sandbox_row(session, sandbox.id)
                 elif sandbox.status != SandboxStatus.CREATING:
                     logger.warning("CR missing for %s (status=%s), marking error", sandbox.id, sandbox.status)
                     await _optimistic_update(session, sandbox.id, sandbox.version, SandboxStatus.ERROR)
@@ -296,9 +294,6 @@ async def _optimistic_update(
         values["gmt_started"] = now
     elif new_status == SandboxStatus.STOPPED:
         values["gmt_stopped"] = now
-    elif new_status == SandboxStatus.DELETED:
-        values["gmt_deleted"] = now
-
     result = await session.execute(
         update(Sandbox).where(Sandbox.id == sandbox_id, Sandbox.version == expected_version).values(**values)
     )
@@ -314,4 +309,12 @@ async def _update_sync_metadata(
     if message is not None:
         values["status_message"] = message
     await session.execute(update(Sandbox).where(Sandbox.id == sandbox_id).values(**values))
+    await session.commit()
+
+
+async def _delete_sandbox_row(session: AsyncSession, sandbox_id: str) -> None:
+    sandbox = await session.get(Sandbox, sandbox_id)
+    if sandbox is None:
+        return
+    await session.delete(sandbox)
     await session.commit()

@@ -84,7 +84,6 @@ async def _validate_owned_sandbox_ids(session: AsyncSession, owner_id: str, sand
         select(Sandbox.id).where(
             Sandbox.owner_id == owner_id,
             Sandbox.id.in_(deduped),
-            Sandbox.gmt_deleted.is_(None),
         )
     )
     owned_ids = result.scalars().all()

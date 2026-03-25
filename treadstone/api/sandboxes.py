@@ -56,7 +56,7 @@ def _build_canonical_web_url(sb, base_url: str) -> str | None:
         scheme = parsed.scheme
     else:
         scheme = "https" if base.startswith("https") else "http"
-    return f"{scheme}://{settings.sandbox_subdomain_prefix}{sb.name}.{settings.sandbox_domain}{_web_port_suffix(base)}"
+    return f"{scheme}://{settings.sandbox_subdomain_prefix}{sb.id}.{settings.sandbox_domain}{_web_port_suffix(base)}"
 
 
 def _build_urls(sb, base_url: str, web_link: SandboxWebLink | None = None) -> dict:

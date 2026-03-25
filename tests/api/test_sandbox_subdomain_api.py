@@ -111,7 +111,7 @@ async def _create_ready_sandbox(auth_client: AsyncClient, name: str = "mybox") -
     async with _test_session_factory() as session:
         sandbox = await session.get(Sandbox, sandbox_id)
         sandbox.status = SandboxStatus.READY.value
-        sandbox.k8s_sandbox_name = sandbox.name
+        sandbox.k8s_sandbox_name = sandbox.id
         session.add(sandbox)
         await session.commit()
     return sandbox_id
@@ -134,35 +134,43 @@ class TestSubdomainDisabled:
 class TestSubdomainRouting:
     async def test_subdomain_without_cookie_redirects_to_bootstrap(self, auth_client: AsyncClient, monkeypatch):
         _enable_subdomain(monkeypatch)
-        await _create_ready_sandbox(auth_client)
+        sandbox_id = await _create_ready_sandbox(auth_client)
 
-        resp = await auth_client.get("https://sandbox-mybox.sandbox.localhost/", follow_redirects=False)
+        resp = await auth_client.get(f"https://sandbox-{sandbox_id}.sandbox.localhost/", follow_redirects=False)
 
         assert resp.status_code == 303
         location = resp.headers["location"]
         parsed = urlparse(location)
         assert parsed.netloc == "api.localhost"
         assert parsed.path == "/v1/browser/bootstrap"
-        assert parse_qs(parsed.query)["return_to"] == ["https://sandbox-mybox.sandbox.localhost/"]
+        assert parse_qs(parsed.query)["return_to"] == [f"https://sandbox-{sandbox_id}.sandbox.localhost/"]
 
     async def test_logged_in_user_can_bootstrap_and_proxy(self, auth_client: AsyncClient, monkeypatch):
         _enable_subdomain(monkeypatch)
-        await _create_ready_sandbox(auth_client)
+        sandbox_id = await _create_ready_sandbox(auth_client)
         mock_client, captured = _capture_mock()
-        auth_client.cookies.set("session", "sandbox-app-session", domain="sandbox-mybox.sandbox.localhost", path="/")
-        auth_client.cookies.set("prefs", "a b", domain="sandbox-mybox.sandbox.localhost", path="/")
+        auth_client.cookies.set(
+            "session",
+            "sandbox-app-session",
+            domain=f"sandbox-{sandbox_id}.sandbox.localhost",
+            path="/",
+        )
+        auth_client.cookies.set("prefs", "a b", domain=f"sandbox-{sandbox_id}.sandbox.localhost", path="/")
 
         with patch("treadstone.services.sandbox_proxy._http_client", mock_client):
             with patch("treadstone.middleware.sandbox_subdomain.get_http_client", return_value=mock_client):
-                bootstrap = await auth_client.get("https://sandbox-mybox.sandbox.localhost/", follow_redirects=True)
+                bootstrap = await auth_client.get(
+                    f"https://sandbox-{sandbox_id}.sandbox.localhost/",
+                    follow_redirects=True,
+                )
                 resp = await auth_client.get(
-                    "https://sandbox-mybox.sandbox.localhost/",
+                    f"https://sandbox-{sandbox_id}.sandbox.localhost/",
                     headers={"Authorization": "Bearer app-token"},
                 )
 
         assert bootstrap.status_code == 200
         assert resp.status_code == 200
-        assert "mybox.default.svc.cluster.local:8080/" in captured["url"]
+        assert f"{sandbox_id}.default.svc.cluster.local:8080/" in captured["url"]
         outgoing_headers = {k.lower(): v for k, v in captured["headers"].items()}
         assert outgoing_headers["authorization"] == "Bearer app-token"
         cookie_header = {k.lower(): v for k, v in captured["headers"].items()}.get("cookie", "")
@@ -179,7 +187,10 @@ class TestSubdomainRouting:
             with patch("treadstone.middleware.sandbox_subdomain.get_http_client", return_value=mock_client):
                 async with AsyncClient(transport=ASGITransport(app=app), base_url="https://api.localhost") as client:
                     resp = await client.get(open_link, follow_redirects=True)
-                    followup = await client.get("https://sandbox-mybox.sandbox.localhost/", follow_redirects=True)
+                    followup = await client.get(
+                        f"https://sandbox-{sandbox_id}.sandbox.localhost/",
+                        follow_redirects=True,
+                    )
 
         assert resp.status_code == 200
         assert followup.status_code == 200
@@ -258,11 +269,11 @@ class TestSubdomainRouting:
 
     async def test_browser_login_page_can_log_in_and_continue(self, auth_client: AsyncClient, monkeypatch):
         _enable_subdomain(monkeypatch)
-        await _create_ready_sandbox(auth_client)
+        sandbox_id = await _create_ready_sandbox(auth_client)
         mock_client, _ = _capture_mock()
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="https://api.localhost") as browser:
-            first = await browser.get("https://sandbox-mybox.sandbox.localhost/", follow_redirects=False)
+            first = await browser.get(f"https://sandbox-{sandbox_id}.sandbox.localhost/", follow_redirects=False)
             bootstrap_url = first.headers["location"]
             bootstrap = await browser.get(bootstrap_url, follow_redirects=False)
             login_url = bootstrap.headers["location"]
@@ -276,7 +287,7 @@ class TestSubdomainRouting:
                         data={
                             "email": "sandbox@test.com",
                             "password": "Pass123!",
-                            "return_to": "https://sandbox-mybox.sandbox.localhost/",
+                            "return_to": f"https://sandbox-{sandbox_id}.sandbox.localhost/",
                         },
                         follow_redirects=True,
                     )

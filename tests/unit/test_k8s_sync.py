@@ -125,7 +125,7 @@ class TestHandleWatchEvent:
 
         async with session_factory() as session:
             sb = await session.get(Sandbox, "sb00000000test1234")
-            assert sb.status == SandboxStatus.DELETED
+            assert sb is None
 
     async def test_deleted_from_ready_marks_error(self, session_factory):
         await _create_sandbox(session_factory, status=SandboxStatus.READY)
@@ -177,7 +177,7 @@ class TestReconcile:
 
         async with session_factory() as session:
             sb = await session.get(Sandbox, "sb00000000test1234")
-            assert sb.status == SandboxStatus.DELETED
+            assert sb is None
 
     async def test_reconcile_returns_resource_version(self, session_factory):
         k8s = FakeK8sClient()
@@ -239,7 +239,7 @@ class TestWatchLoop:
             assert sb.k8s_resource_version == "11"
 
     async def test_watch_deleted_event(self, session_factory):
-        """Watch DELETED event for a DELETING sandbox should mark it DELETED."""
+        """Watch DELETED event for a DELETING sandbox should delete the row."""
         await _create_sandbox(session_factory, status=SandboxStatus.DELETING)
         k8s = FakeK8sClient()
 
@@ -251,7 +251,7 @@ class TestWatchLoop:
 
         async with session_factory() as session:
             sb = await session.get(Sandbox, "sb00000000test1234")
-            assert sb.status == SandboxStatus.DELETED
+            assert sb is None
 
     async def test_watch_loop_completes_on_stream_end(self, session_factory):
         """Watch loop should return gracefully when the stream ends."""

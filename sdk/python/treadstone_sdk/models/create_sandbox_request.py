@@ -21,8 +21,8 @@ class CreateSandboxRequest:
     Attributes:
         template (str):
         name (None | str | Unset): Optional custom sandbox name. Sandbox name must be 1-55 characters of lowercase
-            letters, numbers, or hyphens, and must start and end with a letter or number. This keeps browser URLs like
-            `sandbox-{name}.treadstone-ai.dev` within DNS label limits.
+            letters, numbers, or hyphens, and must start and end with a letter or number. Sandbox names only need to be
+            unique for the current user.
         labels (CreateSandboxRequestLabels | Unset):
         auto_stop_interval (int | Unset): Minutes of inactivity before the sandbox is automatically stopped. Default:
             15.

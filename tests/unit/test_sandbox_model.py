@@ -7,7 +7,6 @@ def test_sandbox_status_enum():
     assert SandboxStatus.STOPPED == "stopped"
     assert SandboxStatus.ERROR == "error"
     assert SandboxStatus.DELETING == "deleting"
-    assert SandboxStatus.DELETED == "deleted"
 
 
 def test_sandbox_fields_exist():
@@ -34,7 +33,6 @@ def test_sandbox_fields_exist():
         "gmt_created",
         "gmt_started",
         "gmt_stopped",
-        "gmt_deleted",
     ]:
         assert hasattr(sb, field), f"Missing field: {field}"
 
@@ -57,10 +55,9 @@ def test_sandbox_tablename():
 VALID_TRANSITIONS: dict[str, list[str]] = {
     "creating": ["ready", "error", "deleting"],
     "ready": ["stopped", "error", "deleting"],
-    "stopped": ["ready", "deleting", "deleted"],
+    "stopped": ["ready", "deleting"],
     "error": ["stopped", "deleting"],
-    "deleting": ["deleted"],
-    "deleted": [],
+    "deleting": [],
 }
 
 
@@ -75,7 +72,6 @@ def test_is_valid_transition():
 
     assert is_valid_transition("creating", "ready") is True
     assert is_valid_transition("creating", "error") is True
-    assert is_valid_transition("creating", "deleted") is False
-    assert is_valid_transition("deleted", "ready") is False
+    assert is_valid_transition("creating", "stopped") is False
     assert is_valid_transition("deleting", "ready") is False
     assert is_valid_transition("ready", "deleting") is True

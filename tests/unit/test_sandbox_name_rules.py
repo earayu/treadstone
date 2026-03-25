@@ -12,7 +12,7 @@ def test_create_sandbox_schema_documents_name_rules() -> None:
 
     assert "1-55 characters" in name_schema["description"]
     assert "lowercase letters, numbers, or hyphens" in name_schema["description"]
-    assert "sandbox-{name}" in name_schema["description"]
+    assert "current user" in name_schema["description"].lower()
 
 
 def test_cli_source_documents_sandbox_name_rules() -> None:
@@ -21,4 +21,4 @@ def test_cli_source_documents_sandbox_name_rules() -> None:
     assert "1-55 characters" in source
     assert "lowercase letters" in source
     assert "numbers, or hyphens" in source
-    assert "sandbox-{name}" in source
+    assert "current user" in source.lower()

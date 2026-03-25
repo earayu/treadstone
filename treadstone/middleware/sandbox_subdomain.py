@@ -2,7 +2,7 @@
 ASGI middleware for authenticated subdomain-based sandbox routing.
 
 When sandbox_domain is configured (e.g. "treadstone-ai.dev"), requests to
-  sandbox-{name}.treadstone-ai.dev
+  sandbox-{sandbox_id}.treadstone-ai.dev
 are authenticated at the edge and then transparently proxied to the
 corresponding sandbox pod, supporting both HTTP and WebSocket.
 """
@@ -42,7 +42,7 @@ from treadstone.services.sandbox_proxy import (
 logger = logging.getLogger(__name__)
 
 
-def extract_sandbox_name(host: str, sandbox_domain: str, prefix: str = "sandbox-") -> str | None:
+def extract_sandbox_id(host: str, sandbox_domain: str, prefix: str = "sandbox-") -> str | None:
     host_no_port = host.split(":")[0].lower()
     domain = sandbox_domain.lower()
 
@@ -54,8 +54,8 @@ def extract_sandbox_name(host: str, sandbox_domain: str, prefix: str = "sandbox-
         return None
     if not subdomain.startswith(prefix):
         return None
-    name = subdomain[len(prefix) :]
-    return name if name else None
+    sandbox_id = subdomain[len(prefix) :]
+    return sandbox_id if sandbox_id else None
 
 
 def _request_scheme(scope: Scope) -> str:
@@ -110,17 +110,17 @@ class SandboxSubdomainMiddleware:
             return
 
         host = self._get_host(scope)
-        sandbox_name = (
-            extract_sandbox_name(host, settings.sandbox_domain, settings.sandbox_subdomain_prefix) if host else None
+        sandbox_id = (
+            extract_sandbox_id(host, settings.sandbox_domain, settings.sandbox_subdomain_prefix) if host else None
         )
-        if sandbox_name is None:
+        if sandbox_id is None:
             await self.app(scope, receive, send)
             return
 
         if scope["type"] == "http":
-            await self._handle_http(scope, receive, send, sandbox_name, host)
+            await self._handle_http(scope, receive, send, sandbox_id, host)
         else:
-            await self._handle_websocket(scope, receive, send, sandbox_name)
+            await self._handle_websocket(scope, receive, send, sandbox_id)
 
     @staticmethod
     def _get_host(scope: Scope) -> str | None:
@@ -129,11 +129,9 @@ class SandboxSubdomainMiddleware:
                 return value.decode("latin-1")
         return None
 
-    async def _load_sandbox(self, sandbox_name: str) -> Sandbox | None:
+    async def _load_sandbox(self, sandbox_id: str) -> Sandbox | None:
         async with async_session() as session:
-            result = await session.execute(
-                select(Sandbox).where(Sandbox.name == sandbox_name, Sandbox.gmt_deleted.is_(None))
-            )
+            result = await session.execute(select(Sandbox).where(Sandbox.id == sandbox_id))
             return result.scalar_one_or_none()
 
     def _build_return_to(self, scope: Scope, host: str) -> str:
@@ -212,7 +210,10 @@ class SandboxSubdomainMiddleware:
         body = b"".join(body_parts)
 
         full_path = f"{path}?{query_string}" if query_string else path
-        target_url = build_sandbox_url(sandbox.k8s_sandbox_name or sandbox.name, full_path)
+        target_url = build_sandbox_url(
+            sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.id,
+            full_path,
+        )
         logger.info("Subdomain proxy %s %s → %s", request.method, sandbox.name, target_url)
 
         client = await get_http_client()
@@ -234,9 +235,9 @@ class SandboxSubdomainMiddleware:
         )
         await streaming(scope, receive, send)
 
-    async def _handle_http(self, scope: Scope, receive: Receive, send: Send, sandbox_name: str, host: str) -> None:
+    async def _handle_http(self, scope: Scope, receive: Receive, send: Send, sandbox_id: str, host: str) -> None:
         request = Request(scope, receive)
-        sandbox = await self._load_sandbox(sandbox_name)
+        sandbox = await self._load_sandbox(sandbox_id)
         if sandbox is None:
             error_resp = Response("Sandbox not found.", status_code=404)
             await error_resp(scope, receive, send)
@@ -261,8 +262,8 @@ class SandboxSubdomainMiddleware:
 
         await self._proxy_http(request, scope, receive, send, sandbox)
 
-    async def _handle_websocket(self, scope: Scope, receive: Receive, send: Send, sandbox_name: str) -> None:
-        sandbox = await self._load_sandbox(sandbox_name)
+    async def _handle_websocket(self, scope: Scope, receive: Receive, send: Send, sandbox_id: str) -> None:
+        sandbox = await self._load_sandbox(sandbox_id)
         if sandbox is None or sandbox.status != SandboxStatus.READY.value:
             websocket = WebSocket(scope, receive, send)
             await websocket.close(code=1008)
@@ -285,7 +286,7 @@ class SandboxSubdomainMiddleware:
         try:
             await proxy_websocket(
                 client_ws=websocket,
-                sandbox_id=sandbox.k8s_sandbox_name or sandbox.name,
+                sandbox_id=sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.id,
                 path=path,
             )
         except Exception:

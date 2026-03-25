@@ -25,7 +25,11 @@ ingress:
   enabled: true
   className: nginx
   hosts:
-    - host: ""
+    - host: localhost
+      paths:
+        - path: /
+          pathType: Prefix
+    - host: "*.sandbox.localhost"
       paths:
         - path: /
           pathType: Prefix
