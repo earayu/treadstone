@@ -20,7 +20,7 @@ from treadstone.services.browser_auth import issue_bootstrap_ticket
 router = APIRouter(prefix="/v1/browser", tags=["browser"])
 
 
-def _extract_sandbox_name(host: str) -> str | None:
+def _extract_sandbox_id(host: str) -> str | None:
     host_no_port = host.split(":")[0].lower()
     domain = settings.sandbox_domain.lower()
 
@@ -41,15 +41,15 @@ def _validate_return_to(return_to: str) -> tuple[str, str, str, str]:
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise ValidationError("return_to must be an absolute sandbox Web UI URL.")
 
-    sandbox_name = _extract_sandbox_name(parsed.netloc)
-    if sandbox_name is None:
+    sandbox_id = _extract_sandbox_id(parsed.netloc)
+    if sandbox_id is None:
         raise ValidationError("return_to must target a sandbox subdomain.")
 
     next_path = parsed.path or "/"
     if parsed.query:
         next_path = f"{next_path}?{parsed.query}"
 
-    return parsed.scheme, parsed.netloc, sandbox_name, next_path
+    return parsed.scheme, parsed.netloc, sandbox_id, next_path
 
 
 def _render_login_page(return_to: str, error: str | None = None, status_code: int = 200) -> HTMLResponse:
@@ -114,7 +114,7 @@ async def browser_bootstrap(
     current_user: User | None = Depends(optional_cookie_user),
     session: AsyncSession = Depends(get_session),
 ):
-    scheme, host, sandbox_name, next_path = _validate_return_to(return_to)
+    scheme, host, sandbox_id, next_path = _validate_return_to(return_to)
 
     if current_user is None:
         return RedirectResponse(
@@ -124,14 +124,13 @@ async def browser_bootstrap(
 
     result = await session.execute(
         select(Sandbox).where(
-            Sandbox.name == sandbox_name,
+            Sandbox.id == sandbox_id,
             Sandbox.owner_id == current_user.id,
-            Sandbox.gmt_deleted.is_(None),
         )
     )
     sandbox = result.scalar_one_or_none()
     if sandbox is None:
-        raise NotFoundError("Sandbox", sandbox_name)
+        raise NotFoundError("Sandbox", sandbox_id)
 
     ticket = issue_bootstrap_ticket(sandbox_id=sandbox.id, next_path=next_path)
     redirect_to = f"{scheme}://{host}/_treadstone/open?{urlencode({'ticket': ticket, 'next': next_path})}"

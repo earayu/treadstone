@@ -82,7 +82,7 @@ class SandboxNameConflictError(TreadstoneError):
     def __init__(self, name: str):
         super().__init__(
             code="sandbox_name_conflict",
-            message=f"A sandbox named '{name}' already exists.",
+            message=f"A sandbox named '{name}' already exists for the current user.",
             status=409,
         )
 

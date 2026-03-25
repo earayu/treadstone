@@ -20,8 +20,8 @@ def _make_sandbox(**overrides) -> Sandbox:
         "status": SandboxStatus.CREATING,
         "version": 1,
         "endpoints": {},
-        "k8s_sandbox_claim_name": "test-sandbox",
-        "k8s_sandbox_name": "test-sandbox",
+        "k8s_sandbox_claim_name": "sb1234567890abcdef",
+        "k8s_sandbox_name": "sb1234567890abcdef",
         "k8s_namespace": "treadstone-local",
     }
     defaults.update(overrides)
@@ -31,11 +31,16 @@ def _make_sandbox(**overrides) -> Sandbox:
     return sb
 
 
-def _mock_session(sandbox: Sandbox | None = None):
+def _mock_session(sandbox: Sandbox | None = None, *extra_scalars):
     session = AsyncMock()
-    mock_result = MagicMock()
-    mock_result.scalar_one_or_none.return_value = sandbox
-    session.execute.return_value = mock_result
+    execute_results = [sandbox, *extra_scalars, None]
+
+    def _make_result(value):
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = value
+        return mock_result
+
+    session.execute.side_effect = [_make_result(value) for value in execute_results] or [_make_result(None)]
     session.get.return_value = sandbox
     session.add = MagicMock()
     session.commit = AsyncMock()
@@ -82,7 +87,8 @@ class TestSandboxServiceCreate:
         assert result.status == SandboxStatus.CREATING
         assert result.owner_id == "user1234567890abcd"
         assert result.template == "aio-sandbox-tiny"
-        assert result.k8s_sandbox_claim_name == "my-sandbox"
+        assert result.name == "my-sandbox"
+        assert result.k8s_sandbox_claim_name == result.id
         session.add.assert_called_once()
         session.commit.assert_called()
 
@@ -100,6 +106,7 @@ class TestSandboxServiceCreate:
 
         k8s.create_sandbox_claim.assert_called_once()
         call_kwargs = k8s.create_sandbox_claim.call_args
+        assert call_kwargs.kwargs["name"].startswith("sb")
         assert call_kwargs.kwargs["template_ref"] == "aio-sandbox-tiny"
 
 
@@ -150,10 +157,10 @@ class TestSandboxServiceDelete:
         assert sb.status == SandboxStatus.DELETING
         k8s.delete_sandbox_claim.assert_called_once()
 
-    async def test_delete_from_deleted_raises(self):
+    async def test_delete_from_deleting_raises(self):
         from treadstone.services.sandbox_service import SandboxService
 
-        sb = _make_sandbox(status=SandboxStatus.DELETED)
+        sb = _make_sandbox(status=SandboxStatus.DELETING)
         session = _mock_session(sb)
         service = SandboxService(session=session, k8s_client=_mock_k8s_client())
 
@@ -172,7 +179,7 @@ class TestSandboxServiceStartStop:
 
         result = await service.start(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
         assert result.status == SandboxStatus.CREATING
-        k8s.scale_sandbox.assert_called_once_with(name="test-sandbox", namespace="treadstone-local", replicas=1)
+        k8s.scale_sandbox.assert_called_once_with(name="sb1234567890abcdef", namespace="treadstone-local", replicas=1)
 
     async def test_stop_calls_scale_sandbox_0(self):
         from treadstone.services.sandbox_service import SandboxService
@@ -184,7 +191,7 @@ class TestSandboxServiceStartStop:
 
         result = await service.stop(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
         assert result.status == SandboxStatus.STOPPED
-        k8s.scale_sandbox.assert_called_once_with(name="test-sandbox", namespace="treadstone-local", replicas=0)
+        k8s.scale_sandbox.assert_called_once_with(name="sb1234567890abcdef", namespace="treadstone-local", replicas=0)
 
     async def test_start_from_ready_raises(self):
         from treadstone.services.sandbox_service import SandboxService

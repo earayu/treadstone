@@ -49,8 +49,8 @@ class Settings(BaseSettings):
     pod_namespace: str = ""
 
     # Subdomain-based sandbox routing (for browser Web UI access)
-    # Dev: "sandbox.localhost"  →  sandbox-{name}.sandbox.localhost[:port]
-    # Prod: "treadstone-ai.dev" →  sandbox-{name}.treadstone-ai.dev
+    # Dev: "sandbox.localhost"  →  sandbox-{sandbox_id}.sandbox.localhost[:port]
+    # Prod: "treadstone-ai.dev" →  sandbox-{sandbox_id}.treadstone-ai.dev
     # Empty string disables subdomain routing.
     sandbox_domain: str = ""
 

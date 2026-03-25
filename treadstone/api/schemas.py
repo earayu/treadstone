@@ -21,9 +21,7 @@ SANDBOX_NAME_RULE = (
     "and must start and end with a letter or number."
 )
 SANDBOX_NAME_DESCRIPTION = (
-    "Optional custom sandbox name. "
-    f"{SANDBOX_NAME_RULE} "
-    "This keeps browser URLs like `sandbox-{name}.treadstone-ai.dev` within DNS label limits."
+    f"Optional custom sandbox name. {SANDBOX_NAME_RULE} Sandbox names only need to be unique for the current user."
 )
 STORAGE_SIZE_PATTERN = re.compile(r"^[1-9]\d*(?:Ei|Pi|Ti|Gi|Mi|Ki)$")
 STORAGE_SIZE_RULE = "storage_size must be a valid Kubernetes quantity like 5Gi, 500Mi, or 1Ti."
@@ -94,7 +92,7 @@ class SandboxUrls(BaseModel):
     proxy: str = Field(..., examples=["http://localhost:8000/v1/sandboxes/sb-abc123def456/proxy"])
     web: str | None = Field(
         default=None,
-        examples=["http://sandbox-my-sandbox.sandbox.localhost:8000/_treadstone/open?token=swlabc123"],
+        examples=["http://sandbox-sbabc123def456.sandbox.localhost:8000/_treadstone/open?token=swlabc123"],
         description=(
             "Recommended browser entry URL. When a sandbox web link is enabled, this is the shareable hand-off URL."
         ),
@@ -136,13 +134,16 @@ class SandboxListResponse(BaseModel):
 
 
 class SandboxWebLinkResponse(BaseModel):
-    web_url: str = Field(..., examples=["https://sandbox-demo.treadstone-ai.dev/"])
-    open_link: str = Field(..., examples=["https://sandbox-demo.treadstone-ai.dev/_treadstone/open?token=swlabc123"])
+    web_url: str = Field(..., examples=["https://sandbox-sbabc123def456.treadstone-ai.dev/"])
+    open_link: str = Field(
+        ...,
+        examples=["https://sandbox-sbabc123def456.treadstone-ai.dev/_treadstone/open?token=swlabc123"],
+    )
     expires_at: datetime = Field(..., examples=["2026-03-31T12:00:00+00:00"])
 
 
 class SandboxWebLinkStatusResponse(BaseModel):
-    web_url: str = Field(..., examples=["https://sandbox-demo.treadstone-ai.dev/"])
+    web_url: str = Field(..., examples=["https://sandbox-sbabc123def456.treadstone-ai.dev/"])
     enabled: bool = Field(..., examples=[True])
     expires_at: datetime | None = Field(default=None, examples=["2026-03-31T12:00:00+00:00"])
     last_used_at: datetime | None = Field(default=None, examples=[None])

@@ -34,15 +34,22 @@ EOF
 # ── Wait for service ─────────────────────────────────────────────────────────
 
 printf "Waiting for %s to be ready " "$BASE_URL"
+consecutive_successes=0
 for i in $(seq 1 30); do
     if curl -sf -o /dev/null "$BASE_URL/health" 2>/dev/null; then
-        printf " ready!\n\n"
-        break
+        consecutive_successes=$((consecutive_successes + 1))
+        printf "+"
+        if [ "$consecutive_successes" -ge 3 ]; then
+            printf " ready!\n\n"
+            break
+        fi
+    else
+        consecutive_successes=0
+        printf "."
     fi
-    printf "."
     sleep 2
     if [ "$i" -eq 30 ]; then
-        printf "\nERROR: timed out after 60s waiting for %s/health\n" "$BASE_URL"
+        printf "\nERROR: timed out after 60s waiting for 3 consecutive %s/health successes\n" "$BASE_URL"
         exit 1
     fi
 done

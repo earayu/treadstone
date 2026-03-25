@@ -143,7 +143,7 @@ treadstone auth delete-user <user-id>    # Delete a user (admin)
 Create and manage sandboxes.
 
 Custom sandbox names must be 1-55 characters of lowercase letters, numbers, or hyphens. They must start and end
-with a letter or number. This keeps browser URLs like `sandbox-{name}.treadstone-ai.dev` within DNS label limits.
+with a letter or number. Sandbox names only need to be unique for the current user.
 
 ```bash
 treadstone sandboxes create --template aio-sandbox-tiny --name my-box

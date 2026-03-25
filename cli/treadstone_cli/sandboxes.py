@@ -31,7 +31,7 @@ def sandboxes() -> None:
     help=(
         "Sandbox name (auto-generated if omitted). Must be 1-55 characters of lowercase letters, "
         "numbers, or hyphens; must start and end with a letter or number. "
-        "This keeps sandbox-{name} within DNS label limits."
+        "Sandbox names only need to be unique for the current user."
     ),
 )
 @click.option("--label", multiple=True, help="Labels in key:val format (repeatable).")
@@ -58,8 +58,8 @@ def create(
     """Create a new sandbox from a template.
 
     Custom names must be 1-55 characters of lowercase letters, numbers, or
-    hyphens, and must start and end with a letter or number. This keeps
-    browser URLs like sandbox-{name}.treadstone-ai.dev within DNS label limits.
+    hyphens, and must start and end with a letter or number. Sandbox names
+    only need to be unique for the current user.
 
     \b
     Examples:

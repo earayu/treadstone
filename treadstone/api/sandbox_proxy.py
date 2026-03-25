@@ -51,7 +51,10 @@ async def http_proxy(
 
     headers = dict(request.headers)
     try:
-        routing = resolve_routing(headers, path_sandbox_id=sandbox.k8s_sandbox_name or sandbox.name)
+        routing = resolve_routing(
+            headers,
+            path_sandbox_id=sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.id,
+        )
     except ValueError as exc:
         raise ValidationError(str(exc)) from exc
 
