@@ -91,6 +91,8 @@ clean: ## Remove build artifacts and caches
 # ── Deploy (Helm) ────────────────────────────────────────────────────────────
 
 ENV ?= local
+# StorageClass is cluster-scoped, not per-ENV: local → local-path, any other ENV → ack.
+# Override only when targeting a different cloud: make deploy-storage CLUSTER_PROFILE=aws
 CLUSTER_PROFILE ?= $(if $(filter local,$(ENV)),local,ack)
 
 # Every environment gets its own namespace and Helm release name:

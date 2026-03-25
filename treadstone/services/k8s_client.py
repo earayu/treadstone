@@ -28,6 +28,14 @@ TEMPLATE_API_VERSION = "v1alpha1"
 
 WATCH_TIMEOUT_SECONDS = 300
 
+# AIO Sandbox image conventions (ghcr.io/agent-infra/sandbox).
+# The image creates a non-root user `gem` with this UID/GID.  All internal
+# services (code-server, python-server, su - gem) use SANDBOX_HOME_DIR as
+# workspace.  Persistent volumes must be mounted here with matching ownership.
+SANDBOX_HOME_DIR = "/home/gem"
+SANDBOX_UID = 1000
+SANDBOX_GID = 1000
+
 
 class WatchExpiredError(Exception):
     """Raised when the K8s API returns 410 Gone for an expired resourceVersion."""
@@ -156,9 +164,39 @@ class Kr8sClient:
             "ports": [{"containerPort": container_port}],
             "resources": resources,
         }
+
+        pod_spec: dict[str, Any] = {"containers": [container], "restartPolicy": "OnFailure"}
+
         if volume_claim_templates:
-            container["volumeMounts"] = [
-                {"name": vct["metadata"]["name"], "mountPath": "/home/gem/workspace"} for vct in volume_claim_templates
+            vol_names = [vct["metadata"]["name"] for vct in volume_claim_templates]
+            container["volumeMounts"] = [{"name": n, "mountPath": SANDBOX_HOME_DIR} for n in vol_names]
+
+            pod_spec["securityContext"] = {
+                "fsGroup": SANDBOX_GID,
+                "fsGroupChangePolicy": "OnRootMismatch",
+            }
+
+            # On first boot the PVC shadows the image's home dir.  Seed the
+            # volume with the image-layer skeleton (dotfiles from useradd -m,
+            # etc.) so the main container's entrypoint can layer runtime state
+            # on top.  A sentinel file tracks whether seeding has happened —
+            # `ls -A` empty-checks break on ext4 volumes that ship lost+found.
+            _sentinel = "/mnt/home/.treadstone-home-initialized"
+            init_script = (
+                f"if [ ! -f {_sentinel} ]; then "
+                f"cp -a {SANDBOX_HOME_DIR}/. /mnt/home/ 2>/dev/null || true; "
+                f"touch {_sentinel}; "
+                f"fi; "
+                f"chown {SANDBOX_UID}:{SANDBOX_GID} /mnt/home"
+            )
+            pod_spec["initContainers"] = [
+                {
+                    "name": "init-home",
+                    "image": image,
+                    "command": ["sh", "-c", init_script],
+                    "volumeMounts": [{"name": n, "mountPath": "/mnt/home"} for n in vol_names],
+                    "securityContext": {"runAsUser": 0},
+                }
             ]
 
         manifest: dict[str, Any] = {
@@ -167,7 +205,7 @@ class Kr8sClient:
             "metadata": {"name": name, "namespace": namespace},
             "spec": {
                 "replicas": 1,
-                "podTemplate": {"spec": {"containers": [container], "restartPolicy": "OnFailure"}},
+                "podTemplate": {"spec": pod_spec},
             },
         }
         if volume_claim_templates:
