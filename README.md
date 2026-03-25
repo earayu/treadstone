@@ -77,18 +77,38 @@ treadstone --skills
 
 # All commands support JSON output for automation
 treadstone --json sandboxes list
+treadstone --json sandboxes create --template aio-sandbox-tiny --name my-sandbox
+treadstone --json sandboxes web enable <sandbox_id>
 ```
+
+Sandbox names are human-readable labels scoped to the current user. Follow-up
+CLI commands use `sandbox_id`, and browser entry URLs should be read from
+command output rather than derived from the sandbox name.
 
 ### Python SDK
 
 ```python
-from treadstone_sdk import Client
+from treadstone_sdk import AuthenticatedClient
+from treadstone_sdk.api.sandbox_templates import sandbox_templates_list_sandbox_templates
+from treadstone_sdk.api.sandboxes import sandboxes_create_sandbox, sandboxes_get_sandbox
+from treadstone_sdk.models.create_sandbox_request import CreateSandboxRequest
 
-client = Client(base_url="http://localhost:8000")
+client = AuthenticatedClient(base_url="http://localhost:8000", token="sk_your_api_key")
 
-# All API operations are available as typed methods
-# See sdk/python/ for the full generated SDK
+templates = sandbox_templates_list_sandbox_templates.sync(client=client)
+template_name = templates.items[0].name
+
+sandbox = sandboxes_create_sandbox.sync(
+    client=client,
+    body=CreateSandboxRequest(template=template_name, name="demo"),
+)
+
+sandbox_id = sandbox.id
+detail = sandboxes_get_sandbox.sync(sandbox_id=sandbox_id, client=client)
 ```
+
+Use the SDK when you want typed API access from Python. Sandbox names are only
+current-user labels; use `sandbox.id` for follow-up API calls and browser hand-off flows.
 
 ## Authentication Model
 

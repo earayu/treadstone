@@ -13,11 +13,12 @@ def sandboxes() -> None:
     """Manage sandboxes.
 
     Create, inspect, and control sandboxes. Use 'sb' as a shorthand.
+    Sandbox names are human-readable labels; follow-up commands use sandbox IDs.
 
     \b
     Examples:
-      treadstone sandboxes create --template aio-sandbox-tiny --name my-box
-      treadstone sandboxes list --label env:dev
+      treadstone --json sandboxes create --template aio-sandbox-tiny --name my-box
+      treadstone --json sandboxes list --label env:dev
       treadstone sandboxes get sb-abc123def456
       treadstone sandboxes web enable sb-abc123def456
     """
@@ -59,7 +60,8 @@ def create(
 
     Custom names must be 1-55 characters of lowercase letters, numbers, or
     hyphens, and must start and end with a letter or number. Sandbox names
-    only need to be unique for the current user.
+    only need to be unique for the current user. Use `--json` if you need the
+    returned `id`, `urls.proxy`, or `urls.web` for later automation steps.
 
     \b
     Examples:
@@ -190,7 +192,8 @@ def web() -> None:
     """Manage browser hand-off URLs for a sandbox.
 
     Use SANDBOX_ID from `treadstone sandboxes list` or the `id` field in
-    create/get JSON output. Sandbox names are not accepted here.
+    create/get JSON output. Sandbox names are not accepted here, and browser
+    URLs are derived from sandbox IDs rather than sandbox names.
 
     \b
     Examples:

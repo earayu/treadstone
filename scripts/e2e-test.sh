@@ -61,4 +61,8 @@ hurl --test --variables-file "$VARS_FILE" \
     --report-html "$REPORT_DIR" \
     "$E2E_DIR"/*.hurl
 
+# ── Post-process: group by run, improve visual design ────────────────────────
+
+python3 "$ROOT_DIR/scripts/gen-e2e-report.py" "$REPORT_DIR"
+
 printf "\nHTML report: %s/index.html\n" "$REPORT_DIR"

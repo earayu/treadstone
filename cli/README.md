@@ -38,7 +38,7 @@ treadstone api-keys create --name my-key --save
 # Create a sandbox
 treadstone sandboxes create --template aio-sandbox-tiny --name my-sandbox
 # Name rules: 1-55 chars, lowercase letters/numbers/hyphens only,
-# and must start/end with a letter or number.
+# and must start/end with a letter or number. Names are only unique per user.
 
 # List sandboxes
 treadstone sandboxes list
@@ -50,6 +50,19 @@ treadstone sandboxes web enable <sandbox-id>
 treadstone guide agent
 treadstone --skills
 ```
+
+For automation and AI agents, prefer JSON output and capture the returned sandbox ID:
+
+```bash
+treadstone --json templates list
+treadstone --json sandboxes create --template aio-sandbox-tiny --name my-sandbox
+treadstone --json sandboxes list
+treadstone --json sandboxes web enable <sandbox-id>
+```
+
+Treat `name` as a human-readable label only. Follow-up sandbox commands require
+`SANDBOX_ID`, and browser URLs should come from `urls.web`, `web_url`, or
+`open_link` rather than being constructed from the sandbox name.
 
 ## Configuration
 
@@ -108,7 +121,7 @@ treadstone config path
 | `--base-url URL` | Override the server URL |
 | `--api-key KEY` | Override the API key |
 | `--json` | Output responses as JSON (useful for scripting) |
-| `--skills` | Print the built-in agent skill in `SKILL.md` format |
+| `--skills` | Print the built-in agent skill in `SKILL.md` format for tools like GangGang, Codex, and Cursor |
 | `--version` | Show CLI version |
 | `--help` | Show help message |
 
@@ -208,6 +221,26 @@ treadstone --json api-keys list
 `treadstone sandboxes web enable <sandbox-id>` is idempotent: it returns the
 current active browser hand-off URL when one already exists. If you need a new
 hand-off URL, disable web access first and then enable it again.
+
+## AI Agent usage
+
+Use the CLI as a JSON-first interface when an agent needs to chain commands:
+
+```bash
+treadstone --json system health
+treadstone --json templates list
+treadstone --json sandboxes create --template aio-sandbox-tiny --name demo
+treadstone --json sandboxes get <sandbox-id>
+treadstone --json sandboxes web enable <sandbox-id>
+```
+
+Guidelines:
+
+- Put `--json` before the subcommand.
+- Pass `--email` and `--password` explicitly for non-interactive auth flows.
+- Sandbox names are only unique for the current user. They are not accepted where `SANDBOX_ID` is required.
+- Browser entry URLs are based on `sandbox_id` under the hood. Read `urls.web`, `web_url`, or `open_link` from command output instead of constructing URLs manually.
+- `treadstone --skills` prints a built-in `SKILL.md` document that can be fed to agent runners.
 
 ## Error handling
 
