@@ -184,7 +184,11 @@ ship: ## AI commit & push: make ship MSG="feat: add user model"
 release: ## Tag a release: make release V=0.2.0
 	@if [ -z "$(V)" ]; then echo "Usage: make release V=0.2.0"; exit 1; fi
 	@if [ "$$(git symbolic-ref --short HEAD)" != "main" ]; then echo "Error: Must be on main to release."; exit 1; fi
+	@echo "Bumping versions to $(V)..."
+	python scripts/set_release_versions.py "$(V)"
+	git add pyproject.toml cli/pyproject.toml sdk/python/pyproject.toml
+	git commit -m "chore: release v$(V)"
 	@echo "Tagging v$(V) and pushing — this will trigger Docker + PyPI + GitHub Release..."
 	git tag "v$(V)"
-	git push origin "v$(V)"
+	git push origin main "v$(V)"
 	@echo "✓ Release v$(V) triggered. Watch: gh run watch"
