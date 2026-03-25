@@ -4,15 +4,17 @@ This document describes how to deploy Treadstone to Kubernetes and perform basic
 
 ## Architecture Overview
 
-The deployment consists of three layers of Helm charts, ordered by dependency from bottom to top:
+The deployment consists of four layers of Helm charts, ordered by dependency from bottom to top:
 
 | Layer | Chart | Description |
 |-------|-------|-------------|
+| Storage | `deploy/cluster-storage` | Cluster-scoped StorageClass aliases for persistent sandbox workspaces |
 | Infra | `deploy/agent-sandbox` | Sandbox CRD + controller (cluster-scoped, deploy once) |
 | Runtime | `deploy/sandbox-runtime` | SandboxTemplate + WarmPool (namespace-scoped) |
 | App | `deploy/treadstone` | FastAPI application + Ingress + RBAC + Migration Job |
 
-Each layer's Helm chart provides `values-{local,demo,prod}.yaml`, selected via the `ENV` variable.
+The app/runtime layers use the `ENV` variable (`local`, `demo`, `prod`). Cluster storage uses `CLUSTER_PROFILE`
+(`local`, `ack`, `aws`) because `StorageClass` resources are cluster-scoped rather than namespace-scoped.
 
 ## Prerequisites
 
@@ -48,8 +50,8 @@ make up              # Equivalent to make up ENV=local
 ### Demo / Prod Environments
 
 ```bash
-make up ENV=demo     # Requires an existing, accessible K8s cluster
-make up ENV=prod
+make up ENV=demo CLUSTER_PROFILE=ack     # Requires an existing, accessible K8s cluster
+make up ENV=prod CLUSTER_PROFILE=ack
 ```
 
 ### One-Command Teardown
@@ -81,18 +83,20 @@ kind load docker-image treadstone:latest --name treadstone
 ### 3. Deploy All Helm Charts
 
 ```bash
-make deploy-all ENV=local
+make deploy-all ENV=local CLUSTER_PROFILE=local
 ```
 
 This is equivalent to running in sequence:
 
 ```bash
+make deploy-storage CLUSTER_PROFILE=local  # StorageClass aliases (cluster-scoped)
 make deploy-infra ENV=local     # Sandbox CRD + controller
 make deploy-runtime ENV=local   # SandboxTemplate + WarmPool
 make deploy-app ENV=local       # App + Secret + Migration
 ```
 
 `deploy-app` automatically creates a K8s Secret (`treadstone-secrets`) from `.env.local`, and runs the database migration in a Helm pre-install/pre-upgrade hook.
+Persistent sandboxes use `TREADSTONE_SANDBOX_STORAGE_CLASS` from the environment file and default to a 5 GiB workspace.
 
 ### 4. Verify Deployment
 
@@ -203,7 +207,7 @@ make restart-app
 
 ```bash
 make undeploy-app                  # Uninstall app only
-make undeploy-all                  # Uninstall app + runtime (keep infra controller)
+make undeploy-all                  # Uninstall app + runtime (keep shared infra + storage)
 make down                          # Tear down everything (including Kind cluster in local)
 ```
 

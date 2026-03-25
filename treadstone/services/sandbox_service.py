@@ -18,6 +18,7 @@ from treadstone.core.errors import (
     InvalidTransitionError,
     SandboxNameConflictError,
     SandboxNotFoundError,
+    StorageBackendNotReadyError,
     TemplateNotFoundError,
 )
 from treadstone.models.sandbox import Sandbox, SandboxStatus, is_valid_transition
@@ -61,10 +62,14 @@ class SandboxService:
         auto_stop_interval: int = 15,
         auto_delete_interval: int = -1,
         persist: bool = False,
-        storage_size: str = "10Gi",
+        storage_size: str | None = None,
     ) -> Sandbox:
         sandbox_id = "sb" + random_id()
         sandbox_name = name or f"sb-{random_id(8)}"
+        effective_storage_size = storage_size or settings.sandbox_default_storage_size
+
+        if persist:
+            await self._ensure_persistent_storage_backend_ready()
 
         sandbox = Sandbox()
         sandbox.id = sandbox_id
@@ -80,7 +85,7 @@ class SandboxService:
         sandbox.gmt_created = utc_now()
         sandbox.k8s_namespace = settings.sandbox_namespace
         sandbox.persist = persist
-        sandbox.storage_size = storage_size if persist else None
+        sandbox.storage_size = effective_storage_size if persist else None
 
         if persist:
             sandbox.provision_mode = "direct"
@@ -99,7 +104,7 @@ class SandboxService:
 
         try:
             if persist:
-                await self._create_direct(sandbox, template, storage_size)
+                await self._create_direct(sandbox, template, effective_storage_size)
             else:
                 await self._create_via_claim(sandbox, template)
         except TemplateNotFoundError:
@@ -134,6 +139,12 @@ class SandboxService:
             namespace=sandbox.k8s_namespace,
         )
 
+    async def _ensure_persistent_storage_backend_ready(self) -> None:
+        storage_class_name = settings.sandbox_storage_class.strip()
+        storage_class = await self.k8s.get_storage_class(storage_class_name)
+        if storage_class is None:
+            raise StorageBackendNotReadyError(storage_class_name)
+
     async def _create_direct(self, sandbox: Sandbox, template: str, storage_size: str) -> None:
         tmpl = await self._resolve_template(sandbox.k8s_namespace, template)
 
@@ -151,6 +162,7 @@ class SandboxService:
                 "metadata": {"name": "workspace"},
                 "spec": {
                     "accessModes": ["ReadWriteOnce"],
+                    "storageClassName": settings.sandbox_storage_class,
                     "resources": {"requests": {"storage": storage_size}},
                 },
             }

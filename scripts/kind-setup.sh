@@ -5,6 +5,7 @@ CLUSTER_NAME="treadstone"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 KIND_CONFIG="${SCRIPT_DIR}/../deploy/kind/kind-config.yaml"
 INGRESS_NGINX_VERSION="v1.12.1"
+LOCAL_PATH_PROVISIONER_VERSION="v0.0.31"
 
 check_prerequisites() {
     local missing=()
@@ -60,6 +61,24 @@ install_ingress_nginx() {
     echo "ingress-nginx is ready."
 }
 
+install_local_path_provisioner() {
+    if kubectl get namespace local-path-storage &>/dev/null && \
+       kubectl get deployment -n local-path-storage local-path-provisioner &>/dev/null; then
+        echo ""
+        echo "local-path-provisioner already running, skipping install."
+        return 0
+    fi
+
+    echo ""
+    echo "Installing local-path-provisioner (${LOCAL_PATH_PROVISIONER_VERSION}) ..."
+    kubectl apply -f "https://raw.githubusercontent.com/rancher/local-path-provisioner/${LOCAL_PATH_PROVISIONER_VERSION}/deploy/local-path-storage.yaml"
+    echo "Waiting for local-path-provisioner to be ready (timeout 300s) ..."
+    kubectl wait --namespace local-path-storage \
+        --for=condition=available deployment/local-path-provisioner \
+        --timeout=300s
+    echo "local-path-provisioner is ready."
+}
+
 verify_cluster() {
     echo ""
     echo "Verifying cluster nodes ..."
@@ -74,6 +93,7 @@ main() {
     check_prerequisites
     create_cluster
     install_ingress_nginx
+    install_local_path_provisioner
     verify_cluster
     echo ""
     echo "Next steps:"

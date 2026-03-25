@@ -202,7 +202,7 @@ async def create_sandbox(
         auto_stop_interval=body.auto_stop_interval,
         auto_delete_interval=body.auto_delete_interval,
         persist=body.persist,
-        storage_size=body.storage_size or "10Gi",
+        storage_size=body.storage_size or settings.sandbox_default_storage_size,
     )
     web_link = None
     if settings.sandbox_domain:

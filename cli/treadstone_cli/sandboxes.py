@@ -7,6 +7,8 @@ import click
 from treadstone_cli._client import require_auth
 from treadstone_cli._output import handle_error, is_json_mode, print_detail, print_json, print_table
 
+_STORAGE_SIZE_CHOICES = ("5Gi", "10Gi", "20Gi")
+
 
 @click.group()
 def sandboxes() -> None:
@@ -44,7 +46,12 @@ def sandboxes() -> None:
     help="Minutes after stop before auto-delete. Use -1 to disable auto-delete.",
 )
 @click.option("--persist", is_flag=True, default=False, help="Enable persistent storage.")
-@click.option("--storage-size", default="10Gi", help="PVC size when --persist is set.")
+@click.option(
+    "--storage-size",
+    default="5Gi",
+    type=click.Choice(_STORAGE_SIZE_CHOICES, case_sensitive=True),
+    help="PVC size when --persist is set. Supported tiers: 5Gi, 10Gi, 20Gi.",
+)
 @click.pass_context
 def create(
     ctx: click.Context,
@@ -67,7 +74,7 @@ def create(
     Examples:
       treadstone sandboxes create --template aio-sandbox-tiny
       treadstone sandboxes create --template aio-sandbox-medium --name dev-box --label env:dev
-      treadstone sandboxes create --template aio-sandbox-large --persist --storage-size 20Gi
+      treadstone sandboxes create --template aio-sandbox-large --persist --storage-size 5Gi
       treadstone sandboxes create --template aio-sandbox-small --auto-stop-interval 30 --auto-delete-interval 120
     """
     client = require_auth(ctx)

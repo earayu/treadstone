@@ -180,6 +180,7 @@ with a letter or number. Sandbox names only need to be unique for the current us
 ```bash
 treadstone sandboxes create --template aio-sandbox-tiny --name my-box
 treadstone sandboxes create --template aio-sandbox-medium --label env:dev --persist
+treadstone sandboxes create --template aio-sandbox-large --persist --storage-size 5Gi
 treadstone sandboxes list
 treadstone sandboxes list --label env:prod --label team:agent --limit 10
 treadstone sandboxes get <sandbox-id>
@@ -190,6 +191,8 @@ treadstone sandboxes web enable <sandbox-id>
 treadstone sandboxes web status <sandbox-id>
 treadstone sandboxes web disable <sandbox-id>
 ```
+
+Persistent sandbox storage currently supports the preset tiers `5Gi`, `10Gi`, and `20Gi`.
 
 ### `templates`
 

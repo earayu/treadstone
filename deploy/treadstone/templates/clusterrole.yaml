@@ -54,6 +54,14 @@ rules:
     verbs:
       - get
       - patch
+  # StorageClasses: read-only for persistent sandbox storage backend checks
+  - apiGroups:
+      - storage.k8s.io
+    resources:
+      - storageclasses
+    verbs:
+      - get
+      - list
   # Lease objects: leader election for singleton background sync
   - apiGroups:
       - coordination.k8s.io

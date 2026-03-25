@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
+from treadstone.config import SANDBOX_STORAGE_SIZE_VALUES, settings
 from treadstone.models.api_key import ApiKeyDataPlaneMode
 from treadstone.models.user import Role
 
@@ -23,8 +25,8 @@ SANDBOX_NAME_RULE = (
 SANDBOX_NAME_DESCRIPTION = (
     f"Optional custom sandbox name. {SANDBOX_NAME_RULE} Sandbox names only need to be unique for the current user."
 )
-STORAGE_SIZE_PATTERN = re.compile(r"^[1-9]\d*(?:Ei|Pi|Ti|Gi|Mi|Ki)$")
-STORAGE_SIZE_RULE = "storage_size must be a valid Kubernetes quantity like 5Gi, 500Mi, or 1Ti."
+STORAGE_SIZE_RULE = "storage_size must be one of the supported storage tiers: 5Gi, 10Gi, or 20Gi."
+StorageSize = Literal["5Gi", "10Gi", "20Gi"]
 
 # ── Sandbox ──────────────────────────────────────────────────────────────────
 
@@ -42,7 +44,11 @@ class CreateSandboxRequest(BaseModel):
         description="Minutes after stop before the sandbox is automatically deleted. -1 disables auto-delete.",
     )
     persist: bool = Field(default=False, examples=[False])
-    storage_size: str | None = Field(default=None, examples=["10Gi"], description="Persistent volume size.")
+    storage_size: StorageSize | None = Field(
+        default=None,
+        examples=["5Gi"],
+        description="Persistent volume size. Supported tiers: 5Gi, 10Gi, 20Gi.",
+    )
 
     @field_validator("name")
     @classmethod
@@ -69,10 +75,10 @@ class CreateSandboxRequest(BaseModel):
 
     @field_validator("storage_size")
     @classmethod
-    def validate_storage_size(cls, value: str | None) -> str | None:
+    def validate_storage_size(cls, value: StorageSize | None) -> StorageSize | None:
         if value is None:
             return None
-        if not STORAGE_SIZE_PATTERN.fullmatch(value):
+        if value not in SANDBOX_STORAGE_SIZE_VALUES:
             raise ValueError(STORAGE_SIZE_RULE)
         return value
 
@@ -80,7 +86,7 @@ class CreateSandboxRequest(BaseModel):
     def validate_storage_config(self) -> CreateSandboxRequest:
         if self.persist:
             if self.storage_size is None:
-                self.storage_size = "10Gi"
+                self.storage_size = settings.sandbox_default_storage_size
             return self
 
         if self.storage_size is not None:
@@ -121,8 +127,10 @@ class SandboxDetailResponse(SandboxResponse):
     image: str | None = Field(default=None, examples=["ghcr.io/agent-infra/sandbox:latest"])
     status_message: str | None = Field(default=None, examples=[None])
     persist: bool = Field(default=False, examples=[False])
-    storage_size: str | None = Field(
-        default=None, examples=["10Gi"], description="Persistent volume size (only present when persist=true)."
+    storage_size: StorageSize | None = Field(
+        default=None,
+        examples=["5Gi"],
+        description="Persistent volume size (only present when persist=true). Supported tiers: 5Gi, 10Gi, 20Gi.",
     )
     started_at: datetime | None = Field(default=None, examples=["2026-03-21T12:01:00+00:00"])
     stopped_at: datetime | None = Field(default=None, examples=[None])
