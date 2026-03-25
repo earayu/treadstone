@@ -75,6 +75,8 @@ class K8sClientProtocol(Protocol):
 
     async def scale_sandbox(self, name: str, namespace: str, replicas: int) -> bool: ...
 
+    async def get_storage_class(self, name: str) -> dict[str, Any] | None: ...
+
     # ── SandboxTemplate (extensions.agents.x-k8s.io) — read only ──
     async def list_sandbox_templates(self, namespace: str) -> list[dict[str, Any]]: ...
 
@@ -259,6 +261,15 @@ class Kr8sClient:
         ) as resp:
             return resp.status_code < 400
 
+    async def get_storage_class(self, name: str) -> dict[str, Any] | None:
+        api = await self._get_api()
+        url = f"/apis/storage.k8s.io/v1/storageclasses/{name}"
+        try:
+            async with api.call_api("GET", base=url, version="") as resp:
+                return resp.json()
+        except Exception:
+            return None
+
     # ── SandboxTemplate ──
 
     async def list_sandbox_templates(self, namespace: str) -> list[dict[str, Any]]:
@@ -344,6 +355,14 @@ class FakeK8sClient:
         self._templates: list[dict[str, Any]] = list(self._DEFAULT_TEMPLATES)
         self._claims: dict[str, dict[str, Any]] = {}
         self._sandboxes: dict[str, dict[str, Any]] = {}
+        self._storage_classes: dict[str, dict[str, Any]] = {
+            "treadstone-workspace": {
+                "apiVersion": "storage.k8s.io/v1",
+                "kind": "StorageClass",
+                "metadata": {"name": "treadstone-workspace"},
+                "provisioner": "test.fake.provisioner",
+            }
+        }
         self._watch_queue: asyncio.Queue[tuple[str, dict[str, Any]] | None] = asyncio.Queue()
 
     async def create_sandbox_claim(
@@ -481,6 +500,9 @@ class FakeK8sClient:
         sb["metadata"]["resourceVersion"] = rv
         return True
 
+    async def get_storage_class(self, name: str) -> dict[str, Any] | None:
+        return self._storage_classes.get(name)
+
     async def list_sandbox_templates(self, namespace: str) -> list[dict[str, Any]]:
         return list(self._templates)
 
@@ -495,6 +517,9 @@ class FakeK8sClient:
             sb["status"]["replicas"] = 1
             rv = str(int(sb["metadata"].get("resourceVersion", "1")) + 1)
             sb["metadata"]["resourceVersion"] = rv
+
+    def remove_storage_class(self, name: str) -> None:
+        self._storage_classes.pop(name, None)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

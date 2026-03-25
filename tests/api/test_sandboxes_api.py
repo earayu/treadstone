@@ -10,6 +10,7 @@ from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
 from treadstone.models.sandbox import Sandbox
 from treadstone.models.user import OAuthAccount, User
+from treadstone.services.k8s_client import FakeK8sClient, set_k8s_client
 
 _test_session_factory = None
 
@@ -126,6 +127,32 @@ class TestCreateSandbox:
         assert data["name"] == "persist-sb"
         assert data["status"] == "creating"
 
+    async def test_create_with_persist_uses_default_storage_size(self, auth_client):
+        create_resp = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": "persist-default", "persist": True},
+        )
+        assert create_resp.status_code == 202
+
+        sandbox_id = create_resp.json()["id"]
+        get_resp = await auth_client.get(f"/v1/sandboxes/{sandbox_id}")
+        assert get_resp.status_code == 200
+        assert get_resp.json()["storage_size"] == "5Gi"
+
+    async def test_create_with_missing_storage_class_returns_503(self, auth_client):
+        k8s = FakeK8sClient()
+        k8s.remove_storage_class("treadstone-workspace")
+        set_k8s_client(k8s)
+
+        resp = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": "persist-no-sc", "persist": True},
+        )
+
+        assert resp.status_code == 503
+        data = resp.json()
+        assert data["error"]["code"] == "storage_backend_not_ready"
+
     async def test_create_with_subdomain_returns_shareable_web_entry_url(self, auth_client, monkeypatch):
         _enable_subdomain(monkeypatch)
 
@@ -204,6 +231,16 @@ class TestCreateSandbox:
         )
         assert resp.status_code == 422
         assert resp.json()["error"]["code"] == "validation_error"
+
+    async def test_create_with_unsupported_storage_tier_returns_422(self, auth_client):
+        resp = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": "bad-storage-tier", "persist": True, "storage_size": "7Gi"},
+        )
+        assert resp.status_code == 422
+        data = resp.json()
+        assert data["error"]["code"] == "validation_error"
+        assert "5Gi" in data["error"]["message"]
 
     async def test_create_with_invalid_auto_stop_interval_returns_422(self, auth_client):
         resp = await auth_client.post(

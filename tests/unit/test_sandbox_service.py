@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from treadstone.core.errors import InvalidTransitionError, TemplateNotFoundError
+from treadstone.core.errors import InvalidTransitionError, StorageBackendNotReadyError, TemplateNotFoundError
 from treadstone.models.sandbox import Sandbox, SandboxStatus
 
 
@@ -57,6 +57,7 @@ def _mock_k8s_client():
     k8s.create_sandbox = AsyncMock(return_value={"metadata": {"name": "test-sb"}, "kind": "Sandbox"})
     k8s.delete_sandbox = AsyncMock(return_value=True)
     k8s.scale_sandbox = AsyncMock(return_value=True)
+    k8s.get_storage_class = AsyncMock(return_value={"metadata": {"name": "treadstone-workspace"}})
     k8s.get_sandbox_claim = AsyncMock(return_value=None)
     k8s.list_sandbox_templates = AsyncMock(
         return_value=[
@@ -254,7 +255,28 @@ class TestDualPathProvisioning:
         k8s.create_sandbox_claim.assert_not_called()
         call_kwargs = k8s.create_sandbox.call_args.kwargs
         assert call_kwargs["volume_claim_templates"] is not None
+        assert call_kwargs["volume_claim_templates"][0]["spec"]["storageClassName"] == "treadstone-workspace"
         assert call_kwargs["volume_claim_templates"][0]["spec"]["resources"]["requests"]["storage"] == "20Gi"
+
+    async def test_create_with_persist_checks_storage_class_before_creating(self):
+        from treadstone.services.sandbox_service import SandboxService
+
+        session = _mock_session()
+        k8s = _mock_k8s_client()
+        k8s.get_storage_class.return_value = None
+        service = SandboxService(session=session, k8s_client=k8s)
+
+        with pytest.raises(StorageBackendNotReadyError):
+            await service.create(
+                owner_id="user1234567890abcd",
+                template="aio-sandbox-tiny",
+                persist=True,
+            )
+
+        session.add.assert_not_called()
+        session.commit.assert_not_called()
+        k8s.create_sandbox.assert_not_called()
+        k8s.create_sandbox_claim.assert_not_called()
 
     async def test_delete_claim_path_calls_delete_sandbox_claim(self):
         from treadstone.services.sandbox_service import SandboxService

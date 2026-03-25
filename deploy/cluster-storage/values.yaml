@@ -1,0 +1,11 @@
+enabled: true
+
+storageClass:
+  name: treadstone-workspace
+  annotations: {}
+  labels: {}
+  provisioner: diskplugin.csi.alibabacloud.com
+  reclaimPolicy: Delete
+  volumeBindingMode: WaitForFirstConsumer
+  allowVolumeExpansion: true
+  parameters: {}

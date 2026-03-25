@@ -1,3 +1,4 @@
+from typing import Literal
 from urllib.parse import urlparse
 
 from pydantic_settings import BaseSettings
@@ -5,6 +6,7 @@ from pydantic_settings import BaseSettings
 _DEFAULT_JWT_SECRET = "CHANGE_ME_IN_PROD"
 _MIN_JWT_SECRET_LENGTH = 32
 _UNSUPPORTED_OIDC_AUTH_TYPES = {"auth0", "authing", "logto"}
+SANDBOX_STORAGE_SIZE_VALUES = ("5Gi", "10Gi", "20Gi")
 
 
 class Settings(BaseSettings):
@@ -38,6 +40,8 @@ class Settings(BaseSettings):
     sandbox_namespace: str = "treadstone-local"
     sandbox_port: int = 8080
     sandbox_proxy_timeout: float = 180.0
+    sandbox_storage_class: str = "treadstone-workspace"
+    sandbox_default_storage_size: Literal["5Gi", "10Gi", "20Gi"] = "5Gi"
 
     # Leader election for singleton background sync tasks in multi-replica deploys
     leader_election_enabled: bool = False

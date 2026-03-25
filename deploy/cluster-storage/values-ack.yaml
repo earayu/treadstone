@@ -1,0 +1,9 @@
+storageClass:
+  provisioner: diskplugin.csi.alibabacloud.com
+  reclaimPolicy: Delete
+  volumeBindingMode: WaitForFirstConsumer
+  allowVolumeExpansion: true
+  parameters:
+    type: cloud_essd
+    performanceLevel: PL0
+    fstype: ext4

@@ -1,4 +1,4 @@
-.PHONY: help install install-hooks dev test test-unit test-api test-integration test-all test-e2e test-cov lint format migrate migration downgrade gen-openapi build clean ship up down deploy-infra deploy-runtime deploy-app deploy-all undeploy-app undeploy-runtime undeploy-all restart-app kind-create kind-delete port-forward
+.PHONY: help install install-hooks dev test test-unit test-api test-integration test-all test-e2e test-cov lint format migrate migration downgrade gen-openapi build clean ship up down deploy-storage deploy-infra deploy-runtime deploy-app deploy-all undeploy-storage undeploy-app undeploy-runtime undeploy-all restart-app kind-create kind-delete port-forward
 
 # ── Development ──────────────────────────────────────────────────────────────
 
@@ -91,12 +91,20 @@ clean: ## Remove build artifacts and caches
 # ── Deploy (Helm) ────────────────────────────────────────────────────────────
 
 ENV ?= local
+CLUSTER_PROFILE ?= $(if $(filter local,$(ENV)),local,ack)
 
 # Every environment gets its own namespace and Helm release name:
 # local → treadstone-local, demo → treadstone-demo, prod → treadstone-prod
-NS          := treadstone-$(ENV)
-APP_RELEASE := treadstone-$(ENV)
-RT_RELEASE  := sandbox-runtime-$(ENV)
+NS              := treadstone-$(ENV)
+APP_RELEASE     := treadstone-$(ENV)
+RT_RELEASE      := sandbox-runtime-$(ENV)
+STORAGE_NS      := cluster-storage-system
+STORAGE_RELEASE := cluster-storage-$(CLUSTER_PROFILE)
+
+deploy-storage: ## Deploy cluster-scoped StorageClass aliases for persistent sandboxes
+	helm upgrade --install $(STORAGE_RELEASE) deploy/cluster-storage \
+		-n $(STORAGE_NS) -f deploy/cluster-storage/values-$(CLUSTER_PROFILE).yaml \
+		--create-namespace
 
 deploy-infra: ## Deploy agent-sandbox controller (once per cluster)
 	helm upgrade --install agent-sandbox deploy/agent-sandbox \
@@ -123,7 +131,7 @@ deploy-app: ## Deploy Treadstone application (creates K8s secret from .env.<ENV>
 		-n $(NS) -f deploy/treadstone/values-$(ENV).yaml \
 		--create-namespace
 
-deploy-all: deploy-infra deploy-runtime deploy-app ## Deploy everything (infra → runtime → app)
+deploy-all: deploy-storage deploy-infra deploy-runtime deploy-app ## Deploy everything (storage → infra → runtime → app)
 
 restart-app: ## Rolling restart to pick up new env vars
 	kubectl rollout restart deployment/$(APP_RELEASE)-treadstone -n $(NS)
@@ -131,14 +139,18 @@ restart-app: ## Rolling restart to pick up new env vars
 port-forward: ## Port-forward treadstone service to localhost:8000
 	kubectl -n $(NS) port-forward svc/$(APP_RELEASE)-treadstone 8000:8000
 
+undeploy-storage: ## Undeploy cluster-scoped storage aliases (use with care on shared clusters)
+	helm uninstall $(STORAGE_RELEASE) -n $(STORAGE_NS) 2>/dev/null || true
+
 undeploy-app: ## Undeploy Treadstone application
 	helm uninstall $(APP_RELEASE) -n $(NS) 2>/dev/null || true
 
 undeploy-runtime: ## Undeploy sandbox runtime
 	helm uninstall $(RT_RELEASE) -n $(NS) 2>/dev/null || true
 
-undeploy-all: undeploy-app undeploy-runtime ## Undeploy app + runtime (keeps infra)
-	@echo "Note: agent-sandbox controller left in place. Run 'helm uninstall agent-sandbox' to remove."
+undeploy-all: undeploy-app undeploy-runtime ## Undeploy app + runtime (keeps shared infra + storage)
+	@echo "Note: agent-sandbox controller and cluster-storage are left in place."
+	@echo "Remove manually only if the cluster is dedicated to Treadstone."
 
 # ── Environment Lifecycle ─────────────────────────────────────────────────────
 

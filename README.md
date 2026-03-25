@@ -139,8 +139,10 @@ Examples:
 treadstone sandboxes create --template aio-sandbox-tiny --name quick-demo
 
 # Persistent development environment
-treadstone sandboxes create --template aio-sandbox-large --name dev-box --persist --storage-size 20Gi
+treadstone sandboxes create --template aio-sandbox-large --name dev-box --persist --storage-size 5Gi
 ```
+
+Persistent sandbox storage uses preset workspace tiers today: `5Gi`, `10Gi`, and `20Gi`.
 
 ## Architecture
 

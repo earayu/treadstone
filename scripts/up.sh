@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ENV="${1:-local}"
+CLUSTER_PROFILE="${2:-${CLUSTER_PROFILE:-}}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CLUSTER_NAME="treadstone"
 
@@ -20,7 +21,11 @@ fi
 
 echo ""
 echo "Deploying Helm charts (ENV=$ENV) ..."
-make deploy-all ENV="$ENV"
+if [ -n "$CLUSTER_PROFILE" ]; then
+    make deploy-all ENV="$ENV" CLUSTER_PROFILE="$CLUSTER_PROFILE"
+else
+    make deploy-all ENV="$ENV"
+fi
 
 NS="treadstone-${ENV}"
 

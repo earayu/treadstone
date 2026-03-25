@@ -11,19 +11,26 @@ from treadstone.services.k8s_client import (
 
 
 class _EmptyStreamResponse:
+    def __init__(self, payload: dict | None = None):
+        self._payload = payload or {}
+
     async def aiter_lines(self):
         for line in ():
             yield line
 
+    def json(self):
+        return self._payload
+
 
 class _RecordedCall:
-    def __init__(self, recorder: list[dict], payload: dict):
+    def __init__(self, recorder: list[dict], payload: dict, response_payload: dict | None = None):
         self._recorder = recorder
         self._payload = payload
+        self._response_payload = response_payload
 
     async def __aenter__(self):
         self._recorder.append(self._payload)
-        return _EmptyStreamResponse()
+        return _EmptyStreamResponse(self._response_payload)
 
     async def __aexit__(self, exc_type, exc, tb):
         return False
@@ -34,7 +41,11 @@ class _RecordingAPI:
         self.calls: list[dict] = []
 
     def call_api(self, method: str, **kwargs):
-        return _RecordedCall(self.calls, {"method": method, **kwargs})
+        response_payload = None
+        if method == "GET" and kwargs.get("base", "").startswith("/apis/storage.k8s.io/v1/storageclasses/"):
+            name = kwargs["base"].rsplit("/", 1)[-1]
+            response_payload = {"metadata": {"name": name}}
+        return _RecordedCall(self.calls, {"method": method, **kwargs}, response_payload=response_payload)
 
 
 async def test_list_sandbox_templates():
@@ -140,6 +151,7 @@ async def test_create_sandbox_direct():
                 "metadata": {"name": "workspace"},
                 "spec": {
                     "accessModes": ["ReadWriteOnce"],
+                    "storageClassName": "treadstone-workspace",
                     "resources": {"requests": {"storage": "10Gi"}},
                 },
             }
@@ -165,6 +177,13 @@ async def test_create_sandbox_direct_without_storage():
     )
     assert sb["kind"] == "Sandbox"
     assert "volumeClaimTemplates" not in sb["spec"]
+
+
+async def test_get_storage_class():
+    client = FakeK8sClient()
+    storage_class = await client.get_storage_class("treadstone-workspace")
+    assert storage_class is not None
+    assert storage_class["metadata"]["name"] == "treadstone-workspace"
 
 
 async def test_delete_sandbox_direct():
@@ -218,3 +237,21 @@ async def test_watch_sandboxes_passes_query_params_separately():
         "timeoutSeconds": str(WATCH_TIMEOUT_SECONDS),
         "resourceVersion": "123",
     }
+
+
+async def test_get_storage_class_requests_expected_endpoint():
+    client = Kr8sClient()
+    api = _RecordingAPI()
+
+    async def fake_get_api():
+        return api
+
+    client._get_api = fake_get_api  # type: ignore[method-assign]
+
+    storage_class = await client.get_storage_class("treadstone-workspace")
+
+    assert storage_class == {"metadata": {"name": "treadstone-workspace"}}
+    call = api.calls[0]
+    assert call["method"] == "GET"
+    assert call["base"] == "/apis/storage.k8s.io/v1/storageclasses/treadstone-workspace"
+    assert call["version"] == ""

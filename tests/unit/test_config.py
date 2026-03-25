@@ -29,6 +29,12 @@ def test_auth_defaults():
     assert s.jwt_secret == "CHANGE_ME_IN_PROD"
 
 
+def test_sandbox_storage_defaults():
+    s = Settings(_env_file=None, database_url=DB_URL)
+    assert s.sandbox_storage_class == "treadstone-workspace"
+    assert s.sandbox_default_storage_size == "5Gi"
+
+
 def test_auth_type_override():
     s = Settings(_env_file=None, database_url=DB_URL, auth_type="logto")
     assert s.auth_type == "logto"
