@@ -3,6 +3,9 @@
 from datetime import UTC, datetime, timedelta
 
 from treadstone.services.k8s_client import (
+    SANDBOX_GID,
+    SANDBOX_HOME_DIR,
+    SANDBOX_UID,
     WATCH_TIMEOUT_SECONDS,
     FakeK8sClient,
     Kr8sClient,
@@ -255,3 +258,88 @@ async def test_get_storage_class_requests_expected_endpoint():
     assert call["method"] == "GET"
     assert call["base"] == "/apis/storage.k8s.io/v1/storageclasses/treadstone-workspace"
     assert call["version"] == ""
+
+
+# ── Kr8sClient manifest structure (persist=true) ──
+
+
+async def test_create_sandbox_manifest_mounts_pvc_at_home_dir():
+    """Persistent sandbox must mount PVC at SANDBOX_HOME_DIR with correct
+    securityContext and an initContainer that seeds the volume on first boot."""
+    client = Kr8sClient()
+    api = _RecordingAPI()
+
+    async def fake_get_api():
+        return api
+
+    client._get_api = fake_get_api  # type: ignore[method-assign]
+
+    image = "ghcr.io/agent-infra/sandbox:latest"
+    await client.create_sandbox(
+        name="persist-sb",
+        namespace="treadstone-local",
+        image=image,
+        container_port=8080,
+        resources={"requests": {"cpu": "250m", "memory": "512Mi"}},
+        volume_claim_templates=[
+            {
+                "metadata": {"name": "workspace"},
+                "spec": {
+                    "accessModes": ["ReadWriteOnce"],
+                    "storageClassName": "treadstone-workspace",
+                    "resources": {"requests": {"storage": "10Gi"}},
+                },
+            }
+        ],
+    )
+
+    assert len(api.calls) == 1
+    manifest = api.calls[0]["json"]
+    pod_spec = manifest["spec"]["podTemplate"]["spec"]
+
+    # Main container mounts PVC at the image's home directory
+    main = pod_spec["containers"][0]
+    assert main["volumeMounts"] == [{"name": "workspace", "mountPath": SANDBOX_HOME_DIR}]
+
+    # Pod-level security context lets the gem user write to the volume
+    sc = pod_spec["securityContext"]
+    assert sc["fsGroup"] == SANDBOX_GID
+    assert sc["fsGroupChangePolicy"] == "OnRootMismatch"
+
+    # initContainer seeds home contents on first boot using a sentinel file
+    # (not ls -A empty-check, which breaks on ext4 volumes with lost+found)
+    init = pod_spec["initContainers"][0]
+    assert init["name"] == "init-home"
+    assert init["image"] == image
+    assert init["securityContext"] == {"runAsUser": 0}
+    assert init["volumeMounts"] == [{"name": "workspace", "mountPath": "/mnt/home"}]
+    script = init["command"][2]
+    assert ".treadstone-home-initialized" in script
+    assert f"chown {SANDBOX_UID}:{SANDBOX_GID}" in script
+
+
+async def test_create_sandbox_manifest_without_pvc_has_no_init_or_security_context():
+    """Ephemeral sandbox (no PVC) must not add securityContext or initContainers."""
+    client = Kr8sClient()
+    api = _RecordingAPI()
+
+    async def fake_get_api():
+        return api
+
+    client._get_api = fake_get_api  # type: ignore[method-assign]
+
+    await client.create_sandbox(
+        name="ephemeral-sb",
+        namespace="treadstone-local",
+        image="ghcr.io/agent-infra/sandbox:latest",
+        container_port=8080,
+        resources={"requests": {"cpu": "250m", "memory": "512Mi"}},
+    )
+
+    manifest = api.calls[0]["json"]
+    pod_spec = manifest["spec"]["podTemplate"]["spec"]
+
+    assert "securityContext" not in pod_spec
+    assert "initContainers" not in pod_spec
+    assert "volumeMounts" not in pod_spec["containers"][0]
+    assert "volumeClaimTemplates" not in manifest["spec"]

@@ -4,7 +4,7 @@ storageClass:
   name: treadstone-workspace
   annotations: {}
   labels: {}
-  provisioner: diskplugin.csi.alibabacloud.com
+  provisioner: ""  # always overridden by values-<profile>.yaml (local / ack / aws)
   reclaimPolicy: Delete
   volumeBindingMode: WaitForFirstConsumer
   allowVolumeExpansion: true
