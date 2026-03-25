@@ -65,9 +65,9 @@ class _TreadstoneGroup(click.Group):
                 [
                     ("Check connectivity", "treadstone system health"),
                     ("Sign in interactively", "treadstone auth login"),
-                    ("List templates", "treadstone templates list"),
-                    ("Create a sandbox", "treadstone sandboxes create --template aio-sandbox-tiny"),
-                    ("Get a browser hand-off URL", "treadstone sandboxes web enable SANDBOX_ID"),
+                    ("List templates (JSON)", "treadstone --json templates list"),
+                    ("Create a sandbox (JSON)", "treadstone --json sandboxes create --template aio-sandbox-tiny"),
+                    ("Get a browser hand-off URL", "treadstone --json sandboxes web enable SANDBOX_ID"),
                     ("Print the agent skill", "treadstone guide agent  or  treadstone --skills"),
                 ]
             )
@@ -91,7 +91,7 @@ class _TreadstoneGroup(click.Group):
     is_eager=True,
     expose_value=False,
     callback=_print_skills,
-    help="Print the built-in agent skill in SKILL.md format.",
+    help="Print the built-in agent skill in SKILL.md format for tools like GangGang, Codex, and Cursor.",
 )
 @click.option(
     "--api-key",

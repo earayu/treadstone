@@ -127,6 +127,8 @@ def test_guide_agent_matches_skills_flag(runner: CliRunner) -> None:
     assert "description:" in guide_result.output
     assert "# Treadstone CLI" in guide_result.output
     assert "SANDBOX_ID arguments always require the sandbox ID" in guide_result.output
+    assert "Sandbox names only need to be unique for the current user." in guide_result.output
+    assert "Never construct browser URLs from sandbox names." in guide_result.output
 
 
 def test_login_saves_session_and_whoami_uses_it(
@@ -293,14 +295,14 @@ def test_sandboxes_web_commands_cover_enable_status_disable(
     routes = {
         ("POST", "/v1/sandboxes/sb-123/web-link"): FakeResponse(
             {
-                "web_url": "https://sandbox-demo.treadstone-ai.dev",
-                "open_link": "https://sandbox-demo.treadstone-ai.dev/_treadstone/open?token=abc",
+                "web_url": "https://sandbox-sb-123.treadstone-ai.dev",
+                "open_link": "https://sandbox-sb-123.treadstone-ai.dev/_treadstone/open?token=abc",
                 "expires_at": "2026-03-31T12:00:00+00:00",
             }
         ),
         ("GET", "/v1/sandboxes/sb-123/web-link"): FakeResponse(
             {
-                "web_url": "https://sandbox-demo.treadstone-ai.dev",
+                "web_url": "https://sandbox-sb-123.treadstone-ai.dev",
                 "enabled": True,
                 "expires_at": "2026-03-31T12:00:00+00:00",
                 "last_used_at": None,
@@ -317,6 +319,7 @@ def test_sandboxes_web_commands_cover_enable_status_disable(
     assert enable_result.exit_code == 0
     assert status_result.exit_code == 0
     assert disable_result.exit_code == 0
+    assert json.loads(enable_result.output)["web_url"].endswith("sandbox-sb-123.treadstone-ai.dev")
     assert json.loads(enable_result.output)["open_link"].endswith("token=abc")
     assert json.loads(status_result.output)["enabled"] is True
     assert json.loads(disable_result.output)["sandbox_id"] == "sb-123"
