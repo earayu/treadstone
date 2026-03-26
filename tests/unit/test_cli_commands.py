@@ -16,6 +16,7 @@ if str(CLI_ROOT) not in sys.path:
     sys.path.insert(0, str(CLI_ROOT))
 
 _client = importlib.import_module("treadstone_cli._client")
+_auth_cmd = importlib.import_module("treadstone_cli.auth")
 cli = importlib.import_module("treadstone_cli.main").cli
 
 
@@ -51,11 +52,15 @@ def make_fake_client(routes: dict[tuple[str, str], Any], requests: list[dict[str
             self.cookies = dict(cookies or {})
             self.timeout = timeout
 
-        def get(self, path: str, params: dict[str, Any] | None = None) -> FakeResponse:
-            return self._request("GET", path, params=params)
+        def get(
+            self, path: str, params: dict[str, Any] | None = None, headers: dict[str, str] | None = None
+        ) -> FakeResponse:
+            return self._request("GET", path, params=params, extra_headers=headers)
 
-        def post(self, path: str, json: dict[str, Any] | None = None) -> FakeResponse:
-            return self._request("POST", path, json=json)
+        def post(
+            self, path: str, json: dict[str, Any] | None = None, headers: dict[str, str] | None = None
+        ) -> FakeResponse:
+            return self._request("POST", path, json=json, extra_headers=headers)
 
         def patch(self, path: str, json: dict[str, Any] | None = None) -> FakeResponse:
             return self._request("PATCH", path, json=json)
@@ -70,23 +75,41 @@ def make_fake_client(routes: dict[tuple[str, str], Any], requests: list[dict[str
             *,
             json: dict[str, Any] | None = None,
             params: dict[str, Any] | None = None,
+            extra_headers: dict[str, str] | None = None,
         ) -> FakeResponse:
+            merged_headers = {**self.headers, **(extra_headers or {})}
             request = {
                 "method": method,
                 "path": path,
                 "json": json,
                 "params": params,
-                "headers": dict(self.headers),
+                "headers": merged_headers,
                 "cookies": dict(self.cookies),
                 "base_url": self.base_url,
             }
             requests.append(request)
-            handler = routes[(method, path)]
+            handler = routes.get((method, path))
+            if handler is None:
+                for (rm, rp), rh in routes.items():
+                    if rm == method and _path_matches(rp, path):
+                        handler = rh
+                        break
+            if handler is None:
+                raise KeyError(f"No route for {method} {path}")
             if callable(handler):
                 return handler(request)
             return handler
 
     return FakeHTTPClient
+
+
+def _path_matches(pattern: str, path: str) -> bool:
+    """Simple wildcard match: '/v1/auth/cli/flows/*/status' matches '/v1/auth/cli/flows/clf123/status'."""
+    pattern_parts = pattern.split("/")
+    path_parts = path.split("/")
+    if len(pattern_parts) != len(path_parts):
+        return False
+    return all(pp == "*" or pp == rp for pp, rp in zip(pattern_parts, path_parts))
 
 
 @pytest.fixture
@@ -323,3 +346,165 @@ def test_sandboxes_web_commands_cover_enable_status_disable(
     assert json.loads(enable_result.output)["open_link"].endswith("token=abc")
     assert json.loads(status_result.output)["enabled"] is True
     assert json.loads(disable_result.output)["sandbox_id"] == "sb-123"
+
+
+# ── CLI browser OAuth login flow tests ──────────────────────────
+
+
+def _make_browser_flow_routes(
+    poll_responses: list[FakeResponse] | None = None,
+) -> dict[tuple[str, str], Any]:
+    """Build routes for a browser login flow with configurable poll responses."""
+    poll_iter = iter(poll_responses or [FakeResponse({"status": "approved"})])
+
+    return {
+        ("POST", "/v1/auth/cli/flows"): FakeResponse(
+            {
+                "flow_id": "clf-test",
+                "flow_secret": "secret-abc",
+                "browser_url": "http://test/v1/auth/cli/login?flow_id=clf-test",
+                "expires_at": "2099-01-01T00:00:00Z",
+                "poll_interval": 2,
+            }
+        ),
+        ("GET", "/v1/auth/cli/flows/*/status"): lambda _req: next(poll_iter),
+        ("POST", "/v1/auth/cli/flows/*/exchange"): FakeResponse({"session_token": "jwt-token-123"}),
+    }
+
+
+def test_browser_login_success_saves_session(
+    runner: CliRunner,
+    cli_state: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requests: list[dict[str, Any]] = []
+    routes = _make_browser_flow_routes()
+    monkeypatch.setattr(_client.httpx, "Client", make_fake_client(routes, requests))
+    monkeypatch.setattr(_auth_cmd, "webbrowser", type("FakeWB", (), {"open": staticmethod(lambda url: True)})())
+    monkeypatch.setattr(_auth_cmd.time, "sleep", lambda _: None)
+
+    result = runner.invoke(cli, ["auth", "login"])
+
+    assert result.exit_code == 0
+    assert "Login successful" in result.output
+    assert json.loads(_client.SESSION_FILE.read_text()) == {_client._DEFAULT_BASE_URL: "jwt-token-123"}
+
+    poll_req = next(r for r in requests if r["method"] == "GET" and "status" in r["path"])
+    assert poll_req["headers"]["X-Flow-Secret"] == "secret-abc"
+
+
+def test_browser_login_webbrowser_open_failure_still_prints_url(
+    runner: CliRunner,
+    cli_state: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requests: list[dict[str, Any]] = []
+    routes = _make_browser_flow_routes()
+    monkeypatch.setattr(_client.httpx, "Client", make_fake_client(routes, requests))
+
+    def failing_open(url: str) -> None:
+        raise OSError("no browser")
+
+    monkeypatch.setattr(_auth_cmd, "webbrowser", type("FakeWB", (), {"open": staticmethod(failing_open)})())
+    monkeypatch.setattr(_auth_cmd.time, "sleep", lambda _: None)
+
+    result = runner.invoke(cli, ["auth", "login"])
+
+    assert result.exit_code == 0
+    assert "Could not open browser" in result.output
+    assert "http://test/v1/auth/cli/login?flow_id=clf-test" in result.output
+    assert "Login successful" in result.output
+
+
+def test_browser_login_flow_expired_exits_with_error(
+    runner: CliRunner,
+    cli_state: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requests: list[dict[str, Any]] = []
+    routes = _make_browser_flow_routes(poll_responses=[FakeResponse({"status": "expired"})])
+    monkeypatch.setattr(_client.httpx, "Client", make_fake_client(routes, requests))
+    monkeypatch.setattr(_auth_cmd, "webbrowser", type("FakeWB", (), {"open": staticmethod(lambda url: True)})())
+    monkeypatch.setattr(_auth_cmd.time, "sleep", lambda _: None)
+
+    result = runner.invoke(cli, ["auth", "login"])
+
+    assert result.exit_code != 0
+    assert "expired" in result.output
+
+
+def test_browser_login_flow_failed_exits_with_error(
+    runner: CliRunner,
+    cli_state: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requests: list[dict[str, Any]] = []
+    routes = _make_browser_flow_routes(poll_responses=[FakeResponse({"status": "failed"})])
+    monkeypatch.setattr(_client.httpx, "Client", make_fake_client(routes, requests))
+    monkeypatch.setattr(_auth_cmd, "webbrowser", type("FakeWB", (), {"open": staticmethod(lambda url: True)})())
+    monkeypatch.setattr(_auth_cmd.time, "sleep", lambda _: None)
+
+    result = runner.invoke(cli, ["auth", "login"])
+
+    assert result.exit_code != 0
+    assert "failed" in result.output
+
+
+def test_json_login_without_credentials_returns_error(
+    runner: CliRunner,
+    cli_state: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result = runner.invoke(cli, ["--json", "auth", "login"])
+
+    assert result.exit_code != 0
+    data = json.loads(result.output)
+    assert "error" in data
+    assert "interactive" in data["error"].lower()
+
+
+def test_direct_login_with_email_password_still_works(
+    runner: CliRunner,
+    cli_state: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requests: list[dict[str, Any]] = []
+    routes = {
+        ("POST", "/v1/auth/login"): FakeResponse({"detail": "Login successful"}, cookies={"session": "direct-sess"}),
+    }
+    monkeypatch.setattr(_client.httpx, "Client", make_fake_client(routes, requests))
+
+    result = runner.invoke(cli, ["auth", "login", "--email", "u@b.com", "--password", "Pass123!"])
+
+    assert result.exit_code == 0
+    assert "Login successful" in result.output
+    assert json.loads(_client.SESSION_FILE.read_text()) == {_client._DEFAULT_BASE_URL: "direct-sess"}
+
+
+def test_browser_login_polls_pending_then_approved(
+    runner: CliRunner,
+    cli_state: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CLI correctly waits through pending polls until approved."""
+    requests: list[dict[str, Any]] = []
+    routes = _make_browser_flow_routes(
+        poll_responses=[
+            FakeResponse({"status": "pending"}),
+            FakeResponse({"status": "pending"}),
+            FakeResponse({"status": "approved"}),
+        ]
+    )
+    monkeypatch.setattr(_client.httpx, "Client", make_fake_client(routes, requests))
+    monkeypatch.setattr(_auth_cmd, "webbrowser", type("FakeWB", (), {"open": staticmethod(lambda url: True)})())
+
+    sleep_calls: list[float] = []
+    monkeypatch.setattr(_auth_cmd.time, "sleep", lambda s: sleep_calls.append(s))
+
+    result = runner.invoke(cli, ["auth", "login"])
+
+    assert result.exit_code == 0
+    assert "Login successful" in result.output
+    assert len(sleep_calls) == 3
+    poll_requests = [r for r in requests if r["method"] == "GET" and "status" in r["path"]]
+    assert len(poll_requests) == 3

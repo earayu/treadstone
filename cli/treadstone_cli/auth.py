@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import sys
+import time
+import webbrowser
+
 import click
 import httpx
 
@@ -16,6 +20,9 @@ from treadstone_cli._client import (
 )
 from treadstone_cli._output import handle_error, is_json_mode, print_detail, print_json, print_table
 
+_FLOW_POLL_INTERVAL = 2
+_FLOW_MAX_POLLS = 300
+
 
 @click.group()
 def auth() -> None:
@@ -27,23 +34,14 @@ def auth() -> None:
     \b
     Quick start:
       treadstone auth register                        Create a new account
-      treadstone auth login                           Save a local session
+      treadstone auth login                           Browser login (Google/GitHub/email)
+      treadstone auth login --email X --password Y    Direct email/password login
       treadstone auth whoami                          Verify current identity
-      treadstone api-keys create --name agent --save Create a reusable API key
+      treadstone api-keys create --name agent --save  Create a reusable API key
     """
 
 
-@auth.command("login")
-@click.option("--email", required=True, prompt=True, help="Account email.")
-@click.option("--password", required=True, prompt=True, hide_input=True, help="Account password.")
-@click.pass_context
-def login(ctx: click.Context, email: str, password: str) -> None:
-    """Log in with email and password.
-
-    If --email or --password are not provided, you will be prompted
-    interactively. On success, the CLI stores the returned session cookie and
-    reuses it for future control-plane commands until you run logout.
-    """
+def _direct_login(ctx: click.Context, email: str, password: str) -> None:
     client = build_client(ctx)
     resp = client.post("/v1/auth/login", json={"email": email, "password": password})
     handle_error(resp)
@@ -57,6 +55,83 @@ def login(ctx: click.Context, email: str, password: str) -> None:
         print_json({**data, "base_url": base_url, "session_saved": True})
     else:
         click.echo(f"Login successful. Saved session for {base_url}.")
+
+
+def _browser_login(ctx: click.Context) -> None:
+    base_url = get_base_url(ctx)
+    client = httpx.Client(base_url=base_url, timeout=30.0)
+
+    resp = client.post("/v1/auth/cli/flows")
+    handle_error(resp)
+    data = resp.json()
+
+    flow_id = data["flow_id"]
+    flow_secret = data["flow_secret"]
+    browser_url = data["browser_url"]
+
+    click.echo(f"Opening browser to log in...\n  {browser_url}\n")
+    try:
+        webbrowser.open(browser_url)
+    except Exception:
+        click.echo("Could not open browser automatically. Open the URL above in your browser.")
+
+    click.echo("Waiting for login to complete... (press Ctrl+C to cancel)")
+
+    headers = {"X-Flow-Secret": flow_secret}
+    for _ in range(_FLOW_MAX_POLLS):
+        time.sleep(_FLOW_POLL_INTERVAL)
+        try:
+            poll = client.get(f"/v1/auth/cli/flows/{flow_id}/status", headers=headers)
+        except httpx.HTTPError:
+            continue
+        if poll.status_code != 200:
+            continue
+        status = poll.json().get("status")
+        if status == "approved":
+            exchange = client.post(f"/v1/auth/cli/flows/{flow_id}/exchange", headers=headers)
+            handle_error(exchange)
+            token = exchange.json()["session_token"]
+            save_session(base_url, token)
+            if is_json_mode(ctx):
+                print_json({"detail": "Login successful", "base_url": base_url, "session_saved": True})
+            else:
+                click.echo(f"\nLogin successful. Saved session for {base_url}.")
+            return
+        if status in ("expired", "used", "failed"):
+            click.echo(f"\nLogin flow {status}. Please try again.", err=True)
+            sys.exit(1)
+
+    click.echo("\nLogin timed out. Please try again.", err=True)
+    sys.exit(1)
+
+
+@auth.command("login")
+@click.option("--email", default=None, help="Account email (enables direct login).")
+@click.option("--password", default=None, help="Account password (requires --email).")
+@click.pass_context
+def login(ctx: click.Context, email: str | None, password: str | None) -> None:
+    """Log in to Treadstone.
+
+    Without flags, opens a browser for Google/GitHub/email authentication.
+    With --email and --password, logs in directly without a browser.
+    """
+    if email and not password:
+        password = click.prompt("Password", hide_input=True)
+    if password and not email:
+        raise click.UsageError("--password requires --email.")
+
+    if email and password:
+        _direct_login(ctx, email, password)
+    else:
+        if is_json_mode(ctx):
+            print_json(
+                {
+                    "error": "Browser login is interactive. "
+                    "Pass --email and --password for non-interactive use, or use TREADSTONE_API_KEY."
+                }
+            )
+            sys.exit(1)
+        _browser_login(ctx)
 
 
 @auth.command("logout")
