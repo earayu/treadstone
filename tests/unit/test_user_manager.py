@@ -17,12 +17,12 @@ def test_auth_backend_name():
 
 def test_cookie_transport_config():
     assert cookie_transport.cookie_name == "session"
-    assert cookie_transport.cookie_max_age == 86400
+    assert cookie_transport.cookie_max_age == 604800
 
 
 def test_jwt_strategy_lifetime():
     strategy = get_jwt_strategy()
-    assert strategy.lifetime_seconds == 86400
+    assert strategy.lifetime_seconds == 604800
 
 
 def test_fastapi_users_instance():

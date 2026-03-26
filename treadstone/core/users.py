@@ -14,7 +14,7 @@ from treadstone.config import settings
 from treadstone.core.database import get_session
 from treadstone.models.user import OAuthAccount, Role, User
 
-COOKIE_MAX_AGE = 86400  # 24 hours
+COOKIE_MAX_AGE = settings.session_ttl_seconds
 
 
 def should_use_secure_cookies() -> bool:
