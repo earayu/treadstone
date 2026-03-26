@@ -179,11 +179,12 @@ class ConcurrentLimitError(TreadstoneError):
 
 class TemplateNotAllowedError(TreadstoneError):
     def __init__(self, tier: str, template: str, allowed_templates: list[str]):
+        allowed_str = ", ".join(allowed_templates) if allowed_templates else "none"
         super().__init__(
             code="template_not_allowed",
             message=(
                 f"Template '{template}' is not available on the '{tier}' tier. "
-                f"Allowed templates: {', '.join(allowed_templates)}. "
+                f"Allowed templates: {allowed_str}. "
                 f"Upgrade your plan to access this template."
             ),
             status=403,
