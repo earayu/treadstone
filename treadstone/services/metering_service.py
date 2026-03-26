@@ -1,11 +1,16 @@
 """MeteringService — core metering logic for the Treadstone billing system.
 
-Implements Layer 1 of the metering execution plan:
+Implements Layers 1–2 of the metering execution plan:
   F05: Plan management (ensure_user_plan, get_user_plan, update_user_tier)
   F06: Welcome bonus (auto-granted on free-tier registration)
   F07: Dual-pool credit consumption (consume_compute_credits)
   F08: Compute session lifecycle (open_compute_session, close_compute_session)
   F09: Storage ledger (record_storage_allocation, record_storage_release)
+  F10: Template permission check (check_template_allowed)
+  F11: Compute quota check (check_compute_quota, get_total_compute_remaining)
+  F12: Concurrent sandbox limit (check_concurrent_limit)
+  F13: Storage quota check (check_storage_quota, get_total_storage_quota, get_current_storage_used)
+  F14: Sandbox duration check (check_sandbox_duration)
 
 Transaction Policy
 ------------------
@@ -24,7 +29,14 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from treadstone.core.errors import NotFoundError, ValidationError
+from treadstone.core.errors import (
+    ComputeQuotaExceededError,
+    ConcurrentLimitError,
+    NotFoundError,
+    StorageQuotaExceededError,
+    TemplateNotAllowedError,
+    ValidationError,
+)
 from treadstone.models.metering import (
     ComputeSession,
     CreditGrant,
@@ -33,6 +45,7 @@ from treadstone.models.metering import (
     TierTemplate,
     UserPlan,
 )
+from treadstone.models.sandbox import Sandbox, SandboxStatus
 from treadstone.models.user import utc_now
 from treadstone.services.metering_helpers import (
     ConsumeResult,
@@ -408,8 +421,138 @@ class MeteringService:
         return ledger
 
     # ═══════════════════════════════════════════════════════
+    #  Quota Checks  (F10–F14)
+    # ═══════════════════════════════════════════════════════
+
+    async def check_template_allowed(
+        self,
+        session: AsyncSession,
+        user_id: str,
+        template: str,
+    ) -> None:
+        """Verify that the user's tier permits the requested sandbox template.
+
+        Raises TemplateNotAllowedError (403) if the template is not in the
+        plan's ``allowed_templates`` list.
+        """
+        plan = await self.get_user_plan(session, user_id)
+        if template not in plan.allowed_templates:
+            raise TemplateNotAllowedError(plan.tier, template, plan.allowed_templates)
+
+    async def check_compute_quota(
+        self,
+        session: AsyncSession,
+        user_id: str,
+    ) -> None:
+        """Verify that the user has remaining compute credits.
+
+        Checks monthly remaining + extra CreditGrants.
+        Raises ComputeQuotaExceededError (402) when total_remaining <= 0.
+        """
+        plan = await self.get_user_plan(session, user_id)
+        monthly_remaining = plan.compute_credits_monthly_limit - plan.compute_credits_monthly_used
+        extra_remaining = await self.get_extra_credits_remaining(session, user_id, "compute")
+        total_remaining = monthly_remaining + extra_remaining
+        if total_remaining <= Decimal("0"):
+            raise ComputeQuotaExceededError(
+                monthly_used=float(plan.compute_credits_monthly_used),
+                monthly_limit=float(plan.compute_credits_monthly_limit),
+                extra_remaining=float(extra_remaining),
+            )
+
+    async def check_concurrent_limit(
+        self,
+        session: AsyncSession,
+        user_id: str,
+    ) -> None:
+        """Verify that the user has not reached the concurrent sandbox limit.
+
+        Counts sandboxes in ``creating`` or ``ready`` status.
+        Raises ConcurrentLimitError (429) when running >= max_concurrent_running.
+        """
+        plan = await self.get_user_plan(session, user_id)
+        running_count = await self._count_running_sandboxes(session, user_id)
+        if running_count >= plan.max_concurrent_running:
+            raise ConcurrentLimitError(running_count, plan.max_concurrent_running)
+
+    async def check_storage_quota(
+        self,
+        session: AsyncSession,
+        user_id: str,
+        requested_gib: int,
+    ) -> None:
+        """Verify that the user has enough storage quota for the requested allocation.
+
+        total_quota = monthly_limit + extra_storage_grants
+        available  = total_quota - current_used
+        Raises StorageQuotaExceededError (402) when available < requested_gib.
+        """
+        total_quota = await self.get_total_storage_quota(session, user_id)
+        current_used = await self.get_current_storage_used(session, user_id)
+        available = total_quota - current_used
+        if available < requested_gib:
+            raise StorageQuotaExceededError(current_used, requested_gib, total_quota)
+
+    async def check_sandbox_duration(
+        self,
+        session: AsyncSession,
+        user_id: str,
+    ) -> int:
+        """Return the maximum sandbox duration (seconds) allowed by the user's tier.
+
+        The caller is responsible for comparing the returned value against the
+        requested ``auto_stop_interval`` and raising ``SandboxDurationExceededError``
+        when the request exceeds the limit.  Duration-check semantics
+        (e.g. ``auto_stop_interval <= 0`` means unlimited) belong to the sandbox
+        domain, not the metering domain.
+        """
+        plan = await self.get_user_plan(session, user_id)
+        return plan.max_sandbox_duration_seconds
+
+    # ═══════════════════════════════════════════════════════
     #  Query Helpers
     # ═══════════════════════════════════════════════════════
+
+    async def get_total_compute_remaining(
+        self,
+        session: AsyncSession,
+        user_id: str,
+    ) -> Decimal:
+        """Return total compute credits remaining (monthly + extra).
+
+        May be negative in grace-period overage scenarios.
+        """
+        plan = await self.get_user_plan(session, user_id)
+        monthly_remaining = plan.compute_credits_monthly_limit - plan.compute_credits_monthly_used
+        extra_remaining = await self.get_extra_credits_remaining(session, user_id, "compute")
+        return monthly_remaining + extra_remaining
+
+    async def get_total_storage_quota(
+        self,
+        session: AsyncSession,
+        user_id: str,
+    ) -> int:
+        """Return total storage quota in GiB (monthly limit + extra storage grants)."""
+        plan = await self.get_user_plan(session, user_id)
+        extra_storage = await self.get_extra_credits_remaining(session, user_id, "storage")
+        return plan.storage_credits_monthly_limit + int(extra_storage)
+
+    async def get_current_storage_used(
+        self,
+        session: AsyncSession,
+        user_id: str,
+    ) -> int:
+        """Return total active storage allocation in GiB.
+
+        Sums ``size_gib`` across all ``ACTIVE`` StorageLedger entries for the user.
+        """
+        result = await session.execute(
+            select(func.coalesce(func.sum(StorageLedger.size_gib), 0)).where(
+                StorageLedger.user_id == user_id,
+                StorageLedger.storage_state == StorageState.ACTIVE,
+            )
+        )
+        return int(result.scalar_one())
 
     async def get_extra_credits_remaining(
         self,
@@ -431,6 +574,22 @@ class MeteringService:
             )
         )
         return Decimal(str(result.scalar_one()))
+
+    async def _count_running_sandboxes(
+        self,
+        session: AsyncSession,
+        user_id: str,
+    ) -> int:
+        """Count sandboxes in creating or ready status for the given user."""
+        result = await session.execute(
+            select(func.count())
+            .select_from(Sandbox)
+            .where(
+                Sandbox.owner_id == user_id,
+                Sandbox.status.in_([SandboxStatus.CREATING, SandboxStatus.READY]),
+            )
+        )
+        return result.scalar_one()
 
     async def _get_user_plan_for_update(self, session: AsyncSession, user_id: str) -> UserPlan:
         """Fetch and row-lock the user's plan for credit mutation.

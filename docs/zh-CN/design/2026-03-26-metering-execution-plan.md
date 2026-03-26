@@ -245,19 +245,19 @@ F01 → F02 → F03 → F04 → F05 → F06 → F07 → F08 → F09
 
 ### Layer 1 — MeteringService 核心
 
-- [ ] **F05** MeteringService 骨架 + ensure_user_plan + get_user_plan + update_user_tier
-- [ ] **F06** Welcome Bonus（注册 hook 中自动发放 50 Compute Credits）
-- [ ] **F07** consume_compute_credits（双池消费算法，含 FOR UPDATE 行锁）
-- [ ] **F08** open_compute_session / close_compute_session
-- [ ] **F09** record_storage_allocation / record_storage_release
+- [x] **F05** MeteringService 骨架 + ensure_user_plan + get_user_plan + update_user_tier
+- [x] **F06** Welcome Bonus（注册 hook 中自动发放 50 Compute Credits）
+- [x] **F07** consume_compute_credits（双池消费算法，含 FOR UPDATE 行锁）
+- [x] **F08** open_compute_session / close_compute_session
+- [x] **F09** record_storage_allocation / record_storage_release
 
 ### Layer 2 — 配额检查
 
-- [ ] **F10** check_template_allowed
-- [ ] **F11** check_compute_quota + get_total_compute_remaining
-- [ ] **F12** check_concurrent_limit
-- [ ] **F13** check_storage_quota + get_total_storage_quota + get_current_storage_used
-- [ ] **F14** check_sandbox_duration
+- [x] **F10** check_template_allowed
+- [x] **F11** check_compute_quota + get_total_compute_remaining
+- [x] **F12** check_concurrent_limit
+- [x] **F13** check_storage_quota + get_total_storage_quota + get_current_storage_used
+- [x] **F14** check_sandbox_duration
 
 ### Layer 3 — 系统集成
 
