@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from treadstone.api.audit import router as audit_router
 from treadstone.api.auth import router as auth_router
 from treadstone.api.browser import router as browser_router
+from treadstone.api.cli_auth import router as cli_auth_router
 from treadstone.api.config import router as config_router
 from treadstone.api.sandbox_proxy import router as sandbox_proxy_router
 from treadstone.api.sandbox_templates import router as sandbox_templates_router
@@ -156,6 +157,7 @@ app.add_middleware(RequestLoggingMiddleware)
 app.include_router(audit_router)
 app.include_router(auth_router)
 app.include_router(browser_router)
+app.include_router(cli_auth_router)
 app.include_router(config_router)
 app.include_router(sandbox_proxy_router)
 app.include_router(sandbox_templates_router)

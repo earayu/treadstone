@@ -10,12 +10,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from treadstone.api import auth as auth_api
-from treadstone.api import browser as browser_api
 from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
 from treadstone.models.user import OAuthAccount, User
 from treadstone.services import browser_login as browser_login_service
+from treadstone.services import login_page as login_page_service
 
 _test_session_factory = None
 
@@ -284,8 +284,8 @@ async def test_github_callback_rejects_unverified_email_and_does_not_link_existi
 @pytest.mark.asyncio
 async def test_browser_login_page_renders_google_and_github_buttons_when_configured(db_session, monkeypatch):
     _enable_browser_flow(monkeypatch)
-    monkeypatch.setattr(browser_api, "get_google_oauth_client", lambda: SimpleNamespace(name="google"), raising=False)
-    monkeypatch.setattr(browser_api, "get_github_oauth_client", lambda: SimpleNamespace(name="github"), raising=False)
+    monkeypatch.setattr(login_page_service, "get_google_oauth_client", lambda: SimpleNamespace(name="google"))
+    monkeypatch.setattr(login_page_service, "get_github_oauth_client", lambda: SimpleNamespace(name="github"))
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
         response = await http_client.get(
