@@ -927,28 +927,34 @@ async def handle_period_rollover(
 
 ```python
 class ComputeQuotaExceededError(TreadstoneError):
-    def __init__(self, user_id: str):
+    def __init__(self, monthly_used: float, monthly_limit: float, extra_remaining: float):
         super().__init__(
             code="compute_quota_exceeded",
-            message="Compute credit quota exceeded. Please upgrade your plan or purchase additional credits.",
+            message=(
+                f"Compute credits exhausted. "
+                f"Monthly used: {monthly_used:.1f} / {monthly_limit:.1f} vCPU-hours, "
+                f"extra remaining: {extra_remaining:.1f} vCPU-hours. "
+                f"Please wait for the next billing cycle or purchase additional credits."
+            ),
             status=402,
         )
 
 
-class ConcurrentLimitExceededError(TreadstoneError):
-    def __init__(self, user_id: str, limit: int):
+class ConcurrentLimitError(TreadstoneError):
+    def __init__(self, current_running: int, max_concurrent: int):
         super().__init__(
             code="concurrent_limit_exceeded",
-            message=f"Maximum concurrent sandbox limit ({limit}) reached.",
+            message=f"Concurrent sandbox limit reached. Running: {current_running} / {max_concurrent}. Stop an existing sandbox before creating a new one.",
             status=429,
         )
 
 
-class TemplateForbiddenError(TreadstoneError):
-    def __init__(self, template: str, plan_name: str):
+class TemplateNotAllowedError(TreadstoneError):
+    def __init__(self, tier: str, template: str, allowed_templates: list[str]):
+        allowed_str = ", ".join(allowed_templates) if allowed_templates else "none"
         super().__init__(
-            code="template_forbidden",
-            message=f"Template '{template}' is not available on the {plan_name} plan.",
+            code="template_not_allowed",
+            message=f"Template '{template}' is not available on the '{tier}' tier. Allowed templates: {allowed_str}. Upgrade your plan to access this template.",
             status=403,
         )
 ```
@@ -979,16 +985,16 @@ class SandboxService:
         # ... (后续不变)
 
     async def _check_quotas(self, user_id: str, template: str) -> None:
-        plan = await get_user_plan(self.session, user_id)
+        plan = await self._metering.get_user_plan(self.session, user_id)
 
         # 1. 模板权限
         if template not in plan.allowed_templates:
-            raise TemplateForbiddenError(template, plan.plan_name)
+            raise TemplateNotAllowedError(plan.tier, template, plan.allowed_templates)
 
         # 2. 并发 sandbox 数
         active_count = await self._count_active_sandboxes(user_id)
-        if active_count >= plan.max_concurrent_sandboxes:
-            raise ConcurrentLimitExceededError(user_id, plan.max_concurrent_sandboxes)
+        if active_count >= plan.max_concurrent_running:
+            raise ConcurrentLimitError(active_count, plan.max_concurrent_running)
 
         # 3. Compute 额度余量
         monthly_remaining = (

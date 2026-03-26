@@ -24,8 +24,11 @@ from treadstone.models.audit_event import AuditActorType
 from treadstone.models.sandbox import Sandbox, SandboxStatus, is_valid_transition
 from treadstone.services.audit import record_audit_event
 from treadstone.services.k8s_client import K8sClientProtocol, WatchExpiredError
+from treadstone.services.metering_service import MeteringService
 
 logger = logging.getLogger(__name__)
+
+_metering = MeteringService()
 
 RECONCILE_INTERVAL = 300  # 5 minutes
 WATCH_RESTART_BACKOFF = 5  # seconds to wait before restarting Watch after unexpected failure
@@ -98,6 +101,7 @@ async def handle_watch_event(
             return
 
         if event_type == "DELETED":
+            await _try_close_compute_session(session, sandbox.id)
             if sandbox.status == SandboxStatus.DELETING:
                 await _record_status_change(
                     session,
@@ -156,6 +160,7 @@ async def handle_watch_event(
                 )
                 return
 
+            old_status = sandbox.status
             rows = await _optimistic_update(
                 session, sandbox.id, sandbox.version, new_status, resource_version=cr_rv, message=message
             )
@@ -165,11 +170,12 @@ async def handle_watch_event(
                 await _record_status_change(
                     session,
                     sandbox_id=sandbox.id,
-                    from_status=sandbox.status,
+                    from_status=old_status,
                     to_status=new_status,
                     source="k8s_watch",
                     message=message,
                 )
+                await _apply_metering_on_transition(session, sandbox, old_status, new_status)
                 await session.commit()
 
 
@@ -204,6 +210,7 @@ async def reconcile(
 
             if cr is None:
                 if sandbox.status == SandboxStatus.DELETING:
+                    await _try_close_compute_session(session, sandbox.id)
                     await _record_status_change(
                         session,
                         sandbox_id=sandbox.id,
@@ -214,14 +221,16 @@ async def reconcile(
                     await _delete_sandbox_row(session, sandbox.id)
                 elif sandbox.status != SandboxStatus.CREATING:
                     logger.warning("CR missing for %s (status=%s), marking error", sandbox.id, sandbox.status)
+                    old_status = sandbox.status
                     await _optimistic_update(session, sandbox.id, sandbox.version, SandboxStatus.ERROR)
                     await _record_status_change(
                         session,
                         sandbox_id=sandbox.id,
-                        from_status=sandbox.status,
+                        from_status=old_status,
                         to_status=SandboxStatus.ERROR,
                         source="k8s_reconcile",
                     )
+                    await _apply_metering_on_transition(session, sandbox, old_status, SandboxStatus.ERROR)
                     await session.commit()
                 continue
 
@@ -232,20 +241,28 @@ async def reconcile(
             new_status, message = derive_status_from_sandbox_cr(cr)
 
             if new_status != sandbox.status and is_valid_transition(sandbox.status, new_status):
+                old_status = sandbox.status
                 await _optimistic_update(
                     session, sandbox.id, sandbox.version, new_status, resource_version=cr_rv, message=message
                 )
                 await _record_status_change(
                     session,
                     sandbox_id=sandbox.id,
-                    from_status=sandbox.status,
+                    from_status=old_status,
                     to_status=new_status,
                     source="k8s_reconcile",
                     message=message,
                 )
+                await _apply_metering_on_transition(session, sandbox, old_status, new_status)
                 await session.commit()
             elif cr_rv != sandbox.k8s_resource_version:
                 await _update_sync_metadata(session, sandbox.id, cr_rv, message)
+
+    # ── Metering reconciliation: fix mismatches between sessions and sandbox state ──
+    try:
+        await reconcile_metering(session_factory)
+    except Exception:
+        logger.exception("Metering reconciliation failed")
 
     logger.info("Reconciliation complete. %d unmanaged CRs in K8s. list_rv=%s", len(cr_map), list_rv)
     return list_rv
@@ -370,6 +387,90 @@ async def _delete_sandbox_row(session: AsyncSession, sandbox_id: str) -> None:
         return
     await session.delete(sandbox)
     await session.commit()
+
+
+async def _apply_metering_on_transition(
+    session: AsyncSession,
+    sandbox: Sandbox,
+    old_status: str,
+    new_status: str,
+) -> None:
+    """Open or close a ComputeSession based on sandbox state transition.
+
+    Best-effort: failures are logged but never block the sync pipeline.
+    reconcile_metering() will repair any missed operations.
+    """
+    try:
+        if old_status != SandboxStatus.READY and new_status == SandboxStatus.READY:
+            await _metering.open_compute_session(session, sandbox.id, sandbox.owner_id, sandbox.template)
+
+        elif old_status == SandboxStatus.READY and new_status in (
+            SandboxStatus.STOPPED,
+            SandboxStatus.ERROR,
+            SandboxStatus.DELETING,
+        ):
+            await _metering.close_compute_session(session, sandbox.id)
+    except Exception:
+        logger.exception("Metering transition failed for sandbox %s (%s→%s)", sandbox.id, old_status, new_status)
+
+
+async def _try_close_compute_session(session: AsyncSession, sandbox_id: str) -> None:
+    """Best-effort close of any open ComputeSession for the given sandbox."""
+    try:
+        await _metering.close_compute_session(session, sandbox_id)
+    except Exception:
+        logger.exception("Failed to close compute session for sandbox %s", sandbox_id)
+
+
+async def reconcile_metering(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Check and repair mismatches between ComputeSession state and sandbox state.
+
+    Two repair cases:
+      1. sandbox is READY but has no open ComputeSession → open one
+      2. sandbox is NOT READY (or missing) but has an open ComputeSession → close it
+    """
+    async with session_factory() as session:
+        from treadstone.models.metering import ComputeSession
+
+        # Case 1: READY sandboxes missing an open session
+        ready_result = await session.execute(select(Sandbox).where(Sandbox.status == SandboxStatus.READY))
+        for sandbox in ready_result.scalars():
+            open_result = await session.execute(
+                select(ComputeSession).where(
+                    ComputeSession.sandbox_id == sandbox.id,
+                    ComputeSession.ended_at.is_(None),
+                )
+            )
+            if open_result.scalar_one_or_none() is None:
+                logger.warning("Ready sandbox %s has no open ComputeSession, opening one", sandbox.id)
+                try:
+                    await _metering.open_compute_session(session, sandbox.id, sandbox.owner_id, sandbox.template)
+                except Exception:
+                    logger.exception("Failed to open compute session for sandbox %s during reconciliation", sandbox.id)
+
+        # Case 2: open sessions for non-READY (or deleted) sandboxes
+        open_sessions_result = await session.execute(select(ComputeSession).where(ComputeSession.ended_at.is_(None)))
+        for cs in open_sessions_result.scalars():
+            sandbox = await session.get(Sandbox, cs.sandbox_id)
+            if sandbox is None or sandbox.status != SandboxStatus.READY:
+                status_desc = sandbox.status if sandbox else "deleted"
+                logger.warning(
+                    "ComputeSession %s for sandbox %s is open but sandbox is %s, closing",
+                    cs.id,
+                    cs.sandbox_id,
+                    status_desc,
+                )
+                try:
+                    await _metering.close_compute_session(session, cs.sandbox_id)
+                except Exception:
+                    logger.exception(
+                        "Failed to close compute session %s during reconciliation",
+                        cs.id,
+                    )
+
+        await session.commit()
 
 
 async def _record_status_change(

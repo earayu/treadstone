@@ -55,10 +55,13 @@ flowchart TD
     H --> I{创建成功?}
     I -->|是| J{persist?}
     J -->|是| K[record_storage_allocation]
-    J -->|否| L[open_compute_session]
-    K --> L
-    L --> M[返回Sandbox]
+    K --> M[返回Sandbox<br/>status=creating]
+    J -->|否| M
     I -->|否| N[原有错误处理]
+
+    style M fill:#e8f5e9
+    note1["注意: open_compute_session 不在此流程中。
+    它由 K8s Sync 在 sandbox 进入 READY 状态时触发。"]
 ```
 
 ### 1.5 检查顺序设计原则
@@ -1838,14 +1841,14 @@ def upgrade() -> None:
 
     # Seed TierTemplate
     op.execute("""
-    INSERT INTO tier_template (tier, compute_credits_monthly, storage_credits_monthly,
+    INSERT INTO tier_template (tier_name, compute_credits_monthly, storage_credits_monthly,
         max_concurrent_running, max_sandbox_duration_seconds, allowed_templates,
-        grace_period_seconds, gmt_created, gmt_updated)
+        grace_period_seconds, is_active, gmt_created, gmt_updated)
     VALUES
-        ('free',       10,    1,  1,  3600,  '["tiny"]',                                600,  NOW(), NOW()),
-        ('pro',        100,   10, 3,  7200,  '["tiny","small","medium"]',                1800, NOW(), NOW()),
-        ('ultra',      500,   50, 10, 14400, '["tiny","small","medium","large"]',        3600, NOW(), NOW()),
-        ('enterprise', 5000,  500,50, 86400, '["tiny","small","medium","large","gpu"]',  7200, NOW(), NOW())
+        ('free',       10,   0,   1,  1800,  '["tiny","small"]',                          600,  TRUE, NOW(), NOW()),
+        ('pro',        100,  10,  3,  7200,  '["tiny","small","medium"]',                  1800, TRUE, NOW(), NOW()),
+        ('ultra',      300,  20,  5,  28800, '["tiny","small","medium","large"]',          3600, TRUE, NOW(), NOW()),
+        ('enterprise', 5000, 500, 50, 86400, '["tiny","small","medium","large","xlarge"]', 7200, TRUE, NOW(), NOW())
     """)
 ```
 

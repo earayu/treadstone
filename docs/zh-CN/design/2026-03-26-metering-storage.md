@@ -282,16 +282,17 @@ stateDiagram-v2
 
 ```python
 class StorageQuotaExceededError(TreadstoneError):
-    def __init__(self, used: int, requested: int, quota: int):
+    def __init__(self, current_used_gib: int, requested_gib: int, total_quota_gib: int):
         super().__init__(
             code="storage_quota_exceeded",
             message=(
                 f"Storage quota exceeded. "
-                f"Used: {used} GiB, Requested: {requested} GiB, "
-                f"Quota: {quota} GiB. "
-                f"Delete unused persistent sandboxes or upgrade your plan."
+                f"Current used: {current_used_gib} GiB, requested: {requested_gib} GiB, "
+                f"total quota: {total_quota_gib} GiB "
+                f"(available: {total_quota_gib - current_used_gib} GiB). "
+                f"Delete existing persistent sandboxes to free space, or upgrade your plan."
             ),
-            status=403,
+            status=402,
         )
 
 
@@ -353,13 +354,13 @@ async def check_storage_quota(
 ```mermaid
 flowchart TD
     A[用户请求创建sandbox<br/>persist=true] --> B{Free tier?}
-    B -->|是| Z1[返回403<br/>StorageQuotaExceededError]
+    B -->|是| Z1[返回402<br/>StorageQuotaExceededError]
     B -->|否| C[解析storage_size<br/>转换为GiB整数]
     C --> D[查询用户Plan<br/>获取monthly配额]
     D --> E[查询未过期的<br/>extra storage grants]
     E --> F[查询active状态的<br/>StorageLedger总和]
     F --> G{used+requested<br/><=quota?}
-    G -->|否| Z2[返回403<br/>StorageQuotaExceededError]
+    G -->|否| Z2[返回402<br/>StorageQuotaExceededError]
     G -->|是| H[检查StorageClass<br/>是否存在]
     H --> I[创建Sandbox记录<br/>status=creating]
     I --> J[创建K8s<br/>SandboxCR+PVC]
@@ -841,8 +842,8 @@ SANDBOX_STORAGE_SIZE_VALUES = ("1Gi", "2Gi", "5Gi", "10Gi", "20Gi", "50Gi")
 ```
 Given: Free tier 用户 (monthly_storage = 0, extra_storage = 0)
 When:  请求创建 sandbox (persist=true, storage_size="5Gi")
-Then:  返回 403 StorageQuotaExceededError
-       消息: "Storage quota exceeded. Used: 0 GiB, Requested: 5 GiB, Quota: 0 GiB."
+Then:  返回 402 StorageQuotaExceededError
+       消息: "Storage quota exceeded. Current used: 0 GiB, requested: 5 GiB, total quota: 0 GiB (available: 0 GiB). ..."
        不创建 K8s 资源
        不创建 StorageLedger 记录
 ```
@@ -853,8 +854,8 @@ Then:  返回 403 StorageQuotaExceededError
 Given: Pro tier 用户 (monthly_storage = 10)
        已有 2 个持久 sandbox: 5Gi + 3Gi = 8 GiB 已用
 When:  请求创建 sandbox (persist=true, storage_size="5Gi")
-Then:  返回 403 StorageQuotaExceededError
-       消息: "Storage quota exceeded. Used: 8 GiB, Requested: 5 GiB, Quota: 10 GiB."
+Then:  返回 402 StorageQuotaExceededError
+       消息: "Storage quota exceeded. Current used: 8 GiB, requested: 5 GiB, total quota: 10 GiB (available: 2 GiB). ..."
 ```
 
 ### 场景 3：Extra Credits 扩展配额
@@ -1055,12 +1056,12 @@ Response (201):
 POST /api/v1/sandboxes
 Request: { "persist": true, "storage_size": "10Gi", ... }
 
-Response (403):
+Response (402):
 {
     "error": {
         "code": "storage_quota_exceeded",
-        "message": "Storage quota exceeded. Used: 8 GiB, Requested: 10 GiB, Quota: 10 GiB. Delete unused persistent sandboxes or upgrade your plan.",
-        "status": 403
+        "message": "Storage quota exceeded. Current used: 8 GiB, requested: 10 GiB, total quota: 10 GiB (available: 2 GiB). Delete existing persistent sandboxes to free space, or upgrade your plan.",
+        "status": 402
     }
 }
 ```
