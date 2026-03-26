@@ -1,17 +1,14 @@
-from datetime import timedelta
-
 import pytest
 from fastapi_users.db import SQLAlchemyUserDatabase
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from treadstone.api import auth as auth_api
 from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
 from treadstone.models.audit_event import AuditEvent
-from treadstone.models.user import Invitation, OAuthAccount, User, utc_now
+from treadstone.models.user import OAuthAccount, User
 
 _test_session_factory = None
 
@@ -92,26 +89,6 @@ async def test_login_success(db_session):
 
 
 @pytest.mark.asyncio
-async def test_invite_audit_event_has_invitation_target_id(db_session):
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        await client.post("/v1/auth/register", json={"email": "admin@example.com", "password": "Pass123!"})
-        await client.post("/v1/auth/login", json={"email": "admin@example.com", "password": "Pass123!"})
-        response = await client.post("/v1/auth/invite", json={"email": "member@example.com", "role": "ro"})
-
-    assert response.status_code == 201
-
-    async with _test_session_factory() as session:
-        invitation = (
-            await session.execute(select(Invitation).where(Invitation.email == "member@example.com"))
-        ).scalar_one()
-        event = (
-            await session.execute(select(AuditEvent).where(AuditEvent.action == "auth.invitation.create"))
-        ).scalar_one()
-
-    assert event.target_id == invitation.id
-
-
-@pytest.mark.asyncio
 async def test_login_wrong_password(db_session):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/v1/auth/register", json={"email": "x@b.com", "password": "Pass123!"})
@@ -146,38 +123,8 @@ async def test_get_user_after_login(db_session):
 
 
 @pytest.mark.asyncio
-async def test_register_with_invalid_invitation_role_does_not_500(db_session, monkeypatch):
-    monkeypatch.setattr(auth_api.settings, "register_mode", "invitation")
-
-    async with _test_session_factory() as session:
-        admin = User(
-            email="admin@test.com",
-            hashed_password="hashed",
-            is_active=True,
-            is_superuser=True,
-            is_verified=True,
-            role="admin",
-        )
-        invitation = Invitation(
-            email="invitee@test.com",
-            token="bad-role-token",
-            created_by="admin@test.com",
-            expires_at=utc_now() + timedelta(days=1),
-            role="not-a-role",
-        )
-        session.add(admin)
-        session.add(invitation)
-        await session.commit()
-
+async def test_invite_endpoint_is_removed(db_session):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.post(
-            "/v1/auth/register",
-            json={
-                "email": "invitee@test.com",
-                "password": "Pass123!",
-                "invitation_token": "bad-role-token",
-            },
-        )
+        resp = await client.post("/v1/auth/invite", json={"email": "member@example.com", "role": "ro"})
 
-    assert resp.status_code == 403
-    assert resp.json()["error"]["code"] == "forbidden"
+    assert resp.status_code == 404

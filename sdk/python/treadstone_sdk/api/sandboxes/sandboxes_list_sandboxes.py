@@ -15,7 +15,6 @@ def _get_kwargs(
     label: list[str] | Unset = UNSET,
     limit: int | Unset = 100,
     offset: int | Unset = 0,
-    user_db: Any | Unset = UNSET,
 ) -> dict[str, Any]:
     params: dict[str, Any] = {}
 
@@ -28,8 +27,6 @@ def _get_kwargs(
     params["limit"] = limit
 
     params["offset"] = offset
-
-    params["user_db"] = user_db
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -78,7 +75,6 @@ def sync_detailed(
     label: list[str] | Unset = UNSET,
     limit: int | Unset = 100,
     offset: int | Unset = 0,
-    user_db: Any | Unset = UNSET,
 ) -> Response[HTTPValidationError | SandboxListResponse]:
     """List Sandboxes
 
@@ -86,7 +82,6 @@ def sync_detailed(
         label (list[str] | Unset):
         limit (int | Unset): Maximum number of items to return. Default: 100.
         offset (int | Unset): Number of items to skip. Default: 0.
-        user_db (Any | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -100,7 +95,6 @@ def sync_detailed(
         label=label,
         limit=limit,
         offset=offset,
-        user_db=user_db,
     )
 
     response = client.get_httpx_client().request(
@@ -116,7 +110,6 @@ def sync(
     label: list[str] | Unset = UNSET,
     limit: int | Unset = 100,
     offset: int | Unset = 0,
-    user_db: Any | Unset = UNSET,
 ) -> HTTPValidationError | SandboxListResponse | None:
     """List Sandboxes
 
@@ -124,7 +117,6 @@ def sync(
         label (list[str] | Unset):
         limit (int | Unset): Maximum number of items to return. Default: 100.
         offset (int | Unset): Number of items to skip. Default: 0.
-        user_db (Any | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -139,7 +131,6 @@ def sync(
         label=label,
         limit=limit,
         offset=offset,
-        user_db=user_db,
     ).parsed
 
 
@@ -149,7 +140,6 @@ async def asyncio_detailed(
     label: list[str] | Unset = UNSET,
     limit: int | Unset = 100,
     offset: int | Unset = 0,
-    user_db: Any | Unset = UNSET,
 ) -> Response[HTTPValidationError | SandboxListResponse]:
     """List Sandboxes
 
@@ -157,7 +147,6 @@ async def asyncio_detailed(
         label (list[str] | Unset):
         limit (int | Unset): Maximum number of items to return. Default: 100.
         offset (int | Unset): Number of items to skip. Default: 0.
-        user_db (Any | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -171,7 +160,6 @@ async def asyncio_detailed(
         label=label,
         limit=limit,
         offset=offset,
-        user_db=user_db,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -185,7 +173,6 @@ async def asyncio(
     label: list[str] | Unset = UNSET,
     limit: int | Unset = 100,
     offset: int | Unset = 0,
-    user_db: Any | Unset = UNSET,
 ) -> HTTPValidationError | SandboxListResponse | None:
     """List Sandboxes
 
@@ -193,7 +180,6 @@ async def asyncio(
         label (list[str] | Unset):
         limit (int | Unset): Maximum number of items to return. Default: 100.
         offset (int | Unset): Number of items to skip. Default: 0.
-        user_db (Any | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -209,6 +195,5 @@ async def asyncio(
             label=label,
             limit=limit,
             offset=offset,
-            user_db=user_db,
         )
     ).parsed

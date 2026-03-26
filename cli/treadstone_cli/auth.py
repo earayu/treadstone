@@ -1,4 +1,4 @@
-"""Auth commands — login, logout, register, whoami, change-password, invite, users, delete-user."""
+"""Auth commands — login, logout, register, whoami, change-password, users, delete-user."""
 
 from __future__ import annotations
 
@@ -88,18 +88,11 @@ def logout(ctx: click.Context) -> None:
 @auth.command("register")
 @click.option("--email", required=True, prompt=True, help="Account email.")
 @click.option("--password", required=True, prompt=True, hide_input=True, confirmation_prompt=True, help="Password.")
-@click.option("--invitation-token", default=None, help="Invitation token (required in invitation mode).")
 @click.pass_context
-def register(ctx: click.Context, email: str, password: str, invitation_token: str | None) -> None:
-    """Register a new account.
-
-    In invitation-only mode, an --invitation-token is required.
-    """
+def register(ctx: click.Context, email: str, password: str) -> None:
+    """Register a new account."""
     client = build_client(ctx)
-    body: dict = {"email": email, "password": password}
-    if invitation_token:
-        body["invitation_token"] = invitation_token
-    resp = client.post("/v1/auth/register", json=body)
+    resp = client.post("/v1/auth/register", json={"email": email, "password": password})
     handle_error(resp)
     data = resp.json()
     if is_json_mode(ctx):
@@ -137,22 +130,6 @@ def change_password(ctx: click.Context, old_password: str, new_password: str) ->
         print_json(resp.json())
     else:
         click.echo("Password changed.")
-
-
-@auth.command("invite")
-@click.option("--email", required=True, help="Email of the person to invite.")
-@click.option("--role", default="ro", help="Role for the invitee (admin or ro).")
-@click.pass_context
-def invite(ctx: click.Context, email: str, role: str) -> None:
-    """Generate an invitation token for a new user (admin only)."""
-    client = require_auth(ctx)
-    resp = client.post("/v1/auth/invite", json={"email": email, "role": role})
-    handle_error(resp)
-    data = resp.json()
-    if is_json_mode(ctx):
-        print_json(data)
-    else:
-        click.echo(f"Invitation sent to {data['email']}. Token: {data['token']}")
 
 
 @auth.command("users")

@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 import treadstone.core.database as db_mod
 from treadstone.main import app
 from treadstone.models.api_key import ApiKey
-from treadstone.models.user import Invitation, OAuthAccount, User
+from treadstone.models.user import OAuthAccount, User
 
 from .conftest import _load_test_db_url
 
@@ -45,7 +45,6 @@ async def cleanup_test_users():
             await session.execute(delete(ApiKey).where(ApiKey.user_id.in_(user_ids)))
             await session.execute(delete(OAuthAccount).where(OAuthAccount.user_id.in_(user_ids)))
             await session.execute(delete(User).where(User.id.in_(user_ids)))
-        await session.execute(delete(Invitation).where(Invitation.email.like(f"inttest%{UNIQUE}%")))
         await session.commit()
     await eng.dispose()
 
@@ -56,12 +55,16 @@ async def test_tables_exist():
     eng = _make_engine()
     session_factory = async_sessionmaker(eng, class_=AsyncSession, expire_on_commit=False)
     async with session_factory() as session:
-        for table in ("user", "oauth_account", "invitation", "api_key"):
+        for table in ("user", "oauth_account", "api_key"):
             result = await session.execute(
                 text("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = :t)"),
                 {"t": table},
             )
             assert result.scalar() is True, f"Table '{table}' does not exist"
+        invitation_result = await session.execute(
+            text("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'invitation')")
+        )
+        assert invitation_result.scalar() is False
     await eng.dispose()
 
 

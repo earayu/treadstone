@@ -1,10 +1,14 @@
-from fastapi import Request
+from collections.abc import AsyncGenerator
+from urllib.parse import urlparse
+
+from fastapi import Depends, Request
 from fastapi_users import BaseUserManager, FastAPIUsers
 from fastapi_users.authentication import AuthenticationBackend, CookieTransport, JWTStrategy
 from fastapi_users.db import SQLAlchemyUserDatabase
 from httpx_oauth.clients.github import GitHubOAuth2
 from httpx_oauth.clients.google import GoogleOAuth2
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from treadstone.config import settings
 from treadstone.core.database import get_session
@@ -13,20 +17,26 @@ from treadstone.models.user import OAuthAccount, Role, User
 COOKIE_MAX_AGE = 86400  # 24 hours
 
 
-# ── OAuth clients (only enabled when secrets are configured) ──
-google_oauth_client: GoogleOAuth2 | None = None
-if settings.google_oauth_client_id and settings.google_oauth_client_secret:
-    google_oauth_client = GoogleOAuth2(
-        settings.google_oauth_client_id,
-        settings.google_oauth_client_secret,
-    )
+def should_use_secure_cookies() -> bool:
+    return not settings.debug and urlparse(settings.api_base_url).scheme == "https"
 
-github_oauth_client: GitHubOAuth2 | None = None
-if settings.github_oauth_client_id and settings.github_oauth_client_secret:
-    github_oauth_client = GitHubOAuth2(
-        settings.github_oauth_client_id,
-        settings.github_oauth_client_secret,
-    )
+
+def get_google_oauth_client() -> GoogleOAuth2 | None:
+    if settings.google_oauth_client_id and settings.google_oauth_client_secret:
+        return GoogleOAuth2(
+            settings.google_oauth_client_id,
+            settings.google_oauth_client_secret,
+        )
+    return None
+
+
+def get_github_oauth_client() -> GitHubOAuth2 | None:
+    if settings.github_oauth_client_id and settings.github_oauth_client_secret:
+        return GitHubOAuth2(
+            settings.github_oauth_client_id,
+            settings.github_oauth_client_secret,
+        )
+    return None
 
 
 # ── UserManager ──
@@ -39,15 +49,15 @@ class UserManager(BaseUserManager[User, str]):
 
     async def on_after_register(self, user: User, request: Request | None = None) -> None:
         """First registered user automatically becomes ADMIN."""
-        async for session in get_session():
-            result = await session.execute(select(func.count()).select_from(User))
-            count = result.scalar_one()
-            if count == 1:
-                user.role = Role.ADMIN.value
-                user.is_superuser = True
-                session.add(user)
-                await session.commit()
-                await session.refresh(user)
+        session = self.user_db.session
+        result = await session.execute(select(func.count()).select_from(User))
+        count = result.scalar_one()
+        if count == 1:
+            user.role = Role.ADMIN.value
+            user.is_superuser = True
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
 
     async def on_after_forgot_password(self, user: User, token: str, request: Request | None = None) -> None:
         pass  # TODO: send email
@@ -57,20 +67,16 @@ class UserManager(BaseUserManager[User, str]):
 
 
 # ── FastAPI-Users DB dependency ──
-async def get_user_db(session=None):
-    if session is None:
-        async for s in get_session():
-            yield SQLAlchemyUserDatabase(s, User, OAuthAccount)
-    else:
-        yield SQLAlchemyUserDatabase(session, User, OAuthAccount)
+async def get_user_db(
+    session: AsyncSession = Depends(get_session),
+) -> AsyncGenerator[SQLAlchemyUserDatabase[User, str], None]:
+    yield SQLAlchemyUserDatabase(session, User, OAuthAccount)
 
 
-async def get_user_manager(user_db=None):
-    if user_db is None:
-        async for db in get_user_db():
-            yield UserManager(db)
-    else:
-        yield UserManager(user_db)
+async def get_user_manager(
+    user_db: SQLAlchemyUserDatabase[User, str] = Depends(get_user_db),
+) -> AsyncGenerator[UserManager, None]:
+    yield UserManager(user_db)
 
 
 # ── Transport + Strategy + Backend ──
@@ -79,7 +85,7 @@ cookie_transport = CookieTransport(
     cookie_max_age=COOKIE_MAX_AGE,
     cookie_httponly=True,
     cookie_samesite="lax",
-    cookie_secure=not settings.debug,
+    cookie_secure=should_use_secure_cookies(),
 )
 
 

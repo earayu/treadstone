@@ -7,26 +7,17 @@ import httpx
 from ... import errors
 from ...client import AuthenticatedClient, Client
 from ...models.http_validation_error import HTTPValidationError
-from ...types import UNSET, Response, Unset
+from ...types import Response
 
 
 def _get_kwargs(
     user_id: str,
-    *,
-    user_db: Any | Unset = UNSET,
 ) -> dict[str, Any]:
-    params: dict[str, Any] = {}
-
-    params["user_db"] = user_db
-
-    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
-
     _kwargs: dict[str, Any] = {
         "method": "delete",
         "url": "/v1/auth/users/{user_id}".format(
             user_id=quote(str(user_id), safe=""),
         ),
-        "params": params,
     }
 
     return _kwargs
@@ -65,13 +56,11 @@ def sync_detailed(
     user_id: str,
     *,
     client: AuthenticatedClient,
-    user_db: Any | Unset = UNSET,
 ) -> Response[Any | HTTPValidationError]:
     """Delete User
 
     Args:
         user_id (str):
-        user_db (Any | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -83,7 +72,6 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         user_id=user_id,
-        user_db=user_db,
     )
 
     response = client.get_httpx_client().request(
@@ -97,13 +85,11 @@ def sync(
     user_id: str,
     *,
     client: AuthenticatedClient,
-    user_db: Any | Unset = UNSET,
 ) -> Any | HTTPValidationError | None:
     """Delete User
 
     Args:
         user_id (str):
-        user_db (Any | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -116,7 +102,6 @@ def sync(
     return sync_detailed(
         user_id=user_id,
         client=client,
-        user_db=user_db,
     ).parsed
 
 
@@ -124,13 +109,11 @@ async def asyncio_detailed(
     user_id: str,
     *,
     client: AuthenticatedClient,
-    user_db: Any | Unset = UNSET,
 ) -> Response[Any | HTTPValidationError]:
     """Delete User
 
     Args:
         user_id (str):
-        user_db (Any | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -142,7 +125,6 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         user_id=user_id,
-        user_db=user_db,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -154,13 +136,11 @@ async def asyncio(
     user_id: str,
     *,
     client: AuthenticatedClient,
-    user_db: Any | Unset = UNSET,
 ) -> Any | HTTPValidationError | None:
     """Delete User
 
     Args:
         user_id (str):
-        user_db (Any | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -174,6 +154,5 @@ async def asyncio(
         await asyncio_detailed(
             user_id=user_id,
             client=client,
-            user_db=user_db,
         )
     ).parsed

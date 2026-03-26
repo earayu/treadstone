@@ -7,10 +7,14 @@ Usage:
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+# OpenAPI export should not depend on a developer having runtime secrets in the shell.
+os.environ.setdefault("TREADSTONE_JWT_SECRET", "openapi_export_dummy_secret_value_1234567890")
 
 from treadstone.main import app  # noqa: E402
 

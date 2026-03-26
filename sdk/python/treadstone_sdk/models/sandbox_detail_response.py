@@ -8,6 +8,7 @@ from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 from dateutil.parser import isoparse
 
+from ..models.sandbox_detail_response_storage_size_type_0 import SandboxDetailResponseStorageSizeType0
 from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
@@ -34,7 +35,8 @@ class SandboxDetailResponse:
         image (None | str | Unset):
         status_message (None | str | Unset):
         persist (bool | Unset):  Default: False.
-        storage_size (None | str | Unset): Persistent volume size (only present when persist=true).
+        storage_size (None | SandboxDetailResponseStorageSizeType0 | Unset): Persistent volume size (only present when
+            persist=true). Supported tiers: 5Gi, 10Gi, 20Gi.
         started_at (datetime.datetime | None | Unset):
         stopped_at (datetime.datetime | None | Unset):
     """
@@ -51,7 +53,7 @@ class SandboxDetailResponse:
     image: None | str | Unset = UNSET
     status_message: None | str | Unset = UNSET
     persist: bool | Unset = False
-    storage_size: None | str | Unset = UNSET
+    storage_size: None | SandboxDetailResponseStorageSizeType0 | Unset = UNSET
     started_at: datetime.datetime | None | Unset = UNSET
     stopped_at: datetime.datetime | None | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
@@ -94,6 +96,8 @@ class SandboxDetailResponse:
         storage_size: None | str | Unset
         if isinstance(self.storage_size, Unset):
             storage_size = UNSET
+        elif isinstance(self.storage_size, SandboxDetailResponseStorageSizeType0):
+            storage_size = self.storage_size.value
         else:
             storage_size = self.storage_size
 
@@ -193,12 +197,20 @@ class SandboxDetailResponse:
 
         persist = d.pop("persist", UNSET)
 
-        def _parse_storage_size(data: object) -> None | str | Unset:
+        def _parse_storage_size(data: object) -> None | SandboxDetailResponseStorageSizeType0 | Unset:
             if data is None:
                 return data
             if isinstance(data, Unset):
                 return data
-            return cast(None | str | Unset, data)
+            try:
+                if not isinstance(data, str):
+                    raise TypeError()
+                storage_size_type_0 = SandboxDetailResponseStorageSizeType0(data)
+
+                return storage_size_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(None | SandboxDetailResponseStorageSizeType0 | Unset, data)
 
         storage_size = _parse_storage_size(d.pop("storage_size", UNSET))
 

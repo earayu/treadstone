@@ -1,7 +1,14 @@
+from __future__ import annotations
+
 import secrets
 from datetime import timedelta
+from html import escape
+from urllib.parse import urlencode
 
+import jwt
 from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi_users import exceptions as fastapi_users_exceptions
 from fastapi_users.password import PasswordHelper
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,8 +22,6 @@ from treadstone.api.schemas import (
     ApiKeySummary,
     ChangePasswordRequest,
     CreateApiKeyRequest,
-    InviteRequest,
-    InviteResponse,
     LoginRequest,
     LoginResponse,
     MessageResponse,
@@ -28,9 +33,17 @@ from treadstone.api.schemas import (
 )
 from treadstone.config import settings
 from treadstone.core.database import get_session
-from treadstone.core.errors import BadRequestError, ConflictError, ForbiddenError, NotFoundError, ValidationError
+from treadstone.core.errors import BadRequestError, ConflictError, NotFoundError, ValidationError
 from treadstone.core.request_context import set_request_context
-from treadstone.core.users import COOKIE_MAX_AGE, cookie_transport, get_jwt_strategy
+from treadstone.core.users import (
+    COOKIE_MAX_AGE,
+    UserManager,
+    get_github_oauth_client,
+    get_google_oauth_client,
+    get_jwt_strategy,
+    get_user_manager,
+    should_use_secure_cookies,
+)
 from treadstone.models.api_key import (
     ApiKey,
     ApiKeySandboxGrant,
@@ -38,10 +51,213 @@ from treadstone.models.api_key import (
     hash_api_key_secret,
 )
 from treadstone.models.sandbox import Sandbox
-from treadstone.models.user import Invitation, Role, User, random_id, utc_now
+from treadstone.models.user import OAuthAccount, Role, User, random_id, utc_now
 from treadstone.services.audit import record_audit_event
+from treadstone.services.browser_login import validate_browser_return_to
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
+
+OAUTH_STATE_AUDIENCE = "treadstone:oauth-state"
+OAUTH_STATE_TTL_SECONDS = 600
+
+
+def _oauth_csrf_cookie_name(provider: str) -> str:
+    return f"oauth_{provider}_csrf"
+
+
+def _oauth_return_to_cookie_name(provider: str) -> str:
+    return f"oauth_{provider}_return_to"
+
+
+def _oauth_callback_url(provider: str) -> str:
+    return f"{settings.api_base_url.rstrip('/')}/v1/auth/{provider}/callback"
+
+
+def _oauth_state_payload(provider: str, csrf_token: str, return_to: str | None) -> str:
+    payload: dict[str, str | int] = {
+        "aud": OAUTH_STATE_AUDIENCE,
+        "provider": provider,
+        "csrf": csrf_token,
+        "exp": int(utc_now().timestamp()) + OAUTH_STATE_TTL_SECONDS,
+    }
+    if return_to is not None:
+        payload["return_to"] = return_to
+    return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
+
+
+def _decode_oauth_state(state: str) -> dict[str, str]:
+    try:
+        payload = jwt.decode(
+            state,
+            settings.jwt_secret,
+            algorithms=["HS256"],
+            audience=OAUTH_STATE_AUDIENCE,
+        )
+    except jwt.PyJWTError as exc:
+        raise BadRequestError("Invalid or expired OAuth state.") from exc
+    return payload
+
+
+def _set_oauth_flow_cookies(response: Response, provider: str, csrf_token: str, return_to: str | None) -> None:
+    response.set_cookie(
+        key=_oauth_csrf_cookie_name(provider),
+        value=csrf_token,
+        max_age=OAUTH_STATE_TTL_SECONDS,
+        httponly=True,
+        samesite="lax",
+        secure=should_use_secure_cookies(),
+    )
+    if return_to is not None:
+        response.set_cookie(
+            key=_oauth_return_to_cookie_name(provider),
+            value=return_to,
+            max_age=OAUTH_STATE_TTL_SECONDS,
+            httponly=True,
+            samesite="lax",
+            secure=should_use_secure_cookies(),
+        )
+
+
+def _clear_oauth_flow_cookies(response: Response, provider: str) -> None:
+    response.delete_cookie(key=_oauth_csrf_cookie_name(provider))
+    response.delete_cookie(key=_oauth_return_to_cookie_name(provider))
+
+
+def _oauth_success_page(provider: str) -> HTMLResponse:
+    title = escape(f"{provider.title()} login successful")
+    body_style = (
+        "font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f5;padding:40px;"
+    )
+    main_style = (
+        "max-width:420px;margin:0 auto;background:white;padding:24px;"
+        "border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.08);"
+    )
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{title}</title>
+</head>
+<body style="{body_style}">
+  <main style="{main_style}">
+    <h1 style="font-size:24px;margin-bottom:12px;">Login successful</h1>
+    <p style="color:#555;">You can close this window and return to Treadstone.</p>
+  </main>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
+
+
+def _oauth_error_message(provider: str, error: str, error_description: str | None = None) -> str:
+    if error == "access_denied":
+        return f"{provider.title()} login was cancelled."
+    if error_description:
+        return error_description
+    return f"{provider.title()} login failed."
+
+
+def _oauth_login_redirect(return_to: str, message: str) -> RedirectResponse:
+    return RedirectResponse(
+        url=f"/v1/browser/login?{urlencode({'return_to': return_to, 'error': message})}",
+        status_code=303,
+    )
+
+
+def _resolve_browser_return_to(
+    request: Request,
+    provider: str,
+    state_payload: dict[str, str] | None = None,
+) -> str | None:
+    if state_payload is not None:
+        return_to = state_payload.get("return_to")
+        if return_to:
+            validate_browser_return_to(return_to)
+            return return_to
+
+    cookie_return_to = request.cookies.get(_oauth_return_to_cookie_name(provider))
+    if cookie_return_to:
+        validate_browser_return_to(cookie_return_to)
+        return cookie_return_to
+    return None
+
+
+def _get_oauth_client(provider: str):
+    if provider == "google":
+        oauth_client = get_google_oauth_client()
+    elif provider == "github":
+        oauth_client = get_github_oauth_client()
+    else:
+        oauth_client = None
+
+    if oauth_client is None:
+        raise BadRequestError(f"{provider.title()} OAuth is not configured.")
+    return oauth_client
+
+
+async def _get_github_verified_identity(oauth_client, access_token: str) -> tuple[str, str | None]:
+    profile = await oauth_client.get_profile(access_token)
+    emails = await oauth_client.get_emails(access_token)
+
+    account_email = next(
+        (
+            str(email["email"])
+            for email in emails
+            if email.get("primary") and email.get("verified") and email.get("email")
+        ),
+        None,
+    )
+    if account_email is None:
+        account_email = next(
+            (str(email["email"]) for email in emails if email.get("verified") and email.get("email")),
+            None,
+        )
+
+    return str(profile["id"]), account_email
+
+
+async def _get_oauth_identity(provider: str, oauth_client, access_token: str) -> tuple[str, str | None]:
+    if provider == "github":
+        return await _get_github_verified_identity(oauth_client, access_token)
+    return await oauth_client.get_id_email(access_token)
+
+
+async def _record_oauth_success_events(
+    *,
+    session: AsyncSession,
+    request: Request,
+    user: User,
+    provider: str,
+    outcome: str,
+    surface: str,
+) -> None:
+    if outcome == "register":
+        await record_audit_event(
+            session,
+            action="auth.register",
+            target_type="user",
+            target_id=user.id,
+            metadata={"email": user.email, "role": user.role, "provider": provider, "surface": surface},
+            request=request,
+        )
+    elif outcome == "link":
+        await record_audit_event(
+            session,
+            action="auth.oauth.link",
+            target_type="user",
+            target_id=user.id,
+            metadata={"email": user.email, "provider": provider, "surface": surface},
+            request=request,
+        )
+
+    await record_audit_event(
+        session,
+        action="auth.login",
+        target_type="user",
+        target_id=user.id,
+        metadata={"email": user.email, "provider": provider, "oauth_action": outcome, "surface": surface},
+        request=request,
+    )
 
 
 def _default_api_key_scope() -> ApiKeyScope:
@@ -72,7 +288,7 @@ async def write_session_cookie(response: Response, user: User) -> str:
         max_age=COOKIE_MAX_AGE,
         httponly=True,
         samesite="lax",
-        secure=cookie_transport.cookie_secure,
+        secure=should_use_secure_cookies(),
     )
     return token
 
@@ -230,17 +446,6 @@ async def register(
     user_count = count_result.scalar_one()
     is_first_user = user_count == 0
 
-    invitation: Invitation | None = None
-    if settings.register_mode == "invitation" and not is_first_user:
-        if not body.invitation_token:
-            raise ForbiddenError("Invitation token required")
-        inv_result = await session.execute(select(Invitation).where(Invitation.token == body.invitation_token))
-        invitation = inv_result.scalar_one_or_none()
-        if not invitation or not invitation.is_valid():
-            raise ForbiddenError("Invalid or expired invitation")
-        if invitation.email != body.email:
-            raise ForbiddenError("Invitation email mismatch")
-
     existing = await session.execute(select(User).where(User.email == body.email))
     if existing.unique().scalar_one_or_none():
         raise ConflictError("Email already registered")
@@ -248,10 +453,7 @@ async def register(
     ph = PasswordHelper()
     hashed = ph.hash(body.password)
 
-    try:
-        role = Role.ADMIN if is_first_user else (Role(invitation.role) if invitation else Role.RO)
-    except ValueError as exc:
-        raise ForbiddenError("Invalid invitation role") from exc
+    role = Role.ADMIN if is_first_user else Role.RO
     user = User(
         email=body.email,
         hashed_password=hashed,
@@ -263,8 +465,6 @@ async def register(
     session.add(user)
     await session.flush()
 
-    if invitation:
-        await invitation.use(session)
     set_request_context(request, actor_user_id=user.id)
     await record_audit_event(
         session,
@@ -280,33 +480,180 @@ async def register(
     return {"id": user.id, "email": user.email, "role": user.role}
 
 
-@router.post("/invite", status_code=status.HTTP_201_CREATED, response_model=InviteResponse)
-async def invite(
+async def _oauth_authorize(provider: str, return_to: str | None) -> RedirectResponse:
+    oauth_client = _get_oauth_client(provider)
+    if return_to is not None:
+        validate_browser_return_to(return_to)
+
+    csrf_token = secrets.token_urlsafe(32)
+    state = _oauth_state_payload(provider, csrf_token, return_to)
+    authorization_url = await oauth_client.get_authorization_url(_oauth_callback_url(provider), state)
+    response = RedirectResponse(url=authorization_url, status_code=303)
+    _set_oauth_flow_cookies(response, provider, csrf_token, return_to)
+    return response
+
+
+async def _oauth_callback(
+    provider: str,
     request: Request,
-    body: InviteRequest,
-    current_user: User = Depends(get_current_admin),
-    session: AsyncSession = Depends(get_session),
+    user_manager: UserManager,
+    session: AsyncSession,
+    code: str | None,
+    state: str | None,
+    error: str | None,
+    error_description: str | None,
 ):
-    token = secrets.token_urlsafe(32)
-    inv = Invitation(
-        email=body.email,
-        token=token,
-        created_by=current_user.email,
-        expires_at=utc_now() + timedelta(days=7),
-        role=body.role,
+    oauth_client = _get_oauth_client(provider)
+    state_payload: dict[str, str] | None = None
+
+    if state is not None:
+        try:
+            state_payload = _decode_oauth_state(state)
+        except BadRequestError:
+            return_to = _resolve_browser_return_to(request, provider)
+            if return_to is not None:
+                response = _oauth_login_redirect(return_to, "Your login session expired. Please try again.")
+                _clear_oauth_flow_cookies(response, provider)
+                return response
+            raise
+        if state_payload.get("provider") != provider:
+            raise BadRequestError("Invalid OAuth state.")
+
+    return_to = _resolve_browser_return_to(request, provider, state_payload)
+    surface = "browser" if return_to is not None else "api"
+
+    if error is not None:
+        message = _oauth_error_message(provider, error, error_description)
+        set_request_context(request, error_code=error)
+        if return_to is not None:
+            response = _oauth_login_redirect(return_to, message)
+            _clear_oauth_flow_cookies(response, provider)
+            return response
+        raise BadRequestError(message)
+
+    if code is None or state_payload is None:
+        raise BadRequestError("Missing OAuth code or state.")
+
+    cookie_csrf_token = request.cookies.get(_oauth_csrf_cookie_name(provider))
+    state_csrf_token = state_payload.get("csrf")
+    if not cookie_csrf_token or not state_csrf_token or not secrets.compare_digest(cookie_csrf_token, state_csrf_token):
+        set_request_context(request, error_code="oauth_invalid_state")
+        if return_to is not None:
+            response = _oauth_login_redirect(return_to, "Your login session expired. Please try again.")
+            _clear_oauth_flow_cookies(response, provider)
+            return response
+        raise BadRequestError("Invalid OAuth state.")
+
+    try:
+        token = await oauth_client.get_access_token(code, _oauth_callback_url(provider))
+        account_id, account_email = await _get_oauth_identity(provider, oauth_client, token["access_token"])
+    except Exception as exc:
+        set_request_context(request, error_code="oauth_provider_error")
+        message = f"{provider.title()} login failed."
+        if return_to is not None:
+            response = _oauth_login_redirect(return_to, message)
+            _clear_oauth_flow_cookies(response, provider)
+            return response
+        raise BadRequestError(message) from exc
+
+    if account_email is None:
+        error_code = "oauth_missing_verified_email" if provider == "github" else "oauth_missing_email"
+        set_request_context(request, error_code=error_code)
+        if provider == "github":
+            message = "GitHub did not provide a verified email address."
+        else:
+            message = f"{provider.title()} did not provide an email address."
+        if return_to is not None:
+            response = _oauth_login_redirect(return_to, message)
+            _clear_oauth_flow_cookies(response, provider)
+            return response
+        raise BadRequestError(message)
+
+    existing_oauth = await session.execute(
+        select(OAuthAccount).where(
+            OAuthAccount.oauth_name == provider,
+            OAuthAccount.account_id == account_id,
+        )
     )
-    session.add(inv)
-    await session.flush()
-    await record_audit_event(
-        session,
-        action="auth.invitation.create",
-        target_type="invitation",
-        target_id=inv.id,
-        metadata={"email": body.email, "role": body.role, "expires_at": inv.expires_at.isoformat()},
+    existing_account = existing_oauth.scalar_one_or_none()
+    if existing_account is not None:
+        outcome = "login"
+    else:
+        existing_user = await session.execute(select(User).where(User.email == account_email))
+        outcome = "link" if existing_user.unique().scalar_one_or_none() is not None else "register"
+
+    try:
+        user = await user_manager.oauth_callback(
+            provider,
+            token["access_token"],
+            account_id,
+            account_email,
+            token.get("expires_at"),
+            token.get("refresh_token"),
+            request,
+            associate_by_email=True,
+            is_verified_by_default=True,
+        )
+    except fastapi_users_exceptions.UserAlreadyExists as exc:
+        raise ConflictError("Email already registered") from exc
+
+    set_request_context(request, actor_user_id=user.id, credential_type="cookie")
+    await _record_oauth_success_events(
+        session=session,
         request=request,
+        user=user,
+        provider=provider,
+        outcome=outcome,
+        surface=surface,
     )
     await session.commit()
-    return {"token": token, "email": body.email, "expires_at": inv.expires_at}
+
+    if return_to is not None:
+        response: Response = RedirectResponse(
+            url=f"/v1/browser/bootstrap?{urlencode({'return_to': return_to})}",
+            status_code=303,
+        )
+    else:
+        response = _oauth_success_page(provider)
+    await write_session_cookie(response, user)
+    _clear_oauth_flow_cookies(response, provider)
+    return response
+
+
+@router.get("/google/authorize", include_in_schema=False)
+async def google_authorize(return_to: str | None = Query(default=None)):
+    return await _oauth_authorize("google", return_to)
+
+
+@router.get("/google/callback", include_in_schema=False)
+async def google_callback(
+    request: Request,
+    user_manager: UserManager = Depends(get_user_manager),
+    session: AsyncSession = Depends(get_session),
+    code: str | None = Query(default=None),
+    state: str | None = Query(default=None),
+    error: str | None = Query(default=None),
+    error_description: str | None = Query(default=None),
+):
+    return await _oauth_callback("google", request, user_manager, session, code, state, error, error_description)
+
+
+@router.get("/github/authorize", include_in_schema=False)
+async def github_authorize(return_to: str | None = Query(default=None)):
+    return await _oauth_authorize("github", return_to)
+
+
+@router.get("/github/callback", include_in_schema=False)
+async def github_callback(
+    request: Request,
+    user_manager: UserManager = Depends(get_user_manager),
+    session: AsyncSession = Depends(get_session),
+    code: str | None = Query(default=None),
+    state: str | None = Query(default=None),
+    error: str | None = Query(default=None),
+    error_description: str | None = Query(default=None),
+):
+    return await _oauth_callback("github", request, user_manager, session, code, state, error, error_description)
 
 
 @router.get("/user", response_model=UserDetailResponse)

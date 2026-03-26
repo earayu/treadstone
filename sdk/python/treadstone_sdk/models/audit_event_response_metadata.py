@@ -6,62 +6,28 @@ from typing import Any, TypeVar
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
-from ..models.role import Role
-from ..types import UNSET, Unset
-
-T = TypeVar("T", bound="InviteRequest")
+T = TypeVar("T", bound="AuditEventResponseMetadata")
 
 
 @_attrs_define
-class InviteRequest:
-    """
-    Attributes:
-        email (str):
-        role (Role | Unset):
-    """
+class AuditEventResponseMetadata:
+    """ """
 
-    email: str
-    role: Role | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        email = self.email
-
-        role: str | Unset = UNSET
-        if not isinstance(self.role, Unset):
-            role = self.role.value
-
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update(
-            {
-                "email": email,
-            }
-        )
-        if role is not UNSET:
-            field_dict["role"] = role
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
-        email = d.pop("email")
+        audit_event_response_metadata = cls()
 
-        _role = d.pop("role", UNSET)
-        role: Role | Unset
-        if isinstance(_role, Unset):
-            role = UNSET
-        else:
-            role = Role(_role)
-
-        invite_request = cls(
-            email=email,
-            role=role,
-        )
-
-        invite_request.additional_properties = d
-        return invite_request
+        audit_event_response_metadata.additional_properties = d
+        return audit_event_response_metadata
 
     @property
     def additional_keys(self) -> list[str]:

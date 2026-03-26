@@ -2,7 +2,7 @@ from treadstone.models.api_key import ApiKey, ApiKeyDataPlaneMode, ApiKeySandbox
 from treadstone.models.audit_event import AuditActorType, AuditEvent, AuditResult
 from treadstone.models.sandbox import Sandbox, SandboxStatus
 from treadstone.models.sandbox_web_link import SandboxWebLink
-from treadstone.models.user import Invitation, OAuthAccount, Role, User
+from treadstone.models.user import OAuthAccount, Role, User
 
 __all__ = [
     "AuditActorType",
@@ -10,7 +10,6 @@ __all__ = [
     "AuditResult",
     "User",
     "OAuthAccount",
-    "Invitation",
     "Role",
     "ApiKey",
     "ApiKeyDataPlaneMode",
