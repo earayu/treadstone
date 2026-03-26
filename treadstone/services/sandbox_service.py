@@ -7,7 +7,10 @@ Dual-path provisioning:
 start/stop use scale_sandbox on the Sandbox CR regardless of path.
 """
 
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -16,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from treadstone.config import settings
 from treadstone.core.errors import (
     InvalidTransitionError,
+    SandboxDurationExceededError,
     SandboxNameConflictError,
     SandboxNotFoundError,
     StorageBackendNotReadyError,
@@ -25,6 +29,10 @@ from treadstone.models.sandbox import Sandbox, SandboxStatus, is_valid_transitio
 from treadstone.models.sandbox_web_link import SandboxWebLink
 from treadstone.models.user import random_id, utc_now
 from treadstone.services.k8s_client import K8sClientProtocol, get_k8s_client
+from treadstone.services.metering_helpers import parse_storage_size_gib
+
+if TYPE_CHECKING:
+    from treadstone.services.metering_service import MeteringService
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +57,15 @@ def _build_resource_limits(requests: dict[str, str]) -> dict[str, str]:
 
 
 class SandboxService:
-    def __init__(self, session: AsyncSession, k8s_client: K8sClientProtocol | None = None):
+    def __init__(
+        self,
+        session: AsyncSession,
+        k8s_client: K8sClientProtocol | None = None,
+        metering: MeteringService | None = None,
+    ):
         self.session = session
         self.k8s = k8s_client or get_k8s_client()
+        self._metering = metering
 
     async def create(
         self,
@@ -64,9 +78,26 @@ class SandboxService:
         persist: bool = False,
         storage_size: str | None = None,
     ) -> Sandbox:
+        effective_storage_size = storage_size or settings.sandbox_default_storage_size
+
+        # ── Metering: quota checks (must run before any resource creation) ──
+        if self._metering is not None:
+            await self._metering.check_template_allowed(self.session, owner_id, template)
+            await self._metering.check_compute_quota(self.session, owner_id)
+            await self._metering.check_concurrent_limit(self.session, owner_id)
+
+            if persist:
+                size_gib = parse_storage_size_gib(effective_storage_size)
+                await self._metering.check_storage_quota(self.session, owner_id, size_gib)
+
+            max_duration = await self._metering.check_sandbox_duration(self.session, owner_id)
+            if auto_stop_interval > 0 and (auto_stop_interval * 60) > max_duration:
+                plan = await self._metering.get_user_plan(self.session, owner_id)
+                raise SandboxDurationExceededError(plan.tier, max_duration)
+
+        # ── Create sandbox record ──
         sandbox_id = "sb" + random_id()
         sandbox_name = name or f"sb-{random_id(8)}"
-        effective_storage_size = storage_size or settings.sandbox_default_storage_size
 
         if persist:
             await self._ensure_persistent_storage_backend_ready()
@@ -118,6 +149,15 @@ class SandboxService:
             sandbox.version += 1
             self.session.add(sandbox)
             await self.session.commit()
+
+        # ── Metering: record storage allocation for persistent sandboxes (best-effort) ──
+        if self._metering is not None and persist and sandbox.status != SandboxStatus.ERROR:
+            try:
+                size_gib = parse_storage_size_gib(effective_storage_size)
+                await self._metering.record_storage_allocation(self.session, owner_id, sandbox.id, size_gib)
+                await self.session.commit()
+            except Exception:
+                logger.exception("Failed to record storage allocation for sandbox %s", sandbox_id)
 
         return sandbox
 
@@ -205,6 +245,13 @@ class SandboxService:
         if not is_valid_transition(sandbox.status, SandboxStatus.DELETING):
             raise InvalidTransitionError(sandbox_id, sandbox.status, "deleting")
 
+        # ── Metering: release storage before K8s deletion (best-effort) ──
+        if self._metering is not None and sandbox.persist:
+            try:
+                await self._metering.record_storage_release(self.session, sandbox.id)
+            except Exception:
+                logger.exception("Failed to release storage metering for sandbox %s", sandbox_id)
+
         sandbox.status = SandboxStatus.DELETING
         sandbox.version += 1
         self.session.add(sandbox)
@@ -246,6 +293,11 @@ class SandboxService:
 
         if sandbox.status != SandboxStatus.STOPPED:
             raise InvalidTransitionError(sandbox_id, sandbox.status, "ready")
+
+        # ── Metering: quota checks before resuming ──
+        if self._metering is not None:
+            await self._metering.check_compute_quota(self.session, owner_id)
+            await self._metering.check_concurrent_limit(self.session, owner_id)
 
         sandbox.status = SandboxStatus.CREATING
         sandbox.gmt_started = utc_now()

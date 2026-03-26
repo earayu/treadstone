@@ -16,9 +16,14 @@ Transaction Policy
 ------------------
 Methods modify ORM objects but do NOT commit the session.
 Callers are responsible for committing or rolling back.  This keeps
-transaction boundaries explicit and composable — e.g. k8s_sync can
-update sandbox state and open a compute session in the same atomic
-transaction.
+transaction boundaries explicit and composable.
+
+Note: in k8s_sync, ``_optimistic_update`` commits the sandbox status
+change in its own transaction, so the subsequent metering call runs
+in a separate implicit transaction.  If the metering call fails, the
+sandbox status is already committed but the ComputeSession may be
+missing.  ``reconcile_metering()`` repairs such mismatches, providing
+eventual consistency.
 """
 
 import logging
