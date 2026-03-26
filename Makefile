@@ -189,7 +189,7 @@ bump: ## Bump version files: make bump V=0.4.2  (run on feature branch, then ope
 	uv lock
 	git add pyproject.toml cli/pyproject.toml sdk/python/pyproject.toml uv.lock
 	git commit -m "chore: bump version to $(V)"
-	git push
+	git push -u origin HEAD
 	@echo "✓ Version bumped and pushed. Open a PR, merge, then run: make release V=$(V)"
 
 release: ## Tag a release: make release V=0.4.2  (run on main after bump PR is merged)
