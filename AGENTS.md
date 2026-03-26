@@ -130,8 +130,15 @@ Rules:
 
 ## Release
 
-- **Process:** On `main`, run `make release V=x.y.z` (e.g. `make release V=0.1.4`). This creates and pushes tag `vx.y.z`, which triggers [`.github/workflows/release.yml`](.github/workflows/release.yml): Docker image → GHCR, `treadstone-cli` + `treadstone-sdk` → PyPI, CLI binaries + install scripts → GitHub Release assets. Watch with `gh run watch` or the Actions tab.
-- **Agents:** Prefer **`make release V=…`** for tagging and publishing. Do not hand-craft `git tag` / `git push origin v…` or `gh release create` unless fixing a broken release—the Makefile enforces `main` and documents the intended flow.
+Two-step flow: **bump** (on feature branch) → **release** (on main).
+
+1. `git checkout -b chore/release-x.y.z && make bump V=x.y.z` — bumps version in `pyproject.toml` (server, CLI, SDK) + `uv.lock`, commits and pushes.
+2. Open a PR, wait for CI, merge.
+3. `git checkout main && git pull && make release V=x.y.z` — tags `vx.y.z` and pushes the tag (no branch push).
+4. Tag push triggers [`.github/workflows/release.yml`](.github/workflows/release.yml): Docker image → GHCR, `treadstone-cli` + `treadstone-sdk` → PyPI, CLI binaries + install scripts → GitHub Release assets.
+5. After Release succeeds, [`.github/workflows/update-prod-image.yml`](.github/workflows/update-prod-image.yml) auto-updates `deploy/treadstone/values-prod.yaml` image tag and commits to `main`.
+
+- **Agents:** Use `make bump V=…` then `make release V=…`. Do not hand-craft `git tag` / `git push origin v…` or `gh release create` unless fixing a broken release.
 
 ## Automation
 
@@ -140,6 +147,7 @@ Rules:
 - **CI** (GitHub Actions): lint + test + openapi + build on pushes/PRs, plus integration on PRs. Any failure blocks merge.
 - **CD** (`.github/workflows/cd.yml`): pushes the `main` image to GHCR on changes to deployable server files.
 - **Release** (`.github/workflows/release.yml`): publishes tagged releases and GitHub Release assets on `v*` tags.
+- **Update Prod Image** (`.github/workflows/update-prod-image.yml`): after Release succeeds, auto-updates `values-prod.yaml` image tag and commits to `main`.
 
 ## Quick Command Reference
 
@@ -157,4 +165,5 @@ Run `make help` for the full list. Key commands:
 | `make gen-openapi` | Export `openapi.json` from the FastAPI app |
 | `make up` / `make down` | Full K8s environment up/down (see `deploy/README.md`) |
 | `make ship MSG=x` | git add + commit + push (feature branches only) |
-| `make release V=x.y.z` | Tag `vx.y.z` on `main` and push (triggers full release pipeline) |
+| `make bump V=x.y.z` | Bump version files, commit + push (feature branches only) |
+| `make release V=x.y.z` | Tag `vx.y.z` on `main` and push tag (triggers full release pipeline) |

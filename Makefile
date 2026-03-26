@@ -1,4 +1,4 @@
-.PHONY: help install install-hooks dev test test-unit test-api test-integration test-all test-e2e test-cov lint format migrate migration downgrade gen-openapi build clean ship up down deploy-storage deploy-infra deploy-runtime deploy-app deploy-all undeploy-storage undeploy-app undeploy-runtime undeploy-all restart-app kind-create kind-delete port-forward
+.PHONY: help install install-hooks dev test test-unit test-api test-integration test-all test-e2e test-cov lint format migrate migration downgrade gen-openapi build clean ship bump release up down deploy-storage deploy-infra deploy-runtime deploy-app deploy-all undeploy-storage undeploy-app undeploy-runtime undeploy-all restart-app kind-create kind-delete port-forward
 
 # ── Development ──────────────────────────────────────────────────────────────
 
@@ -181,14 +181,21 @@ ship: ## AI commit & push: make ship MSG="feat: add user model"
 
 # ── Release ─────────────────────────────────────────────────────────────────
 
-release: ## Tag a release: make release V=0.2.0
-	@if [ -z "$(V)" ]; then echo "Usage: make release V=0.2.0"; exit 1; fi
-	@if [ "$$(git symbolic-ref --short HEAD)" != "main" ]; then echo "Error: Must be on main to release."; exit 1; fi
+bump: ## Bump version files: make bump V=0.4.2  (run on feature branch, then open PR)
+	@if [ -z "$(V)" ]; then echo "Usage: make bump V=0.4.2"; exit 1; fi
+	@if [ "$$(git symbolic-ref --short HEAD)" = "main" ]; then echo "Error: Run bump on a feature branch, not main."; exit 1; fi
 	@echo "Bumping versions to $(V)..."
-	python scripts/set_release_versions.py "$(V)"
-	git add pyproject.toml cli/pyproject.toml sdk/python/pyproject.toml
-	git commit -m "chore: release v$(V)"
-	@echo "Tagging v$(V) and pushing — this will trigger Docker + PyPI + GitHub Release..."
+	uv run python scripts/set_release_versions.py "$(V)"
+	uv lock
+	git add pyproject.toml cli/pyproject.toml sdk/python/pyproject.toml uv.lock
+	git commit -m "chore: bump version to $(V)"
+	git push
+	@echo "✓ Version bumped and pushed. Open a PR, merge, then run: make release V=$(V)"
+
+release: ## Tag a release: make release V=0.4.2  (run on main after bump PR is merged)
+	@if [ -z "$(V)" ]; then echo "Usage: make release V=0.4.2"; exit 1; fi
+	@if [ "$$(git symbolic-ref --short HEAD)" != "main" ]; then echo "Error: Must be on main to release."; exit 1; fi
+	@if git tag -l "v$(V)" | grep -q .; then echo "Error: Tag v$(V) already exists."; exit 1; fi
 	git tag "v$(V)"
-	git push origin main "v$(V)"
+	git push origin "v$(V)"
 	@echo "✓ Release v$(V) triggered. Watch: gh run watch"
