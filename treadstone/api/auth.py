@@ -162,7 +162,8 @@ def _oauth_error_message(provider: str, error: str, error_description: str | Non
     return f"{provider.title()} login failed."
 
 
-async def _approve_cli_flow(session: AsyncSession, cli_flow_id: str, user: User, provider: str) -> None:
+async def _validate_cli_flow_pending(session: AsyncSession, cli_flow_id: str) -> None:
+    """Pre-check that the CLI flow is valid and pending. Called BEFORE user creation to avoid DB side effects."""
     from treadstone.models.cli_login_flow import CliLoginFlow
 
     result = await session.execute(select(CliLoginFlow).where(CliLoginFlow.id == cli_flow_id))
@@ -175,11 +176,32 @@ async def _approve_cli_flow(session: AsyncSession, cli_flow_id: str, user: User,
         expires = expires.replace(tzinfo=now.tzinfo)
     if now > expires:
         raise BadRequestError("CLI login flow has expired.")
+
+
+async def _approve_cli_flow(session: AsyncSession, cli_flow_id: str, user: User, provider: str) -> None:
+    """Mark a pre-validated CLI flow as approved. Must call _validate_cli_flow_pending first."""
+    from treadstone.models.cli_login_flow import CliLoginFlow
+
+    result = await session.execute(select(CliLoginFlow).where(CliLoginFlow.id == cli_flow_id))
+    flow = result.scalar_one()
     flow.status = "approved"
     flow.user_id = user.id
     flow.provider = provider
     flow.gmt_completed = utc_now()
     session.add(flow)
+
+
+async def _fail_cli_flow(session: AsyncSession, cli_flow_id: str) -> None:
+    """Mark a CLI flow as failed so the CLI stops polling immediately."""
+    from treadstone.models.cli_login_flow import CliLoginFlow
+
+    result = await session.execute(select(CliLoginFlow).where(CliLoginFlow.id == cli_flow_id))
+    flow = result.scalar_one_or_none()
+    if flow is not None and flow.status == "pending":
+        flow.status = "failed"
+        flow.gmt_completed = utc_now()
+        session.add(flow)
+        await session.commit()
 
 
 def _cli_oauth_success_page() -> HTMLResponse:
@@ -554,10 +576,13 @@ async def _oauth_callback(
 
     return_to = _resolve_browser_return_to(request, provider, state_payload)
     surface = "browser" if return_to is not None else "api"
+    cli_flow_id_from_state = state_payload.get("cli_flow_id") if state_payload else None
 
     if error is not None:
         message = _oauth_error_message(provider, error, error_description)
         set_request_context(request, error_code=error)
+        if cli_flow_id_from_state:
+            await _fail_cli_flow(session, cli_flow_id_from_state)
         if return_to is not None:
             response = _oauth_login_redirect(return_to, message)
             _clear_oauth_flow_cookies(response, provider)
@@ -571,6 +596,8 @@ async def _oauth_callback(
     state_csrf_token = state_payload.get("csrf")
     if not cookie_csrf_token or not state_csrf_token or not secrets.compare_digest(cookie_csrf_token, state_csrf_token):
         set_request_context(request, error_code="oauth_invalid_state")
+        if cli_flow_id_from_state:
+            await _fail_cli_flow(session, cli_flow_id_from_state)
         if return_to is not None:
             response = _oauth_login_redirect(return_to, "Your login session expired. Please try again.")
             _clear_oauth_flow_cookies(response, provider)
@@ -586,6 +613,8 @@ async def _oauth_callback(
             provider,
         )
         set_request_context(request, error_code="oauth_provider_error")
+        if cli_flow_id_from_state:
+            await _fail_cli_flow(session, cli_flow_id_from_state)
         message = f"{provider.title()} login failed."
         if return_to is not None:
             response = _oauth_login_redirect(return_to, message)
@@ -596,6 +625,8 @@ async def _oauth_callback(
     if account_email is None:
         error_code = "oauth_missing_verified_email" if provider == "github" else "oauth_missing_email"
         set_request_context(request, error_code=error_code)
+        if cli_flow_id_from_state:
+            await _fail_cli_flow(session, cli_flow_id_from_state)
         if provider == "github":
             message = "GitHub did not provide a verified email address."
         else:
@@ -605,6 +636,9 @@ async def _oauth_callback(
             _clear_oauth_flow_cookies(response, provider)
             return response
         raise BadRequestError(message)
+
+    if cli_flow_id_from_state:
+        await _validate_cli_flow_pending(session, cli_flow_id_from_state)
 
     existing_oauth = await session.execute(
         select(OAuthAccount).where(
@@ -634,8 +668,7 @@ async def _oauth_callback(
     except fastapi_users_exceptions.UserAlreadyExists as exc:
         raise ConflictError("Email already registered") from exc
 
-    cli_flow_id = state_payload.get("cli_flow_id") if state_payload else None
-    surface = "cli" if cli_flow_id else surface
+    surface = "cli" if cli_flow_id_from_state else surface
 
     set_request_context(request, actor_user_id=user.id, credential_type="cookie")
     await _record_oauth_success_events(
@@ -647,12 +680,12 @@ async def _oauth_callback(
         surface=surface,
     )
 
-    if cli_flow_id:
-        await _approve_cli_flow(session, cli_flow_id, user, provider)
+    if cli_flow_id_from_state:
+        await _approve_cli_flow(session, cli_flow_id_from_state, user, provider)
 
     await session.commit()
 
-    if cli_flow_id:
+    if cli_flow_id_from_state:
         response: Response = _cli_oauth_success_page()
         _clear_oauth_flow_cookies(response, provider)
         return response

@@ -314,3 +314,79 @@ async def test_session_token_from_exchange_is_valid(db_session, monkeypatch):
         )
         assert whoami.status_code == 200
         assert whoami.json()["email"] == "u@b.com"
+
+
+@pytest.mark.asyncio
+async def test_oauth_callback_with_expired_flow_does_not_create_user(db_session, monkeypatch):
+    """P1 regression: expired CLI flow must reject BEFORE creating user/OAuthAccount."""
+    monkeypatch.setattr(auth_api.settings, "api_base_url", "http://test")
+    monkeypatch.setattr(cli_auth_api.settings, "api_base_url", "http://test")
+
+    from tests.api.test_oauth_api import FakeOAuthClient
+
+    client = FakeOAuthClient("google", account_id="acct-ghost", account_email="ghost@example.com")
+    monkeypatch.setattr(auth_api, "get_google_oauth_client", lambda: client, raising=False)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
+        flow = await _create_flow(http_client)
+
+    async with _test_session_factory() as session:
+        db_flow = (await session.execute(select(CliLoginFlow).where(CliLoginFlow.id == flow["flow_id"]))).scalar_one()
+        db_flow.gmt_expires = utc_now() - timedelta(seconds=1)
+        session.add(db_flow)
+        await session.commit()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
+        authorize = await http_client.get(
+            "/v1/auth/google/authorize",
+            params={"cli_flow_id": flow["flow_id"]},
+            follow_redirects=False,
+        )
+        state = parse_qs(urlparse(authorize.headers["location"]).query)["state"][0]
+        callback = await http_client.get(
+            "/v1/auth/google/callback",
+            params={"code": "oauth-code", "state": state},
+            follow_redirects=False,
+        )
+
+    assert callback.status_code == 400
+    assert "expired" in callback.json()["error"]["message"].lower()
+
+    async with _test_session_factory() as session:
+        users = (await session.execute(select(User).where(User.email == "ghost@example.com"))).unique().scalars().all()
+    assert len(users) == 0, "No user should be created when CLI flow is expired"
+
+
+@pytest.mark.asyncio
+async def test_oauth_access_denied_marks_cli_flow_as_failed(db_session, monkeypatch):
+    """P2 regression: provider deny must mark CLI flow as failed so CLI stops polling."""
+    monkeypatch.setattr(auth_api.settings, "api_base_url", "http://test")
+    monkeypatch.setattr(cli_auth_api.settings, "api_base_url", "http://test")
+
+    from tests.api.test_oauth_api import FakeOAuthClient
+
+    client = FakeOAuthClient("google")
+    monkeypatch.setattr(auth_api, "get_google_oauth_client", lambda: client, raising=False)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
+        flow = await _create_flow(http_client)
+
+        authorize = await http_client.get(
+            "/v1/auth/google/authorize",
+            params={"cli_flow_id": flow["flow_id"]},
+            follow_redirects=False,
+        )
+        state = parse_qs(urlparse(authorize.headers["location"]).query)["state"][0]
+
+        callback = await http_client.get(
+            "/v1/auth/google/callback",
+            params={"state": state, "error": "access_denied"},
+            follow_redirects=False,
+        )
+        assert callback.status_code == 400
+
+        poll = await http_client.get(
+            f"/v1/auth/cli/flows/{flow['flow_id']}/status",
+            headers={"X-Flow-Secret": flow["flow_secret"]},
+        )
+        assert poll.json()["status"] == "failed"

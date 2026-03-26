@@ -97,7 +97,7 @@ def _browser_login(ctx: click.Context) -> None:
             else:
                 click.echo(f"\nLogin successful. Saved session for {base_url}.")
             return
-        if status in ("expired", "used"):
+        if status in ("expired", "used", "failed"):
             click.echo(f"\nLogin flow {status}. Please try again.", err=True)
             sys.exit(1)
 
