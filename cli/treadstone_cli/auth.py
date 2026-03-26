@@ -33,6 +33,7 @@ def auth() -> None:
 
     \b
     Quick start:
+      treadstone auth register                        Create a new account
       treadstone auth login                           Browser login (Google/GitHub/email)
       treadstone auth login --email X --password Y    Direct email/password login
       treadstone auth whoami                          Verify current identity
