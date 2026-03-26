@@ -1,137 +1,124 @@
 # treadstone-sdk
+A client library for accessing treadstone
 
-Typed Python SDK for the Treadstone sandbox service.
-
-## Install
-
-```bash
-pip install treadstone-sdk
-```
-
-## Client types
-
-Use `Client` for unauthenticated endpoints such as health checks:
+## Usage
+First, create a client:
 
 ```python
 from treadstone_sdk import Client
-from treadstone_sdk.api.system import system_health
 
 client = Client(base_url="https://api.example.com")
-health = system_health.sync(client=client)
-print(health.status)
 ```
 
-Use `AuthenticatedClient` for protected endpoints. For AI agents and automation,
-an API key is the preferred credential:
+If the endpoints you're going to hit require authentication, use `AuthenticatedClient` instead:
 
 ```python
 from treadstone_sdk import AuthenticatedClient
 
-client = AuthenticatedClient(
-    base_url="https://api.example.com",
-    token="sk_your_api_key",
-)
+client = AuthenticatedClient(base_url="https://api.example.com", token="SuperSecretToken")
 ```
 
-## Common sandbox workflow
+Now call your endpoint and use your models:
 
 ```python
-from treadstone_sdk import AuthenticatedClient
-from treadstone_sdk.api.sandbox_templates import sandbox_templates_list_sandbox_templates
-from treadstone_sdk.api.sandboxes import (
-    sandboxes_create_sandbox,
-    sandboxes_create_sandbox_web_link,
-    sandboxes_get_sandbox,
-)
-from treadstone_sdk.models.create_sandbox_request import CreateSandboxRequest
+from treadstone_sdk.models import MyDataModel
+from treadstone_sdk.api.my_tag import get_my_data_model
+from treadstone_sdk.types import Response
 
-client = AuthenticatedClient(base_url="https://api.example.com", token="sk_your_api_key")
-
-templates = sandbox_templates_list_sandbox_templates.sync(client=client)
-template_name = templates.items[0].name
-
-sandbox = sandboxes_create_sandbox.sync(
-    client=client,
-    body=CreateSandboxRequest(
-        template=template_name,
-        name="demo",
-    ),
-)
-
-sandbox_id = sandbox.id
-detail = sandboxes_get_sandbox.sync(sandbox_id=sandbox_id, client=client)
-web_link = sandboxes_create_sandbox_web_link.sync(sandbox_id=sandbox_id, client=client)
-
-print(sandbox_id)
-print(detail.urls.proxy)
-print(web_link.open_link)
+with client as client:
+    my_data: MyDataModel = get_my_data_model.sync(client=client)
+    # or if you need more info (e.g. status_code)
+    response: Response[MyDataModel] = get_my_data_model.sync_detailed(client=client)
 ```
 
-## Async example
+Or do the same thing with an async version:
 
 ```python
-from treadstone_sdk import AuthenticatedClient
-from treadstone_sdk.api.sandboxes import sandboxes_get_sandbox
+from treadstone_sdk.models import MyDataModel
+from treadstone_sdk.api.my_tag import get_my_data_model
+from treadstone_sdk.types import Response
 
-client = AuthenticatedClient(base_url="https://api.example.com", token="sk_your_api_key")
-
-async with client:
-    sandbox = await sandboxes_get_sandbox.asyncio("sbabc123def456", client=client)
-    print(sandbox.status)
+async with client as client:
+    my_data: MyDataModel = await get_my_data_model.asyncio(client=client)
+    response: Response[MyDataModel] = await get_my_data_model.asyncio_detailed(client=client)
 ```
 
-## Important identifier rules
-
-- `sandbox.name` is a human-readable label scoped to the current user.
-- Follow-up sandbox operations use `sandbox.id`.
-- Browser entry URLs are based on `sandbox_id` under the hood.
-- Do not construct Web UI URLs from sandbox names. Read `sandbox.urls.web`, `web_url`, or `open_link` from API responses.
-
-## Generated module layout
-
-The SDK is generated from the OpenAPI spec:
-
-- API functions live under `treadstone_sdk.api.<tag>`
-- Request and response models live under `treadstone_sdk.models`
-- Each endpoint exposes `sync`, `sync_detailed`, `asyncio`, and `asyncio_detailed`
-
-Example imports:
-
-```python
-from treadstone_sdk.api.sandboxes import sandboxes_create_sandbox
-from treadstone_sdk.models.create_sandbox_request import CreateSandboxRequest
-```
-
-## Transport customization
-
-You can customize the underlying `httpx` clients if needed:
-
-```python
-import httpx
-
-from treadstone_sdk import AuthenticatedClient
-
-client = AuthenticatedClient(
-    base_url="https://api.example.com",
-    token="sk_your_api_key",
-    httpx_args={"timeout": 60.0},
-)
-
-client.set_httpx_client(
-    httpx.Client(
-        base_url="https://api.example.com",
-        headers={"Authorization": "Bearer sk_your_api_key"},
-        timeout=60.0,
-    )
-)
-```
-
-For internal environments with a custom CA bundle:
+By default, when you're calling an HTTPS API it will attempt to verify that SSL is working correctly. Using certificate verification is highly recommended most of the time, but sometimes you may need to authenticate to a server (especially an internal server) using a custom certificate bundle.
 
 ```python
 client = AuthenticatedClient(
-    base_url="https://internal-api.example.com",
-    token="sk_your_api_key",
+    base_url="https://internal_api.example.com",
+    token="SuperSecretToken",
     verify_ssl="/path/to/certificate_bundle.pem",
 )
 ```
+
+You can also disable certificate validation altogether, but beware that **this is a security risk**.
+
+```python
+client = AuthenticatedClient(
+    base_url="https://internal_api.example.com",
+    token="SuperSecretToken",
+    verify_ssl=False
+)
+```
+
+Things to know:
+1. Every path/method combo becomes a Python module with four functions:
+    1. `sync`: Blocking request that returns parsed data (if successful) or `None`
+    1. `sync_detailed`: Blocking request that always returns a `Request`, optionally with `parsed` set if the request was successful.
+    1. `asyncio`: Like `sync` but async instead of blocking
+    1. `asyncio_detailed`: Like `sync_detailed` but async instead of blocking
+
+1. All path/query params, and bodies become method arguments.
+1. If your endpoint had any tags on it, the first tag will be used as a module name for the function (my_tag above)
+1. Any endpoint which did not have a tag will be in `treadstone_sdk.api.default`
+
+## Advanced customizations
+
+There are more settings on the generated `Client` class which let you control more runtime behavior, check out the docstring on that class for more info. You can also customize the underlying `httpx.Client` or `httpx.AsyncClient` (depending on your use-case):
+
+```python
+from treadstone_sdk import Client
+
+def log_request(request):
+    print(f"Request event hook: {request.method} {request.url} - Waiting for response")
+
+def log_response(response):
+    request = response.request
+    print(f"Response event hook: {request.method} {request.url} - Status {response.status_code}")
+
+client = Client(
+    base_url="https://api.example.com",
+    httpx_args={"event_hooks": {"request": [log_request], "response": [log_response]}},
+)
+
+# Or get the underlying httpx client to modify directly with client.get_httpx_client() or client.get_async_httpx_client()
+```
+
+You can even set the httpx client directly, but beware that this will override any existing settings (e.g., base_url):
+
+```python
+import httpx
+from treadstone_sdk import Client
+
+client = Client(
+    base_url="https://api.example.com",
+)
+# Note that base_url needs to be re-set, as would any shared cookies, headers, etc.
+client.set_httpx_client(httpx.Client(base_url="https://api.example.com", proxies="http://localhost:8030"))
+```
+
+## Building / publishing this package
+This project uses [Poetry](https://python-poetry.org/) to manage dependencies  and packaging.  Here are the basics:
+1. Update the metadata in pyproject.toml (e.g. authors, version)
+1. If you're using a private repository, configure it with Poetry
+    1. `poetry config repositories.<your-repository-name> <url-to-your-repository>`
+    1. `poetry config http-basic.<your-repository-name> <username> <password>`
+1. Publish the client with `poetry publish --build -r <your-repository-name>` or, if for public PyPI, just `poetry publish --build`
+
+If you want to install this client into another project without publishing it (e.g. for development) then:
+1. If that project **is using Poetry**, you can simply do `poetry add <path-to-this-client>` from that project
+1. If that project is not using Poetry:
+    1. Build a wheel with `poetry build -f wheel`
+    1. Install that wheel from the other project `pip install <path-to-wheel>`

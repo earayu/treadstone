@@ -165,7 +165,6 @@ treadstone auth login                    # Log in and save a local session
 treadstone auth logout                   # Clear the saved session for this base URL
 treadstone auth whoami                   # Show the current user via API key or session
 treadstone auth change-password          # Change your password
-treadstone auth invite --email user@example.com   # Invite a user (admin)
 treadstone auth users                    # Admins see all users; non-admins see themselves
 treadstone auth delete-user <user-id>    # Delete a user (admin)
 ```

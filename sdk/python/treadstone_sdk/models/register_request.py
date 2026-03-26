@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, TypeVar, cast
+from typing import Any, TypeVar
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
-
-from ..types import UNSET, Unset
 
 T = TypeVar("T", bound="RegisterRequest")
 
@@ -17,24 +15,16 @@ class RegisterRequest:
     Attributes:
         email (str):
         password (str):
-        invitation_token (None | str | Unset):
     """
 
     email: str
     password: str
-    invitation_token: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         email = self.email
 
         password = self.password
-
-        invitation_token: None | str | Unset
-        if isinstance(self.invitation_token, Unset):
-            invitation_token = UNSET
-        else:
-            invitation_token = self.invitation_token
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
@@ -44,8 +34,6 @@ class RegisterRequest:
                 "password": password,
             }
         )
-        if invitation_token is not UNSET:
-            field_dict["invitation_token"] = invitation_token
 
         return field_dict
 
@@ -56,19 +44,9 @@ class RegisterRequest:
 
         password = d.pop("password")
 
-        def _parse_invitation_token(data: object) -> None | str | Unset:
-            if data is None:
-                return data
-            if isinstance(data, Unset):
-                return data
-            return cast(None | str | Unset, data)
-
-        invitation_token = _parse_invitation_token(d.pop("invitation_token", UNSET))
-
         register_request = cls(
             email=email,
             password=password,
-            invitation_token=invitation_token,
         )
 
         register_request.additional_properties = d

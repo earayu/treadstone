@@ -35,7 +35,15 @@ cp .env.example .env.local
 #   TREADSTONE_DATABASE_URL   — Neon connection string
 #   TREADSTONE_JWT_SECRET     — JWT secret
 #   TREADSTONE_LEADER_ELECTION_ENABLED=true  — Recommended for every K8s environment
+# Optional for Google/GitHub login:
+#   TREADSTONE_GOOGLE_OAUTH_CLIENT_ID / TREADSTONE_GOOGLE_OAUTH_CLIENT_SECRET
+#   TREADSTONE_GITHUB_OAUTH_CLIENT_ID / TREADSTONE_GITHUB_OAUTH_CLIENT_SECRET
 ```
+
+For OAuth provider setup, register callback URLs that match the current environment:
+
+- local: `http://localhost/v1/auth/google/callback` and `http://localhost/v1/auth/github/callback`
+- demo/prod: `https://<api-host>/v1/auth/google/callback` and `https://<api-host>/v1/auth/github/callback`
 
 ## One-Command Deployment (Recommended)
 

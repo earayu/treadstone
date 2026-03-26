@@ -19,7 +19,6 @@ from treadstone.api.sandboxes import router as sandboxes_router
 from treadstone.api.schemas import HealthResponse
 from treadstone.config import settings, validate_runtime_settings
 from treadstone.core.errors import TreadstoneError
-from treadstone.core.users import auth_backend, fastapi_users, github_oauth_client, google_oauth_client
 from treadstone.middleware.request_logging import RequestLoggingMiddleware
 from treadstone.middleware.sandbox_subdomain import SandboxSubdomainMiddleware
 from treadstone.services.sandbox_proxy import close_http_client
@@ -96,7 +95,7 @@ app = FastAPI(
     servers=[
         {"url": "https://api.treadstone-ai.dev", "description": "Production"},
         {"url": "https://demo.treadstone-ai.dev", "description": "Demo"},
-        {"url": "http://localhost:8000", "description": "Local development"},
+        {"url": "http://localhost", "description": "Local ingress"},
     ],
 )
 
@@ -161,20 +160,6 @@ app.include_router(config_router)
 app.include_router(sandbox_proxy_router)
 app.include_router(sandbox_templates_router)
 app.include_router(sandboxes_router)
-
-if google_oauth_client:
-    app.include_router(
-        fastapi_users.get_oauth_router(google_oauth_client, auth_backend, settings.jwt_secret),
-        prefix="/v1/auth/google",
-        tags=["auth"],
-    )
-
-if github_oauth_client:
-    app.include_router(
-        fastapi_users.get_oauth_router(github_oauth_client, auth_backend, settings.jwt_secret),
-        prefix="/v1/auth/github",
-        tags=["auth"],
-    )
 
 
 @app.get("/health", tags=["system"], response_model=HealthResponse)

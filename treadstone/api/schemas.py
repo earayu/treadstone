@@ -95,10 +95,10 @@ class CreateSandboxRequest(BaseModel):
 
 
 class SandboxUrls(BaseModel):
-    proxy: str = Field(..., examples=["http://localhost:8000/v1/sandboxes/sb-abc123def456/proxy"])
+    proxy: str = Field(..., examples=["http://localhost/v1/sandboxes/sb-abc123def456/proxy"])
     web: str | None = Field(
         default=None,
-        examples=["http://sandbox-sbabc123def456.sandbox.localhost:8000/_treadstone/open?token=swlabc123"],
+        examples=["http://sandbox-sbabc123def456.sandbox.localhost/_treadstone/open?token=swlabc123"],
         description=(
             "Recommended browser entry URL. When a sandbox web link is enabled, this is the shareable hand-off URL."
         ),
@@ -192,7 +192,6 @@ class LoginResponse(BaseModel):
 class RegisterRequest(BaseModel):
     email: EmailStr = Field(..., examples=["user@example.com"])
     password: str = Field(..., examples=["MySecretPass123!"])
-    invitation_token: str | None = Field(default=None, examples=[None])
 
 
 class UserResponse(BaseModel):
@@ -213,17 +212,6 @@ class UserDetailResponse(UserResponse):
 class UserListResponse(BaseModel):
     items: list[UserResponse]
     total: int = Field(..., examples=[1])
-
-
-class InviteRequest(BaseModel):
-    email: EmailStr = Field(..., examples=["invitee@example.com"])
-    role: Role = Field(default=Role.RO, examples=["ro"])
-
-
-class InviteResponse(BaseModel):
-    token: str = Field(..., examples=["dGhpcyBpcyBhIHRva2VuLi4u"])
-    email: str = Field(..., examples=["invitee@example.com"])
-    expires_at: datetime = Field(..., examples=["2026-03-28T12:00:00+00:00"])
 
 
 class ChangePasswordRequest(BaseModel):

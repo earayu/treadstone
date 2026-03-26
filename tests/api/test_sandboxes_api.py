@@ -76,7 +76,7 @@ def _enable_subdomain(monkeypatch, domain: str = "sandbox.localhost", api_base_u
     from treadstone.config import Settings
 
     s = Settings()
-    monkeypatch.setattr("treadstone.api.browser.settings", s)
+    monkeypatch.setattr("treadstone.services.browser_login.settings", s)
     monkeypatch.setattr("treadstone.api.sandboxes.settings", s)
     monkeypatch.setattr("treadstone.core.users.settings", s)
     monkeypatch.setattr("treadstone.middleware.sandbox_subdomain.settings", s)

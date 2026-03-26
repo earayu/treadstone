@@ -1,6 +1,7 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from treadstone.api import config as config_api
 from treadstone.main import app
 
 
@@ -21,3 +22,15 @@ async def test_config_includes_login_methods():
     data = resp.json()
     assert "login_methods" in data["auth"]
     assert "email" in data["auth"]["login_methods"]
+
+
+@pytest.mark.asyncio
+async def test_config_includes_google_and_github_when_configured(monkeypatch):
+    monkeypatch.setattr(config_api, "get_google_oauth_client", lambda: object())
+    monkeypatch.setattr(config_api, "get_github_oauth_client", lambda: object())
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/v1/config")
+
+    assert resp.status_code == 200
+    assert resp.json()["auth"]["login_methods"] == ["email", "google", "github"]

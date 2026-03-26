@@ -19,13 +19,12 @@ def test_settings_override():
 
 def test_settings_api_base_url_default():
     s = Settings(_env_file=None, database_url=DB_URL)
-    assert s.api_base_url == "http://localhost:8000"
+    assert s.api_base_url == "http://localhost"
 
 
 def test_auth_defaults():
     s = Settings(_env_file=None, database_url=DB_URL)
     assert s.auth_type == "cookie"
-    assert s.register_mode == "unlimited"
     assert s.jwt_secret == "CHANGE_ME_IN_PROD"
 
 
@@ -44,6 +43,15 @@ def test_oauth_defaults_empty():
     s = Settings(_env_file=None, database_url=DB_URL)
     assert s.google_oauth_client_id == ""
     assert s.github_oauth_client_secret == ""
+
+
+def test_settings_ignore_removed_oauth_and_invitation_env_vars(monkeypatch):
+    monkeypatch.setenv("TREADSTONE_REGISTER_MODE", "unlimited")
+    monkeypatch.setenv("TREADSTONE_OAUTH_REDIRECT_URL", "http://localhost:3000/auth/callback")
+
+    s = Settings(_env_file=None, database_url=DB_URL)
+
+    assert s.auth_type == "cookie"
 
 
 def test_validate_runtime_settings_rejects_default_secret():

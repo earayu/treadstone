@@ -44,7 +44,7 @@ pip install treadstone-cli
 
 ```bash
 # Optional: point the CLI at your own deployment
-export TREADSTONE_BASE_URL="http://localhost:8000"
+export TREADSTONE_BASE_URL="http://localhost"
 
 treadstone system health
 treadstone auth register
@@ -104,7 +104,7 @@ from treadstone_sdk.api.sandboxes import sandboxes_create_sandbox
 from treadstone_sdk.models.create_sandbox_request import CreateSandboxRequest
 
 client = AuthenticatedClient(
-    base_url="http://localhost:8000",
+    base_url="http://localhost",
     token="sk_your_api_key",
 )
 

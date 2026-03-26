@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, TypeVar, cast
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
+from ..models.create_sandbox_request_storage_size_type_0 import CreateSandboxRequestStorageSizeType0
 from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
@@ -29,7 +30,8 @@ class CreateSandboxRequest:
         auto_delete_interval (int | Unset): Minutes after stop before the sandbox is automatically deleted. -1 disables
             auto-delete. Default: -1.
         persist (bool | Unset):  Default: False.
-        storage_size (None | str | Unset): Persistent volume size.
+        storage_size (CreateSandboxRequestStorageSizeType0 | None | Unset): Persistent volume size. Supported tiers:
+            5Gi, 10Gi, 20Gi.
     """
 
     template: str
@@ -38,7 +40,7 @@ class CreateSandboxRequest:
     auto_stop_interval: int | Unset = 15
     auto_delete_interval: int | Unset = -1
     persist: bool | Unset = False
-    storage_size: None | str | Unset = UNSET
+    storage_size: CreateSandboxRequestStorageSizeType0 | None | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -63,6 +65,8 @@ class CreateSandboxRequest:
         storage_size: None | str | Unset
         if isinstance(self.storage_size, Unset):
             storage_size = UNSET
+        elif isinstance(self.storage_size, CreateSandboxRequestStorageSizeType0):
+            storage_size = self.storage_size.value
         else:
             storage_size = self.storage_size
 
@@ -117,12 +121,20 @@ class CreateSandboxRequest:
 
         persist = d.pop("persist", UNSET)
 
-        def _parse_storage_size(data: object) -> None | str | Unset:
+        def _parse_storage_size(data: object) -> CreateSandboxRequestStorageSizeType0 | None | Unset:
             if data is None:
                 return data
             if isinstance(data, Unset):
                 return data
-            return cast(None | str | Unset, data)
+            try:
+                if not isinstance(data, str):
+                    raise TypeError()
+                storage_size_type_0 = CreateSandboxRequestStorageSizeType0(data)
+
+                return storage_size_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(CreateSandboxRequestStorageSizeType0 | None | Unset, data)
 
         storage_size = _parse_storage_size(d.pop("storage_size", UNSET))
 

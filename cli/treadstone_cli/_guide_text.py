@@ -42,7 +42,6 @@ treadstone auth login
 treadstone auth logout
 treadstone auth whoami
 treadstone auth change-password
-treadstone auth invite
 treadstone auth users
 treadstone auth delete-user
 treadstone api-keys create|list|update|delete

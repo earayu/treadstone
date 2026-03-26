@@ -43,7 +43,7 @@ uv run pytest tests/integration/ -v -m integration
 
 | Test | What it verifies |
 |------|-----------------|
-| `test_tables_exist` | Alembic migration correctly created user/oauth_account/invitation/api_key tables |
+| `test_tables_exist` | Alembic migration correctly created user/oauth_account/api_key tables and removed invitation |
 | `test_register_creates_user_in_db` | Register API creates a user record in the real DB |
 | `test_full_auth_flow` | Full flow: register → login → get user → change password → login with new password |
 | `test_duplicate_register_returns_409` | Duplicate email registration returns 409 Conflict |

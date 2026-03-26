@@ -1,44 +1,44 @@
 from __future__ import annotations
 
-import datetime
 from collections.abc import Mapping
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
-from dateutil.parser import isoparse
 
-T = TypeVar("T", bound="InviteResponse")
+if TYPE_CHECKING:
+    from ..models.audit_event_response import AuditEventResponse
+
+
+T = TypeVar("T", bound="AuditEventListResponse")
 
 
 @_attrs_define
-class InviteResponse:
+class AuditEventListResponse:
     """
     Attributes:
-        token (str):
-        email (str):
-        expires_at (datetime.datetime):
+        items (list[AuditEventResponse]):
+        total (int):
     """
 
-    token: str
-    email: str
-    expires_at: datetime.datetime
+    items: list[AuditEventResponse]
+    total: int
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        token = self.token
+        items = []
+        for items_item_data in self.items:
+            items_item = items_item_data.to_dict()
+            items.append(items_item)
 
-        email = self.email
-
-        expires_at = self.expires_at.isoformat()
+        total = self.total
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
             {
-                "token": token,
-                "email": email,
-                "expires_at": expires_at,
+                "items": items,
+                "total": total,
             }
         )
 
@@ -46,21 +46,25 @@ class InviteResponse:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
+        from ..models.audit_event_response import AuditEventResponse
+
         d = dict(src_dict)
-        token = d.pop("token")
+        items = []
+        _items = d.pop("items")
+        for items_item_data in _items:
+            items_item = AuditEventResponse.from_dict(items_item_data)
 
-        email = d.pop("email")
+            items.append(items_item)
 
-        expires_at = isoparse(d.pop("expires_at"))
+        total = d.pop("total")
 
-        invite_response = cls(
-            token=token,
-            email=email,
-            expires_at=expires_at,
+        audit_event_list_response = cls(
+            items=items,
+            total=total,
         )
 
-        invite_response.additional_properties = d
-        return invite_response
+        audit_event_list_response.additional_properties = d
+        return audit_event_list_response
 
     @property
     def additional_keys(self) -> list[str]:

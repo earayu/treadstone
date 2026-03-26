@@ -9,29 +9,21 @@ from ...client import AuthenticatedClient, Client
 from ...models.api_key_summary import ApiKeySummary
 from ...models.http_validation_error import HTTPValidationError
 from ...models.update_api_key_request import UpdateApiKeyRequest
-from ...types import UNSET, Response, Unset
+from ...types import Response
 
 
 def _get_kwargs(
     key_id: str,
     *,
     body: UpdateApiKeyRequest,
-    user_db: Any | Unset = UNSET,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
-
-    params: dict[str, Any] = {}
-
-    params["user_db"] = user_db
-
-    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
     _kwargs: dict[str, Any] = {
         "method": "patch",
         "url": "/v1/auth/api-keys/{key_id}".format(
             key_id=quote(str(key_id), safe=""),
         ),
-        "params": params,
     }
 
     _kwargs["json"] = body.to_dict()
@@ -77,13 +69,11 @@ def sync_detailed(
     *,
     client: AuthenticatedClient,
     body: UpdateApiKeyRequest,
-    user_db: Any | Unset = UNSET,
 ) -> Response[ApiKeySummary | HTTPValidationError]:
     """Update Api Key
 
     Args:
         key_id (str):
-        user_db (Any | Unset):
         body (UpdateApiKeyRequest):
 
     Raises:
@@ -97,7 +87,6 @@ def sync_detailed(
     kwargs = _get_kwargs(
         key_id=key_id,
         body=body,
-        user_db=user_db,
     )
 
     response = client.get_httpx_client().request(
@@ -112,13 +101,11 @@ def sync(
     *,
     client: AuthenticatedClient,
     body: UpdateApiKeyRequest,
-    user_db: Any | Unset = UNSET,
 ) -> ApiKeySummary | HTTPValidationError | None:
     """Update Api Key
 
     Args:
         key_id (str):
-        user_db (Any | Unset):
         body (UpdateApiKeyRequest):
 
     Raises:
@@ -133,7 +120,6 @@ def sync(
         key_id=key_id,
         client=client,
         body=body,
-        user_db=user_db,
     ).parsed
 
 
@@ -142,13 +128,11 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient,
     body: UpdateApiKeyRequest,
-    user_db: Any | Unset = UNSET,
 ) -> Response[ApiKeySummary | HTTPValidationError]:
     """Update Api Key
 
     Args:
         key_id (str):
-        user_db (Any | Unset):
         body (UpdateApiKeyRequest):
 
     Raises:
@@ -162,7 +146,6 @@ async def asyncio_detailed(
     kwargs = _get_kwargs(
         key_id=key_id,
         body=body,
-        user_db=user_db,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -175,13 +158,11 @@ async def asyncio(
     *,
     client: AuthenticatedClient,
     body: UpdateApiKeyRequest,
-    user_db: Any | Unset = UNSET,
 ) -> ApiKeySummary | HTTPValidationError | None:
     """Update Api Key
 
     Args:
         key_id (str):
-        user_db (Any | Unset):
         body (UpdateApiKeyRequest):
 
     Raises:
@@ -197,6 +178,5 @@ async def asyncio(
             key_id=key_id,
             client=client,
             body=body,
-            user_db=user_db,
         )
     ).parsed
