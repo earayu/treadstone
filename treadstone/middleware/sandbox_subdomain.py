@@ -21,9 +21,11 @@ from starlette.websockets import WebSocket
 
 from treadstone.config import settings
 from treadstone.core.database import async_session
+from treadstone.core.request_context import set_request_context, set_scope_context
 from treadstone.models.sandbox import Sandbox, SandboxStatus
 from treadstone.models.sandbox_web_link import SandboxWebLink
 from treadstone.models.user import utc_now
+from treadstone.services.audit import record_audit_event
 from treadstone.services.browser_auth import (
     SANDBOX_WEB_COOKIE_NAME,
     SANDBOX_WEB_COOKIE_TTL_SECONDS,
@@ -116,6 +118,11 @@ class SandboxSubdomainMiddleware:
         if sandbox_id is None:
             await self.app(scope, receive, send)
             return
+        set_scope_context(
+            scope,
+            sandbox_id=sandbox_id,
+            route_kind="subdomain_ws" if scope["type"] == "websocket" else "subdomain_http",
+        )
 
         if scope["type"] == "http":
             await self._handle_http(scope, receive, send, sandbox_id, host)
@@ -160,6 +167,7 @@ class SandboxSubdomainMiddleware:
         )
 
     async def _exchange_open_credentials(self, request: Request, sandbox: Sandbox) -> Response:
+        set_request_context(request, sandbox_id=sandbox.id)
         ticket = request.query_params.get("ticket")
         token = request.query_params.get("token")
         next_path = _sanitize_next_path(request.query_params.get("next"))
@@ -184,10 +192,30 @@ class SandboxSubdomainMiddleware:
                 )
                 link = result.scalar_one_or_none()
                 if link is None or link.is_expired():
+                    set_request_context(request, error_code="sandbox_web_link_invalid")
+                    await record_audit_event(
+                        session,
+                        action="sandbox.web_link.open",
+                        target_type="sandbox",
+                        target_id=sandbox.id,
+                        result="failure",
+                        error_code="sandbox_web_link_invalid",
+                        metadata={"issued_via": "open_link"},
+                        request=request,
+                    )
+                    await session.commit()
                     return Response("Invalid or expired sandbox web link.", status_code=401)
                 link.gmt_last_used = utc_now()
                 link.gmt_updated = utc_now()
                 session.add(link)
+                await record_audit_event(
+                    session,
+                    action="sandbox.web_link.open",
+                    target_type="sandbox",
+                    target_id=sandbox.id,
+                    metadata={"issued_via": "open_link"},
+                    request=request,
+                )
                 await session.commit()
 
             response = RedirectResponse(url=next_path, status_code=303)

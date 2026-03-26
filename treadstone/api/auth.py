@@ -1,13 +1,13 @@
 import secrets
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from fastapi_users.password import PasswordHelper
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from treadstone.api.deps import get_current_admin, get_current_control_plane_user
+from treadstone.api.deps import get_current_admin, get_current_control_plane_user, optional_cookie_user
 from treadstone.api.schemas import (
     ApiKeyListResponse,
     ApiKeyResponse,
@@ -29,6 +29,7 @@ from treadstone.api.schemas import (
 from treadstone.config import settings
 from treadstone.core.database import get_session
 from treadstone.core.errors import BadRequestError, ConflictError, ForbiddenError, NotFoundError, ValidationError
+from treadstone.core.request_context import set_request_context
 from treadstone.core.users import COOKIE_MAX_AGE, cookie_transport, get_jwt_strategy
 from treadstone.models.api_key import (
     ApiKey,
@@ -38,6 +39,7 @@ from treadstone.models.api_key import (
 )
 from treadstone.models.sandbox import Sandbox
 from treadstone.models.user import Invitation, Role, User, random_id, utc_now
+from treadstone.services.audit import record_audit_event
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
 
@@ -104,9 +106,22 @@ async def _resolve_api_key_scope(
 
 def _serialize_api_key_scope(api_key: ApiKey) -> dict:
     sandbox_ids = [grant.sandbox_id for grant in api_key.sandbox_grants]
+    return _scope_payload_from_values(
+        control_plane_enabled=api_key.control_plane_enabled,
+        data_plane_mode=api_key.data_plane_mode,
+        sandbox_ids=sandbox_ids,
+    )
+
+
+def _scope_payload_from_values(
+    *,
+    control_plane_enabled: bool,
+    data_plane_mode: str,
+    sandbox_ids: list[str],
+) -> dict:
     return {
-        "control_plane": api_key.control_plane_enabled,
-        "data_plane": {"mode": api_key.data_plane_mode, "sandbox_ids": sandbox_ids},
+        "control_plane": control_plane_enabled,
+        "data_plane": {"mode": data_plane_mode, "sandbox_ids": sandbox_ids},
     }
 
 
@@ -140,23 +155,63 @@ async def _load_api_key_with_grants(session: AsyncSession, key_id: str) -> ApiKe
 
 @router.post("/login", response_model=LoginResponse)
 async def login(
+    request: Request,
     body: LoginRequest,
     session: AsyncSession = Depends(get_session),
 ):
     """Authenticate with email + password, set session cookie."""
-    user = await authenticate_email_password(session, str(body.email), body.password)
+    try:
+        user = await authenticate_email_password(session, str(body.email), body.password)
+    except BadRequestError:
+        await record_audit_event(
+            session,
+            action="auth.login",
+            target_type="user",
+            result="failure",
+            error_code="bad_request",
+            metadata={"email": str(body.email), "surface": "api"},
+            request=request,
+        )
+        await session.commit()
+        raise
+
+    set_request_context(request, actor_user_id=user.id, credential_type="cookie")
 
     response = Response(
         content='{"detail":"Login successful"}',
         media_type="application/json",
     )
     await write_session_cookie(response, user)
+    await record_audit_event(
+        session,
+        action="auth.login",
+        target_type="user",
+        target_id=user.id,
+        metadata={"email": user.email, "surface": "api"},
+        request=request,
+    )
+    await session.commit()
     return response
 
 
 @router.post("/logout", response_model=MessageResponse)
-async def logout():
+async def logout(
+    request: Request,
+    current_user: User | None = Depends(optional_cookie_user),
+    session: AsyncSession = Depends(get_session),
+):
     """Clear the session cookie."""
+    if current_user is not None:
+        set_request_context(request, actor_user_id=current_user.id, credential_type="cookie")
+        await record_audit_event(
+            session,
+            action="auth.logout",
+            target_type="user",
+            target_id=current_user.id,
+            request=request,
+        )
+        await session.commit()
+
     response = Response(
         content='{"detail":"Logout successful"}',
         media_type="application/json",
@@ -167,6 +222,7 @@ async def logout():
 
 @router.post("/register", status_code=status.HTTP_201_CREATED, response_model=RegisterResponse)
 async def register(
+    request: Request,
     body: RegisterRequest,
     session: AsyncSession = Depends(get_session),
 ):
@@ -205,11 +261,20 @@ async def register(
         role=role.value,
     )
     session.add(user)
+    await session.flush()
 
     if invitation:
         await invitation.use(session)
-    else:
-        await session.commit()
+    set_request_context(request, actor_user_id=user.id)
+    await record_audit_event(
+        session,
+        action="auth.register",
+        target_type="user",
+        target_id=user.id,
+        metadata={"email": user.email, "role": user.role},
+        request=request,
+    )
+    await session.commit()
 
     await session.refresh(user)
     return {"id": user.id, "email": user.email, "role": user.role}
@@ -217,6 +282,7 @@ async def register(
 
 @router.post("/invite", status_code=status.HTTP_201_CREATED, response_model=InviteResponse)
 async def invite(
+    request: Request,
     body: InviteRequest,
     current_user: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_session),
@@ -230,6 +296,15 @@ async def invite(
         role=body.role,
     )
     session.add(inv)
+    await session.flush()
+    await record_audit_event(
+        session,
+        action="auth.invitation.create",
+        target_type="invitation",
+        target_id=inv.id,
+        metadata={"email": body.email, "role": body.role, "expires_at": inv.expires_at.isoformat()},
+        request=request,
+    )
     await session.commit()
     return {"token": token, "email": body.email, "expires_at": inv.expires_at}
 
@@ -264,6 +339,7 @@ async def list_users(
 
 @router.post("/change-password", response_model=MessageResponse)
 async def change_password(
+    request: Request,
     body: ChangePasswordRequest,
     current_user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
@@ -277,12 +353,20 @@ async def change_password(
         raise NotFoundError("User", current_user.id)
     user.hashed_password = ph.hash(body.new_password)
     session.add(user)
+    await record_audit_event(
+        session,
+        action="auth.password.change",
+        target_type="user",
+        target_id=user.id,
+        request=request,
+    )
     await session.commit()
     return {"detail": "Password changed"}
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
+    request: Request,
     user_id: str,
     current_user: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_session),
@@ -298,12 +382,22 @@ async def delete_user(
         )
         if admin_count_result.scalar_one() <= 1:
             raise BadRequestError("Cannot delete the last admin")
+    metadata = {"email": target.email, "role": target.role}
     await session.delete(target)
+    await record_audit_event(
+        session,
+        action="auth.user.delete",
+        target_type="user",
+        target_id=user_id,
+        metadata=metadata,
+        request=request,
+    )
     await session.commit()
 
 
 @router.post("/api-keys", status_code=status.HTTP_201_CREATED, response_model=ApiKeyResponse)
 async def create_api_key(
+    request: Request,
     body: CreateApiKeyRequest,
     current_user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
@@ -313,6 +407,11 @@ async def create_api_key(
     if body.expires_in is not None:
         gmt_expires = utc_now() + timedelta(seconds=body.expires_in)
     resolved_scope, sandbox_ids = await _resolve_api_key_scope(session, current_user.id, body.scope)
+    scope_metadata = _scope_payload_from_values(
+        control_plane_enabled=resolved_scope.control_plane,
+        data_plane_mode=resolved_scope.data_plane.mode.value,
+        sandbox_ids=sandbox_ids,
+    )
     api_key = ApiKey(
         id="key" + random_id(),
         key_hash=hash_api_key_secret(key_value),
@@ -326,6 +425,14 @@ async def create_api_key(
     session.add(api_key)
     await session.flush()
     await _replace_api_key_sandbox_grants(session, api_key, sandbox_ids)
+    await record_audit_event(
+        session,
+        action="auth.api_key.create",
+        target_type="api_key",
+        target_id=api_key.id,
+        metadata={"name": api_key.name, "scope": scope_metadata},
+        request=request,
+    )
     await session.commit()
     api_key = await _load_api_key_with_grants(session, api_key.id)
     return {
@@ -355,11 +462,13 @@ async def list_api_keys(
 
 @router.patch("/api-keys/{key_id}", response_model=ApiKeySummary)
 async def update_api_key(
+    request: Request,
     key_id: str,
     body: UpdateApiKeyRequest,
     current_user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
 ):
+    scope_metadata: dict | None = None
     result = await session.execute(
         select(ApiKey)
         .options(selectinload(ApiKey.sandbox_grants))
@@ -382,9 +491,22 @@ async def update_api_key(
         api_key.control_plane_enabled = resolved_scope.control_plane
         api_key.data_plane_mode = resolved_scope.data_plane.mode.value
         await _replace_api_key_sandbox_grants(session, api_key, sandbox_ids)
+        scope_metadata = _scope_payload_from_values(
+            control_plane_enabled=resolved_scope.control_plane,
+            data_plane_mode=resolved_scope.data_plane.mode.value,
+            sandbox_ids=sandbox_ids,
+        )
 
     api_key.gmt_updated = utc_now()
     session.add(api_key)
+    await record_audit_event(
+        session,
+        action="auth.api_key.update",
+        target_type="api_key",
+        target_id=api_key.id,
+        metadata={"name": api_key.name, "scope": scope_metadata or _serialize_api_key_scope(api_key)},
+        request=request,
+    )
     await session.commit()
     api_key = await _load_api_key_with_grants(session, api_key.id)
     return _serialize_api_key_summary(api_key)
@@ -392,6 +514,7 @@ async def update_api_key(
 
 @router.delete("/api-keys/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_api_key(
+    request: Request,
     key_id: str,
     current_user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
@@ -405,4 +528,12 @@ async def delete_api_key(
     api_key.gmt_deleted = utc_now()
     api_key.gmt_updated = utc_now()
     session.add(api_key)
+    await record_audit_event(
+        session,
+        action="auth.api_key.delete",
+        target_type="api_key",
+        target_id=api_key.id,
+        metadata={"name": api_key.name},
+        request=request,
+    )
     await session.commit()

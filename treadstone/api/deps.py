@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from treadstone.core.database import get_session
 from treadstone.core.errors import AuthInvalidError, AuthRequiredError, ForbiddenError
+from treadstone.core.request_context import set_request_context
 from treadstone.core.users import fastapi_users
 from treadstone.models.api_key import ApiKey, ApiKeyDataPlaneMode, ApiKeySandboxGrant, hash_api_key_secret
 from treadstone.models.user import Role, User
@@ -21,10 +22,15 @@ optional_cookie_user = fastapi_users.current_user(optional=True, active=True)
 def _set_auth_context(
     request: Request,
     credential_type: Literal["cookie", "api_key"],
+    user: User | None = None,
     api_key: ApiKey | None = None,
 ) -> None:
-    request.state.credential_type = credential_type
-    request.state.api_key_id = api_key.id if api_key is not None else None
+    set_request_context(
+        request,
+        credential_type=credential_type,
+        actor_user_id=user.id if user is not None else None,
+        actor_api_key_id=api_key.id if api_key is not None else None,
+    )
 
 
 async def _get_active_user(session: AsyncSession, user_id: str) -> User | None:
@@ -68,13 +74,13 @@ async def get_current_control_plane_user(
         if not api_key.control_plane_enabled:
             raise ForbiddenError("This API key does not have control plane access.")
 
-        _set_auth_context(request, "api_key", api_key)
+        _set_auth_context(request, "api_key", user, api_key)
         return user
 
     if cookie_user is None:
         raise AuthRequiredError()
 
-    _set_auth_context(request, "cookie")
+    _set_auth_context(request, "cookie", cookie_user)
     return cookie_user
 
 
@@ -111,7 +117,9 @@ async def get_current_data_plane_user(
         if result.scalar_one_or_none() is None:
             raise ForbiddenError("This API key does not have access to this sandbox.")
 
-    _set_auth_context(request, "api_key", api_key)
+    _set_auth_context(request, "api_key", user, api_key)
+    if sandbox_id:
+        set_request_context(request, sandbox_id=sandbox_id)
     return user
 
 

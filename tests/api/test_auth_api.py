@@ -3,12 +3,14 @@ from datetime import timedelta
 import pytest
 from fastapi_users.db import SQLAlchemyUserDatabase
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from treadstone.api import auth as auth_api
 from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
+from treadstone.models.audit_event import AuditEvent
 from treadstone.models.user import Invitation, OAuthAccount, User, utc_now
 
 _test_session_factory = None
@@ -59,6 +61,12 @@ async def test_register_first_user_becomes_admin(db_session):
     assert data["email"] == "admin@example.com"
     assert data["role"] == "admin"
 
+    async with _test_session_factory() as session:
+        event = (await session.execute(select(AuditEvent).where(AuditEvent.action == "auth.register"))).scalar_one()
+
+    assert event.target_id == data["id"]
+    assert event.actor_user_id == data["id"]
+
 
 @pytest.mark.asyncio
 async def test_register_duplicate_email(db_session):
@@ -76,6 +84,32 @@ async def test_login_success(db_session):
     assert resp.status_code == 200
     assert "session" in resp.cookies
 
+    async with _test_session_factory() as session:
+        events = (await session.execute(select(AuditEvent).where(AuditEvent.action == "auth.login"))).scalars().all()
+
+    assert len(events) == 1
+    assert events[0].result == "success"
+
+
+@pytest.mark.asyncio
+async def test_invite_audit_event_has_invitation_target_id(db_session):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post("/v1/auth/register", json={"email": "admin@example.com", "password": "Pass123!"})
+        await client.post("/v1/auth/login", json={"email": "admin@example.com", "password": "Pass123!"})
+        response = await client.post("/v1/auth/invite", json={"email": "member@example.com", "role": "ro"})
+
+    assert response.status_code == 201
+
+    async with _test_session_factory() as session:
+        invitation = (
+            await session.execute(select(Invitation).where(Invitation.email == "member@example.com"))
+        ).scalar_one()
+        event = (
+            await session.execute(select(AuditEvent).where(AuditEvent.action == "auth.invitation.create"))
+        ).scalar_one()
+
+    assert event.target_id == invitation.id
+
 
 @pytest.mark.asyncio
 async def test_login_wrong_password(db_session):
@@ -83,6 +117,13 @@ async def test_login_wrong_password(db_session):
         await client.post("/v1/auth/register", json={"email": "x@b.com", "password": "Pass123!"})
         resp = await client.post("/v1/auth/login", json={"email": "x@b.com", "password": "WRONG"})
     assert resp.status_code == 400
+
+    async with _test_session_factory() as session:
+        events = (await session.execute(select(AuditEvent).where(AuditEvent.action == "auth.login"))).scalars().all()
+
+    assert len(events) == 1
+    assert events[0].result == "failure"
+    assert events[0].error_code == "bad_request"
 
 
 @pytest.mark.asyncio

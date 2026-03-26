@@ -3,11 +3,13 @@
 import pytest
 from fastapi_users.db import SQLAlchemyUserDatabase
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
+from treadstone.models.audit_event import AuditEvent
 from treadstone.models.sandbox import Sandbox
 from treadstone.models.user import OAuthAccount, User
 from treadstone.services.k8s_client import FakeK8sClient, set_k8s_client
@@ -88,6 +90,7 @@ class TestCreateSandbox:
         resp = await auth_client.post(
             "/v1/sandboxes",
             json={"template": "aio-sandbox-tiny", "name": "my-sb"},
+            headers={"X-Request-Id": "req-sandbox-create"},
         )
         assert resp.status_code == 202
         data = resp.json()
@@ -95,6 +98,16 @@ class TestCreateSandbox:
         assert data["status"] == "creating"
         assert data["template"] == "aio-sandbox-tiny"
         assert "id" in data
+        assert resp.headers["X-Request-Id"] == "req-sandbox-create"
+
+        async with _test_session_factory() as session:
+            events = (
+                (await session.execute(select(AuditEvent).where(AuditEvent.action == "sandbox.create"))).scalars().all()
+            )
+
+        assert len(events) == 1
+        assert events[0].request_id == "req-sandbox-create"
+        assert events[0].target_id == data["id"]
 
     async def test_create_auto_generates_name(self, auth_client):
         resp = await auth_client.post(

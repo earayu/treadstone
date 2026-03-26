@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import logging
+from io import StringIO
 from unittest.mock import AsyncMock, patch
 from urllib.parse import parse_qs, urlparse
 
@@ -9,11 +12,14 @@ import httpx
 import pytest
 from fastapi_users.db import SQLAlchemyUserDatabase
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
+from treadstone.middleware.request_logging import request_logger
+from treadstone.models.audit_event import AuditEvent
 from treadstone.models.sandbox import Sandbox, SandboxStatus
 from treadstone.models.user import OAuthAccount, User
 
@@ -135,8 +141,16 @@ class TestSubdomainRouting:
     async def test_subdomain_without_cookie_redirects_to_bootstrap(self, auth_client: AsyncClient, monkeypatch):
         _enable_subdomain(monkeypatch)
         sandbox_id = await _create_ready_sandbox(auth_client)
+        stream = StringIO()
+        handler = logging.StreamHandler(stream)
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        original_handlers = list(request_logger.handlers)
+        request_logger.handlers = [handler]
 
-        resp = await auth_client.get(f"https://sandbox-{sandbox_id}.sandbox.localhost/", follow_redirects=False)
+        try:
+            resp = await auth_client.get(f"https://sandbox-{sandbox_id}.sandbox.localhost/", follow_redirects=False)
+        finally:
+            request_logger.handlers = original_handlers
 
         assert resp.status_code == 303
         location = resp.headers["location"]
@@ -144,6 +158,10 @@ class TestSubdomainRouting:
         assert parsed.netloc == "api.localhost"
         assert parsed.path == "/v1/browser/bootstrap"
         assert parse_qs(parsed.query)["return_to"] == [f"https://sandbox-{sandbox_id}.sandbox.localhost/"]
+
+        payload = json.loads(stream.getvalue().strip().splitlines()[-1])
+        assert payload["route_kind"] == "subdomain_http"
+        assert payload["sandbox_id"] == sandbox_id
 
     async def test_logged_in_user_can_bootstrap_and_proxy(self, auth_client: AsyncClient, monkeypatch):
         _enable_subdomain(monkeypatch)
@@ -200,6 +218,17 @@ class TestSubdomainRouting:
         assert status_resp.json()["enabled"] is True
         assert "open_link" not in status_resp.json()
 
+        async with _test_session_factory() as session:
+            events = (
+                (await session.execute(select(AuditEvent).where(AuditEvent.action == "sandbox.web_link.open")))
+                .scalars()
+                .all()
+            )
+
+        assert len(events) == 1
+        assert events[0].result == "success"
+        assert events[0].target_id == sandbox_id
+
     async def test_enabling_existing_web_link_returns_same_link(self, auth_client: AsyncClient, monkeypatch):
         _enable_subdomain(monkeypatch)
         sandbox_id = await _create_ready_sandbox(auth_client)
@@ -230,6 +259,17 @@ class TestSubdomainRouting:
         assert status_resp.status_code == 200
         assert status_resp.json()["enabled"] is False
         assert open_resp.status_code == 401
+
+        async with _test_session_factory() as session:
+            events = (
+                (await session.execute(select(AuditEvent).where(AuditEvent.action == "sandbox.web_link.open")))
+                .scalars()
+                .all()
+            )
+
+        assert len(events) == 1
+        assert events[0].result == "failure"
+        assert events[0].error_code == "sandbox_web_link_invalid"
 
     async def test_recreate_web_link_after_delete_returns_new_active_link(self, auth_client: AsyncClient, monkeypatch):
         _enable_subdomain(monkeypatch)

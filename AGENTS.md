@@ -71,6 +71,7 @@ For K8s deployment (Kind cluster, Helm, smoke tests), see [`deploy/README.md`](d
 - TDD: write a failing test first, implement, verify it passes.
 - DRY, YAGNI: no premature abstraction.
 - All function signatures must have type hints.
+- When adding or changing auth, admin, API key, sandbox lifecycle, browser hand-off, or other user-facing control-plane features, update Audit Log coverage and structured request logging in the same change.
 - Ruff rules: E, F, I, UP (see `pyproject.toml`). Line width: 120.
 
 ## Error Handling
