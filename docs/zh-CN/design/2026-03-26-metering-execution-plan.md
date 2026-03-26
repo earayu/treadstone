@@ -186,7 +186,7 @@ flowchart TD
 | **F01** | SQLAlchemy 模型 | `treadstone/models/metering.py`, `models/__init__.py` | TierTemplate, UserPlan, CreditGrant, ComputeSession, StorageLedger 五个模型类 + StorageState 枚举 |
 | **F02** | Alembic migration | `alembic/versions/xxx_add_metering_tables.py` | 5 张表的 DDL + TierTemplate 4 行 seed 数据 |
 | **F03** | Error 类 | `treadstone/core/errors.py` | ComputeQuotaExceededError(402), StorageQuotaExceededError(402), ConcurrentLimitError(429), TemplateNotAllowedError(403), SandboxDurationExceededError(400) |
-| **F04** | 辅助函数 | `treadstone/services/metering_service.py`（顶部） | calculate_credit_rate(), TEMPLATE_SPECS, parse_storage_size_gib(), ConsumeResult dataclass |
+| **F04** | 辅助函数 | `treadstone/services/metering_helpers.py` | calculate_credit_rate(), TEMPLATE_SPECS, parse_storage_size_gib(), ConsumeResult dataclass |
 | **F05** | Plan 管理 | `treadstone/services/metering_service.py` | MeteringService 类骨架, ensure_user_plan(), get_user_plan(), update_user_tier() |
 | **F06** | Welcome Bonus | `treadstone/services/metering_service.py`, 注册 hook | 注册时自动创建 50 Compute Credits 的 CreditGrant（Free 用户） |
 | **F07** | 双池消费 | `treadstone/services/metering_service.py` | consume_compute_credits() — 先 Monthly 后 Extra, FOR UPDATE 行锁, FIFO by expires_at |
@@ -238,10 +238,10 @@ F01 → F02 → F03 → F04 → F05 → F06 → F07 → F08 → F09
 
 ### Layer 0 — 基础设施
 
-- [ ] **F01** SQLAlchemy 模型（TierTemplate, UserPlan, CreditGrant, ComputeSession, StorageLedger, StorageState）
-- [ ] **F02** Alembic migration（5 张表 DDL + 4 行 TierTemplate seed 数据）
-- [ ] **F03** Error 类（ComputeQuotaExceededError, StorageQuotaExceededError, ConcurrentLimitError, TemplateNotAllowedError, SandboxDurationExceededError）
-- [ ] **F04** 辅助函数（calculate_credit_rate, TEMPLATE_SPECS, parse_storage_size_gib, ConsumeResult）
+- [x] **F01** SQLAlchemy 模型（TierTemplate, UserPlan, CreditGrant, ComputeSession, StorageLedger, StorageState）
+- [x] **F02** Alembic migration（5 张表 DDL + 4 行 TierTemplate seed 数据）
+- [x] **F03** Error 类（ComputeQuotaExceededError, StorageQuotaExceededError, ConcurrentLimitError, TemplateNotAllowedError, SandboxDurationExceededError）
+- [x] **F04** 辅助函数（calculate_credit_rate, TEMPLATE_SPECS, parse_storage_size_gib, ConsumeResult）
 
 ### Layer 1 — MeteringService 核心
 
