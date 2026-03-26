@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import secrets
 from datetime import timedelta
 from html import escape
@@ -54,6 +55,8 @@ from treadstone.models.sandbox import Sandbox
 from treadstone.models.user import OAuthAccount, Role, User, random_id, utc_now
 from treadstone.services.audit import record_audit_event
 from treadstone.services.browser_login import validate_browser_return_to
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
 
@@ -548,6 +551,10 @@ async def _oauth_callback(
         token = await oauth_client.get_access_token(code, _oauth_callback_url(provider))
         account_id, account_email = await _get_oauth_identity(provider, oauth_client, token["access_token"])
     except Exception as exc:
+        logger.exception(
+            "OAuth %s token exchange or profile fetch failed",
+            provider,
+        )
         set_request_context(request, error_code="oauth_provider_error")
         message = f"{provider.title()} login failed."
         if return_to is not None:
