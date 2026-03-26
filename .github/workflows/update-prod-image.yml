@@ -1,0 +1,46 @@
+name: Update Prod Image
+
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+
+permissions:
+  contents: write
+
+jobs:
+  update-prod-image:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get release tag
+        id: tag
+        run: |
+          TAG=$(git describe --tags --exact-match "${{ github.event.workflow_run.head_sha }}" 2>/dev/null || echo "")
+          if [ -z "$TAG" ] || [[ "$TAG" != v* ]]; then
+            echo "No semver tag found for this run — skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$TAG" >> "$GITHUB_OUTPUT"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update values-prod.yaml
+        if: steps.tag.outputs.skip == 'false'
+        run: python scripts/update_prod_image.py "${{ steps.tag.outputs.version }}"
+
+      - name: Commit and push
+        if: steps.tag.outputs.skip == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add deploy/treadstone/values-prod.yaml
+          git diff --cached --quiet \
+            || git commit -m "chore: update prod image to ${{ steps.tag.outputs.version }}"
+          git push
