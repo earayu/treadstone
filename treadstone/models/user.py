@@ -4,6 +4,7 @@ from enum import StrEnum
 
 from fastapi_users.db import SQLAlchemyBaseOAuthAccountTable, SQLAlchemyBaseUserTable
 from sqlalchemy import Boolean, DateTime, ForeignKey, String
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from treadstone.core.database import Base
@@ -63,8 +64,7 @@ class Invitation(Base):
             expires_at = expires_at.replace(tzinfo=UTC)
         return not self.is_used and utc_now() < expires_at
 
-    async def use(self, session) -> None:
+    async def use(self, session: AsyncSession) -> None:
         self.is_used = True
         self.used_at = utc_now()
         session.add(self)
-        await session.commit()

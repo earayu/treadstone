@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
@@ -359,3 +359,26 @@ class ConfigResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str = Field(..., examples=["ok"])
+
+
+class AuditEventResponse(BaseModel):
+    id: str = Field(..., examples=["audabc123def456"])
+    created_at: datetime = Field(..., examples=["2026-03-26T12:00:00+00:00"])
+    actor_type: str = Field(..., examples=["user"])
+    actor_user_id: str | None = Field(default=None, examples=["userabc123def456"])
+    actor_api_key_id: str | None = Field(default=None, examples=["keyabc123def456"])
+    credential_type: str | None = Field(default=None, examples=["cookie"])
+    action: str = Field(..., examples=["sandbox.create"])
+    target_type: str = Field(..., examples=["sandbox"])
+    target_id: str | None = Field(default=None, examples=["sbabc123def456"])
+    result: str = Field(..., examples=["success"])
+    error_code: str | None = Field(default=None, examples=[None])
+    request_id: str | None = Field(default=None, examples=["req_0123456789abcdef"])
+    ip: str | None = Field(default=None, examples=["203.0.113.10"])
+    user_agent: str | None = Field(default=None, examples=["python-httpx/0.28.1"])
+    metadata: dict[str, Any] = Field(default_factory=dict, examples=[{"template": "aio-sandbox-tiny"}])
+
+
+class AuditEventListResponse(BaseModel):
+    items: list[AuditEventResponse]
+    total: int = Field(..., examples=[1])

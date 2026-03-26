@@ -19,8 +19,10 @@ from treadstone.api.schemas import (
 from treadstone.config import settings
 from treadstone.core.database import get_session
 from treadstone.core.errors import SandboxNotFoundError, ValidationError
+from treadstone.core.request_context import set_request_context
 from treadstone.models.sandbox_web_link import SandboxWebLink
 from treadstone.models.user import User, utc_now
+from treadstone.services.audit import record_audit_event
 from treadstone.services.browser_auth import OPEN_LINK_TTL_SECONDS, build_open_link_token, build_open_link_url
 from treadstone.services.sandbox_service import SandboxService
 
@@ -156,8 +158,6 @@ async def _upsert_web_link(
         link.gmt_deleted = None
 
     session.add(link)
-    await session.commit()
-    await session.refresh(link)
     return link
 
 
@@ -204,9 +204,32 @@ async def create_sandbox(
         persist=body.persist,
         storage_size=body.storage_size or settings.sandbox_default_storage_size,
     )
+    set_request_context(request, sandbox_id=sandbox.id)
     web_link = None
     if settings.sandbox_domain:
         web_link = await _upsert_web_link(session, sandbox, user.id)
+        await record_audit_event(
+            session,
+            action="sandbox.web_link.create",
+            target_type="sandbox",
+            target_id=sandbox.id,
+            metadata={"issued_via": "open_link", "auto_created": True},
+            request=request,
+        )
+    await record_audit_event(
+        session,
+        action="sandbox.create",
+        target_type="sandbox",
+        target_id=sandbox.id,
+        metadata={
+            "name": sandbox.name,
+            "template": sandbox.template,
+            "persist": sandbox.persist,
+            "storage_size": sandbox.storage_size,
+        },
+        request=request,
+    )
+    await session.commit()
     return _to_response(sandbox, str(request.base_url), web_link)
 
 
@@ -241,18 +264,29 @@ async def get_sandbox(
     sandbox = await service.get(sandbox_id=sandbox_id, owner_id=user.id)
     if sandbox is None:
         raise SandboxNotFoundError(sandbox_id)
+    set_request_context(request, sandbox_id=sandbox.id)
     web_link = await _load_active_web_link(session, sandbox.id) if settings.sandbox_domain else None
     return _to_detail(sandbox, str(request.base_url), web_link)
 
 
 @router.delete("/{sandbox_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_sandbox(
+    request: Request,
     sandbox_id: str,
     user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
 ):
     service = SandboxService(session=session)
     await service.delete(sandbox_id=sandbox_id, owner_id=user.id)
+    set_request_context(request, sandbox_id=sandbox_id)
+    await record_audit_event(
+        session,
+        action="sandbox.delete",
+        target_type="sandbox",
+        target_id=sandbox_id,
+        request=request,
+    )
+    await session.commit()
 
 
 @router.post("/{sandbox_id}/start", response_model=SandboxDetailResponse)
@@ -264,6 +298,15 @@ async def start_sandbox(
 ):
     service = SandboxService(session=session)
     sandbox = await service.start(sandbox_id=sandbox_id, owner_id=user.id)
+    set_request_context(request, sandbox_id=sandbox.id)
+    await record_audit_event(
+        session,
+        action="sandbox.start",
+        target_type="sandbox",
+        target_id=sandbox.id,
+        request=request,
+    )
+    await session.commit()
     web_link = await _load_active_web_link(session, sandbox.id) if settings.sandbox_domain else None
     return _to_detail(sandbox, str(request.base_url), web_link)
 
@@ -277,6 +320,15 @@ async def stop_sandbox(
 ):
     service = SandboxService(session=session)
     sandbox = await service.stop(sandbox_id=sandbox_id, owner_id=user.id)
+    set_request_context(request, sandbox_id=sandbox.id)
+    await record_audit_event(
+        session,
+        action="sandbox.stop",
+        target_type="sandbox",
+        target_id=sandbox.id,
+        request=request,
+    )
+    await session.commit()
     web_link = await _load_active_web_link(session, sandbox.id) if settings.sandbox_domain else None
     return _to_detail(sandbox, str(request.base_url), web_link)
 
@@ -292,9 +344,21 @@ async def create_sandbox_web_link(
     sandbox = await service.get(sandbox_id=sandbox_id, owner_id=user.id)
     if sandbox is None:
         raise SandboxNotFoundError(sandbox_id)
+    set_request_context(request, sandbox_id=sandbox.id)
 
     web_url = _get_web_url(sandbox, str(request.base_url))
-    link = await _ensure_active_web_link(session, sandbox, user.id)
+    link = await _load_active_web_link(session, sandbox.id)
+    if link is None:
+        link = await _upsert_web_link(session, sandbox, user.id)
+        await record_audit_event(
+            session,
+            action="sandbox.web_link.create",
+            target_type="sandbox",
+            target_id=sandbox.id,
+            metadata={"issued_via": "open_link", "auto_created": False},
+            request=request,
+        )
+        await session.commit()
     return {
         "web_url": web_url,
         "open_link": build_open_link_url(web_url, link.id),
@@ -313,6 +377,7 @@ async def get_sandbox_web_link(
     sandbox = await service.get(sandbox_id=sandbox_id, owner_id=user.id)
     if sandbox is None:
         raise SandboxNotFoundError(sandbox_id)
+    set_request_context(request, sandbox_id=sandbox.id)
 
     web_url = _get_web_url(sandbox, str(request.base_url))
     link = await _load_active_web_link(session, sandbox.id)
@@ -328,6 +393,7 @@ async def get_sandbox_web_link(
 
 @router.delete("/{sandbox_id}/web-link", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_sandbox_web_link(
+    request: Request,
     sandbox_id: str,
     user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
@@ -336,6 +402,7 @@ async def delete_sandbox_web_link(
     sandbox = await service.get(sandbox_id=sandbox_id, owner_id=user.id)
     if sandbox is None:
         raise SandboxNotFoundError(sandbox_id)
+    set_request_context(request, sandbox_id=sandbox.id)
 
     result = await session.execute(
         select(SandboxWebLink).where(SandboxWebLink.sandbox_id == sandbox.id, SandboxWebLink.gmt_deleted.is_(None))
@@ -345,4 +412,12 @@ async def delete_sandbox_web_link(
         link.gmt_deleted = utc_now()
         link.gmt_updated = utc_now()
         session.add(link)
+        await record_audit_event(
+            session,
+            action="sandbox.web_link.delete",
+            target_type="sandbox",
+            target_id=sandbox.id,
+            metadata={"issued_via": "open_link"},
+            request=request,
+        )
         await session.commit()

@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from sqlalchemy.exc import IntegrityError
 
+from treadstone.api.audit import router as audit_router
 from treadstone.api.auth import router as auth_router
 from treadstone.api.browser import router as browser_router
 from treadstone.api.config import router as config_router
@@ -19,6 +20,7 @@ from treadstone.api.schemas import HealthResponse
 from treadstone.config import settings, validate_runtime_settings
 from treadstone.core.errors import TreadstoneError
 from treadstone.core.users import auth_backend, fastapi_users, github_oauth_client, google_oauth_client
+from treadstone.middleware.request_logging import RequestLoggingMiddleware
 from treadstone.middleware.sandbox_subdomain import SandboxSubdomainMiddleware
 from treadstone.services.sandbox_proxy import close_http_client
 
@@ -101,11 +103,13 @@ app = FastAPI(
 
 @app.exception_handler(TreadstoneError)
 async def treadstone_error_handler(request: Request, exc: TreadstoneError):
+    request.state.error_code = exc.code
     return JSONResponse(status_code=exc.status, content=exc.to_dict())
 
 
 @app.exception_handler(RequestValidationError)
 async def validation_error_handler(request: Request, exc: RequestValidationError):
+    request.state.error_code = "validation_error"
     details = exc.errors()
     messages = []
     for err in details:
@@ -119,6 +123,7 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
 
 @app.exception_handler(IntegrityError)
 async def integrity_error_handler(request: Request, exc: IntegrityError):
+    request.state.error_code = "conflict"
     logger.error("Unhandled IntegrityError: %s", exc)
     body = {
         "error": {
@@ -132,6 +137,7 @@ async def integrity_error_handler(request: Request, exc: IntegrityError):
 
 @app.exception_handler(Exception)
 async def generic_error_handler(request: Request, exc: Exception):
+    request.state.error_code = "internal_error"
     logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
     body = {
         "error": {
@@ -145,8 +151,10 @@ async def generic_error_handler(request: Request, exc: Exception):
 
 # ── Middleware (outermost = first to run) ──
 app.add_middleware(SandboxSubdomainMiddleware)
+app.add_middleware(RequestLoggingMiddleware)
 
 # ── Routes ──
+app.include_router(audit_router)
 app.include_router(auth_router)
 app.include_router(browser_router)
 app.include_router(config_router)

@@ -20,7 +20,9 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from treadstone.config import settings
+from treadstone.models.audit_event import AuditActorType
 from treadstone.models.sandbox import Sandbox, SandboxStatus, is_valid_transition
+from treadstone.services.audit import record_audit_event
 from treadstone.services.k8s_client import K8sClientProtocol, WatchExpiredError
 
 logger = logging.getLogger(__name__)
@@ -97,6 +99,13 @@ async def handle_watch_event(
 
         if event_type == "DELETED":
             if sandbox.status == SandboxStatus.DELETING:
+                await _record_status_change(
+                    session,
+                    sandbox_id=sandbox.id,
+                    from_status=sandbox.status,
+                    to_status="deleted",
+                    source="k8s_watch",
+                )
                 await _delete_sandbox_row(session, sandbox.id)
             else:
                 logger.warning("Unexpected DELETED event for %s (status=%s), marking error", sandbox.id, sandbox.status)
@@ -105,6 +114,15 @@ async def handle_watch_event(
                 )
                 if rows == 0:
                     logger.debug("Optimistic lock conflict for %s, skipping", sandbox.id)
+                else:
+                    await _record_status_change(
+                        session,
+                        sandbox_id=sandbox.id,
+                        from_status=sandbox.status,
+                        to_status=SandboxStatus.ERROR,
+                        source="k8s_watch",
+                    )
+                    await session.commit()
             return
 
         if event_type in ("ADDED", "MODIFIED"):
@@ -143,6 +161,16 @@ async def handle_watch_event(
             )
             if rows == 0:
                 logger.debug("Optimistic lock conflict for %s, skipping", sandbox.id)
+            else:
+                await _record_status_change(
+                    session,
+                    sandbox_id=sandbox.id,
+                    from_status=sandbox.status,
+                    to_status=new_status,
+                    source="k8s_watch",
+                    message=message,
+                )
+                await session.commit()
 
 
 async def reconcile(
@@ -176,10 +204,25 @@ async def reconcile(
 
             if cr is None:
                 if sandbox.status == SandboxStatus.DELETING:
+                    await _record_status_change(
+                        session,
+                        sandbox_id=sandbox.id,
+                        from_status=sandbox.status,
+                        to_status="deleted",
+                        source="k8s_reconcile",
+                    )
                     await _delete_sandbox_row(session, sandbox.id)
                 elif sandbox.status != SandboxStatus.CREATING:
                     logger.warning("CR missing for %s (status=%s), marking error", sandbox.id, sandbox.status)
                     await _optimistic_update(session, sandbox.id, sandbox.version, SandboxStatus.ERROR)
+                    await _record_status_change(
+                        session,
+                        sandbox_id=sandbox.id,
+                        from_status=sandbox.status,
+                        to_status=SandboxStatus.ERROR,
+                        source="k8s_reconcile",
+                    )
+                    await session.commit()
                 continue
 
             cr_rv = cr.get("metadata", {}).get("resourceVersion")
@@ -192,6 +235,15 @@ async def reconcile(
                 await _optimistic_update(
                     session, sandbox.id, sandbox.version, new_status, resource_version=cr_rv, message=message
                 )
+                await _record_status_change(
+                    session,
+                    sandbox_id=sandbox.id,
+                    from_status=sandbox.status,
+                    to_status=new_status,
+                    source="k8s_reconcile",
+                    message=message,
+                )
+                await session.commit()
             elif cr_rv != sandbox.k8s_resource_version:
                 await _update_sync_metadata(session, sandbox.id, cr_rv, message)
 
@@ -318,3 +370,22 @@ async def _delete_sandbox_row(session: AsyncSession, sandbox_id: str) -> None:
         return
     await session.delete(sandbox)
     await session.commit()
+
+
+async def _record_status_change(
+    session: AsyncSession,
+    *,
+    sandbox_id: str,
+    from_status: str,
+    to_status: str,
+    source: str,
+    message: str | None = None,
+) -> None:
+    await record_audit_event(
+        session,
+        action="sandbox.status.change",
+        target_type="sandbox",
+        target_id=sandbox_id,
+        actor_type=AuditActorType.SYSTEM.value,
+        metadata={"from_status": from_status, "to_status": to_status, "source": source, "message": message},
+    )
