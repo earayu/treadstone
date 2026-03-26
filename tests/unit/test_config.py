@@ -26,6 +26,13 @@ def test_auth_defaults():
     s = Settings(_env_file=None, database_url=DB_URL)
     assert s.auth_type == "cookie"
     assert s.jwt_secret == "CHANGE_ME_IN_PROD"
+    assert s.session_ttl_seconds == 604800
+
+
+def test_session_ttl_can_be_overridden_from_env(monkeypatch):
+    monkeypatch.setenv("TREADSTONE_SESSION_TTL_SECONDS", "42")
+    s = Settings(_env_file=None, database_url=DB_URL)
+    assert s.session_ttl_seconds == 42
 
 
 def test_sandbox_storage_defaults():

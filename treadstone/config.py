@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     # Auth
     auth_type: str = "cookie"  # cookie | auth0 | authing | logto | none
     jwt_secret: str = _DEFAULT_JWT_SECRET
+    session_ttl_seconds: int = 604800
 
     # OAuth Social
     google_oauth_client_id: str = ""
