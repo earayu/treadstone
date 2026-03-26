@@ -1,5 +1,6 @@
 """Unit tests for metering models (F01) and helpers (F04)."""
 
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -17,6 +18,7 @@ from treadstone.services.metering_helpers import (
     TEMPLATE_SPECS,
     ConsumeResult,
     calculate_credit_rate,
+    compute_period_bounds,
     parse_storage_size_gib,
 )
 
@@ -271,6 +273,38 @@ class TestParseStorageSizeGib:
     def test_invalid_number_raises(self):
         with pytest.raises(BadRequestError, match="Invalid storage size"):
             parse_storage_size_gib("abcGi")
+
+
+class TestComputePeriodBounds:
+    def test_mid_month(self):
+        now = datetime(2026, 3, 15, 10, 30, 0, tzinfo=UTC)
+        start, end = compute_period_bounds(now)
+        assert start == datetime(2026, 3, 1, 0, 0, 0, tzinfo=UTC)
+        assert end == datetime(2026, 4, 1, 0, 0, 0, tzinfo=UTC)
+
+    def test_first_of_month(self):
+        now = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
+        start, end = compute_period_bounds(now)
+        assert start == datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
+        assert end == datetime(2026, 2, 1, 0, 0, 0, tzinfo=UTC)
+
+    def test_december_rolls_to_next_year(self):
+        now = datetime(2026, 12, 25, 23, 59, 59, tzinfo=UTC)
+        start, end = compute_period_bounds(now)
+        assert start == datetime(2026, 12, 1, 0, 0, 0, tzinfo=UTC)
+        assert end == datetime(2027, 1, 1, 0, 0, 0, tzinfo=UTC)
+
+    def test_last_day_of_month(self):
+        now = datetime(2026, 2, 28, 23, 0, 0, tzinfo=UTC)
+        start, end = compute_period_bounds(now)
+        assert start == datetime(2026, 2, 1, 0, 0, 0, tzinfo=UTC)
+        assert end == datetime(2026, 3, 1, 0, 0, 0, tzinfo=UTC)
+
+    def test_microseconds_zeroed(self):
+        now = datetime(2026, 6, 15, 12, 30, 45, 123456, tzinfo=UTC)
+        start, _ = compute_period_bounds(now)
+        assert start.microsecond == 0
+        assert start.second == 0
 
 
 class TestConsumeResult:
