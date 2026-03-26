@@ -1850,7 +1850,7 @@ wheels = [
 
 [[package]]
 name = "treadstone"
-version = "0.3.9"
+version = "0.3.15"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
