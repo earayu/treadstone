@@ -40,7 +40,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add deploy/treadstone/values-prod.yaml
+          git add deploy/treadstone/values-prod.yaml deploy/treadstone-web/values-prod.yaml
           git diff --cached --quiet \
             || git commit -m "chore: update prod image to ${{ steps.tag.outputs.version }}"
           git push
