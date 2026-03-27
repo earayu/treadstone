@@ -1,4 +1,4 @@
-.PHONY: help install install-hooks dev test test-unit test-api test-integration test-all test-e2e test-cov lint format migrate migration downgrade gen-openapi build clean ship bump release up down deploy-storage deploy-infra deploy-runtime deploy-app deploy-all undeploy-storage undeploy-app undeploy-runtime undeploy-all restart-app kind-create kind-delete port-forward
+.PHONY: help install install-hooks dev test test-unit test-api test-integration test-all test-e2e test-cov lint format migrate migration downgrade gen-openapi build clean ship bump release up down deploy-storage deploy-infra deploy-runtime deploy-app deploy-web deploy-all undeploy-storage undeploy-app undeploy-web undeploy-runtime undeploy-all restart-app kind-create kind-delete port-forward dev-web lint-web build-web
 
 # ── Development ──────────────────────────────────────────────────────────────
 
@@ -77,6 +77,17 @@ gen-sdk: gen-openapi ## Generate Python SDK from OpenAPI spec
 		--output-path sdk/python \
 		--overwrite
 
+# ── Web Frontend ─────────────────────────────────────────────────────────────
+
+dev-web: ## Start Vite dev server (localhost:5173, hot reload)
+	cd web && pnpm dev
+
+lint-web: ## Lint and type-check frontend
+	cd web && pnpm lint
+
+build-web: ## Build frontend for production
+	cd web && pnpm build
+
 # ── Build ────────────────────────────────────────────────────────────────────
 
 build: ## Build Docker image
@@ -99,6 +110,7 @@ CLUSTER_PROFILE ?= $(if $(filter local,$(ENV)),local,ack)
 # local → treadstone-local, demo → treadstone-demo, prod → treadstone-prod
 NS              := treadstone-$(ENV)
 APP_RELEASE     := treadstone-$(ENV)
+WEB_RELEASE     := treadstone-web-$(ENV)
 RT_RELEASE      := sandbox-runtime-$(ENV)
 STORAGE_NS      := cluster-storage-system
 STORAGE_RELEASE := cluster-storage-$(CLUSTER_PROFILE)
@@ -133,7 +145,12 @@ deploy-app: ## Deploy Treadstone application (creates K8s secret from .env.<ENV>
 		-n $(NS) -f deploy/treadstone/values-$(ENV).yaml \
 		--create-namespace
 
-deploy-all: deploy-storage deploy-infra deploy-runtime deploy-app ## Deploy everything (storage → infra → runtime → app)
+deploy-web: ## Deploy Treadstone Web UI frontend
+	helm upgrade --install $(WEB_RELEASE) deploy/treadstone-web \
+		-n $(NS) -f deploy/treadstone-web/values-$(ENV).yaml \
+		--create-namespace
+
+deploy-all: deploy-storage deploy-infra deploy-runtime deploy-app deploy-web ## Deploy everything (storage → infra → runtime → app → web)
 
 restart-app: ## Rolling restart to pick up new env vars
 	kubectl rollout restart deployment/$(APP_RELEASE)-treadstone -n $(NS)
@@ -147,10 +164,13 @@ undeploy-storage: ## Undeploy cluster-scoped storage aliases (use with care on s
 undeploy-app: ## Undeploy Treadstone application
 	helm uninstall $(APP_RELEASE) -n $(NS) 2>/dev/null || true
 
+undeploy-web: ## Undeploy Treadstone Web UI frontend
+	helm uninstall $(WEB_RELEASE) -n $(NS) 2>/dev/null || true
+
 undeploy-runtime: ## Undeploy sandbox runtime
 	helm uninstall $(RT_RELEASE) -n $(NS) 2>/dev/null || true
 
-undeploy-all: undeploy-app undeploy-runtime ## Undeploy app + runtime (keeps shared infra + storage)
+undeploy-all: undeploy-app undeploy-web undeploy-runtime ## Undeploy app + web + runtime (keeps shared infra + storage)
 	@echo "Note: agent-sandbox controller and cluster-storage are left in place."
 	@echo "Remove manually only if the cluster is dedicated to Treadstone."
 

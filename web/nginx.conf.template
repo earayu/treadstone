@@ -1,0 +1,37 @@
+server {
+    listen       80;
+    server_name  _;
+    root         /usr/share/nginx/html;
+    index        index.html;
+
+    # SPA fallback — all non-file, non-API routes serve index.html
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Reverse proxy API calls to the backend (same-origin from browser's perspective)
+    location /v1/ {
+        proxy_pass ${BACKEND_URL}/v1/;
+        proxy_set_header Host            $host;
+        proxy_set_header X-Real-IP       $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_http_version 1.1;
+    }
+
+    location = /health {
+        proxy_pass ${BACKEND_URL}/health;
+    }
+
+    # Immutable hashed assets — long cache
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Healthcheck for K8s readiness probe (frontend-own)
+    location = /healthz {
+        access_log off;
+        return 200 "ok\n";
+        add_header Content-Type text/plain;
+    }
+}

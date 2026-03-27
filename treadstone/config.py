@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     pod_name: str = ""
     pod_namespace: str = ""
 
+    # CORS — allowed origins for the Web UI frontend.
+    # Default includes the Vite dev server; override in production env files.
+    cors_allowed_origins: list[str] = ["http://localhost:5173"]
+
     # Subdomain-based sandbox routing (for browser Web UI access)
     # Dev: "sandbox.localhost"  →  sandbox-{sandbox_id}.sandbox.localhost[:port]
     # Prod: "treadstone-ai.dev" →  sandbox-{sandbox_id}.treadstone-ai.dev

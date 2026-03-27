@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from sqlalchemy.exc import IntegrityError
@@ -169,6 +170,13 @@ async def generic_error_handler(request: Request, exc: Exception):
 
 
 # ── Middleware (outermost = first to run) ──
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.add_middleware(SandboxSubdomainMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 

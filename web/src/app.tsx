@@ -1,0 +1,74 @@
+import { createBrowserRouter, RouterProvider } from "react-router"
+
+import { PublicLayout } from "@/components/layout/public-layout"
+import { AuthLayout } from "@/components/layout/auth-layout"
+import { AppLayout } from "@/components/layout/app-layout"
+
+import { LandingPage } from "@/pages/public/landing"
+import { PricingPage } from "@/pages/public/pricing"
+import { QuickstartPage } from "@/pages/public/quickstart"
+
+import { SignInPage } from "@/pages/auth/sign-in"
+import { SignUpPage } from "@/pages/auth/sign-up"
+import { CliLoginPage } from "@/pages/auth/cli-login"
+
+import { DashboardPage } from "@/pages/app/dashboard"
+import { TemplatesPage } from "@/pages/app/templates"
+import { SandboxesPage } from "@/pages/app/sandboxes"
+import { CreateSandboxPage } from "@/pages/app/create-sandbox"
+import { SandboxDetailPage } from "@/pages/app/sandbox-detail"
+import { ApiKeysPage } from "@/pages/app/api-keys"
+import { UsagePage } from "@/pages/app/usage"
+import { SettingsPage } from "@/pages/app/settings"
+
+import { AdminMeteringPage } from "@/pages/internal/admin-metering"
+import { AuditEventsPage } from "@/pages/internal/audit-events"
+
+const router = createBrowserRouter([
+  {
+    element: <PublicLayout />,
+    children: [
+      { index: true, element: <LandingPage /> },
+      { path: "pricing", element: <PricingPage /> },
+      { path: "quickstart", element: <QuickstartPage /> },
+    ],
+  },
+  {
+    path: "auth",
+    element: <AuthLayout />,
+    children: [
+      { path: "sign-in", element: <SignInPage /> },
+      { path: "sign-up", element: <SignUpPage /> },
+    ],
+  },
+  {
+    path: "auth/cli/login",
+    element: <CliLoginPage />,
+  },
+  {
+    path: "app",
+    element: <AppLayout />,
+    children: [
+      { index: true, element: <DashboardPage /> },
+      { path: "templates", element: <TemplatesPage /> },
+      { path: "sandboxes", element: <SandboxesPage /> },
+      { path: "sandboxes/new", element: <CreateSandboxPage /> },
+      { path: "sandboxes/:id", element: <SandboxDetailPage /> },
+      { path: "api-keys", element: <ApiKeysPage /> },
+      { path: "usage", element: <UsagePage /> },
+      { path: "settings", element: <SettingsPage /> },
+    ],
+  },
+  {
+    path: "internal",
+    element: <AppLayout />,
+    children: [
+      { path: "admin/metering", element: <AdminMeteringPage /> },
+      { path: "audit", element: <AuditEventsPage /> },
+    ],
+  },
+])
+
+export function App() {
+  return <RouterProvider router={router} />
+}
