@@ -28,7 +28,7 @@ class User(SQLAlchemyBaseUserTable[str], Base):
 
     id: Mapped[str] = mapped_column(String(24), primary_key=True, default=lambda: "user" + random_id())
     username: Mapped[str | None] = mapped_column(String(256), unique=True, nullable=True)
-    role: Mapped[str] = mapped_column(String(16), nullable=False, default=Role.RO.value)
+    role: Mapped[str] = mapped_column(String(16), nullable=False, default=Role.RW.value)
     is_staff: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     gmt_created: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     gmt_updated: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)

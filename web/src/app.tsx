@@ -1,8 +1,9 @@
-import { createBrowserRouter, RouterProvider } from "react-router"
+import { createBrowserRouter, RouterProvider, Link } from "react-router"
 
 import { PublicLayout } from "@/components/layout/public-layout"
 import { AuthLayout } from "@/components/layout/auth-layout"
 import { AppLayout } from "@/components/layout/app-layout"
+import { AdminLayout } from "@/components/layout/admin-layout"
 
 import { LandingPage } from "@/pages/public/landing"
 import { PricingPage } from "@/pages/public/pricing"
@@ -23,6 +24,23 @@ import { SettingsPage } from "@/pages/app/settings"
 
 import { AdminMeteringPage } from "@/pages/internal/admin-metering"
 import { AuditEventsPage } from "@/pages/internal/audit-events"
+
+function NotFoundPage() {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 text-center">
+      <h1 className="text-6xl font-bold tracking-tight text-foreground">404</h1>
+      <p className="mt-4 text-base text-muted-foreground">
+        The page you're looking for doesn't exist.
+      </p>
+      <Link
+        to="/"
+        className="mt-8 bg-primary px-6 py-2.5 text-sm font-bold uppercase tracking-widest text-primary-foreground transition-colors hover:bg-primary/90"
+      >
+        Go Home
+      </Link>
+    </div>
+  )
+}
 
 const router = createBrowserRouter([
   {
@@ -61,11 +79,15 @@ const router = createBrowserRouter([
   },
   {
     path: "internal",
-    element: <AppLayout />,
+    element: <AdminLayout />,
     children: [
       { path: "admin/metering", element: <AdminMeteringPage /> },
       { path: "audit", element: <AuditEventsPage /> },
     ],
+  },
+  {
+    path: "*",
+    element: <NotFoundPage />,
   },
 ])
 

@@ -3,7 +3,7 @@ import { Sidebar } from "./sidebar"
 import { Topbar } from "./topbar"
 import { useCurrentUser } from "@/hooks/use-auth"
 
-export function AppLayout() {
+export function AdminLayout() {
   const { data: user, isLoading } = useCurrentUser()
 
   if (isLoading) {
@@ -16,6 +16,10 @@ export function AppLayout() {
 
   if (!user) {
     return <Navigate to="/auth/sign-in" replace />
+  }
+
+  if (user.role !== "admin") {
+    return <Navigate to="/app" replace />
   }
 
   return (

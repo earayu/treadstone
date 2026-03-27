@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import secrets
 from datetime import timedelta
@@ -27,7 +28,6 @@ from treadstone.api.schemas import (
     LoginResponse,
     MessageResponse,
     RegisterRequest,
-    RegisterResponse,
     UpdateApiKeyRequest,
     UserDetailResponse,
     UserListResponse,
@@ -489,7 +489,7 @@ async def logout(
     return response
 
 
-@router.post("/register", status_code=status.HTTP_201_CREATED, response_model=RegisterResponse)
+@router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(
     request: Request,
     body: RegisterRequest,
@@ -506,7 +506,7 @@ async def register(
     ph = PasswordHelper()
     hashed = ph.hash(body.password)
 
-    role = Role.ADMIN if is_first_user else Role.RO
+    role = Role.ADMIN if is_first_user else Role.RW
     user = User(
         email=body.email,
         hashed_password=hashed,
@@ -530,7 +530,13 @@ async def register(
     await session.commit()
 
     await session.refresh(user)
-    return {"id": user.id, "email": user.email, "role": user.role}
+    response = Response(
+        content=json.dumps({"id": user.id, "email": user.email, "role": user.role}),
+        status_code=status.HTTP_201_CREATED,
+        media_type="application/json",
+    )
+    await write_session_cookie(response, user)
+    return response
 
 
 async def _oauth_authorize(provider: str, return_to: str | None, cli_flow_id: str | None = None) -> RedirectResponse:
@@ -696,7 +702,7 @@ async def _oauth_callback(
             status_code=303,
         )
     else:
-        response = _oauth_success_page(provider)
+        response = RedirectResponse(url="/app", status_code=303)
     await write_session_cookie(response, user)
     _clear_oauth_flow_cookies(response, provider)
     return response

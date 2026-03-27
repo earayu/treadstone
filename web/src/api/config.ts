@@ -1,16 +1,16 @@
 import { useQuery } from "@tanstack/react-query"
-import { api } from "@/lib/api-client"
+import { client } from "@/lib/api-client"
+import type { components } from "@/api/schema"
 
-export interface AppConfig {
-  auth_type: string
-  google_oauth_enabled: boolean
-  github_oauth_enabled: boolean
-}
+export type AppConfig = components["schemas"]["ConfigResponse"]
 
 export function useAppConfig() {
-  return useQuery<AppConfig>({
+  return useQuery({
     queryKey: ["config"],
-    queryFn: () => api.get<AppConfig>("/v1/config"),
+    queryFn: async () => {
+      const { data } = await client.GET("/v1/config")
+      return data!
+    },
     staleTime: 10 * 60 * 1000,
   })
 }
