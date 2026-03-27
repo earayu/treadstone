@@ -191,7 +191,8 @@ make lint             # Lint check
 make format           # Auto-format
 make migrate          # Run database migrations
 make migration MSG=x  # Generate a new migration
-make build            # Build Docker image
+make image            # Build backend Docker image
+make image-web        # Build frontend Docker image
 make up               # Spin up local Kind cluster + deploy
 make down             # Tear down local environment
 ```

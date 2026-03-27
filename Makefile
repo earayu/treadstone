@@ -1,4 +1,4 @@
-.PHONY: help install install-hooks dev test test-unit test-api test-integration test-all test-e2e test-cov lint format migrate migration downgrade gen-openapi build clean ship bump release up down deploy-storage deploy-infra deploy-runtime deploy-app deploy-web deploy-all undeploy-storage undeploy-app undeploy-web undeploy-runtime undeploy-all restart-app kind-create kind-delete port-forward dev-web lint-web build-web
+.PHONY: help install install-hooks dev test test-unit test-api test-integration test-all test-e2e test-cov lint format migrate migration downgrade gen-openapi image image-web clean ship bump release up down deploy-storage deploy-infra deploy-runtime deploy-app deploy-web deploy-all undeploy-storage undeploy-app undeploy-web undeploy-runtime undeploy-all restart-app kind-create kind-delete port-forward dev-web lint-web build-web
 
 # ── Development ──────────────────────────────────────────────────────────────
 
@@ -91,10 +91,13 @@ lint-web: ## Lint and type-check frontend
 build-web: ## Build frontend for production
 	cd web && pnpm build
 
-# ── Build ────────────────────────────────────────────────────────────────────
+# ── Docker Images ────────────────────────────────────────────────────────────
 
-build: ## Build Docker image
+image: ## Build backend Docker image
 	docker build -t treadstone:latest .
+
+image-web: ## Build frontend Docker image
+	docker build -t treadstone-web:latest web/
 
 clean: ## Remove build artifacts and caches
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

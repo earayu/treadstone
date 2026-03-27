@@ -81,11 +81,13 @@ make kind-create
 
 The cluster configuration is located at `deploy/kind/kind-config.yaml`: 1 control-plane + 2 workers, with automatic port mapping for 80/443 and ingress-nginx installed.
 
-### 2. Build and Load Image (local only)
+### 2. Build and Load Images (local only)
 
 ```bash
-make build
+make image
 kind load docker-image treadstone:latest --name treadstone
+make image-web
+kind load docker-image treadstone-web:latest --name treadstone
 ```
 
 ### 3. Deploy All Helm Charts
@@ -204,8 +206,10 @@ curl -s -X DELETE $BASE_URL/v1/sandboxes/{sandbox_id} \
 
 ```bash
 # local environment
-make build
+make image
 kind load docker-image treadstone:latest --name treadstone
+make image-web
+kind load docker-image treadstone-web:latest --name treadstone
 make restart-app
 
 # Or run make up to redo the full flow
@@ -270,7 +274,8 @@ with the ACM certificate ARN for `api.treadstone-ai.dev`.
 make help              # List all available commands
 make kind-create       # Create Kind cluster
 make kind-delete       # Delete Kind cluster
-make build             # Build Docker image
+make image             # Build backend Docker image
+make image-web         # Build frontend Docker image
 make deploy-all        # Deploy all layers (infra + runtime + app)
 make deploy-app        # Deploy app only
 make restart-app       # Rolling restart
