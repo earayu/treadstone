@@ -35,7 +35,10 @@ if [ -n "${E2E_ADMIN_EMAIL:-}" ]; then
     ADMIN_EMAIL="$E2E_ADMIN_EMAIL"
     ADMIN_PASSWORD="${E2E_ADMIN_PASSWORD:-$TEST_PASSWORD}"
 else
-    ADMIN_EMAIL="e2e-admin-${UNIQUE}@test.treadstone.dev"
+    # Fixed email (no UNIQUE suffix) so the same account is reused across runs.
+    # First run on a clean DB: HTTP 201, user becomes ADMIN (first user).
+    # Subsequent runs: HTTP 409, user already exists and retains ADMIN role.
+    ADMIN_EMAIL="e2e-admin@test.treadstone.dev"
     ADMIN_PASSWORD="$TEST_PASSWORD"
 fi
 
