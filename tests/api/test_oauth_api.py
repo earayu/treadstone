@@ -139,9 +139,9 @@ async def test_google_callback_creates_user_and_sets_session_cookie(db_session, 
             follow_redirects=False,
         )
 
-    assert callback.status_code == 200
+    assert callback.status_code == 303
+    assert callback.headers["location"] == "/app"
     assert callback.cookies.get("session") is not None
-    assert "close this window" in callback.text.lower()
 
     async with _test_session_factory() as session:
         user = (await session.execute(select(User).where(User.email == "new@example.com"))).unique().scalar_one()
@@ -182,7 +182,8 @@ async def test_google_callback_auto_links_existing_user_by_email(db_session, mon
             follow_redirects=False,
         )
 
-    assert callback.status_code == 200
+    assert callback.status_code == 303
+    assert callback.headers["location"] == "/app"
     assert callback.cookies.get("session") is not None
 
     async with _test_session_factory() as session:
