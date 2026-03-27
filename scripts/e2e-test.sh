@@ -35,7 +35,10 @@ if [ -n "${E2E_ADMIN_EMAIL:-}" ]; then
     ADMIN_EMAIL="$E2E_ADMIN_EMAIL"
     ADMIN_PASSWORD="${E2E_ADMIN_PASSWORD:-$TEST_PASSWORD}"
 else
-    ADMIN_EMAIL="e2e-admin-${UNIQUE}@test.treadstone.dev"
+    # Fixed email (no UNIQUE suffix) so the same account is reused across runs.
+    # First run on a clean DB: HTTP 201, user becomes ADMIN (first user).
+    # Subsequent runs: HTTP 409, user already exists and retains ADMIN role.
+    ADMIN_EMAIL="e2e-admin@test.treadstone.dev"
     ADMIN_PASSWORD="$TEST_PASSWORD"
 fi
 
@@ -83,11 +86,28 @@ done
 # with 409 (user already exists), which is harmless.
 
 if [ -z "${E2E_ADMIN_EMAIL:-}" ]; then
-    curl -sf -X POST "${BASE_URL}/v1/auth/register" \
-         -H "Content-Type: application/json" \
-         -d "{\"email\":\"${ADMIN_EMAIL}\",\"password\":\"${ADMIN_PASSWORD}\"}" \
-         > /dev/null || true
-    printf "Admin user pre-registered (fresh-DB path): %s\n\n" "$ADMIN_EMAIL"
+    # Register admin user with retry — also serves as a DB readiness gate.
+    # The /health endpoint does not touch the database; a real DB-backed request
+    # is needed to confirm the backend + Neon compute are fully ready.
+    # Retry until we get 201 (created) or 409 (already exists — DB is up).
+    printf "Pre-registering admin user (DB readiness gate) "
+    for i in $(seq 1 20); do
+        status=$(curl -s -o /dev/null -w "%{http_code}" \
+             -X POST "${BASE_URL}/v1/auth/register" \
+             -H "Content-Type: application/json" \
+             -d "{\"email\":\"${ADMIN_EMAIL}\",\"password\":\"${ADMIN_PASSWORD}\"}" \
+             2>/dev/null || echo "000")
+        if [ "$status" = "201" ] || [ "$status" = "409" ]; then
+            printf " ready! (HTTP %s)\n\n" "$status"
+            break
+        fi
+        printf "."
+        sleep 3
+        if [ "$i" -eq 20 ]; then
+            printf "\nERROR: DB not ready after 60s (last HTTP status: %s)\n" "$status"
+            exit 1
+        fi
+    done
 else
     printf "Using configured admin user: %s\n\n" "$ADMIN_EMAIL"
 fi
