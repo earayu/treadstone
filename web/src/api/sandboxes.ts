@@ -1,43 +1,29 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { api } from "@/lib/api-client"
-import type { SandboxStatus } from "@/lib/constants"
+import { client } from "@/lib/api-client"
+import type { components } from "@/api/schema"
 
-export interface Sandbox {
-  id: string
-  name: string
-  template: string
-  status: SandboxStatus
-  labels: Record<string, string>
-  auto_stop_interval: number | null
-  auto_delete_interval: number | null
-  persist: boolean
-  storage_size: string | null
-  started_at: string | null
-  stopped_at: string | null
-  created_at: string
-}
-
-export interface CreateSandboxBody {
-  template: string
-  name?: string
-  labels?: Record<string, string>
-  auto_stop_interval?: number
-  auto_delete_interval?: number
-  persist?: boolean
-  storage_size?: string
-}
+export type Sandbox = components["schemas"]["SandboxResponse"]
+export type CreateSandboxBody = components["schemas"]["CreateSandboxRequest"]
 
 export function useSandboxes() {
-  return useQuery<Sandbox[]>({
+  return useQuery({
     queryKey: ["sandboxes"],
-    queryFn: () => api.get<Sandbox[]>("/v1/sandboxes"),
+    queryFn: async () => {
+      const { data } = await client.GET("/v1/sandboxes")
+      return data!
+    },
   })
 }
 
 export function useSandbox(id: string) {
-  return useQuery<Sandbox>({
+  return useQuery({
     queryKey: ["sandboxes", id],
-    queryFn: () => api.get<Sandbox>(`/v1/sandboxes/${id}`),
+    queryFn: async () => {
+      const { data } = await client.GET("/v1/sandboxes/{sandbox_id}", {
+        params: { path: { sandbox_id: id } },
+      })
+      return data!
+    },
     enabled: !!id,
   })
 }
@@ -45,8 +31,10 @@ export function useSandbox(id: string) {
 export function useCreateSandbox() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: CreateSandboxBody) =>
-      api.post<Sandbox>("/v1/sandboxes", body),
+    mutationFn: async (body: CreateSandboxBody) => {
+      const { data } = await client.POST("/v1/sandboxes", { body })
+      return data!
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sandboxes"] }),
   })
 }
@@ -54,7 +42,11 @@ export function useCreateSandbox() {
 export function useDeleteSandbox() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => api.delete<void>(`/v1/sandboxes/${id}`),
+    mutationFn: async (id: string) => {
+      await client.DELETE("/v1/sandboxes/{sandbox_id}", {
+        params: { path: { sandbox_id: id } },
+      })
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sandboxes"] }),
   })
 }
@@ -62,8 +54,12 @@ export function useDeleteSandbox() {
 export function useStartSandbox() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) =>
-      api.post<Sandbox>(`/v1/sandboxes/${id}/start`),
+    mutationFn: async (id: string) => {
+      const { data } = await client.POST("/v1/sandboxes/{sandbox_id}/start", {
+        params: { path: { sandbox_id: id } },
+      })
+      return data!
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sandboxes"] }),
   })
 }
@@ -71,8 +67,12 @@ export function useStartSandbox() {
 export function useStopSandbox() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) =>
-      api.post<Sandbox>(`/v1/sandboxes/${id}/stop`),
+    mutationFn: async (id: string) => {
+      const { data } = await client.POST("/v1/sandboxes/{sandbox_id}/stop", {
+        params: { path: { sandbox_id: id } },
+      })
+      return data!
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sandboxes"] }),
   })
 }

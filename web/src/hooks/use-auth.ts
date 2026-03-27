@@ -1,20 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { api, HttpError } from "@/lib/api-client"
+import { client, HttpError } from "@/lib/api-client"
+import type { components } from "@/api/schema"
 
-export interface User {
-  id: string
-  email: string
-  role: string
-  username: string | null
-  is_active: boolean
-}
+export type User = components["schemas"]["UserDetailResponse"]
 
 export function useCurrentUser() {
   return useQuery<User | null>({
     queryKey: ["auth", "me"],
     queryFn: async () => {
       try {
-        return await api.get<User>("/v1/auth/user")
+        const { data } = await client.GET("/v1/auth/user")
+        return data ?? null
       } catch (e) {
         if (e instanceof HttpError && e.status === 401) return null
         throw e
@@ -28,8 +24,10 @@ export function useCurrentUser() {
 export function useLogin() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { email: string; password: string }) =>
-      api.post<User>("/v1/auth/login", body),
+    mutationFn: async (body: { email: string; password: string }) => {
+      const { data } = await client.POST("/v1/auth/login", { body })
+      return data!
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["auth", "me"] }),
   })
 }
@@ -37,7 +35,9 @@ export function useLogin() {
 export function useLogout() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: () => api.post<void>("/v1/auth/logout"),
+    mutationFn: async () => {
+      await client.POST("/v1/auth/logout")
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["auth", "me"] }),
   })
 }
@@ -45,8 +45,10 @@ export function useLogout() {
 export function useRegister() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { email: string; password: string }) =>
-      api.post<User>("/v1/auth/register", body),
+    mutationFn: async (body: { email: string; password: string }) => {
+      const { data } = await client.POST("/v1/auth/register", { body })
+      return data!
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["auth", "me"] }),
   })
 }

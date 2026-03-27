@@ -1,51 +1,28 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { api } from "@/lib/api-client"
-import type { DataPlaneMode } from "@/lib/constants"
+import { client } from "@/lib/api-client"
+import type { components } from "@/api/schema"
 
-export interface ApiKey {
-  id: string
-  name: string
-  key_prefix: string
-  created_at: string
-  updated_at: string
-  expires_at: string | null
-  scope: {
-    control_plane: boolean
-    data_plane: {
-      mode: DataPlaneMode
-      sandbox_ids: string[]
-    }
-  }
-}
-
-export interface ApiKeyCreated extends ApiKey {
-  key: string
-}
-
-export interface CreateApiKeyBody {
-  name: string
-  expires_at?: string | null
-  scope?: {
-    control_plane?: boolean
-    data_plane?: {
-      mode?: DataPlaneMode
-      sandbox_ids?: string[]
-    }
-  }
-}
+export type ApiKey = components["schemas"]["ApiKeySummary"]
+export type ApiKeyCreated = components["schemas"]["ApiKeyResponse"]
+export type CreateApiKeyBody = components["schemas"]["CreateApiKeyRequest"]
 
 export function useApiKeys() {
-  return useQuery<ApiKey[]>({
+  return useQuery({
     queryKey: ["api-keys"],
-    queryFn: () => api.get<ApiKey[]>("/v1/auth/api-keys"),
+    queryFn: async () => {
+      const { data } = await client.GET("/v1/auth/api-keys")
+      return data!
+    },
   })
 }
 
 export function useCreateApiKey() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: CreateApiKeyBody) =>
-      api.post<ApiKeyCreated>("/v1/auth/api-keys", body),
+    mutationFn: async (body: CreateApiKeyBody) => {
+      const { data } = await client.POST("/v1/auth/api-keys", { body })
+      return data!
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["api-keys"] }),
   })
 }
@@ -53,7 +30,11 @@ export function useCreateApiKey() {
 export function useDeleteApiKey() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => api.delete<void>(`/v1/auth/api-keys/${id}`),
+    mutationFn: async (id: string) => {
+      await client.DELETE("/v1/auth/api-keys/{key_id}", {
+        params: { path: { key_id: id } },
+      })
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["api-keys"] }),
   })
 }

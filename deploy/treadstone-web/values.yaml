@@ -6,7 +6,8 @@ image:
   pullPolicy: IfNotPresent
 
 # Backend API service URL (K8s internal). nginx proxies /v1/* here.
-backendUrl: http://localhost:8000
+# Override in env-specific values files (e.g. values-local.yaml, values-prod.yaml).
+backendUrl: http://treadstone-server:8000
 
 service:
   type: ClusterIP
