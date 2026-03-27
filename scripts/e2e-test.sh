@@ -21,11 +21,25 @@ cleanup() { rm -f "$VARS_FILE"; }
 trap cleanup EXIT
 
 TEST_PASSWORD="E2eStr0ng_Pass!"
-ADMIN_EMAIL="e2e-admin-${UNIQUE}@test.treadstone.dev"
+
+# ── Admin credentials ─────────────────────────────────────────────────────────
+# On a fresh DB the first registered user becomes ADMIN automatically.
+# On a persistent DB (e.g. Kind cluster reused across runs) set these env vars
+# to point at an already-admin account:
+#   E2E_ADMIN_EMAIL=<email>        (required when DB has existing users)
+#   E2E_ADMIN_PASSWORD=<password>  (defaults to TEST_PASSWORD if omitted)
+if [ -n "${E2E_ADMIN_EMAIL:-}" ]; then
+    ADMIN_EMAIL="$E2E_ADMIN_EMAIL"
+    ADMIN_PASSWORD="${E2E_ADMIN_PASSWORD:-$TEST_PASSWORD}"
+else
+    ADMIN_EMAIL="e2e-admin-${UNIQUE}@test.treadstone.dev"
+    ADMIN_PASSWORD="$TEST_PASSWORD"
+fi
 
 cat > "$VARS_FILE" <<EOF
 base_url=${BASE_URL}
 admin_email=${ADMIN_EMAIL}
+admin_password=${ADMIN_PASSWORD}
 email_01=e2e-01-${UNIQUE}@test.treadstone.dev
 email_02=e2e-02-${UNIQUE}@test.treadstone.dev
 email_03=e2e-03-${UNIQUE}@test.treadstone.dev
@@ -60,13 +74,20 @@ for i in $(seq 1 30); do
     fi
 done
 
-# ── Pre-register admin user (first user → ADMIN role) ────────────────────────
+# ── Pre-register admin user when no external admin is configured ──────────────
+# Only attempt registration when E2E_ADMIN_EMAIL is not set (fresh-DB path).
+# The curl exit code is intentionally ignored: on a non-fresh DB this will fail
+# with 409 (user already exists), which is harmless.
 
-curl -sf -X POST "${BASE_URL}/v1/auth/register" \
-     -H "Content-Type: application/json" \
-     -d "{\"email\":\"${ADMIN_EMAIL}\",\"password\":\"${TEST_PASSWORD}\"}" \
-     > /dev/null
-printf "Admin user registered: %s\n\n" "$ADMIN_EMAIL"
+if [ -z "${E2E_ADMIN_EMAIL:-}" ]; then
+    curl -sf -X POST "${BASE_URL}/v1/auth/register" \
+         -H "Content-Type: application/json" \
+         -d "{\"email\":\"${ADMIN_EMAIL}\",\"password\":\"${ADMIN_PASSWORD}\"}" \
+         > /dev/null || true
+    printf "Admin user pre-registered (fresh-DB path): %s\n\n" "$ADMIN_EMAIL"
+else
+    printf "Using configured admin user: %s\n\n" "$ADMIN_EMAIL"
+fi
 
 # ── Run all E2E tests (parallel by default in --test mode) ───────────────────
 
