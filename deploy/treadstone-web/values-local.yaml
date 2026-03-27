@@ -1,0 +1,17 @@
+replicaCount: 1
+
+image:
+  repository: treadstone-web
+  tag: latest
+  pullPolicy: IfNotPresent
+
+backendUrl: http://treadstone-local-treadstone:8000
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: app.localhost
+      paths:
+        - path: /
+          pathType: Prefix

@@ -7,6 +7,7 @@ on:
 env:
   REGISTRY: ghcr.io
   TREADSTONE_IMAGE: ghcr.io/${{ github.repository_owner }}/treadstone
+  WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/treadstone-web
 
 permissions:
   contents: write
@@ -59,6 +60,35 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # ── Web frontend Docker image → GHCR ──
+  docker-web:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.WEB_IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: web
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -175,7 +205,7 @@ jobs:
 
   # ── GitHub Release ──
   github-release:
-    needs: [docker, publish-cli, publish-sdk, build-binaries]
+    needs: [docker, docker-web, publish-cli, publish-sdk, build-binaries]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

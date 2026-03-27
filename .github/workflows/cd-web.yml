@@ -1,0 +1,53 @@
+name: CD Web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/cd-web.yml"
+
+  workflow_dispatch:
+    inputs:
+      build_web:
+        description: "Build and push treadstone-web image"
+        type: boolean
+        default: true
+
+env:
+  REGISTRY: ghcr.io
+  WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/treadstone-web
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-web:
+    if: >
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && inputs.build_web)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.WEB_IMAGE }}
+          tags: |
+            type=raw,value=main
+            type=sha,prefix=main-
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: web
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

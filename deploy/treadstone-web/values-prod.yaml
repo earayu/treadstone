@@ -1,37 +1,28 @@
-replicaCount: 1
+replicaCount: 2
 
 image:
-  repository: ghcr.io/earayu/treadstone
+  repository: ghcr.io/earayu/treadstone-web
   tag: 0.5.1
   pullPolicy: Always
 
-envSecretRef: treadstone-secrets
+backendUrl: http://treadstone-prod-treadstone:8000
 
 resources:
   limits:
-    cpu: "1"
-    memory: 512Mi
-  requests:
     cpu: 200m
-    memory: 256Mi
-
-migration:
-  enabled: true
-
-hpa:
-  enabled: true
-  minReplicas: 2
-  maxReplicas: 10
-  targetCPUUtilizationPercentage: 80
+    memory: 128Mi
+  requests:
+    cpu: 50m
+    memory: 64Mi
 
 ingress:
   enabled: true
   className: alb
   annotations:
     alb.ingress.kubernetes.io/group.name: treadstone
-    # Wildcard *.treadstone-ai.dev must have the LOWEST priority so that
-    # specific hosts (app., demo., etc.) in other Ingress resources win.
-    alb.ingress.kubernetes.io/order: "100"
+    # Exact host match — must have higher priority than the backend's
+    # wildcard *.treadstone-ai.dev (order 100).
+    alb.ingress.kubernetes.io/order: "1"
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
@@ -39,15 +30,11 @@ ingress:
     alb.ingress.kubernetes.io/certificate-id: "24067085-cn-hangzhou"
     alb.ingress.kubernetes.io/healthcheck-enabled: "true"
     alb.ingress.kubernetes.io/healthcheck-method: GET
-    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/healthcheck-path: /healthz
     alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
     alb.ingress.kubernetes.io/healthcheck-httpcode: http_2xx
   hosts:
-    - host: api.treadstone-ai.dev
-      paths:
-        - path: /
-          pathType: Prefix
-    - host: "*.treadstone-ai.dev"
+    - host: app.treadstone-ai.dev
       paths:
         - path: /
           pathType: Prefix
