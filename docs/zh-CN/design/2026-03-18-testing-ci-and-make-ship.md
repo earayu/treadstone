@@ -409,7 +409,8 @@ make lint            # 代码检查
 make format          # 自动格式化
 make migrate         # 运行数据库迁移
 make migration MSG=x # 生成新迁移
-make build           # 构建 Docker 镜像
+make image           # 构建后端 Docker 镜像
+make image-web       # 构建前端 Docker 镜像
 make ship MSG=x      # AI 专用：add + commit + push（MSG 必填）
 ```
 ```
