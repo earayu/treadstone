@@ -4,13 +4,16 @@
 # run in parallel with no ordering dependencies.
 #
 # Usage:
-#   make test-e2e                            # default: BASE_URL=http://localhost
-#   make test-e2e BASE_URL=http://localhost:8000
-#   BASE_URL=http://localhost bash scripts/e2e-test.sh
+#   make test-e2e                                  # run all tests
+#   make test-e2e FILE=08-metering-admin.hurl      # run a single test file
+#   make test-e2e BASE_URL=http://localhost:8000   # custom base URL
+#   BASE_URL=http://localhost bash scripts/e2e-test.sh [file.hurl]
 
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost}"
+# Optional: pass a single filename (e.g. "08-metering-admin.hurl") to run only that file.
+TARGET_FILE="${1:-}"
 UNIQUE=$(head -c 8 /dev/urandom | xxd -p | head -c 8)
 VARS_FILE=$(mktemp)
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -89,12 +92,20 @@ else
     printf "Using configured admin user: %s\n\n" "$ADMIN_EMAIL"
 fi
 
-# ── Run all E2E tests (parallel by default in --test mode) ───────────────────
+# ── Run E2E tests (parallel by default in --test mode) ───────────────────────
 
 mkdir -p "$REPORT_DIR"
-hurl --test --variables-file "$VARS_FILE" \
-    --report-html "$REPORT_DIR" \
-    "$E2E_DIR"/*.hurl
+
+if [ -n "$TARGET_FILE" ]; then
+    printf "Running single test file: %s\n\n" "$TARGET_FILE"
+    hurl --test --variables-file "$VARS_FILE" \
+        --report-html "$REPORT_DIR" \
+        "$E2E_DIR/$TARGET_FILE"
+else
+    hurl --test --variables-file "$VARS_FILE" \
+        --report-html "$REPORT_DIR" \
+        "$E2E_DIR"/*.hurl
+fi
 
 # ── Post-process: group by run, improve visual design ────────────────────────
 

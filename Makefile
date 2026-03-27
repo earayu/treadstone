@@ -47,8 +47,8 @@ test-integration: ## Run integration tests only (needs real DB)
 test-all: ## Run all tests including integration (needs real DB)
 	uv run pytest tests/ -v -m ""
 
-test-e2e: ## Run E2E tests against deployed cluster (BASE_URL=http://localhost)
-	@bash scripts/e2e-test.sh
+test-e2e: ## Run E2E tests against deployed cluster (BASE_URL=http://localhost). Pass FILE=<name>.hurl to run a single test file.
+	@bash scripts/e2e-test.sh $(if $(FILE),$(FILE),)
 
 test-cov: ## Run tests with coverage report
 	uv run pytest tests/ -v --cov=treadstone --cov-report=term-missing --cov-report=html
