@@ -20,13 +20,19 @@ REPORT_DIR="$ROOT_DIR/reports/e2e"
 cleanup() { rm -f "$VARS_FILE"; }
 trap cleanup EXIT
 
+TEST_PASSWORD="E2eStr0ng_Pass!"
+ADMIN_EMAIL="e2e-admin-${UNIQUE}@test.treadstone.dev"
+
 cat > "$VARS_FILE" <<EOF
 base_url=${BASE_URL}
+admin_email=${ADMIN_EMAIL}
 email_01=e2e-01-${UNIQUE}@test.treadstone.dev
 email_02=e2e-02-${UNIQUE}@test.treadstone.dev
 email_03=e2e-03-${UNIQUE}@test.treadstone.dev
 email_04=e2e-04-${UNIQUE}@test.treadstone.dev
-test_password=E2eStr0ng_Pass!
+email_07=e2e-07-${UNIQUE}@test.treadstone.dev
+email_08=e2e-08-${UNIQUE}@test.treadstone.dev
+test_password=${TEST_PASSWORD}
 new_password=E2eStr0ng_New1!
 unique=${UNIQUE}
 EOF
@@ -53,6 +59,14 @@ for i in $(seq 1 30); do
         exit 1
     fi
 done
+
+# ── Pre-register admin user (first user → ADMIN role) ────────────────────────
+
+curl -sf -X POST "${BASE_URL}/v1/auth/register" \
+     -H "Content-Type: application/json" \
+     -d "{\"email\":\"${ADMIN_EMAIL}\",\"password\":\"${TEST_PASSWORD}\"}" \
+     > /dev/null
+printf "Admin user registered: %s\n\n" "$ADMIN_EMAIL"
 
 # ── Run all E2E tests (parallel by default in --test mode) ───────────────────
 
