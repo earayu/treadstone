@@ -35,6 +35,18 @@ def custom_generate_unique_id(route: APIRoute) -> str:
     return route.name
 
 
+async def _run_metering_loop(session_factory) -> None:
+    """Run the periodic metering tick loop for single-process deployments."""
+    from treadstone.services.metering_tasks import TICK_INTERVAL, run_metering_tick
+
+    while True:
+        await asyncio.sleep(TICK_INTERVAL)
+        try:
+            await run_metering_tick(session_factory)
+        except Exception:
+            logger.exception("Metering tick failed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from treadstone.core.database import async_session
@@ -58,6 +70,7 @@ async def lifespan(app: FastAPI):
         supervisor = LeaderControlledSyncSupervisor(
             elector=elector,
             sync_loop_factory=lambda: start_sync_loop(settings.sandbox_namespace, get_k8s_client(), async_session),
+            session_factory=async_session,
         )
         logger.info(
             "Leader election enabled for K8s sync loop (lease=%s, namespace=%s, holder=%s)",
@@ -78,12 +91,16 @@ async def lifespan(app: FastAPI):
 
     logger.info("Leader election disabled; starting K8s sync loop directly")
     sync_task = asyncio.create_task(start_sync_loop(settings.sandbox_namespace, get_k8s_client(), async_session))
+    metering_task = asyncio.create_task(_run_metering_loop(async_session))
     try:
         yield
     finally:
         sync_task.cancel()
+        metering_task.cancel()
         with suppress(asyncio.CancelledError):
             await sync_task
+        with suppress(asyncio.CancelledError):
+            await metering_task
         await close_http_client()
 
 
