@@ -4,8 +4,19 @@ set -euo pipefail
 CLUSTER_NAME="treadstone"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 KIND_CONFIG="${SCRIPT_DIR}/../deploy/kind/kind-config.yaml"
+
+# Pin ALL image tags so upgrades are explicit and reproducible.
+# When bumping INGRESS_NGINX_VERSION, check the deploy.yaml for the
+# matching kube-webhook-certgen tag and update WEBHOOK_CERTGEN_TAG.
 INGRESS_NGINX_VERSION="v1.12.1"
+WEBHOOK_CERTGEN_TAG="v1.5.2"
 LOCAL_PATH_PROVISIONER_VERSION="v0.0.31"
+
+INFRA_IMAGES=(
+    "registry.k8s.io/ingress-nginx/controller:${INGRESS_NGINX_VERSION}"
+    "registry.k8s.io/ingress-nginx/kube-webhook-certgen:${WEBHOOK_CERTGEN_TAG}"
+    "rancher/local-path-provisioner:${LOCAL_PATH_PROVISIONER_VERSION}"
+)
 
 check_prerequisites() {
     local missing=()
@@ -38,9 +49,30 @@ create_cluster() {
     fi
 
     echo "Creating Kind cluster '$CLUSTER_NAME' ..."
-    kind create cluster --config "$KIND_CONFIG"
+    # Strip proxy env vars: Kind propagates them into node containers where
+    # 127.0.0.1 points to the container itself, not the host — causing all
+    # in-cluster image pulls to fail with "proxyconnect: connection refused".
+    env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY \
+        kind create cluster --config "$KIND_CONFIG"
     echo ""
     kubectl cluster-info --context "kind-$CLUSTER_NAME"
+}
+
+preload_infra_images() {
+    echo ""
+    echo "Pre-pulling infrastructure images on host ..."
+    for img in "${INFRA_IMAGES[@]}"; do
+        if docker image inspect "$img" &>/dev/null; then
+            echo "  $img (cached)"
+        else
+            echo "  Pulling $img ..."
+            docker pull "$img"
+        fi
+    done
+
+    echo "Loading infrastructure images into Kind cluster ..."
+    kind load docker-image "${INFRA_IMAGES[@]}" --name "$CLUSTER_NAME"
+    echo "Infrastructure images preloaded."
 }
 
 install_ingress_nginx() {
@@ -92,6 +124,7 @@ main() {
     echo ""
     check_prerequisites
     create_cluster
+    preload_infra_images
     install_ingress_nginx
     install_local_path_provisioner
     verify_cluster

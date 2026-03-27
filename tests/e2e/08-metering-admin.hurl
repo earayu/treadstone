@@ -7,7 +7,7 @@ POST {{base_url}}/v1/auth/login
 Content-Type: application/json
 {
     "email": "{{admin_email}}",
-    "password": "{{test_password}}"
+    "password": "{{admin_password}}"
 }
 HTTP 200
 
