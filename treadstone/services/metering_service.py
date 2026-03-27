@@ -170,7 +170,7 @@ class MeteringService:
         plan.gmt_updated = now
 
         if overrides:
-            self._apply_overrides(plan, overrides)
+            self.apply_overrides(plan, overrides)
             plan.overrides = overrides
 
         session.add(plan)
@@ -627,8 +627,203 @@ class MeteringService:
             raise NotFoundError("TierTemplate", tier_name)
         return template
 
+    # ═══════════════════════════════════════════════════════
+    #  Usage Queries  (F24)
+    # ═══════════════════════════════════════════════════════
+
+    async def get_usage_summary(self, session: AsyncSession, user_id: str) -> dict:
+        """Assemble the complete usage overview for GET /v1/usage."""
+        plan = await self.get_user_plan(session, user_id)
+        monthly_remaining = plan.compute_credits_monthly_limit - plan.compute_credits_monthly_used
+        extra_compute = await self.get_extra_credits_remaining(session, user_id, "compute")
+        extra_storage = await self.get_extra_credits_remaining(session, user_id, "storage")
+        total_storage_quota = plan.storage_credits_monthly_limit + int(extra_storage)
+        current_storage_used = await self.get_current_storage_used(session, user_id)
+        running_count = await self._count_running_sandboxes(session, user_id)
+
+        grace_active = plan.grace_period_started_at is not None
+        grace_expires_at = None
+        if grace_active and plan.grace_period_started_at is not None:
+            grace_expires_at = plan.grace_period_started_at + timedelta(seconds=plan.grace_period_seconds)
+
+        return {
+            "tier": plan.tier,
+            "billing_period": {
+                "start": plan.period_start.isoformat(),
+                "end": plan.period_end.isoformat(),
+            },
+            "compute": {
+                "monthly_limit": float(plan.compute_credits_monthly_limit),
+                "monthly_used": float(plan.compute_credits_monthly_used),
+                "monthly_remaining": float(max(Decimal("0"), monthly_remaining)),
+                "extra_remaining": float(extra_compute),
+                "total_remaining": float(monthly_remaining + extra_compute),
+                "unit": "vCPU-hours",
+            },
+            "storage": {
+                "monthly_limit": plan.storage_credits_monthly_limit,
+                "extra_remaining": int(extra_storage),
+                "total_quota": total_storage_quota,
+                "current_used": current_storage_used,
+                "available": total_storage_quota - current_storage_used,
+                "unit": "GiB",
+            },
+            "limits": {
+                "max_concurrent_running": plan.max_concurrent_running,
+                "current_running": running_count,
+                "max_sandbox_duration_seconds": plan.max_sandbox_duration_seconds,
+                "allowed_templates": plan.allowed_templates,
+            },
+            "grace_period": {
+                "active": grace_active,
+                "started_at": plan.grace_period_started_at.isoformat() if grace_active else None,
+                "expires_at": grace_expires_at.isoformat() if grace_expires_at else None,
+                "grace_period_seconds": plan.grace_period_seconds,
+            },
+        }
+
+    async def list_compute_sessions(
+        self,
+        session: AsyncSession,
+        user_id: str,
+        *,
+        status: str = "all",
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[ComputeSession], int]:
+        """Return paginated ComputeSession list for a user."""
+        base = select(ComputeSession).where(ComputeSession.user_id == user_id)
+        count_base = select(func.count()).select_from(ComputeSession).where(ComputeSession.user_id == user_id)
+        if status == "active":
+            base = base.where(ComputeSession.ended_at.is_(None))
+            count_base = count_base.where(ComputeSession.ended_at.is_(None))
+        elif status == "completed":
+            base = base.where(ComputeSession.ended_at.is_not(None))
+            count_base = count_base.where(ComputeSession.ended_at.is_not(None))
+
+        total = (await session.execute(count_base)).scalar_one()
+        items_result = await session.execute(
+            base.order_by(ComputeSession.started_at.desc()).limit(limit).offset(offset)
+        )
+        return list(items_result.scalars().all()), total
+
+    async def list_credit_grants(self, session: AsyncSession, user_id: str) -> list[CreditGrant]:
+        """Return all CreditGrants for a user, newest first."""
+        result = await session.execute(
+            select(CreditGrant).where(CreditGrant.user_id == user_id).order_by(CreditGrant.granted_at.desc())
+        )
+        return list(result.scalars().all())
+
+    # ═══════════════════════════════════════════════════════
+    #  Credit Grant Management  (F26)
+    # ═══════════════════════════════════════════════════════
+
+    async def create_credit_grant(
+        self,
+        session: AsyncSession,
+        user_id: str,
+        credit_type: str,
+        amount: Decimal,
+        grant_type: str,
+        *,
+        granted_by: str | None = None,
+        reason: str | None = None,
+        campaign_id: str | None = None,
+        expires_at: datetime | None = None,
+    ) -> CreditGrant:
+        """Create a new CreditGrant record."""
+        now = utc_now()
+        grant = CreditGrant(
+            user_id=user_id,
+            credit_type=credit_type,
+            grant_type=grant_type,
+            campaign_id=campaign_id,
+            original_amount=amount,
+            remaining_amount=amount,
+            reason=reason,
+            granted_by=granted_by,
+            granted_at=now,
+            expires_at=expires_at,
+        )
+        session.add(grant)
+        await session.flush()
+        return grant
+
+    # ═══════════════════════════════════════════════════════
+    #  Tier Template Management  (F25–F26)
+    # ═══════════════════════════════════════════════════════
+
+    async def list_tier_templates(self, session: AsyncSession) -> list[TierTemplate]:
+        """Return all active TierTemplates."""
+        result = await session.execute(
+            select(TierTemplate)
+            .where(TierTemplate.is_active.is_(True))
+            .order_by(TierTemplate.compute_credits_monthly.asc())
+        )
+        return list(result.scalars().all())
+
+    async def update_tier_template(
+        self,
+        session: AsyncSession,
+        tier_name: str,
+        updates: dict,
+        *,
+        apply_to_existing: bool = False,
+    ) -> tuple[TierTemplate, int]:
+        """Update a TierTemplate and optionally propagate to existing users.
+
+        Returns (updated_template, users_affected_count).
+        """
+        template = await self._get_tier_template(session, tier_name)
+        now = utc_now()
+
+        updatable_fields = {
+            "compute_credits_monthly",
+            "storage_credits_monthly",
+            "max_concurrent_running",
+            "max_sandbox_duration_seconds",
+            "allowed_templates",
+            "grace_period_seconds",
+        }
+        for key, value in updates.items():
+            if key in updatable_fields:
+                setattr(template, key, value)
+        template.gmt_updated = now
+        session.add(template)
+
+        users_affected = 0
+        if apply_to_existing:
+            result = await session.execute(
+                select(UserPlan).where(
+                    UserPlan.tier == tier_name,
+                    or_(UserPlan.overrides.is_(None), UserPlan.overrides == {}),
+                )
+            )
+            plans = result.scalars().all()
+            field_map = {
+                "compute_credits_monthly": "compute_credits_monthly_limit",
+                "storage_credits_monthly": "storage_credits_monthly_limit",
+                "max_concurrent_running": "max_concurrent_running",
+                "max_sandbox_duration_seconds": "max_sandbox_duration_seconds",
+                "allowed_templates": "allowed_templates",
+                "grace_period_seconds": "grace_period_seconds",
+            }
+            for plan in plans:
+                for tmpl_field, plan_field in field_map.items():
+                    setattr(plan, plan_field, getattr(template, tmpl_field))
+                plan.gmt_updated = now
+                session.add(plan)
+            users_affected = len(plans)
+
+        await session.flush()
+        return template, users_affected
+
+    # ═══════════════════════════════════════════════════════
+    #  Internal Helpers
+    # ═══════════════════════════════════════════════════════
+
     @staticmethod
-    def _apply_overrides(plan: UserPlan, overrides: dict) -> None:
+    def apply_overrides(plan: UserPlan, overrides: dict) -> None:
         """Apply admin override values to a UserPlan, validating keys first."""
         for key in overrides:
             if key not in ALLOWED_PLAN_OVERRIDES:

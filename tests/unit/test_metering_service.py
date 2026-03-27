@@ -304,13 +304,13 @@ class TestUpdateUserTier:
 class TestApplyOverrides:
     def test_valid_keys(self):
         plan = _make_plan()
-        MeteringService._apply_overrides(plan, {"max_concurrent_running": 99})
+        MeteringService.apply_overrides(plan, {"max_concurrent_running": 99})
         assert plan.max_concurrent_running == 99
 
     def test_invalid_key_raises(self):
         plan = _make_plan()
         with pytest.raises(ValidationError, match="Invalid override key"):
-            MeteringService._apply_overrides(plan, {"bogus_field": 1})
+            MeteringService.apply_overrides(plan, {"bogus_field": 1})
 
     def test_all_allowed_keys_accepted(self):
         plan = _make_plan()
@@ -322,7 +322,7 @@ class TestApplyOverrides:
             "allowed_templates": ["tiny"],
             "grace_period_seconds": 9999,
         }
-        MeteringService._apply_overrides(plan, overrides)
+        MeteringService.apply_overrides(plan, overrides)
         for key, value in overrides.items():
             assert getattr(plan, key) == value
 
