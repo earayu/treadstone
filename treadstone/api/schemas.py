@@ -370,3 +370,218 @@ class AuditEventResponse(BaseModel):
 class AuditEventListResponse(BaseModel):
     items: list[AuditEventResponse]
     total: int = Field(..., examples=[1])
+
+
+# ── Metering — Usage ─────────────────────────────────────────────────────────
+
+
+class BillingPeriod(BaseModel):
+    start: str = Field(..., examples=["2026-03-01T00:00:00+00:00"])
+    end: str = Field(..., examples=["2026-04-01T00:00:00+00:00"])
+
+
+class ComputeUsage(BaseModel):
+    monthly_limit: float = Field(..., examples=[100.0])
+    monthly_used: float = Field(..., examples=[45.5])
+    monthly_remaining: float = Field(..., examples=[54.5])
+    extra_remaining: float = Field(..., examples=[50.0])
+    total_remaining: float = Field(..., examples=[104.5])
+    unit: str = Field(default="vCPU-hours")
+
+
+class StorageUsage(BaseModel):
+    monthly_limit: int = Field(..., examples=[10])
+    extra_remaining: int = Field(..., examples=[0])
+    total_quota: int = Field(..., examples=[10])
+    current_used: int = Field(..., examples=[5])
+    available: int = Field(..., examples=[5])
+    unit: str = Field(default="GiB")
+
+
+class UsageLimits(BaseModel):
+    max_concurrent_running: int = Field(..., examples=[3])
+    current_running: int = Field(..., examples=[1])
+    max_sandbox_duration_seconds: int = Field(..., examples=[7200])
+    allowed_templates: list[str] = Field(..., examples=[["tiny", "small", "medium"]])
+
+
+class GracePeriodStatus(BaseModel):
+    active: bool = Field(..., examples=[False])
+    started_at: str | None = Field(default=None, examples=[None])
+    expires_at: str | None = Field(default=None, examples=[None])
+    grace_period_seconds: int = Field(..., examples=[1800])
+
+
+class UsageSummaryResponse(BaseModel):
+    tier: str = Field(..., examples=["pro"])
+    billing_period: BillingPeriod
+    compute: ComputeUsage
+    storage: StorageUsage
+    limits: UsageLimits
+    grace_period: GracePeriodStatus
+
+
+class UserPlanResponse(BaseModel):
+    id: str = Field(..., examples=["planabc123def456"])
+    user_id: str = Field(..., examples=["userabc123def456"])
+    tier: str = Field(..., examples=["pro"])
+    compute_credits_monthly_limit: float = Field(..., examples=[100.0])
+    compute_credits_monthly_used: float = Field(..., examples=[45.5])
+    storage_credits_monthly_limit: int = Field(..., examples=[10])
+    max_concurrent_running: int = Field(..., examples=[3])
+    max_sandbox_duration_seconds: int = Field(..., examples=[7200])
+    allowed_templates: list[str] = Field(..., examples=[["tiny", "small", "medium"]])
+    grace_period_seconds: int = Field(..., examples=[1800])
+    overrides: dict[str, Any] | None = Field(default=None)
+    billing_period_start: str = Field(..., examples=["2026-03-01T00:00:00+00:00"])
+    billing_period_end: str = Field(..., examples=["2026-04-01T00:00:00+00:00"])
+    grace_period_started_at: str | None = Field(default=None)
+    warning_80_notified_at: str | None = Field(default=None)
+    warning_100_notified_at: str | None = Field(default=None)
+    created_at: str = Field(..., examples=["2026-01-15T08:00:00+00:00"])
+    updated_at: str = Field(..., examples=["2026-03-01T00:00:00+00:00"])
+
+
+class ComputeSessionItem(BaseModel):
+    id: str = Field(..., examples=["csabc123def456"])
+    sandbox_id: str = Field(..., examples=["sbabc123def456"])
+    template: str = Field(..., examples=["small"])
+    credit_rate_per_hour: float = Field(..., examples=[0.5])
+    started_at: str = Field(..., examples=["2026-03-26T08:00:00+00:00"])
+    ended_at: str | None = Field(default=None)
+    duration_seconds: float = Field(..., examples=[7200])
+    credits_consumed: float = Field(..., examples=[2.0])
+    credits_consumed_monthly: float = Field(..., examples=[1.5])
+    credits_consumed_extra: float = Field(..., examples=[0.5])
+    status: str = Field(..., examples=["active"])
+
+
+class ComputeSessionListResponse(BaseModel):
+    items: list[ComputeSessionItem]
+    total: int = Field(..., examples=[42])
+    limit: int = Field(..., examples=[20])
+    offset: int = Field(..., examples=[0])
+
+
+class CreditGrantItem(BaseModel):
+    id: str = Field(..., examples=["cgabc123def456"])
+    credit_type: str = Field(..., examples=["compute"])
+    grant_type: str = Field(..., examples=["admin_grant"])
+    original_amount: float = Field(..., examples=[100.0])
+    remaining_amount: float = Field(..., examples=[50.0])
+    reason: str | None = Field(default=None, examples=["Special support"])
+    granted_by: str | None = Field(default=None)
+    campaign_id: str | None = Field(default=None)
+    status: str = Field(..., examples=["active"])
+    granted_at: str = Field(..., examples=["2026-03-01T00:00:00+00:00"])
+    expires_at: str | None = Field(default=None, examples=["2026-06-01T00:00:00+00:00"])
+
+
+class CreditGrantListResponse(BaseModel):
+    items: list[CreditGrantItem]
+
+
+# ── Metering — Admin ─────────────────────────────────────────────────────────
+
+
+class UpdatePlanRequest(BaseModel):
+    tier: str | None = Field(default=None, examples=["ultra"])
+    overrides: dict[str, Any] | None = Field(default=None, examples=[{"compute_credits_monthly_limit": 500}])
+
+    @model_validator(mode="after")
+    def at_least_one_field(self) -> UpdatePlanRequest:
+        if self.tier is None and self.overrides is None:
+            raise ValueError("At least one of 'tier' or 'overrides' must be provided.")
+        return self
+
+
+class CreateGrantRequest(BaseModel):
+    credit_type: Literal["compute", "storage"] = Field(..., examples=["compute"])
+    amount: float = Field(..., gt=0, examples=[100])
+    grant_type: str = Field(..., examples=["admin_grant"])
+    reason: str | None = Field(default=None, examples=["Special support"])
+    campaign_id: str | None = Field(default=None)
+    expires_at: datetime | None = Field(default=None, examples=["2026-06-01T00:00:00Z"])
+
+
+class CreateGrantResponse(BaseModel):
+    id: str = Field(..., examples=["cgabc123def456"])
+    user_id: str = Field(..., examples=["userabc123def456"])
+    credit_type: str = Field(..., examples=["compute"])
+    original_amount: float = Field(..., examples=[100.0])
+    remaining_amount: float = Field(..., examples=[100.0])
+    grant_type: str = Field(..., examples=["admin_grant"])
+    reason: str | None = Field(default=None)
+    granted_by: str | None = Field(default=None)
+    campaign_id: str | None = Field(default=None)
+    granted_at: str = Field(..., examples=["2026-03-26T12:00:00+00:00"])
+    expires_at: str | None = Field(default=None)
+
+
+class TierTemplateItem(BaseModel):
+    tier: str = Field(..., examples=["pro"])
+    compute_credits_monthly: float = Field(..., examples=[100.0])
+    storage_credits_monthly: int = Field(..., examples=[10])
+    max_concurrent_running: int = Field(..., examples=[3])
+    max_sandbox_duration_seconds: int = Field(..., examples=[7200])
+    allowed_templates: list[str] = Field(..., examples=[["tiny", "small", "medium"]])
+    grace_period_seconds: int = Field(..., examples=[1800])
+    is_active: bool = Field(..., examples=[True])
+    created_at: str = Field(..., examples=["2026-01-01T00:00:00+00:00"])
+    updated_at: str = Field(..., examples=["2026-01-01T00:00:00+00:00"])
+
+
+class TierTemplateListResponse(BaseModel):
+    items: list[TierTemplateItem]
+
+
+class UpdateTierTemplateRequest(BaseModel):
+    compute_credits_monthly: float | None = Field(default=None, examples=[150])
+    storage_credits_monthly: int | None = Field(default=None, examples=[15])
+    max_concurrent_running: int | None = Field(default=None, examples=[5])
+    max_sandbox_duration_seconds: int | None = Field(default=None, examples=[14400])
+    allowed_templates: list[str] | None = Field(default=None, examples=[["tiny", "small", "medium", "large"]])
+    grace_period_seconds: int | None = Field(default=None, examples=[3600])
+    apply_to_existing: bool = Field(default=False)
+
+    @model_validator(mode="after")
+    def at_least_one_update(self) -> UpdateTierTemplateRequest:
+        updatable = (
+            self.compute_credits_monthly,
+            self.storage_credits_monthly,
+            self.max_concurrent_running,
+            self.max_sandbox_duration_seconds,
+            self.grace_period_seconds,
+        )
+        has_update = any(v is not None for v in updatable) or self.allowed_templates is not None
+        if not has_update:
+            raise ValueError("At least one field to update must be provided.")
+        return self
+
+
+class UpdateTierTemplateResponse(TierTemplateItem):
+    users_affected: int = Field(..., examples=[0])
+
+
+class BatchGrantRequest(BaseModel):
+    user_ids: list[str] = Field(..., min_length=1, max_length=1000)
+    credit_type: Literal["compute", "storage"] = Field(..., examples=["compute"])
+    amount: float = Field(..., gt=0, examples=[50])
+    grant_type: str = Field(..., examples=["campaign"])
+    campaign_id: str | None = Field(default=None, examples=["spring_2026_promo"])
+    reason: str | None = Field(default=None, examples=["Spring promotion"])
+    expires_at: datetime | None = Field(default=None, examples=["2026-06-01T00:00:00Z"])
+
+
+class BatchGrantResultItem(BaseModel):
+    user_id: str = Field(..., examples=["userabc123"])
+    grant_id: str | None = Field(default=None, examples=["cgabc123"])
+    status: str = Field(..., examples=["success"])
+    error: str | None = Field(default=None)
+
+
+class BatchGrantResponse(BaseModel):
+    total_requested: int = Field(..., examples=[3])
+    succeeded: int = Field(..., examples=[2])
+    failed: int = Field(..., examples=[1])
+    results: list[BatchGrantResultItem]

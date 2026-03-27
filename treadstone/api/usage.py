@@ -1,0 +1,104 @@
+"""Usage API — read-only endpoints for users to view their metering data.
+
+Endpoints:
+  GET /v1/usage          — aggregate usage overview
+  GET /v1/usage/plan     — full UserPlan details
+  GET /v1/usage/sessions — paginated ComputeSession list
+  GET /v1/usage/grants   — CreditGrant list
+
+Note: All endpoints call ``session.commit()`` because ``get_user_plan``
+(called internally by ``get_usage_summary``, etc.) may lazily create a
+UserPlan + welcome-bonus CreditGrant on first access.  The commit
+persists that side-effect.
+"""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from treadstone.api.deps import get_current_control_plane_user
+from treadstone.api.metering_serializers import iso, serialize_grant, serialize_plan
+from treadstone.api.schemas import (
+    ComputeSessionListResponse,
+    CreditGrantListResponse,
+    UsageSummaryResponse,
+    UserPlanResponse,
+)
+from treadstone.core.database import get_session
+from treadstone.models.metering import ComputeSession
+from treadstone.models.user import User, utc_now
+from treadstone.services.metering_service import MeteringService
+
+router = APIRouter(prefix="/v1/usage", tags=["usage"])
+
+_metering = MeteringService()
+
+
+def _serialize_session(cs: ComputeSession) -> dict:
+    now = utc_now()
+    end = cs.ended_at or now
+    duration = (end - cs.started_at).total_seconds()
+    return {
+        "id": cs.id,
+        "sandbox_id": cs.sandbox_id,
+        "template": cs.template,
+        "credit_rate_per_hour": float(cs.credit_rate_per_hour),
+        "started_at": iso(cs.started_at),
+        "ended_at": iso(cs.ended_at),
+        "duration_seconds": duration,
+        "credits_consumed": float(cs.credits_consumed),
+        "credits_consumed_monthly": float(cs.credits_consumed_monthly),
+        "credits_consumed_extra": float(cs.credits_consumed_extra),
+        "status": "active" if cs.ended_at is None else "completed",
+    }
+
+
+@router.get("", response_model=UsageSummaryResponse)
+async def get_usage(
+    user: User = Depends(get_current_control_plane_user),
+    session: AsyncSession = Depends(get_session),
+):
+    summary = await _metering.get_usage_summary(session, user.id)
+    await session.commit()
+    return summary
+
+
+@router.get("/plan", response_model=UserPlanResponse)
+async def get_plan(
+    user: User = Depends(get_current_control_plane_user),
+    session: AsyncSession = Depends(get_session),
+):
+    plan = await _metering.get_user_plan(session, user.id)
+    await session.commit()
+    return serialize_plan(plan)
+
+
+@router.get("/sessions", response_model=ComputeSessionListResponse)
+async def list_compute_sessions(
+    user: User = Depends(get_current_control_plane_user),
+    session: AsyncSession = Depends(get_session),
+    status: str = Query(default="all", pattern="^(active|completed|all)$"),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    await _metering.ensure_user_plan(session, user.id)
+    items, total = await _metering.list_compute_sessions(session, user.id, status=status, limit=limit, offset=offset)
+    await session.commit()
+    return {
+        "items": [_serialize_session(cs) for cs in items],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.get("/grants", response_model=CreditGrantListResponse)
+async def list_credit_grants(
+    user: User = Depends(get_current_control_plane_user),
+    session: AsyncSession = Depends(get_session),
+):
+    await _metering.ensure_user_plan(session, user.id)
+    grants = await _metering.list_credit_grants(session, user.id)
+    await session.commit()
+    return {"items": [serialize_grant(g) for g in grants]}
