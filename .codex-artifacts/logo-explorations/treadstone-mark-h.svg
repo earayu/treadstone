@@ -1,0 +1,15 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1024" height="1024" fill="white"/>
+  <mask id="mark-h-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+    <rect width="1024" height="1024" fill="black"/>
+    <path
+      d="M328 236H696L772 312L608 468V788H416V468L252 312L328 236Z"
+      fill="white"
+    />
+    <path
+      d="M472 426H552L612 482V736H412V482L472 426Z"
+      fill="black"
+    />
+  </mask>
+  <rect width="1024" height="1024" fill="#111111" mask="url(#mark-h-mask)"/>
+</svg>
