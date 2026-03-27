@@ -1,0 +1,10 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1024" height="1024" fill="white"/>
+  <mask id="mark-f-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+    <rect width="1024" height="1024" fill="black"/>
+    <rect x="264" y="208" width="496" height="608" rx="128" fill="white"/>
+    <polygon points="264,292 424,292 324,404 264,404" fill="black"/>
+    <rect x="468" y="372" width="88" height="332" rx="44" fill="black"/>
+  </mask>
+  <rect width="1024" height="1024" fill="#111111" mask="url(#mark-f-mask)"/>
+</svg>

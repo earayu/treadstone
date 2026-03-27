@@ -1,0 +1,11 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1024" height="1024" fill="white"/>
+  <mask id="stone-2-t1-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+    <rect width="1024" height="1024" fill="black"/>
+    <rect x="280" y="208" width="464" height="620" rx="136" fill="white"/>
+    <polygon points="560,208 744,208 744,392" fill="black"/>
+    <rect x="384" y="338" width="256" height="84" rx="42" fill="black"/>
+    <rect x="470" y="338" width="84" height="308" rx="42" fill="black"/>
+  </mask>
+  <rect width="1024" height="1024" fill="#111111" mask="url(#stone-2-t1-mask)"/>
+</svg>
