@@ -132,6 +132,24 @@ class InvalidTransitionError(TreadstoneError):
         )
 
 
+# ── Email Verification Errors ──
+
+
+class EmailVerificationRequiredError(TreadstoneError):
+    def __init__(self, message: str = "Email verification required before creating sandboxes."):
+        super().__init__(code="email_verification_required", message=message, status=403)
+
+
+class EmailVerificationTokenInvalidError(TreadstoneError):
+    def __init__(self, message: str = "Invalid or expired verification token."):
+        super().__init__(code="email_verification_token_invalid", message=message, status=400)
+
+
+class EmailAlreadyVerifiedError(TreadstoneError):
+    def __init__(self, message: str = "Email is already verified."):
+        super().__init__(code="email_already_verified", message=message, status=400)
+
+
 # ── Metering Errors ──
 
 

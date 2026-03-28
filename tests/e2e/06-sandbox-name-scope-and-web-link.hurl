@@ -22,6 +22,18 @@ Content-Type: application/json
 }
 HTTP 200
 
+GET {{base_url}}/v1/test-support/emails/latest-verification?email=e2e-06-a-{{unique}}@test.treadstone.dev
+HTTP 200
+[Captures]
+verify_token_a: jsonpath "$.token"
+
+POST {{base_url}}/v1/auth/verification/confirm
+Content-Type: application/json
+{
+    "token": "{{verify_token_a}}"
+}
+HTTP 200
+
 POST {{base_url}}/v1/auth/api-keys
 Content-Type: application/json
 {"name": "e2e-name-scope-a"}
@@ -102,6 +114,18 @@ Content-Type: application/json
 {
     "email": "e2e-06-b-{{unique}}@test.treadstone.dev",
     "password": "{{test_password}}"
+}
+HTTP 200
+
+GET {{base_url}}/v1/test-support/emails/latest-verification?email=e2e-06-b-{{unique}}@test.treadstone.dev
+HTTP 200
+[Captures]
+verify_token_b: jsonpath "$.token"
+
+POST {{base_url}}/v1/auth/verification/confirm
+Content-Type: application/json
+{
+    "token": "{{verify_token_b}}"
 }
 HTTP 200
 

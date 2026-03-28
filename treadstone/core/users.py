@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from treadstone.config import settings
 from treadstone.core.database import get_session
 from treadstone.models.user import OAuthAccount, Role, User
+from treadstone.services.email import get_email_backend
 
 COOKIE_MAX_AGE = settings.session_ttl_seconds
 
@@ -63,7 +64,9 @@ class UserManager(BaseUserManager[User, str]):
         pass  # TODO: send email
 
     async def on_after_request_verify(self, user: User, token: str, request: Request | None = None) -> None:
-        pass  # TODO: send email
+        verify_url = f"{settings.app_base_url.rstrip('/')}/auth/verify-email?token={token}"
+        backend = get_email_backend()
+        await backend.send_verification_email(to=user.email, token=token, verify_url=verify_url)
 
 
 # ── FastAPI-Users DB dependency ──

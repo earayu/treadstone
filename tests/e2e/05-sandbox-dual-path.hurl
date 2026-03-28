@@ -20,6 +20,20 @@ Content-Type: application/json
 }
 HTTP 200
 
+# ── Verify email ───────────────────────────────────────────────────────────
+
+GET {{base_url}}/v1/test-support/emails/latest-verification?email=e2e-05-{{unique}}@test.treadstone.dev
+HTTP 200
+[Captures]
+verify_token: jsonpath "$.token"
+
+POST {{base_url}}/v1/auth/verification/confirm
+Content-Type: application/json
+{
+    "token": "{{verify_token}}"
+}
+HTTP 200
+
 POST {{base_url}}/v1/auth/api-keys
 Content-Type: application/json
 {"name": "e2e-dual-path-key"}

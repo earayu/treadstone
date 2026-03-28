@@ -63,8 +63,15 @@ export function SignUpPage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     try {
-      await register.mutateAsync({ email: email.trim(), password })
-      toast.success("Account created.")
+      const result = await register.mutateAsync({ email: email.trim(), password })
+      const r = result as { is_verified?: boolean; verification_email_sent?: boolean }
+      if (r.is_verified) {
+        toast.success("Account created.")
+      } else if (r.verification_email_sent) {
+        toast.success("Account created. Check your email to verify your address.")
+      } else {
+        toast.success("Account created.")
+      }
       navigate("/app")
     } catch (err) {
       if (err instanceof HttpError) {

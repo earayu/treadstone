@@ -27,14 +27,23 @@ from treadstone.api.schemas import (
     LoginResponse,
     MessageResponse,
     RegisterRequest,
+    RegisterResponse,
     SetPasswordRequest,
     UpdateApiKeyRequest,
     UserDetailResponse,
     UserListResponse,
+    VerificationConfirmRequest,
 )
 from treadstone.config import settings
 from treadstone.core.database import get_session
-from treadstone.core.errors import BadRequestError, ConflictError, NotFoundError, ValidationError
+from treadstone.core.errors import (
+    BadRequestError,
+    ConflictError,
+    EmailAlreadyVerifiedError,
+    EmailVerificationTokenInvalidError,
+    NotFoundError,
+    ValidationError,
+)
 from treadstone.core.request_context import set_request_context
 from treadstone.core.users import (
     COOKIE_MAX_AGE,
@@ -466,11 +475,12 @@ async def logout(
     return response
 
 
-@router.post("/register", status_code=status.HTTP_201_CREATED)
+@router.post("/register", status_code=status.HTTP_201_CREATED, response_model=RegisterResponse)
 async def register(
     request: Request,
     body: RegisterRequest,
     session: AsyncSession = Depends(get_session),
+    user_manager: UserManager = Depends(get_user_manager),
 ):
     count_result = await session.execute(select(func.count()).select_from(User))
     user_count = count_result.scalar_one()
@@ -490,7 +500,7 @@ async def register(
         has_local_password=True,
         is_active=True,
         is_superuser=(role == Role.ADMIN),
-        is_verified=True,
+        is_verified=is_first_user,
         role=role.value,
     )
     session.add(user)
@@ -502,14 +512,30 @@ async def register(
         action="auth.register",
         target_type="user",
         target_id=user.id,
-        metadata={"email": user.email, "role": user.role},
+        metadata={"email": user.email, "role": user.role, "is_verified": user.is_verified},
         request=request,
     )
     await session.commit()
-
     await session.refresh(user)
+
+    verification_email_sent = False
+    if not user.is_verified:
+        try:
+            await user_manager.request_verify(user, request)
+            verification_email_sent = True
+        except Exception:
+            logger.exception("Failed to send verification email to %s", user.email)
+
     response = Response(
-        content=json.dumps({"id": user.id, "email": user.email, "role": user.role}),
+        content=json.dumps(
+            {
+                "id": user.id,
+                "email": user.email,
+                "role": user.role,
+                "is_verified": user.is_verified,
+                "verification_email_sent": verification_email_sent,
+            }
+        ),
         status_code=status.HTTP_201_CREATED,
         media_type="application/json",
     )
@@ -748,6 +774,7 @@ async def get_user(current_user: User = Depends(get_current_control_plane_user))
         "username": current_user.username,
         "role": current_user.role,
         "is_active": current_user.is_active,
+        "is_verified": current_user.is_verified,
         "has_local_password": current_user.has_local_password,
     }
 
@@ -826,6 +853,64 @@ async def set_password(
     )
     await session.commit()
     return {"detail": "Password set"}
+
+
+VERIFICATION_RESEND_COOLDOWN_SECONDS = 60
+_verification_last_sent: dict[str, float] = {}
+
+
+@router.post("/verification/request", response_model=MessageResponse)
+async def request_verification(
+    request: Request,
+    current_user: User = Depends(get_current_control_plane_user),
+    user_manager: UserManager = Depends(get_user_manager),
+):
+    """Resend verification email for the current user."""
+    if current_user.is_verified:
+        raise EmailAlreadyVerifiedError()
+
+    now_ts = utc_now().timestamp()
+    last_sent = _verification_last_sent.get(current_user.id, 0)
+    elapsed = now_ts - last_sent
+    if elapsed < VERIFICATION_RESEND_COOLDOWN_SECONDS:
+        raise BadRequestError(
+            f"Please wait {int(VERIFICATION_RESEND_COOLDOWN_SECONDS - elapsed)} seconds before resending."
+        )
+
+    await user_manager.request_verify(current_user, request)
+    _verification_last_sent[current_user.id] = now_ts
+    return {"detail": "Verification email sent"}
+
+
+@router.post("/verification/confirm", response_model=MessageResponse)
+async def confirm_verification(
+    request: Request,
+    body: VerificationConfirmRequest,
+    user_manager: UserManager = Depends(get_user_manager),
+    session: AsyncSession = Depends(get_session),
+):
+    """Confirm email verification using a token from the verification link."""
+    try:
+        user = await user_manager.verify(body.token, request)
+    except (
+        fastapi_users_exceptions.InvalidVerifyToken,
+        fastapi_users_exceptions.UserNotExists,
+    ):
+        raise EmailVerificationTokenInvalidError()
+    except fastapi_users_exceptions.UserAlreadyVerified:
+        raise EmailAlreadyVerifiedError()
+
+    set_request_context(request, actor_user_id=user.id)
+    await record_audit_event(
+        session,
+        action="auth.verify",
+        target_type="user",
+        target_id=user.id,
+        metadata={"email": user.email},
+        request=request,
+    )
+    await session.commit()
+    return {"detail": "Email verified"}
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

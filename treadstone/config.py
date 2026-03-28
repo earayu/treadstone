@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     logto_domain: str = ""
     logto_app_id: str = ""
 
+    # Email verification
+    email_backend: str = "memory"  # resend | memory
+    resend_api_key: str = ""
+    email_from: str = "noreply@treadstone.dev"
+    verification_token_lifetime_seconds: int = 3600
+
     # Sandbox proxy defaults (overridable per-request via X-Sandbox-* headers)
     sandbox_namespace: str = "treadstone-local"
     sandbox_port: int = 8080
