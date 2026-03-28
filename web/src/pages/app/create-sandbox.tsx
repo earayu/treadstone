@@ -407,12 +407,12 @@ export function CreateSandboxPage() {
               <ul className="mt-6 space-y-5">
                 <li>
                   <p className="text-[10px] uppercase tracking-[2px] text-muted-foreground">
-                    Monthly credit
+                    Compute usage
                   </p>
                   <p className="mt-1 text-lg font-bold text-foreground">
-                    {usage.compute.monthly_limit}{" "}
+                    {usage.compute.vcpu_hours.toFixed(2)}{" "}
                     <span className="text-xs font-normal text-muted-foreground">
-                      {usage.compute.unit}/mo
+                      vCPU-h
                     </span>
                   </p>
                 </li>

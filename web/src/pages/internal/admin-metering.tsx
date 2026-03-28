@@ -399,10 +399,8 @@ function UserPlanSection() {
   }
 
   const tier = usage?.tier ?? "—"
-  const computeUsed = usage?.compute.monthly_used
-  const computeLimit = usage?.compute.monthly_limit
-  const creditsRemaining =
-    computeUsed != null && computeLimit != null ? (computeLimit - computeUsed).toFixed(1) : "—"
+  const vcpuHours = usage?.compute.vcpu_hours ?? 0
+  const memGibHours = usage?.compute.memory_gib_hours ?? 0
   const maxConcurrent = usage?.limits.max_concurrent_running ?? "—"
   const runningNow = usage?.limits.current_running ?? 0
 
@@ -477,9 +475,15 @@ function UserPlanSection() {
                 </div>
                 <div>
                   <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-                    CREDITS REMAINING
+                    VCPU-HOURS
                   </p>
-                  <p className="mt-1 text-base font-semibold text-foreground">{creditsRemaining}</p>
+                  <p className="mt-1 text-base font-semibold text-foreground">{vcpuHours.toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+                    MEM GIB-HOURS
+                  </p>
+                  <p className="mt-1 text-base font-semibold text-foreground">{memGibHours.toFixed(2)}</p>
                 </div>
                 <div>
                   <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
