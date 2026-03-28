@@ -1,5 +1,9 @@
 """normalize allowed_templates to full K8s names
 
+Converts short template names ("tiny") to full K8s CRD names ("aio-sandbox-tiny")
+in tier_template and user_plan tables. This handles both existing production data
+and seed data inserted by migration 9f3a6a152a5c which used short names.
+
 Revision ID: f7a1b3c5d9e2
 Revises: 9f3a6a152a5c
 Create Date: 2026-03-28 12:00:00.000000
@@ -8,6 +12,7 @@ Create Date: 2026-03-28 12:00:00.000000
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -42,7 +47,7 @@ def _replace_json_array(table: str, mapping: dict[str, str]) -> None:
         if updated != templates:
             conn.execute(
                 sa.text(f"UPDATE {table} SET allowed_templates = :val WHERE id = :id"),  # noqa: S608
-                {"val": sa.type_coerce(updated, sa.JSON()), "id": row_id},
+                {"val": json.dumps(updated), "id": row_id},
             )
 
 
