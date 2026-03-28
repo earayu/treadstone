@@ -3,6 +3,7 @@
 import pytest
 from fastapi_users.db import SQLAlchemyUserDatabase
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from treadstone.core.database import Base, get_session
@@ -10,25 +11,28 @@ from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
 from treadstone.models.user import OAuthAccount, User
 
+_test_session_factory = None
+
 
 @pytest.fixture
 async def db_session():
+    global _test_session_factory
     test_engine = create_async_engine("sqlite+aiosqlite://", echo=False)
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    factory = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+    _test_session_factory = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
 
     async def override_get_session():
-        async with factory() as session:
+        async with _test_session_factory() as session:
             yield session
 
     async def override_get_user_db():
-        async with factory() as session:
+        async with _test_session_factory() as session:
             yield SQLAlchemyUserDatabase(session, User, OAuthAccount)
 
     async def override_get_user_manager():
-        async with factory() as session:
+        async with _test_session_factory() as session:
             db = SQLAlchemyUserDatabase(session, User, OAuthAccount)
             yield UserManager(db)
 
@@ -46,6 +50,11 @@ async def db_session():
 async def auth_client(db_session):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/v1/auth/register", json={"email": "tmpl@test.com", "password": "Pass123!"})
+        async with _test_session_factory() as session:
+            user = (await session.execute(select(User).where(User.email == "tmpl@test.com"))).unique().scalar_one()
+            user.is_verified = True
+            session.add(user)
+            await session.commit()
         await client.post("/v1/auth/login", json={"email": "tmpl@test.com", "password": "Pass123!"})
         yield client
 

@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { useCreateSandbox } from "@/api/sandboxes"
 import { useSandboxTemplates, type SandboxTemplate } from "@/api/templates"
 import { useUsageOverview } from "@/api/usage"
+import { useCurrentUser } from "@/hooks/use-auth"
 import { HttpError } from "@/lib/api-client"
 import { cn } from "@/lib/utils"
 
@@ -54,9 +55,11 @@ function parseLabels(raw: string): { ok: true; labels: Record<string, string> } 
 
 export function CreateSandboxPage() {
   const navigate = useNavigate()
+  const { data: user } = useCurrentUser()
   const { data: templatesData, isLoading: templatesLoading } = useSandboxTemplates()
   const { data: usage, isLoading: usageLoading } = useUsageOverview()
   const createMutation = useCreateSandbox()
+  const isUnverified = user && !user.is_verified
 
   const visibleTemplates = useMemo(() => {
     const items = templatesData?.items ?? []
@@ -164,6 +167,12 @@ export function CreateSandboxPage() {
           <p className="mt-1 text-sm text-muted-foreground">
             Configure and deploy a new sandbox environment.
           </p>
+
+          {isUnverified && (
+            <div className="mt-4 border-l-4 border-amber-500 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+              Please verify your email before creating sandboxes. Check your inbox for a verification link.
+            </div>
+          )}
 
           <form className="mt-8 space-y-8" onSubmit={handleSubmit} noValidate>
             <section>
@@ -377,7 +386,8 @@ export function CreateSandboxPage() {
               disabled={
                 createMutation.isPending ||
                 !activeTemplate ||
-                visibleTemplates.length === 0
+                visibleTemplates.length === 0 ||
+                !!isUnverified
               }
               className="h-12 w-full bg-primary text-sm font-bold uppercase tracking-[2px] text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >

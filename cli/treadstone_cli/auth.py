@@ -174,6 +174,25 @@ def register(ctx: click.Context, email: str, password: str) -> None:
         print_json(data)
     else:
         click.echo(f"Registered: {data['email']} (role: {data['role']})")
+        if not data.get("is_verified"):
+            if data.get("verification_email_sent"):
+                click.echo("Check your email to verify your account before creating sandboxes.")
+            else:
+                click.echo("Email verification required. Use 'treadstone auth resend-verification' to request a link.")
+
+
+@auth.command("resend-verification")
+@click.pass_context
+def resend_verification(ctx: click.Context) -> None:
+    """Resend email verification link for the current account."""
+    client = require_auth(ctx)
+    resp = client.post("/v1/auth/verification/request")
+    handle_error(resp)
+    data = resp.json()
+    if is_json_mode(ctx):
+        print_json(data)
+    else:
+        click.echo(data.get("detail", "Verification email sent."))
 
 
 @auth.command("whoami")

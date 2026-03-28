@@ -9,6 +9,7 @@ import { LandingPage } from "@/pages/public/landing"
 
 import { SignInPage } from "@/pages/auth/sign-in"
 import { SignUpPage } from "@/pages/auth/sign-up"
+import { VerifyEmailPage } from "@/pages/auth/verify-email"
 import { CliLoginPage } from "@/pages/auth/cli-login"
 
 import { DashboardPage } from "@/pages/app/dashboard"
@@ -51,6 +52,7 @@ const router = createBrowserRouter([
     children: [
       { path: "sign-in", element: <SignInPage /> },
       { path: "sign-up", element: <SignUpPage /> },
+      { path: "verify-email", element: <VerifyEmailPage /> },
     ],
   },
   {

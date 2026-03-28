@@ -1,6 +1,7 @@
 from treadstone.models.api_key import ApiKey, ApiKeyDataPlaneMode, ApiKeySandboxGrant
 from treadstone.models.audit_event import AuditActorType, AuditEvent, AuditResult
 from treadstone.models.cli_login_flow import CliLoginFlow
+from treadstone.models.email_verification_log import EmailVerificationLog
 from treadstone.models.metering import (
     ComputeSession,
     CreditGrant,
@@ -18,6 +19,7 @@ __all__ = [
     "AuditEvent",
     "AuditResult",
     "CliLoginFlow",
+    "EmailVerificationLog",
     "ComputeSession",
     "CreditGrant",
     "StorageLedger",

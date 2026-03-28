@@ -57,6 +57,7 @@ async def test_register_first_user_becomes_admin(db_session):
     data = resp.json()
     assert data["email"] == "admin@example.com"
     assert data["role"] == "admin"
+    assert data["is_verified"] is True
 
     async with _test_session_factory() as session:
         event = (await session.execute(select(AuditEvent).where(AuditEvent.action == "auth.register"))).scalar_one()
@@ -121,6 +122,7 @@ async def test_get_user_after_login(db_session):
     assert resp.status_code == 200
     assert resp.json()["email"] == "me@b.com"
     assert resp.json()["has_local_password"] is True
+    assert resp.json()["is_verified"] is True
 
 
 @pytest.mark.asyncio

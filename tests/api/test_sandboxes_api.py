@@ -54,6 +54,11 @@ async def auth_client(db_session):
     """Register + login, return client with auth cookie."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/v1/auth/register", json={"email": "sandbox@test.com", "password": "Pass123!"})
+        async with _test_session_factory() as session:
+            user = (await session.execute(select(User).where(User.email == "sandbox@test.com"))).unique().scalar_one()
+            user.is_verified = True
+            session.add(user)
+            await session.commit()
         await client.post("/v1/auth/login", json={"email": "sandbox@test.com", "password": "Pass123!"})
         yield client
 
@@ -62,6 +67,11 @@ async def auth_client(db_session):
 async def second_auth_client(db_session):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/v1/auth/register", json={"email": "other@test.com", "password": "Pass123!"})
+        async with _test_session_factory() as session:
+            user = (await session.execute(select(User).where(User.email == "other@test.com"))).unique().scalar_one()
+            user.is_verified = True
+            session.add(user)
+            await session.commit()
         await client.post("/v1/auth/login", json={"email": "other@test.com", "password": "Pass123!"})
         yield client
 
