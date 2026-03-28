@@ -465,13 +465,9 @@ function UserPlanSection() {
                 </div>
                 <div>
                   <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-                    COMPUTE USED
+                    TIER
                   </p>
-                  <p className="mt-1 text-base font-semibold text-foreground">
-                    {computeUsed != null && computeLimit != null
-                      ? `${computeUsed.toFixed(1)} / ${computeLimit.toFixed(1)} vCPU-h`
-                      : "—"}
-                  </p>
+                  <p className="mt-1 text-base font-semibold text-foreground">{tier}</p>
                 </div>
                 <div>
                   <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
