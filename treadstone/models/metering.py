@@ -23,7 +23,7 @@ class TierTemplate(Base):
     id: Mapped[str] = mapped_column(String(24), primary_key=True, default=lambda: "tt" + random_id())
     tier_name: Mapped[str] = mapped_column(String(16), unique=True, nullable=False)
     compute_credits_monthly: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
-    storage_credits_monthly: Mapped[int] = mapped_column(Integer, nullable=False)
+    storage_capacity_gib: Mapped[int] = mapped_column(Integer, nullable=False)
     max_concurrent_running: Mapped[int] = mapped_column(Integer, nullable=False)
     max_sandbox_duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
     allowed_templates: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
@@ -44,7 +44,7 @@ class UserPlan(Base):
 
     # Entitlements (copied from TierTemplate, can be overridden)
     compute_credits_monthly_limit: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
-    storage_credits_monthly_limit: Mapped[int] = mapped_column(Integer, nullable=False)
+    storage_capacity_limit_gib: Mapped[int] = mapped_column(Integer, nullable=False)
     max_concurrent_running: Mapped[int] = mapped_column(Integer, nullable=False)
     max_sandbox_duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
     allowed_templates: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
@@ -108,14 +108,20 @@ class ComputeSession(Base):
     id: Mapped[str] = mapped_column(String(24), primary_key=True, default=lambda: "cs" + random_id())
     sandbox_id: Mapped[str] = mapped_column(String(24), ForeignKey("sandbox.id"), nullable=False, index=True)
     user_id: Mapped[str] = mapped_column(String(24), ForeignKey("user.id"), nullable=False, index=True)
-    template: Mapped[str] = mapped_column(String(32), nullable=False)
-    credit_rate_per_hour: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
+    template: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    # Raw resource spec locked at session open time
+    vcpu_request: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
+    memory_gib_request: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
+
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_metered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    credits_consumed: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False, default=Decimal("0"))
-    credits_consumed_monthly: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False, default=Decimal("0"))
-    credits_consumed_extra: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False, default=Decimal("0"))
+
+    # Accumulated raw resource-hours
+    vcpu_hours: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False, default=Decimal("0"))
+    memory_gib_hours: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False, default=Decimal("0"))
+
     gmt_created: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     gmt_updated: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 

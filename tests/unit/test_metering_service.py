@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from treadstone.core.errors import (
+    BadRequestError,
     ComputeQuotaExceededError,
     ConcurrentLimitError,
     NotFoundError,
@@ -40,7 +41,7 @@ def _make_template(tier_name: str = "free", **kwargs) -> TierTemplate:
     defaults = {
         "free": {
             "compute_credits_monthly": Decimal("10"),
-            "storage_credits_monthly": 0,
+            "storage_capacity_gib": 0,
             "max_concurrent_running": 1,
             "max_sandbox_duration_seconds": 1800,
             "allowed_templates": ["aio-sandbox-tiny", "aio-sandbox-small"],
@@ -48,7 +49,7 @@ def _make_template(tier_name: str = "free", **kwargs) -> TierTemplate:
         },
         "pro": {
             "compute_credits_monthly": Decimal("100"),
-            "storage_credits_monthly": 10,
+            "storage_capacity_gib": 10,
             "max_concurrent_running": 3,
             "max_sandbox_duration_seconds": 7200,
             "allowed_templates": ["aio-sandbox-tiny", "aio-sandbox-small", "aio-sandbox-medium"],
@@ -64,7 +65,7 @@ def _make_plan(user_id: str = "user01", tier: str = "free", **kwargs) -> UserPla
         "tier": tier,
         "compute_credits_monthly_limit": Decimal("10"),
         "compute_credits_monthly_used": Decimal("0"),
-        "storage_credits_monthly_limit": 0,
+        "storage_capacity_limit_gib": 0,
         "max_concurrent_running": 1,
         "max_sandbox_duration_seconds": 1800,
         "allowed_templates": ["aio-sandbox-tiny", "aio-sandbox-small"],
@@ -316,7 +317,7 @@ class TestApplyOverrides:
         plan = _make_plan()
         overrides = {
             "compute_credits_monthly_limit": Decimal("999"),
-            "storage_credits_monthly_limit": 999,
+            "storage_capacity_limit_gib": 999,
             "max_concurrent_running": 99,
             "max_sandbox_duration_seconds": 99999,
             "allowed_templates": ["aio-sandbox-tiny"],
@@ -497,7 +498,8 @@ class TestOpenComputeSession:
         assert cs.sandbox_id == "sb01"
         assert cs.user_id == "user01"
         assert cs.template == "aio-sandbox-small"
-        assert cs.credit_rate_per_hour == Decimal("0.5")
+        assert cs.vcpu_request == Decimal("0.5")
+        assert cs.memory_gib_request == Decimal("1")
         assert cs.started_at == FIXED_NOW
         assert cs.last_metered_at == FIXED_NOW
         assert cs.ended_at is None
@@ -509,7 +511,8 @@ class TestOpenComputeSession:
             sandbox_id="sb01",
             user_id="user01",
             template="aio-sandbox-small",
-            credit_rate_per_hour=Decimal("0.5"),
+            vcpu_request=Decimal("0.5"),
+            memory_gib_request=Decimal("1"),
             started_at=FIXED_NOW,
             last_metered_at=FIXED_NOW,
         )
@@ -524,7 +527,7 @@ class TestOpenComputeSession:
     async def test_unknown_template_raises(self):
         svc = MeteringService()
         session = _mock_session(_MockResult(value=None))
-        with pytest.raises(ValueError, match="Unknown template"):
+        with pytest.raises(BadRequestError, match="Unknown sandbox template"):
             await svc.open_compute_session(session, "sb01", "user01", "nonexistent")
 
 
@@ -537,7 +540,7 @@ class TestCloseComputeSession:
 
         assert result is None
 
-    async def test_closes_session_and_consumes_final_credits(self, monkeypatch):
+    async def test_closes_session_and_accumulates_resource_hours(self, monkeypatch):
         started = datetime(2026, 3, 15, 9, 0, 0, tzinfo=UTC)
         close_time = datetime(2026, 3, 15, 10, 0, 0, tzinfo=UTC)
         monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: close_time)
@@ -546,50 +549,47 @@ class TestCloseComputeSession:
             sandbox_id="sb01",
             user_id="user01",
             template="aio-sandbox-small",
-            credit_rate_per_hour=Decimal("0.5"),
+            vcpu_request=Decimal("0.5"),
+            memory_gib_request=Decimal("1"),
             started_at=started,
             last_metered_at=started,
-            credits_consumed=Decimal("0"),
-            credits_consumed_monthly=Decimal("0"),
-            credits_consumed_extra=Decimal("0"),
+            vcpu_hours=Decimal("0"),
+            memory_gib_hours=Decimal("0"),
         )
         session = _mock_session(_MockResult(value=cs))
         svc = MeteringService()
-        svc.consume_compute_credits = AsyncMock(
-            return_value=ConsumeResult(monthly=Decimal("0.5"), extra=Decimal("0"), shortfall=Decimal("0"))
-        )
 
         result = await svc.close_compute_session(session, "sb01")
 
         assert result is cs
         assert cs.ended_at == close_time
         assert cs.last_metered_at == close_time
-        assert cs.credits_consumed == Decimal("0.5")
-        assert cs.credits_consumed_monthly == Decimal("0.5")
-        svc.consume_compute_credits.assert_awaited_once()
+        # 1 hour elapsed: 0.5 vCPU-h, 1 GiB-h for aio-sandbox-small
+        assert cs.vcpu_hours == Decimal("0.5")
+        assert cs.memory_gib_hours == Decimal("1")
 
     async def test_zero_elapsed_still_closes(self, monkeypatch):
-        """If last_metered_at == now, no credits are consumed but session still closes."""
+        """If last_metered_at == now, no resource-hours are added but session still closes."""
         monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
         cs = ComputeSession(
             sandbox_id="sb01",
             user_id="user01",
             template="aio-sandbox-tiny",
-            credit_rate_per_hour=Decimal("0.25"),
+            vcpu_request=Decimal("0.25"),
+            memory_gib_request=Decimal("0.5"),
             started_at=FIXED_NOW,
             last_metered_at=FIXED_NOW,
-            credits_consumed=Decimal("0"),
-            credits_consumed_monthly=Decimal("0"),
-            credits_consumed_extra=Decimal("0"),
+            vcpu_hours=Decimal("0"),
+            memory_gib_hours=Decimal("0"),
         )
         session = _mock_session(_MockResult(value=cs))
         svc = MeteringService()
-        svc.consume_compute_credits = AsyncMock()
 
         result = await svc.close_compute_session(session, "sb01")
 
         assert result.ended_at == FIXED_NOW
-        svc.consume_compute_credits.assert_not_awaited()
+        assert result.vcpu_hours == Decimal("0")
+        assert result.memory_gib_hours == Decimal("0")
 
 
 # ═══════════════════════════════════════════════════════
@@ -600,7 +600,8 @@ class TestCloseComputeSession:
 class TestRecordStorageAllocation:
     async def test_creates_active_ledger_entry(self, monkeypatch):
         monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
-        session = _mock_session()
+        # Idempotency: first execute checks for existing ACTIVE ledger (none)
+        session = _mock_session(_MockResult(value=None))
         svc = MeteringService()
 
         ledger = await svc.record_storage_allocation(session, "user01", "sb01", 10)
@@ -973,7 +974,7 @@ class TestCheckStorageQuota:
 
 class TestGetTotalStorageQuota:
     async def test_monthly_only(self):
-        plan = _make_plan("user01", storage_credits_monthly_limit=10)
+        plan = _make_plan("user01", storage_capacity_limit_gib=10)
         svc = MeteringService()
         svc.get_user_plan = AsyncMock(return_value=plan)
         svc.get_extra_credits_remaining = AsyncMock(return_value=Decimal("0"))
@@ -982,7 +983,7 @@ class TestGetTotalStorageQuota:
         assert result == 10
 
     async def test_monthly_plus_extra(self):
-        plan = _make_plan("user01", storage_credits_monthly_limit=10)
+        plan = _make_plan("user01", storage_capacity_limit_gib=10)
         svc = MeteringService()
         svc.get_user_plan = AsyncMock(return_value=plan)
         svc.get_extra_credits_remaining = AsyncMock(return_value=Decimal("5"))
@@ -991,7 +992,7 @@ class TestGetTotalStorageQuota:
         assert result == 15
 
     async def test_zero_monthly_with_extra(self):
-        plan = _make_plan("user01", storage_credits_monthly_limit=0)
+        plan = _make_plan("user01", storage_capacity_limit_gib=0)
         svc = MeteringService()
         svc.get_user_plan = AsyncMock(return_value=plan)
         svc.get_extra_credits_remaining = AsyncMock(return_value=Decimal("20"))

@@ -1101,10 +1101,15 @@ export interface components {
              */
             template: string;
             /**
-             * Credit Rate Per Hour
+             * Vcpu Request
              * @example 0.5
              */
-            credit_rate_per_hour: number;
+            vcpu_request: number;
+            /**
+             * Memory Gib Request
+             * @example 1
+             */
+            memory_gib_request: number;
             /**
              * Started At
              * @example 2026-03-26T08:00:00+00:00
@@ -1118,20 +1123,15 @@ export interface components {
              */
             duration_seconds: number;
             /**
-             * Credits Consumed
+             * Vcpu Hours
+             * @example 1
+             */
+            vcpu_hours: number;
+            /**
+             * Memory Gib Hours
              * @example 2
              */
-            credits_consumed: number;
-            /**
-             * Credits Consumed Monthly
-             * @example 1.5
-             */
-            credits_consumed_monthly: number;
-            /**
-             * Credits Consumed Extra
-             * @example 0.5
-             */
-            credits_consumed_extra: number;
+            memory_gib_hours: number;
             /**
              * Status
              * @example active
@@ -1161,35 +1161,15 @@ export interface components {
         /** ComputeUsage */
         ComputeUsage: {
             /**
-             * Monthly Limit
-             * @example 100
+             * Vcpu Hours
+             * @example 12.5
              */
-            monthly_limit: number;
+            vcpu_hours: number;
             /**
-             * Monthly Used
-             * @example 45.5
+             * Memory Gib Hours
+             * @example 25
              */
-            monthly_used: number;
-            /**
-             * Monthly Remaining
-             * @example 54.5
-             */
-            monthly_remaining: number;
-            /**
-             * Extra Remaining
-             * @example 50
-             */
-            extra_remaining: number;
-            /**
-             * Total Remaining
-             * @example 104.5
-             */
-            total_remaining: number;
-            /**
-             * Unit
-             * @default vCPU-hours
-             */
-            unit: string;
+            memory_gib_hours: number;
         };
         /** ConfigResponse */
         ConfigResponse: {
@@ -1820,35 +1800,25 @@ export interface components {
         /** StorageUsage */
         StorageUsage: {
             /**
-             * Monthly Limit
-             * @example 10
+             * Gib Hours
+             * @example 120
              */
-            monthly_limit: number;
+            gib_hours: number;
             /**
-             * Extra Remaining
-             * @example 0
-             */
-            extra_remaining: number;
-            /**
-             * Total Quota
-             * @example 10
-             */
-            total_quota: number;
-            /**
-             * Current Used
+             * Current Used Gib
              * @example 5
              */
-            current_used: number;
+            current_used_gib: number;
             /**
-             * Available
+             * Total Quota Gib
+             * @example 10
+             */
+            total_quota_gib: number;
+            /**
+             * Available Gib
              * @example 5
              */
-            available: number;
-            /**
-             * Unit
-             * @default GiB
-             */
-            unit: string;
+            available_gib: number;
         };
         /** TierTemplateItem */
         TierTemplateItem: {
@@ -1866,7 +1836,7 @@ export interface components {
              * Storage Credits Monthly
              * @example 10
              */
-            storage_credits_monthly: number;
+            storage_capacity_gib: number;
             /**
              * Max Concurrent Running
              * @example 3
@@ -1961,7 +1931,7 @@ export interface components {
              * Storage Credits Monthly
              * @example 15
              */
-            storage_credits_monthly?: number | null;
+            storage_capacity_gib?: number | null;
             /**
              * Max Concurrent Running
              * @example 5
@@ -2009,7 +1979,7 @@ export interface components {
              * Storage Credits Monthly
              * @example 10
              */
-            storage_credits_monthly: number;
+            storage_capacity_gib: number;
             /**
              * Max Concurrent Running
              * @example 3
@@ -2194,7 +2164,7 @@ export interface components {
              * Storage Credits Monthly Limit
              * @example 10
              */
-            storage_credits_monthly_limit: number;
+            storage_capacity_limit_gib: number;
             /**
              * Max Concurrent Running
              * @example 3

@@ -1352,3 +1352,82 @@ active -> deleted
 ## 15. 最终判断（一句话版本）
 
 **当前代码已经有 Compute 的后台记账系统和 Usage/Admin 运营界面，但还没有把配额执行真正接入公开产品入口；Storage 则仍停留在“框架已写、公开路径未闭环”的阶段，因此不适合把这两套系统一起作为正式上线能力对外承诺。**
+
+---
+
+## 16. 审计后修复记录
+
+**修复提交：** `2fc7c1f` (分支 `fix/metering-system-overhaul`)
+**修复日期：** 2026-03-29
+
+### 16.1 Bug 修复
+
+| 编号 | 问题 | 修复内容 |
+| --- | --- | --- |
+| Bug-1 | 公开 API 未注入 MeteringService，Storage 计量完全失效 | `treadstone/api/sandboxes.py` 添加模块级 `_metering = MeteringService()`，create/delete/start/stop 路由注入 `metering=_metering` |
+| Bug-2 | `record_storage_allocation` 不幂等，可产生重复 ACTIVE 行 | 在 INSERT 前增加 `SELECT ... FOR UPDATE` 幂等检查；新增 migration 添加 partial unique index `ix_storage_ledger_sandbox_active` |
+| Bug-3 | `record_storage_release` 无行锁，并发释放可能重复计算 | 查询增加 `.with_for_update()` |
+| Bug-4 | `calculate_credit_rate` 抛 `ValueError`，不符合错误规范 | 改为抛 `BadRequestError` |
+| Bug-5 | Grace period enforcement 不触发 K8s 停机 | 在 `sync_supervisor` 和 `main` 的 metering loop 中传入 `stop_sandbox_callback`，通过 `k8s_client.scale_sandbox(replicas=0)` 实际缩容 |
+
+### 16.2 缺失路径补全
+
+| 编号 | 缺失项 | 修复内容 |
+| --- | --- | --- |
+| Missing-1 | Storage Ledger 在公开路径上不被创建/释放 | 通过 Bug-1 修复，MeteringService 注入后 `record_storage_allocation` 和 `record_storage_release` 在 create/delete 路径上正常执行 |
+| Missing-2 | 无 Storage Reconciliation 机制 | 新增 `reconcile_storage_metering()` 函数，在 `k8s_sync.reconcile()` 末尾调用。修复 persist sandbox 与 StorageLedger 的漂移 |
+| Missing-3 | 录入与强制执行耦合 | `config.py` 新增 `metering_enforcement_enabled: bool = False`，SandboxService 中 quota check 受此开关控制，recording 始终执行 |
+
+### 16.3 数据模型重构：Raw Resource Metering
+
+**核心变更：** 将 ComputeSession 从 credit-based 模型重构为 raw resource-based 模型。
+
+| 变更 | 旧字段 | 新字段 |
+| --- | --- | --- |
+| ComputeSession 资源规格 | `credit_rate_per_hour` | `vcpu_request`, `memory_gib_request` |
+| ComputeSession 累计用量 | `credits_consumed`, `credits_consumed_monthly`, `credits_consumed_extra` | `vcpu_hours`, `memory_gib_hours` |
+
+**设计理念：**
+- 记录原始资源消耗（vCPU-hours, memory-GiB-hours, storage-GiB-hours）
+- 未来计费公式可从原始数据任意推导：`price = vcpu_hours * cpu_price + memory_gib_hours * mem_price + storage_gib_hours * storage_price`
+- `tick_metering()` 简化为纯资源小时数累加，不再调用 `consume_compute_credits()`
+
+**Usage Summary 响应格式变更：**
+
+```json
+{
+  "compute": {"vcpu_hours": 12.5, "memory_gib_hours": 25.0},
+  "storage": {"gib_hours": 100.0, "current_used_gib": 10, "total_quota_gib": 20, "available_gib": 10}
+}
+```
+
+### 16.4 字段重命名
+
+| 表 | 旧字段名 | 新字段名 |
+| --- | --- | --- |
+| `tier_template` | `storage_credits_monthly` | `storage_capacity_gib` |
+| `user_plan` | `storage_credits_monthly_limit` | `storage_capacity_limit_gib` |
+| `compute_session` | `template` String(32) | `template` String(255) |
+
+### 16.5 新增 Helper 函数
+
+- `get_template_resource_spec(template) -> tuple[Decimal, Decimal]`：返回模板的 (vcpu, memory_gib) 原始规格
+- `reconcile_storage_metering(session_factory)`：修复 StorageLedger 与 persist sandbox 的漂移
+- `get_compute_usage_for_period(session, user_id, period_start, period_end)`：查询指定账期内的 vCPU-hours 和 memory-GiB-hours
+
+### 16.6 数据库 Migration
+
+Migration `c4d5e6f7a8b9`（依赖 `b1c2d3e4f5a6`）：
+- 重命名 `tier_template.storage_credits_monthly` → `storage_capacity_gib`
+- 重命名 `user_plan.storage_credits_monthly_limit` → `storage_capacity_limit_gib`
+- 加宽 `compute_session.template` String(32) → String(255)
+- 删除 `compute_session` 的 `credit_rate_per_hour`, `credits_consumed`, `credits_consumed_monthly`, `credits_consumed_extra`
+- 新增 `compute_session` 的 `vcpu_request`, `memory_gib_request`, `vcpu_hours`, `memory_gib_hours`
+- 新增 `storage_ledger` partial unique index `ix_storage_ledger_sandbox_active`
+
+### 16.7 保留未修改的部分
+
+- `UserPlan`, `TierTemplate`, `CreditGrant` 模型保留（供未来计费使用）
+- `consume_compute_credits()` 函数保留在 MeteringService 中
+- `check_warning_thresholds`, `check_grace_periods` 函数保留（受 enforcement 开关控制）
+- StorageLedger 模型未修改（已经是原始数据模型）

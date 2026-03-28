@@ -12,6 +12,18 @@ from treadstone.services.leader_election import LeadershipState
 logger = logging.getLogger(__name__)
 
 
+async def _k8s_stop_sandbox(session, sandbox) -> None:
+    """Stop a sandbox via K8s scale-down (used as grace-period enforcement callback)."""
+    from treadstone.services.k8s_client import get_k8s_client
+
+    k8s = get_k8s_client()
+    k8s_name = sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.id
+    try:
+        await k8s.scale_sandbox(name=k8s_name, namespace=sandbox.k8s_namespace, replicas=0)
+    except Exception:
+        logger.exception("Failed to scale sandbox %s to 0 via grace-period enforcement", sandbox.id)
+
+
 class LeaderControlledSyncSupervisor:
     """Start the sync loop only while this replica holds leadership.
 
@@ -87,7 +99,7 @@ class LeaderControlledSyncSupervisor:
         while True:
             await asyncio.sleep(TICK_INTERVAL)
             try:
-                await run_metering_tick(self._session_factory)
+                await run_metering_tick(self._session_factory, stop_sandbox_callback=_k8s_stop_sandbox)
             except Exception:
                 logger.exception("Metering tick failed")
 

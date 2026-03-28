@@ -25,7 +25,6 @@ from treadstone.models.metering import ComputeSession, StorageLedger, StorageSta
 from treadstone.models.sandbox import Sandbox, SandboxStatus
 from treadstone.models.user import utc_now
 from treadstone.services.audit import record_audit_event
-from treadstone.services.metering_helpers import ConsumeResult
 from treadstone.services.metering_service import MeteringService
 
 logger = logging.getLogger(__name__)
@@ -48,11 +47,10 @@ class _OptimisticLockConflict(Exception):
 
 
 async def tick_metering(session: AsyncSession) -> int:
-    """Meter all open ComputeSessions: calculate elapsed credits and consume them.
+    """Accumulate raw resource-hours for all open ComputeSessions.
 
     Each session update runs inside a savepoint so that an optimistic-lock
-    conflict rolls back only the credit-consumption side-effects for that
-    single session, not the entire tick batch.
+    conflict rolls back only that single session, not the entire tick batch.
 
     Returns the number of sessions successfully metered.
     """
@@ -67,14 +65,12 @@ async def tick_metering(session: AsyncSession) -> int:
         if elapsed_seconds <= 0:
             continue
 
-        new_credits = Decimal(str(elapsed_seconds)) / Decimal("3600") * cs.credit_rate_per_hour
+        elapsed_hours = Decimal(str(elapsed_seconds)) / Decimal("3600")
+        delta_vcpu_hours = cs.vcpu_request * elapsed_hours
+        delta_memory_gib_hours = cs.memory_gib_request * elapsed_hours
 
         try:
             async with session.begin_nested():
-                consume_result: ConsumeResult = await _metering.consume_compute_credits(
-                    session, cs.user_id, new_credits
-                )
-
                 rows = await session.execute(
                     update(ComputeSession)
                     .where(
@@ -82,9 +78,8 @@ async def tick_metering(session: AsyncSession) -> int:
                         ComputeSession.gmt_updated == cs.gmt_updated,
                     )
                     .values(
-                        credits_consumed=ComputeSession.credits_consumed + new_credits,
-                        credits_consumed_monthly=ComputeSession.credits_consumed_monthly + consume_result.monthly,
-                        credits_consumed_extra=ComputeSession.credits_consumed_extra + consume_result.extra,
+                        vcpu_hours=ComputeSession.vcpu_hours + delta_vcpu_hours,
+                        memory_gib_hours=ComputeSession.memory_gib_hours + delta_memory_gib_hours,
                         last_metered_at=now,
                         gmt_updated=now,
                     )
@@ -390,14 +385,12 @@ async def handle_period_rollover(
 
     period_boundary = plan.period_end
 
-    # 1. Close old session at period boundary
+    # 1. Close old session at period boundary — accrue final slice of resource-hours
     elapsed = (period_boundary - cs.last_metered_at).total_seconds()
     if elapsed > 0:
-        final_credits = Decimal(str(elapsed)) / Decimal("3600") * cs.credit_rate_per_hour
-        consume_result = await _metering.consume_compute_credits(session, cs.user_id, final_credits)
-        cs.credits_consumed += final_credits
-        cs.credits_consumed_monthly += consume_result.monthly
-        cs.credits_consumed_extra += consume_result.extra
+        elapsed_hours = Decimal(str(elapsed)) / Decimal("3600")
+        cs.vcpu_hours += cs.vcpu_request * elapsed_hours
+        cs.memory_gib_hours += cs.memory_gib_request * elapsed_hours
 
     cs.ended_at = period_boundary
     cs.last_metered_at = period_boundary
@@ -440,9 +433,12 @@ async def handle_period_rollover(
         sandbox_id=cs.sandbox_id,
         user_id=cs.user_id,
         template=cs.template,
-        credit_rate_per_hour=cs.credit_rate_per_hour,
+        vcpu_request=cs.vcpu_request,
+        memory_gib_request=cs.memory_gib_request,
         started_at=new_period_start,
         last_metered_at=new_period_start,
+        vcpu_hours=Decimal("0"),
+        memory_gib_hours=Decimal("0"),
     )
     session.add(new_cs)
     await session.flush()

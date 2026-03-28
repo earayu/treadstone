@@ -15,6 +15,17 @@ TEMPLATE_SPECS: dict[str, dict[str, Decimal]] = {
 }
 
 
+def get_template_resource_spec(template: str) -> tuple[Decimal, Decimal]:
+    """Return (vcpu_request, memory_gib_request) for the given sandbox template.
+
+    Raises BadRequestError for unknown templates.
+    """
+    spec = TEMPLATE_SPECS.get(template)
+    if spec is None:
+        raise BadRequestError(f"Unknown sandbox template: {template}")
+    return spec["vcpu"], spec["memory_gib"]
+
+
 def calculate_credit_rate(template: str) -> Decimal:
     """Return the credit rate (credits/hour) for the given sandbox template.
 
@@ -22,7 +33,7 @@ def calculate_credit_rate(template: str) -> Decimal:
     """
     spec = TEMPLATE_SPECS.get(template)
     if spec is None:
-        raise ValueError(f"Unknown template: {template}")
+        raise BadRequestError(f"Unknown sandbox template: {template}")
     return max(spec["vcpu"], spec["memory_gib"] / Decimal("2"))
 
 

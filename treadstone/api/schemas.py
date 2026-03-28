@@ -396,21 +396,15 @@ class BillingPeriod(BaseModel):
 
 
 class ComputeUsage(BaseModel):
-    monthly_limit: float = Field(..., examples=[100.0])
-    monthly_used: float = Field(..., examples=[45.5])
-    monthly_remaining: float = Field(..., examples=[54.5])
-    extra_remaining: float = Field(..., examples=[50.0])
-    total_remaining: float = Field(..., examples=[104.5])
-    unit: str = Field(default="vCPU-hours")
+    vcpu_hours: float = Field(..., examples=[12.5])
+    memory_gib_hours: float = Field(..., examples=[25.0])
 
 
 class StorageUsage(BaseModel):
-    monthly_limit: int = Field(..., examples=[10])
-    extra_remaining: int = Field(..., examples=[0])
-    total_quota: int = Field(..., examples=[10])
-    current_used: int = Field(..., examples=[5])
-    available: int = Field(..., examples=[5])
-    unit: str = Field(default="GiB")
+    gib_hours: float = Field(..., examples=[120.0])
+    current_used_gib: int = Field(..., examples=[5])
+    total_quota_gib: int = Field(..., examples=[10])
+    available_gib: int = Field(..., examples=[5])
 
 
 class UsageLimits(BaseModel):
@@ -444,7 +438,7 @@ class UserPlanResponse(BaseModel):
     tier: str = Field(..., examples=["pro"])
     compute_credits_monthly_limit: float = Field(..., examples=[100.0])
     compute_credits_monthly_used: float = Field(..., examples=[45.5])
-    storage_credits_monthly_limit: int = Field(..., examples=[10])
+    storage_capacity_limit_gib: int = Field(..., examples=[10])
     max_concurrent_running: int = Field(..., examples=[3])
     max_sandbox_duration_seconds: int = Field(..., examples=[7200])
     allowed_templates: list[str] = Field(
@@ -465,13 +459,13 @@ class ComputeSessionItem(BaseModel):
     id: str = Field(..., examples=["csabc123def456"])
     sandbox_id: str = Field(..., examples=["sbabc123def456"])
     template: str = Field(..., examples=["aio-sandbox-small"])
-    credit_rate_per_hour: float = Field(..., examples=[0.5])
+    vcpu_request: float = Field(..., examples=[0.5])
+    memory_gib_request: float = Field(..., examples=[1.0])
     started_at: str = Field(..., examples=["2026-03-26T08:00:00+00:00"])
     ended_at: str | None = Field(default=None)
     duration_seconds: float = Field(..., examples=[7200])
-    credits_consumed: float = Field(..., examples=[2.0])
-    credits_consumed_monthly: float = Field(..., examples=[1.5])
-    credits_consumed_extra: float = Field(..., examples=[0.5])
+    vcpu_hours: float = Field(..., examples=[1.0])
+    memory_gib_hours: float = Field(..., examples=[2.0])
     status: str = Field(..., examples=["active"])
 
 
@@ -540,7 +534,7 @@ class CreateGrantResponse(BaseModel):
 class TierTemplateItem(BaseModel):
     tier: str = Field(..., examples=["pro"])
     compute_credits_monthly: float = Field(..., examples=[100.0])
-    storage_credits_monthly: int = Field(..., examples=[10])
+    storage_capacity_gib: int = Field(..., examples=[10])
     max_concurrent_running: int = Field(..., examples=[3])
     max_sandbox_duration_seconds: int = Field(..., examples=[7200])
     allowed_templates: list[str] = Field(
@@ -558,7 +552,7 @@ class TierTemplateListResponse(BaseModel):
 
 class UpdateTierTemplateRequest(BaseModel):
     compute_credits_monthly: float | None = Field(default=None, examples=[150])
-    storage_credits_monthly: int | None = Field(default=None, examples=[15])
+    storage_capacity_gib: int | None = Field(default=None, examples=[15])
     max_concurrent_running: int | None = Field(default=None, examples=[5])
     max_sandbox_duration_seconds: int | None = Field(default=None, examples=[14400])
     allowed_templates: list[str] | None = Field(
@@ -572,7 +566,7 @@ class UpdateTierTemplateRequest(BaseModel):
     def at_least_one_update(self) -> UpdateTierTemplateRequest:
         updatable = (
             self.compute_credits_monthly,
-            self.storage_credits_monthly,
+            self.storage_capacity_gib,
             self.max_concurrent_running,
             self.max_sandbox_duration_seconds,
             self.grace_period_seconds,

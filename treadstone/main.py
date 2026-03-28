@@ -39,11 +39,12 @@ def custom_generate_unique_id(route: APIRoute) -> str:
 async def _run_metering_loop(session_factory) -> None:
     """Run the periodic metering tick loop for single-process deployments."""
     from treadstone.services.metering_tasks import TICK_INTERVAL, run_metering_tick
+    from treadstone.services.sync_supervisor import _k8s_stop_sandbox
 
     while True:
         await asyncio.sleep(TICK_INTERVAL)
         try:
-            await run_metering_tick(session_factory)
+            await run_metering_tick(session_factory, stop_sandbox_callback=_k8s_stop_sandbox)
         except Exception:
             logger.exception("Metering tick failed")
 

@@ -80,8 +80,8 @@ class SandboxService:
     ) -> Sandbox:
         effective_storage_size = storage_size or settings.sandbox_default_storage_size
 
-        # ── Metering: quota checks (must run before any resource creation) ──
-        if self._metering is not None:
+        # ── Metering: enforcement checks (gated by config) ──
+        if self._metering is not None and settings.metering_enforcement_enabled:
             await self._metering.check_template_allowed(self.session, owner_id, template)
             await self._metering.check_compute_quota(self.session, owner_id)
             await self._metering.check_concurrent_limit(self.session, owner_id)
@@ -294,8 +294,8 @@ class SandboxService:
         if sandbox.status != SandboxStatus.STOPPED:
             raise InvalidTransitionError(sandbox_id, sandbox.status, "ready")
 
-        # ── Metering: quota checks before resuming ──
-        if self._metering is not None:
+        # ── Metering: enforcement checks before resuming (gated by config) ──
+        if self._metering is not None and settings.metering_enforcement_enabled:
             await self._metering.check_compute_quota(self.session, owner_id)
             await self._metering.check_concurrent_limit(self.session, owner_id)
 

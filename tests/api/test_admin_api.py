@@ -26,7 +26,7 @@ async def _seed_tier_templates(session: AsyncSession) -> None:
         TierTemplate(
             tier_name="free",
             compute_credits_monthly=Decimal("10"),
-            storage_credits_monthly=0,
+            storage_capacity_gib=0,
             max_concurrent_running=1,
             max_sandbox_duration_seconds=1800,
             allowed_templates=["aio-sandbox-tiny", "aio-sandbox-small"],
@@ -35,7 +35,7 @@ async def _seed_tier_templates(session: AsyncSession) -> None:
         TierTemplate(
             tier_name="pro",
             compute_credits_monthly=Decimal("100"),
-            storage_credits_monthly=10,
+            storage_capacity_gib=10,
             max_concurrent_running=3,
             max_sandbox_duration_seconds=7200,
             allowed_templates=["aio-sandbox-tiny", "aio-sandbox-small", "aio-sandbox-medium"],
@@ -44,7 +44,7 @@ async def _seed_tier_templates(session: AsyncSession) -> None:
         TierTemplate(
             tier_name="ultra",
             compute_credits_monthly=Decimal("300"),
-            storage_credits_monthly=20,
+            storage_capacity_gib=20,
             max_concurrent_running=5,
             max_sandbox_duration_seconds=28800,
             allowed_templates=["aio-sandbox-tiny", "aio-sandbox-small", "aio-sandbox-medium", "aio-sandbox-large"],
@@ -172,8 +172,8 @@ async def test_update_tier_template_apply_to_existing(admin_client):
     assert data["compute_credits_monthly"] == 200.0
     assert data["users_affected"] >= 1
 
-    usage_resp = await admin_client.get(f"/v1/admin/users/{user_id}/usage")
-    assert usage_resp.json()["compute"]["monthly_limit"] == 200.0
+    plan_resp = await admin_client.get("/v1/usage/plan")
+    assert plan_resp.json()["compute_credits_monthly_limit"] == 200.0
 
 
 async def test_update_tier_template_apply_to_existing_skips_overridden(admin_client):
@@ -191,8 +191,8 @@ async def test_update_tier_template_apply_to_existing_skips_overridden(admin_cli
     assert resp.status_code == 200
     assert resp.json()["users_affected"] == 0
 
-    usage_resp = await admin_client.get(f"/v1/admin/users/{user_id}/usage")
-    assert usage_resp.json()["compute"]["monthly_limit"] == 999.0
+    plan_resp = await admin_client.get("/v1/usage/plan")
+    assert plan_resp.json()["compute_credits_monthly_limit"] == 999.0
 
 
 async def test_update_tier_template_requires_at_least_one_field(admin_client):
@@ -366,10 +366,12 @@ async def test_admin_grant_shows_in_usage(admin_client):
         f"/v1/admin/users/{user_id}/grants",
         json={"credit_type": "compute", "amount": 200, "grant_type": "admin_grant"},
     )
-    resp = await admin_client.get("/v1/usage")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["compute"]["extra_remaining"] >= 200.0
+    grants_resp = await admin_client.get("/v1/usage/grants")
+    assert grants_resp.status_code == 200
+    admin_grants = [
+        g for g in grants_resp.json()["items"] if g["grant_type"] == "admin_grant" and g["credit_type"] == "compute"
+    ]
+    assert any(g["remaining_amount"] >= 200.0 for g in admin_grants)
 
 
 # ── POST /v1/admin/grants/batch ──────────────────────────────────────────────

@@ -258,11 +258,16 @@ async def reconcile(
             elif cr_rv != sandbox.k8s_resource_version:
                 await _update_sync_metadata(session, sandbox.id, cr_rv, message)
 
-    # ── Metering reconciliation: fix mismatches between sessions and sandbox state ──
+    # ── Metering reconciliation: fix mismatches between sessions/ledgers and sandbox state ──
     try:
         await reconcile_metering(session_factory)
     except Exception:
-        logger.exception("Metering reconciliation failed")
+        logger.exception("Compute metering reconciliation failed")
+
+    try:
+        await reconcile_storage_metering(session_factory)
+    except Exception:
+        logger.exception("Storage metering reconciliation failed")
 
     logger.info("Reconciliation complete. %d unmanaged CRs in K8s. list_rv=%s", len(cr_map), list_rv)
     return list_rv
@@ -468,6 +473,67 @@ async def reconcile_metering(
                     logger.exception(
                         "Failed to close compute session %s during reconciliation",
                         cs.id,
+                    )
+
+        await session.commit()
+
+
+async def reconcile_storage_metering(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Check and repair mismatches between StorageLedger and persistent sandboxes.
+
+    Two repair cases:
+      1. persist sandbox (not DELETING) has no ACTIVE StorageLedger → create one
+      2. ACTIVE StorageLedger whose sandbox is deleted/missing → release it
+    """
+    from treadstone.models.metering import StorageLedger, StorageState
+    from treadstone.services.metering_helpers import parse_storage_size_gib
+
+    async with session_factory() as session:
+        # Case 1: persistent sandboxes missing a storage ledger entry
+        persist_result = await session.execute(
+            select(Sandbox).where(
+                Sandbox.persist.is_(True),
+                Sandbox.status != SandboxStatus.DELETING,
+                Sandbox.storage_size.isnot(None),
+            )
+        )
+        for sandbox in persist_result.scalars():
+            ledger_result = await session.execute(
+                select(StorageLedger).where(
+                    StorageLedger.sandbox_id == sandbox.id,
+                    StorageLedger.storage_state == StorageState.ACTIVE,
+                )
+            )
+            if ledger_result.scalar_one_or_none() is None:
+                logger.warning("Persistent sandbox %s has no ACTIVE storage ledger, creating one", sandbox.id)
+                try:
+                    size_gib = parse_storage_size_gib(sandbox.storage_size)
+                    await _metering.record_storage_allocation(session, sandbox.owner_id, sandbox.id, size_gib)
+                except Exception:
+                    logger.exception("Failed to create storage ledger for sandbox %s during reconciliation", sandbox.id)
+
+        # Case 2: ACTIVE ledger entries for deleted/missing sandboxes
+        active_ledgers_result = await session.execute(
+            select(StorageLedger).where(StorageLedger.storage_state == StorageState.ACTIVE)
+        )
+        for ledger in active_ledgers_result.scalars():
+            sandbox = await session.get(Sandbox, ledger.sandbox_id) if ledger.sandbox_id else None
+            if sandbox is None or sandbox.status == SandboxStatus.DELETING:
+                status_desc = sandbox.status if sandbox else "deleted"
+                logger.warning(
+                    "StorageLedger %s for sandbox %s is ACTIVE but sandbox is %s, releasing",
+                    ledger.id,
+                    ledger.sandbox_id,
+                    status_desc,
+                )
+                try:
+                    await _metering.record_storage_release(session, ledger.sandbox_id)
+                except Exception:
+                    logger.exception(
+                        "Failed to release storage ledger %s during reconciliation",
+                        ledger.id,
                     )
 
         await session.commit()

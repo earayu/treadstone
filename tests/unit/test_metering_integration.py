@@ -55,7 +55,7 @@ def _make_plan(tier: str = "pro", **kwargs) -> UserPlan:
         "tier": tier,
         "compute_credits_monthly_limit": Decimal("100"),
         "compute_credits_monthly_used": Decimal("0"),
-        "storage_credits_monthly_limit": 10,
+        "storage_capacity_limit_gib": 10,
         "max_concurrent_running": 3,
         "max_sandbox_duration_seconds": 7200,
         "allowed_templates": ["aio-sandbox-tiny", "aio-sandbox-small", "aio-sandbox-medium"],
@@ -127,7 +127,8 @@ def _mock_metering() -> MeteringService:
 
 
 class TestSandboxServiceCreateWithMetering:
-    async def test_create_runs_all_quota_checks(self):
+    async def test_create_runs_all_quota_checks(self, monkeypatch):
+        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         session = _mock_session()
@@ -142,7 +143,8 @@ class TestSandboxServiceCreateWithMetering:
         metering.check_concurrent_limit.assert_awaited_once()
         metering.check_sandbox_duration.assert_awaited_once()
 
-    async def test_create_persist_checks_storage_quota(self):
+    async def test_create_persist_checks_storage_quota(self, monkeypatch):
+        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         session = _mock_session()
@@ -156,7 +158,8 @@ class TestSandboxServiceCreateWithMetering:
 
         metering.check_storage_quota.assert_awaited_once_with(session, "user1234567890abcd", 5)
 
-    async def test_create_non_persist_skips_storage_check(self):
+    async def test_create_non_persist_skips_storage_check(self, monkeypatch):
+        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         session = _mock_session()
@@ -182,7 +185,8 @@ class TestSandboxServiceCreateWithMetering:
 
         metering.record_storage_allocation.assert_awaited_once_with(session, "user1234567890abcd", result.id, 10)
 
-    async def test_create_template_not_allowed_aborts_early(self):
+    async def test_create_template_not_allowed_aborts_early(self, monkeypatch):
+        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         session = _mock_session()
@@ -199,7 +203,8 @@ class TestSandboxServiceCreateWithMetering:
         session.add.assert_not_called()
         k8s.create_sandbox_claim.assert_not_called()
 
-    async def test_create_compute_quota_exceeded_aborts_early(self):
+    async def test_create_compute_quota_exceeded_aborts_early(self, monkeypatch):
+        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         session = _mock_session()
@@ -213,7 +218,8 @@ class TestSandboxServiceCreateWithMetering:
 
         session.add.assert_not_called()
 
-    async def test_create_concurrent_limit_exceeded_aborts_early(self):
+    async def test_create_concurrent_limit_exceeded_aborts_early(self, monkeypatch):
+        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         session = _mock_session()
@@ -227,7 +233,8 @@ class TestSandboxServiceCreateWithMetering:
 
         session.add.assert_not_called()
 
-    async def test_create_storage_quota_exceeded_aborts_early(self):
+    async def test_create_storage_quota_exceeded_aborts_early(self, monkeypatch):
+        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         session = _mock_session()
@@ -243,7 +250,8 @@ class TestSandboxServiceCreateWithMetering:
 
         session.add.assert_not_called()
 
-    async def test_create_duration_exceeded_raises(self):
+    async def test_create_duration_exceeded_raises(self, monkeypatch):
+        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         session = _mock_session()
@@ -259,7 +267,8 @@ class TestSandboxServiceCreateWithMetering:
                 auto_stop_interval=60,
             )
 
-    async def test_create_auto_stop_disabled_skips_duration_check(self):
+    async def test_create_auto_stop_disabled_skips_duration_check(self, monkeypatch):
+        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         session = _mock_session()
@@ -288,7 +297,8 @@ class TestSandboxServiceCreateWithMetering:
 
 
 class TestSandboxServiceStartWithMetering:
-    async def test_start_runs_quota_checks(self):
+    async def test_start_runs_quota_checks(self, monkeypatch):
+        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         sb = _make_sandbox(status=SandboxStatus.STOPPED)
@@ -302,7 +312,8 @@ class TestSandboxServiceStartWithMetering:
         metering.check_compute_quota.assert_awaited_once()
         metering.check_concurrent_limit.assert_awaited_once()
 
-    async def test_start_compute_quota_exceeded_aborts(self):
+    async def test_start_compute_quota_exceeded_aborts(self, monkeypatch):
+        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         sb = _make_sandbox(status=SandboxStatus.STOPPED)
@@ -581,7 +592,8 @@ class TestReconcileMetering:
             sandbox_id=stopped_sandbox.id,
             user_id=stopped_sandbox.owner_id,
             template="aio-sandbox-small",
-            credit_rate_per_hour=Decimal("0.5"),
+            vcpu_request=Decimal("0.5"),
+            memory_gib_request=Decimal("1"),
             started_at=FIXED_NOW,
             last_metered_at=FIXED_NOW,
         )
@@ -624,7 +636,8 @@ class TestReconcileMetering:
             sandbox_id="sb_deleted",
             user_id="user01",
             template="aio-sandbox-small",
-            credit_rate_per_hour=Decimal("0.5"),
+            vcpu_request=Decimal("0.5"),
+            memory_gib_request=Decimal("1"),
             started_at=FIXED_NOW,
             last_metered_at=FIXED_NOW,
         )

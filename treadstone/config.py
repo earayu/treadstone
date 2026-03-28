@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     sandbox_storage_class: str = "treadstone-workspace"
     sandbox_default_storage_size: Literal["5Gi", "10Gi", "20Gi"] = "5Gi"
 
+    # Metering — enforcement (quota checks) can be disabled independently of recording
+    metering_enforcement_enabled: bool = False
+
     # Leader election for singleton background sync tasks in multi-replica deploys
     leader_election_enabled: bool = False
     leader_election_lease_name: str = "treadstone-sync-leader"
