@@ -9,6 +9,10 @@
 - 给普通用户提供 usage 视图
 - 给管理员提供 plan / grant / tier template 管理接口
 
+如果需要一份面向上线前审计、严格按当前代码逐项核对的超详细报告，见：
+
+- [`05-metering-system-audit.md`](./05-metering-system-audit.md)
+
 当前实现主要位于：
 
 - `treadstone/models/metering.py`
@@ -148,4 +152,3 @@
 - 真正的 Billing 系统闭环
 
 因此当前文档把这一块描述为“计量与运营基础设施”，而不是“已完成的商业计费系统”。
-
