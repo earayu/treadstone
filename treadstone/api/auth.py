@@ -389,6 +389,7 @@ def _serialize_api_key_summary(api_key: ApiKey) -> dict:
     return {
         "id": api_key.id,
         "name": api_key.name,
+        "is_enabled": api_key.is_enabled,
         "key_prefix": api_key.key_preview,
         "created_at": api_key.gmt_created,
         "updated_at": api_key.gmt_updated,
@@ -1081,6 +1082,7 @@ async def create_api_key(
     return {
         "id": api_key.id,
         "name": api_key.name,
+        "is_enabled": api_key.is_enabled,
         "key": key_value,
         "created_at": api_key.gmt_created,
         "updated_at": api_key.gmt_updated,
@@ -1123,6 +1125,9 @@ async def update_api_key(
 
     if body.name is not None:
         api_key.name = body.name
+
+    if body.is_enabled is not None:
+        api_key.is_enabled = body.is_enabled
 
     if body.expires_in is not None:
         api_key.gmt_expires = utc_now() + timedelta(seconds=body.expires_in)

@@ -31,6 +31,7 @@ class ApiKey(Base):
     key_preview: Mapped[str] = mapped_column(String(16), nullable=False)
     name: Mapped[str] = mapped_column(String(256), nullable=False, default="default")
     user_id: Mapped[str] = mapped_column(String(24), ForeignKey("user.id", ondelete="cascade"), nullable=False)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     control_plane_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     data_plane_mode: Mapped[str] = mapped_column(String(16), nullable=False, default=ApiKeyDataPlaneMode.ALL.value)
     gmt_created: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)

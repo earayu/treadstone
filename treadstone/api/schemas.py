@@ -284,6 +284,7 @@ class CreateApiKeyRequest(BaseModel):
 
 class UpdateApiKeyRequest(BaseModel):
     name: str | None = Field(default=None, examples=["renamed-key"])
+    is_enabled: bool | None = Field(default=None, examples=[True], description="Enable or disable the API key.")
     expires_in: int | None = Field(
         default=None,
         ge=1,
@@ -298,7 +299,13 @@ class UpdateApiKeyRequest(BaseModel):
     def validate_patch_request(self) -> UpdateApiKeyRequest:
         if self.expires_in is not None and self.clear_expiration:
             raise ValueError("expires_in and clear_expiration cannot be used together.")
-        if self.name is None and self.expires_in is None and not self.clear_expiration and self.scope is None:
+        if (
+            self.name is None
+            and self.is_enabled is None
+            and self.expires_in is None
+            and not self.clear_expiration
+            and self.scope is None
+        ):
             raise ValueError("At least one field must be provided.")
         return self
 
@@ -306,6 +313,7 @@ class UpdateApiKeyRequest(BaseModel):
 class ApiKeyResponse(BaseModel):
     id: str = Field(..., examples=["key-abc123def456"])
     name: str = Field(..., examples=["my-api-key"])
+    is_enabled: bool = Field(..., examples=[True])
     key: str = Field(..., examples=["sk-0123456789abcdef0123456789abcdef01234567"])
     created_at: datetime = Field(..., examples=["2026-03-21T12:00:00+00:00"])
     updated_at: datetime = Field(..., examples=["2026-03-21T12:00:00+00:00"])
@@ -316,6 +324,7 @@ class ApiKeyResponse(BaseModel):
 class ApiKeySummary(BaseModel):
     id: str = Field(..., examples=["key-abc123def456"])
     name: str = Field(..., examples=["my-api-key"])
+    is_enabled: bool = Field(..., examples=[True])
     key_prefix: str = Field(..., examples=["sk-0123...cdef"])
     created_at: datetime = Field(..., examples=["2026-03-21T12:00:00+00:00"])
     updated_at: datetime = Field(..., examples=["2026-03-21T12:00:00+00:00"])

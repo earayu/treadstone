@@ -48,7 +48,7 @@ async def _authenticate_api_key_value(session: AsyncSession, secret: str) -> tup
         )
     )
     api_key = result.scalar_one_or_none()
-    if api_key is None or api_key.is_expired():
+    if api_key is None or api_key.is_expired() or not api_key.is_enabled:
         return None
     user = await _get_active_user(session, api_key.user_id)
     if user is None:
