@@ -154,7 +154,7 @@ export function ApiKeysPage() {
 
   async function handleToggleEnabled(id: string, currentlyEnabled: boolean) {
     try {
-      await updateKey.mutateAsync({ id, body: { is_enabled: !currentlyEnabled } })
+      await updateKey.mutateAsync({ id, body: { is_enabled: !currentlyEnabled, clear_expiration: false } })
       toast.success(currentlyEnabled ? "API key disabled." : "API key enabled.")
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to update key.")
