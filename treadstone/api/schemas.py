@@ -476,6 +476,24 @@ class ComputeSessionListResponse(BaseModel):
     offset: int = Field(..., examples=[0])
 
 
+class StorageLedgerItem(BaseModel):
+    id: str = Field(..., examples=["slabc123def456"])
+    sandbox_id: str | None = Field(default=None, examples=["sbabc123def456"])
+    size_gib: int = Field(..., examples=[10])
+    storage_state: str = Field(..., examples=["active"])
+    allocated_at: str = Field(..., examples=["2026-03-26T08:00:00+00:00"])
+    released_at: str | None = Field(default=None)
+    gib_hours_consumed: float = Field(..., examples=[120.0])
+    last_metered_at: str = Field(..., examples=["2026-03-26T09:00:00+00:00"])
+
+
+class StorageLedgerListResponse(BaseModel):
+    items: list[StorageLedgerItem]
+    total: int = Field(..., examples=[5])
+    limit: int = Field(..., examples=[20])
+    offset: int = Field(..., examples=[0])
+
+
 class ComputeGrantItem(BaseModel):
     id: str = Field(..., examples=["cgabc123def456"])
     grant_type: str = Field(..., examples=["admin_grant"])
