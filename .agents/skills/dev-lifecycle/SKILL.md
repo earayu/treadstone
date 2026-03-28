@@ -93,7 +93,7 @@ If CI fails:
 ```bash
 gh run view <run-id> --log-failed   # inspect failure
 make test                           # reproduce locally
-make lint                           # check formatting
+make lint                           # run repo lint checks
 ```
 
 Fix, then `make ship MSG="fix: ..."` to push the fix.

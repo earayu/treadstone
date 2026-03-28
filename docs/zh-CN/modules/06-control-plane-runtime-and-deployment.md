@@ -128,7 +128,8 @@
 
 本地开发常用入口：
 
-- `make dev`
+- `make dev-api`
+- `make dev-web`
 - `make test`
 - `make lint`
 - `make migrate`
@@ -156,4 +157,3 @@
 - 支付与账单系统
 
 这些主题在历史文档里存在，但不再属于当前控制面运行时文档的范围。
-

@@ -4,16 +4,17 @@ This document describes how to deploy Treadstone to Kubernetes and perform basic
 
 ## Architecture Overview
 
-The deployment consists of four layers of Helm charts, ordered by dependency from bottom to top:
+The deployment consists of five layers of Helm charts, ordered by dependency from bottom to top:
 
 | Layer | Chart | Description |
 |-------|-------|-------------|
 | Storage | `deploy/cluster-storage` | Cluster-scoped StorageClass aliases for persistent sandbox workspaces |
 | Infra | `deploy/agent-sandbox` | Sandbox CRD + controller (cluster-scoped, deploy once) |
 | Runtime | `deploy/sandbox-runtime` | SandboxTemplate + WarmPool (namespace-scoped) |
-| App | `deploy/treadstone` | FastAPI application + Ingress + RBAC + Migration Job |
+| API | `deploy/treadstone` | FastAPI API service + Ingress + RBAC + Migration Job |
+| Web | `deploy/treadstone-web` | React web frontend + Service + Ingress |
 
-The app/runtime layers use the `ENV` variable (`local`, `demo`, `prod`). Cluster storage uses `CLUSTER_PROFILE`
+The API/web/runtime layers use the `ENV` variable (`local`, `demo`, `prod`). Cluster storage uses `CLUSTER_PROFILE`
 (`local`, `ack`, `aws`) because `StorageClass` resources are cluster-scoped rather than namespace-scoped.
 
 ## Prerequisites
@@ -49,7 +50,7 @@ For OAuth provider setup, register callback URLs that match the current environm
 
 ### Local Environment
 
-`make up` automatically handles: creating the Kind cluster → installing ingress-nginx → building the image → loading the image into the cluster → deploying all Helm charts.
+`make up` automatically handles: creating the Kind cluster → installing ingress-nginx → building the API and web images → loading them into the cluster → deploying all Helm charts.
 
 ```bash
 make up              # Equivalent to make up ENV=local
@@ -84,7 +85,7 @@ The cluster configuration is located at `deploy/kind/kind-config.yaml`: 1 contro
 ### 2. Build and Load Images (local only)
 
 ```bash
-make image
+make image-api
 kind load docker-image treadstone:latest --name treadstone
 make image-web
 kind load docker-image treadstone-web:latest --name treadstone
@@ -102,10 +103,11 @@ This is equivalent to running in sequence:
 make deploy-storage CLUSTER_PROFILE=local  # StorageClass aliases (cluster-scoped)
 make deploy-infra ENV=local     # Sandbox CRD + controller
 make deploy-runtime ENV=local   # SandboxTemplate + WarmPool
-make deploy-app ENV=local       # App + Secret + Migration
+make deploy-api ENV=local       # API + Secret + Migration
+make deploy-web ENV=local       # Web frontend
 ```
 
-`deploy-app` automatically creates a K8s Secret (`treadstone-secrets`) from `.env.local`, and runs the database migration in a Helm pre-install/pre-upgrade hook.
+`deploy-api` automatically creates a K8s Secret (`treadstone-secrets`) from `.env.local`, and runs the database migration in a Helm pre-install/pre-upgrade hook.
 Persistent sandboxes use `TREADSTONE_SANDBOX_STORAGE_CLASS` from the environment file and default to a 5 GiB workspace.
 
 ### 4. Verify Deployment
@@ -129,7 +131,7 @@ curl http://localhost/health
 ### Via port-forward (alternative)
 
 ```bash
-make port-forward
+make port-forward-api
 # Access http://localhost:8000 in another terminal
 curl http://localhost:8000/health
 ```
@@ -206,11 +208,11 @@ curl -s -X DELETE $BASE_URL/v1/sandboxes/{sandbox_id} \
 
 ```bash
 # local environment
-make image
+make image-api
 kind load docker-image treadstone:latest --name treadstone
 make image-web
 kind load docker-image treadstone-web:latest --name treadstone
-make restart-app
+make restart-api
 
 # Or run make up to redo the full flow
 ```
@@ -218,8 +220,8 @@ make restart-app
 ### Uninstall
 
 ```bash
-make undeploy-app                  # Uninstall app only
-make undeploy-all                  # Uninstall app + runtime (keep shared infra + storage)
+make undeploy-api                  # Uninstall API only
+make undeploy-env                  # Uninstall API + web + runtime (keep shared infra + storage)
 make down                          # Tear down everything (including Kind cluster in local)
 ```
 
@@ -234,7 +236,8 @@ make kind-delete
 | Config | local | demo | prod |
 |--------|-------|------|------|
 | K8s Namespace | `treadstone-local` | `treadstone-demo` | `treadstone-prod` |
-| Helm release (app) | `treadstone-local` | `treadstone-demo` | `treadstone-prod` |
+| Helm release (api) | `treadstone-local` | `treadstone-demo` | `treadstone-prod` |
+| Helm release (web) | `treadstone-web-local` | `treadstone-web-demo` | `treadstone-web-prod` |
 | Helm release (runtime) | `sandbox-runtime-local` | `sandbox-runtime-demo` | `sandbox-runtime-prod` |
 | Image source | Local build | `ghcr.io/earayu/treadstone` | Specified by CI/CD |
 | Replicas | 1 | 1 | 2 |
@@ -264,7 +267,7 @@ with the ACM certificate ARN for `api.treadstone-ai.dev`.
 | Templates API returns `python-dev` / `nodejs-dev` | `TREADSTONE_DEBUG=true` in `.env` | Set to `false` and recreate the Secret |
 | API returns 500 + `column "xxx" does not exist` | Database is missing new columns | Migration Job should run automatically; manual fix: `kubectl -n treadstone-<ENV> exec deploy/treadstone-<ENV>-treadstone -- uv run alembic upgrade head` |
 | Pod stuck not Ready | Image pull failure | For local: run `kind load docker-image` first; for remote: check image registry permissions |
-| `curl localhost` connection refused | ingress-nginx not ready or port conflict | Rebuild cluster with `make kind-delete && make kind-create`, or use `make port-forward` |
+| `curl localhost` connection refused | ingress-nginx not ready or port conflict | Rebuild cluster with `make kind-delete && make kind-create`, or use `make port-forward-api` |
 | 403 Forbidden in pod logs | Insufficient RBAC permissions | Confirm the Helm chart deployed ClusterRole + ClusterRoleBinding |
 | Sandbox Pod in CrashLoopBackOff | Kind cannot pull sandbox image | `docker pull <image> && kind load docker-image <image> --name treadstone` |
 
@@ -274,13 +277,14 @@ with the ACM certificate ARN for `api.treadstone-ai.dev`.
 make help              # List all available commands
 make kind-create       # Create Kind cluster
 make kind-delete       # Delete Kind cluster
-make image             # Build backend Docker image
+make image-api         # Build API Docker image
 make image-web         # Build frontend Docker image
-make deploy-all        # Deploy all layers (infra + runtime + app)
-make deploy-app        # Deploy app only
-make restart-app       # Rolling restart
-make port-forward      # Forward port to localhost:8000
-make undeploy-all      # Uninstall app + runtime
+make deploy-all        # Deploy all layers (storage + infra + runtime + api + web)
+make deploy-api        # Deploy API only
+make deploy-web        # Deploy web only
+make restart-api       # Rolling restart for the API
+make port-forward-api  # Forward the API to localhost:8000
+make undeploy-env      # Uninstall namespace-scoped layers
 make test-e2e          # Run E2E tests against deployed service
 make up                # One-command deploy (includes cluster creation for local)
 make down              # One-command teardown

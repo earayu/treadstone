@@ -1,30 +1,52 @@
-.PHONY: help install install-hooks dev test test-unit test-api test-integration test-all test-e2e test-cov lint format migrate migration downgrade gen-openapi image image-web clean ship bump release up down deploy-storage deploy-infra deploy-runtime deploy-app deploy-web deploy-all undeploy-storage undeploy-app undeploy-web undeploy-runtime undeploy-all restart-app kind-create kind-delete port-forward dev-web lint-web build-web
+.PHONY: \
+	help \
+	install install-py install-web install-hooks \
+	dev-api dev-web \
+	test test-unit test-api test-integration test-all test-e2e test-cov \
+	lint lint-py lint-web format-py \
+	migrate migration downgrade \
+	gen-openapi gen-web-types gen-sdk-python gen-clients \
+	build-web \
+	image-api image-web \
+	clean clean-py clean-web \
+	deploy-storage deploy-infra deploy-runtime deploy-api deploy-web deploy-all \
+	undeploy-storage undeploy-infra undeploy-runtime undeploy-api undeploy-web undeploy-env \
+	restart-api port-forward-api \
+	up down kind-create kind-delete \
+	ship bump release
 
 # ── Development ──────────────────────────────────────────────────────────────
 
 help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-install: install-hooks ## Install dependencies (first time setup)
+install: install-py install-web install-hooks ## Install repo dependencies and hooks (first time setup)
+
+install-py: ## Install Python dependencies
 	uv sync
 	@echo "✓ Dependencies installed. Copy .env.example to .env and fill in your Neon connection string."
+
+install-web: ## Install web dependencies
+	cd web && pnpm install --frozen-lockfile
 
 install-hooks: ## Install git hooks (auto-called by install)
 	git config core.hooksPath .githooks
 	@echo "✓ Git hooks installed (.githooks/)"
 
-dev: ## Start local dev server with hot reload
+dev-api: ## Start local API dev server with hot reload
 	uv run uvicorn treadstone.main:app --reload --host 0.0.0.0 --port 8000
 
 # ── Code Quality ─────────────────────────────────────────────────────────────
 
-lint: ## Run linter and formatter check
+lint: lint-py lint-web ## Run all lint checks
+
+lint-py: ## Run Python lint and format checks
 	uv run ruff check treadstone/ tests/
 	uv run ruff format --check treadstone/ tests/
 	uv run ruff check --config cli/pyproject.toml cli/treadstone_cli/
 	uv run ruff format --check --config cli/pyproject.toml cli/treadstone_cli/
 
-format: ## Auto-format code
+format-py: ## Auto-format Python code
 	uv run ruff check --fix treadstone/ tests/
 	uv run ruff format treadstone/ tests/
 	uv run ruff check --fix --config cli/pyproject.toml cli/treadstone_cli/
@@ -70,22 +92,24 @@ downgrade: ## Rollback last migration
 gen-openapi: ## Export openapi.json from FastAPI app (no server needed)
 	uv run python scripts/export_openapi.py
 
-gen-ts-types: gen-openapi ## Generate TypeScript types from OpenAPI spec
+gen-web-types: gen-openapi ## Generate web TypeScript types from OpenAPI spec
 	cd web && npx openapi-typescript ../openapi.json -o src/api/schema.d.ts
 
-gen-sdk: gen-openapi ## Generate Python SDK from OpenAPI spec
+gen-sdk-python: gen-openapi ## Generate Python SDK from OpenAPI spec
 	openapi-python-client generate \
 		--path openapi.json \
 		--config openapi-client-config.yaml \
 		--output-path sdk/python \
 		--overwrite
 
+gen-clients: gen-web-types gen-sdk-python ## Generate all client artifacts
+
 # ── Web Frontend ─────────────────────────────────────────────────────────────
 
 dev-web: ## Start Vite dev server (localhost:5173, hot reload)
 	cd web && pnpm dev
 
-lint-web: ## Lint and type-check frontend
+lint-web: ## Run frontend lint checks
 	cd web && pnpm lint
 
 build-web: ## Build frontend for production
@@ -93,17 +117,22 @@ build-web: ## Build frontend for production
 
 # ── Docker Images ────────────────────────────────────────────────────────────
 
-image: ## Build backend Docker image
+image-api: ## Build API Docker image
 	docker build -t treadstone:latest .
 
 image-web: ## Build frontend Docker image
 	docker build -t treadstone-web:latest web/
 
-clean: ## Remove build artifacts and caches
+clean: clean-py clean-web ## Remove build artifacts and caches
+
+clean-py: ## Remove Python build artifacts and caches
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name .pytest_cache -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name .ruff_cache -exec rm -rf {} + 2>/dev/null || true
 	rm -rf dist/ build/ *.egg-info/ htmlcov/
+
+clean-web: ## Remove web build artifacts
+	rm -rf web/dist web/.vite
 
 # ── Deploy (Helm) ────────────────────────────────────────────────────────────
 
@@ -115,7 +144,7 @@ CLUSTER_PROFILE ?= $(if $(filter local,$(ENV)),local,ack)
 # Every environment gets its own namespace and Helm release name:
 # local → treadstone-local, demo → treadstone-demo, prod → treadstone-prod
 NS              := treadstone-$(ENV)
-APP_RELEASE     := treadstone-$(ENV)
+API_RELEASE     := treadstone-$(ENV)
 WEB_RELEASE     := treadstone-web-$(ENV)
 RT_RELEASE      := sandbox-runtime-$(ENV)
 STORAGE_NS      := cluster-storage-system
@@ -136,7 +165,7 @@ deploy-runtime: ## Deploy sandbox templates + warmpool
 		-n $(NS) -f deploy/sandbox-runtime/values-$(ENV).yaml \
 		--create-namespace
 
-deploy-app: ## Deploy Treadstone application (creates K8s secret from .env.<ENV>)
+deploy-api: ## Deploy Treadstone API service (creates K8s secret from .env.<ENV>)
 	@ENV_FILE=".env.$(ENV)"; \
 	if [ ! -f "$$ENV_FILE" ]; then \
 		echo "Error: $$ENV_FILE not found. Run: cp .env.example .env.$(ENV)"; \
@@ -147,7 +176,7 @@ deploy-app: ## Deploy Treadstone application (creates K8s secret from .env.<ENV>
 		-n $(NS) \
 		--from-env-file="$$ENV_FILE" \
 		--dry-run=client -o yaml | kubectl apply -f -
-	helm upgrade --install $(APP_RELEASE) deploy/treadstone \
+	helm upgrade --install $(API_RELEASE) deploy/treadstone \
 		-n $(NS) -f deploy/treadstone/values-$(ENV).yaml \
 		--create-namespace
 
@@ -156,19 +185,22 @@ deploy-web: ## Deploy Treadstone Web UI frontend
 		-n $(NS) -f deploy/treadstone-web/values-$(ENV).yaml \
 		--create-namespace
 
-deploy-all: deploy-storage deploy-infra deploy-runtime deploy-app deploy-web ## Deploy everything (storage → infra → runtime → app → web)
+deploy-all: deploy-storage deploy-infra deploy-runtime deploy-api deploy-web ## Deploy all layers (storage → infra → runtime → api → web)
 
-restart-app: ## Rolling restart to pick up new env vars
-	kubectl rollout restart deployment/$(APP_RELEASE)-treadstone -n $(NS)
+restart-api: ## Rolling restart for the API deployment
+	kubectl rollout restart deployment/$(API_RELEASE)-treadstone -n $(NS)
 
-port-forward: ## Port-forward treadstone service to localhost:8000
-	kubectl -n $(NS) port-forward svc/$(APP_RELEASE)-treadstone 8000:8000
+port-forward-api: ## Port-forward the API service to localhost:8000
+	kubectl -n $(NS) port-forward svc/$(API_RELEASE)-treadstone 8000:8000
 
 undeploy-storage: ## Undeploy cluster-scoped storage aliases (use with care on shared clusters)
 	helm uninstall $(STORAGE_RELEASE) -n $(STORAGE_NS) 2>/dev/null || true
 
-undeploy-app: ## Undeploy Treadstone application
-	helm uninstall $(APP_RELEASE) -n $(NS) 2>/dev/null || true
+undeploy-infra: ## Undeploy agent-sandbox controller
+	helm uninstall agent-sandbox 2>/dev/null || true
+
+undeploy-api: ## Undeploy Treadstone API service
+	helm uninstall $(API_RELEASE) -n $(NS) 2>/dev/null || true
 
 undeploy-web: ## Undeploy Treadstone Web UI frontend
 	helm uninstall $(WEB_RELEASE) -n $(NS) 2>/dev/null || true
@@ -176,7 +208,7 @@ undeploy-web: ## Undeploy Treadstone Web UI frontend
 undeploy-runtime: ## Undeploy sandbox runtime
 	helm uninstall $(RT_RELEASE) -n $(NS) 2>/dev/null || true
 
-undeploy-all: undeploy-app undeploy-web undeploy-runtime ## Undeploy app + web + runtime (keeps shared infra + storage)
+undeploy-env: undeploy-api undeploy-web undeploy-runtime ## Undeploy namespace-scoped layers (keeps shared infra + storage)
 	@echo "Note: agent-sandbox controller and cluster-storage are left in place."
 	@echo "Remove manually only if the cluster is dedicated to Treadstone."
 
