@@ -231,6 +231,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/set-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set Password */
+        post: operations["auth-set_password"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/users/{user_id}": {
         parameters: {
             query?: never;
@@ -338,6 +355,26 @@ export interface paths {
          * @description Exchange an approved CLI login flow for a session token.
          */
         post: operations["auth-exchange_cli_flow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/cli/flows/{flow_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Cli Flow
+         * @description Approve a pending CLI login flow using the current browser session.
+         */
+        post: operations["auth-approve_cli_flow"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1330,22 +1367,6 @@ export interface components {
              */
             password: string;
         };
-        /** RegisterResponse */
-        RegisterResponse: {
-            /**
-             * Id
-             * @example usr-abc123def456
-             */
-            id: string;
-            /**
-             * Email
-             * Format: email
-             * @example user@example.com
-             */
-            email: string;
-            /** @example admin */
-            role: components["schemas"]["Role"];
-        };
         /** ResourceSpec */
         ResourceSpec: {
             /**
@@ -1592,6 +1613,14 @@ export interface components {
              * @example null
              */
             last_used_at?: string | null;
+        };
+        /** SetPasswordRequest */
+        SetPasswordRequest: {
+            /**
+             * New Password
+             * @example NewPass456!
+             */
+            new_password: string;
         };
         /** StorageUsage */
         StorageUsage: {
@@ -1896,6 +1925,11 @@ export interface components {
              * @example true
              */
             is_active: boolean;
+            /**
+             * Has Local Password
+             * @example true
+             */
+            has_local_password: boolean;
         };
         /** UserListResponse */
         UserListResponse: {
@@ -2333,7 +2367,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RegisterResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -2411,6 +2445,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ChangePasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "auth-set_password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPasswordRequest"];
             };
         };
         responses: {
@@ -2653,6 +2720,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "auth-approve_cli_flow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                flow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
                 };
             };
             /** @description Validation Error */

@@ -6,6 +6,7 @@ def test_user_fields_exist():
     assert hasattr(u, "id")
     assert hasattr(u, "email")
     assert hasattr(u, "hashed_password")
+    assert hasattr(u, "has_local_password")
     assert hasattr(u, "role")
     assert hasattr(u, "is_active")
     assert hasattr(u, "is_superuser")

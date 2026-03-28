@@ -207,6 +207,7 @@ class RegisterResponse(UserResponse):
 class UserDetailResponse(UserResponse):
     username: str | None = Field(default=None, examples=["alice"])
     is_active: bool = Field(..., examples=[True])
+    has_local_password: bool = Field(..., examples=[True])
 
 
 class UserListResponse(BaseModel):
@@ -216,6 +217,10 @@ class UserListResponse(BaseModel):
 
 class ChangePasswordRequest(BaseModel):
     old_password: str = Field(..., examples=["OldPass123!"])
+    new_password: str = Field(..., examples=["NewPass456!"])
+
+
+class SetPasswordRequest(BaseModel):
     new_password: str = Field(..., examples=["NewPass456!"])
 
 

@@ -27,6 +27,7 @@ from treadstone.api.schemas import (
     LoginResponse,
     MessageResponse,
     RegisterRequest,
+    SetPasswordRequest,
     UpdateApiKeyRequest,
     UserDetailResponse,
     UserListResponse,
@@ -297,6 +298,8 @@ async def authenticate_email_password(session: AsyncSession, email: str, passwor
 
     if user is None or not user.is_active:
         raise BadRequestError("Invalid email or password")
+    if not user.has_local_password:
+        raise BadRequestError("Invalid email or password")
 
     ph = PasswordHelper()
     valid, _ = ph.verify_and_update(password, user.hashed_password)
@@ -484,6 +487,7 @@ async def register(
     user = User(
         email=body.email,
         hashed_password=hashed,
+        has_local_password=True,
         is_active=True,
         is_superuser=(role == Role.ADMIN),
         is_verified=True,
@@ -744,6 +748,7 @@ async def get_user(current_user: User = Depends(get_current_control_plane_user))
         "username": current_user.username,
         "role": current_user.role,
         "is_active": current_user.is_active,
+        "has_local_password": current_user.has_local_password,
     }
 
 
@@ -771,6 +776,9 @@ async def change_password(
     current_user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
 ):
+    if not current_user.has_local_password:
+        raise BadRequestError("This account does not have a local password yet. Use set-password.")
+
     ph = PasswordHelper()
     valid, _ = ph.verify_and_update(body.old_password, current_user.hashed_password)
     if not valid:
@@ -789,6 +797,35 @@ async def change_password(
     )
     await session.commit()
     return {"detail": "Password changed"}
+
+
+@router.post("/set-password", response_model=MessageResponse)
+async def set_password(
+    request: Request,
+    body: SetPasswordRequest,
+    current_user: User = Depends(get_current_control_plane_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if current_user.has_local_password:
+        raise BadRequestError("This account already has a local password. Use change-password.")
+
+    user = await session.get(User, current_user.id)
+    if not user:
+        raise NotFoundError("User", current_user.id)
+
+    ph = PasswordHelper()
+    user.hashed_password = ph.hash(body.new_password)
+    user.has_local_password = True
+    session.add(user)
+    await record_audit_event(
+        session,
+        action="auth.password.set",
+        target_type="user",
+        target_id=user.id,
+        request=request,
+    )
+    await session.commit()
+    return {"detail": "Password set"}
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
