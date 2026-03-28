@@ -139,6 +139,17 @@ def test_root_help_uses_system_group_and_drops_top_level_health(runner: CliRunne
     assert "No such command 'health'" in missing_alias.output
 
 
+def test_root_help_surfaces_common_nested_commands(runner: CliRunner) -> None:
+    result = runner.invoke(cli, ["--help"])
+
+    assert result.exit_code == 0
+    assert "Command tree:" in result.output
+    assert "auth login" in result.output
+    assert "config get" in result.output
+    assert "sandboxes create" in result.output
+    assert "sandboxes web enable" in result.output
+
+
 def test_guide_agent_matches_skills_flag(runner: CliRunner) -> None:
     guide_result = runner.invoke(cli, ["guide", "agent"])
     skills_result = runner.invoke(cli, ["--skills"])
@@ -282,6 +293,53 @@ def test_sandboxes_create_supports_auto_intervals(
     assert json.loads(result.output)["id"] == "sb-1"
 
 
+def test_sandboxes_create_uses_builtin_default_template_when_omitted(
+    runner: CliRunner,
+    cli_state: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _client.save_session(_client._DEFAULT_BASE_URL, "sess-123")
+    requests: list[dict[str, Any]] = []
+
+    def create_handler(request: dict[str, Any]) -> FakeResponse:
+        assert request["json"]["template"] == "aio-sandbox-tiny"
+        return FakeResponse({"id": "sb-default", "name": "demo", "template": request["json"]["template"]})
+
+    routes = {
+        ("POST", "/v1/sandboxes"): create_handler,
+    }
+    monkeypatch.setattr(_client.httpx, "Client", make_fake_client(routes, requests))
+
+    result = runner.invoke(cli, ["--json", "sandboxes", "create", "--name", "demo"])
+
+    assert result.exit_code == 0
+    assert json.loads(result.output)["template"] == "aio-sandbox-tiny"
+
+
+def test_sandboxes_create_uses_configured_default_template_when_omitted(
+    runner: CliRunner,
+    cli_state: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _client.save_session(_client._DEFAULT_BASE_URL, "sess-123")
+    _client.set_config_value("default_template", "aio-sandbox-medium")
+    requests: list[dict[str, Any]] = []
+
+    def create_handler(request: dict[str, Any]) -> FakeResponse:
+        assert request["json"]["template"] == "aio-sandbox-medium"
+        return FakeResponse({"id": "sb-config", "name": "demo", "template": request["json"]["template"]})
+
+    routes = {
+        ("POST", "/v1/sandboxes"): create_handler,
+    }
+    monkeypatch.setattr(_client.httpx, "Client", make_fake_client(routes, requests))
+
+    result = runner.invoke(cli, ["--json", "sandboxes", "create", "--name", "demo"])
+
+    assert result.exit_code == 0
+    assert json.loads(result.output)["template"] == "aio-sandbox-medium"
+
+
 def test_sandboxes_list_accepts_multiple_labels(
     runner: CliRunner,
     cli_state: Path,
@@ -303,6 +361,24 @@ def test_sandboxes_list_accepts_multiple_labels(
         cli,
         ["--json", "sandboxes", "list", "--label", "env:dev", "--label", "team:agent"],
     )
+
+    assert result.exit_code == 0
+    assert json.loads(result.output)["total"] == 0
+
+
+def test_sandboxes_group_defaults_to_list(
+    runner: CliRunner,
+    cli_state: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _client.save_session(_client._DEFAULT_BASE_URL, "sess-123")
+    requests: list[dict[str, Any]] = []
+    routes = {
+        ("GET", "/v1/sandboxes"): FakeResponse({"items": [], "total": 0}),
+    }
+    monkeypatch.setattr(_client.httpx, "Client", make_fake_client(routes, requests))
+
+    result = runner.invoke(cli, ["--json", "sandboxes"])
 
     assert result.exit_code == 0
     assert json.loads(result.output)["total"] == 0
@@ -346,6 +422,17 @@ def test_sandboxes_web_commands_cover_enable_status_disable(
     assert json.loads(enable_result.output)["open_link"].endswith("token=abc")
     assert json.loads(status_result.output)["enabled"] is True
     assert json.loads(disable_result.output)["sandbox_id"] == "sb-123"
+
+
+def test_config_group_defaults_to_get(runner: CliRunner, cli_state: Path) -> None:
+    _client.set_config_value("base_url", "https://example.com")
+    _client.set_config_value("default_template", "aio-sandbox-medium")
+
+    result = runner.invoke(cli, ["config"])
+
+    assert result.exit_code == 0
+    assert "base_url = https://example.com" in result.output
+    assert "default_template = aio-sandbox-medium" in result.output
 
 
 # ── CLI browser OAuth login flow tests ──────────────────────────

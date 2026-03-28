@@ -4,30 +4,44 @@ from __future__ import annotations
 
 import click
 
-from treadstone_cli._client import require_auth
+from treadstone_cli._client import get_default_template, require_auth
 from treadstone_cli._output import handle_error, is_json_mode, print_detail, print_json, print_table
 
 _STORAGE_SIZE_CHOICES = ("5Gi", "10Gi", "20Gi")
 
 
-@click.group()
-def sandboxes() -> None:
+@click.group(invoke_without_command=True)
+@click.pass_context
+def sandboxes(ctx: click.Context) -> None:
     """Manage sandboxes.
 
-    Create, inspect, and control sandboxes. Use 'sb' as a shorthand.
-    Sandbox names are human-readable labels; follow-up commands use sandbox IDs.
+    Create, inspect, and control sandboxes. Use 'sb' as a shorthand. Sandbox
+    names are human-readable labels; follow-up commands use sandbox IDs.
+    Running `treadstone sandboxes` with no subcommand is the same as
+    `treadstone sandboxes list`.
 
     \b
     Examples:
-      treadstone --json sandboxes create --template aio-sandbox-tiny --name my-box
+      treadstone --json sandboxes create --name my-box
       treadstone --json sandboxes list --label env:dev
+      treadstone sandboxes
       treadstone sandboxes get sb-abc123def456
       treadstone sandboxes web enable sb-abc123def456
     """
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(list_sandboxes, labels=(), limit=100, offset=0)
 
 
 @sandboxes.command("create")
-@click.option("--template", required=True, help="Sandbox template name.")
+@click.option(
+    "--template",
+    envvar="TREADSTONE_DEFAULT_TEMPLATE",
+    default=None,
+    help=(
+        "Sandbox template name (env: TREADSTONE_DEFAULT_TEMPLATE). "
+        "Defaults to config key `default_template`, otherwise aio-sandbox-tiny."
+    ),
+)
 @click.option(
     "--name",
     default=None,
@@ -38,10 +52,17 @@ def sandboxes() -> None:
     ),
 )
 @click.option("--label", multiple=True, help="Labels in key:val format (repeatable).")
-@click.option("--auto-stop-interval", default=15, type=int, help="Minutes of inactivity before the sandbox auto-stops.")
+@click.option(
+    "--auto-stop-interval",
+    default=15,
+    show_default=True,
+    type=int,
+    help="Minutes of inactivity before the sandbox auto-stops.",
+)
 @click.option(
     "--auto-delete-interval",
     default=-1,
+    show_default=True,
     type=int,
     help="Minutes after stop before auto-delete. Use -1 to disable auto-delete.",
 )
@@ -49,6 +70,7 @@ def sandboxes() -> None:
 @click.option(
     "--storage-size",
     default="5Gi",
+    show_default=True,
     type=click.Choice(_STORAGE_SIZE_CHOICES, case_sensitive=True),
     help="PVC size when --persist is set. Supported tiers: 5Gi, 10Gi, 20Gi.",
 )
@@ -67,17 +89,22 @@ def create(
 
     Custom names must be 1-55 characters of lowercase letters, numbers, or
     hyphens, and must start and end with a letter or number. Sandbox names
-    only need to be unique for the current user. Use `--json` if you need the
-    returned `id`, `urls.proxy`, or `urls.web` for later automation steps.
+    only need to be unique for the current user. If `--template` is omitted,
+    the CLI uses `TREADSTONE_DEFAULT_TEMPLATE`, then config key
+    `default_template`, then the built-in default `aio-sandbox-tiny`. Use
+    `--json` if you need the returned `id`, `urls.proxy`, or `urls.web` for
+    later automation steps.
 
     \b
     Examples:
-      treadstone sandboxes create --template aio-sandbox-tiny
+      treadstone sandboxes create
+      treadstone sandboxes create --name dev-box --label env:dev
       treadstone sandboxes create --template aio-sandbox-medium --name dev-box --label env:dev
       treadstone sandboxes create --template aio-sandbox-large --persist --storage-size 5Gi
       treadstone sandboxes create --template aio-sandbox-small --auto-stop-interval 30 --auto-delete-interval 120
     """
     client = require_auth(ctx)
+    resolved_template = template or get_default_template()
     labels = {}
     for lbl in label:
         if ":" not in lbl:
@@ -86,7 +113,7 @@ def create(
         k, v = lbl.split(":", 1)
         labels[k] = v
     body: dict = {
-        "template": template,
+        "template": resolved_template,
         "labels": labels,
         "auto_stop_interval": auto_stop_interval,
         "auto_delete_interval": auto_delete_interval,
@@ -107,8 +134,8 @@ def create(
 
 @sandboxes.command("list")
 @click.option("--label", "labels", multiple=True, help="Filter by label (key:val). Repeat to require multiple labels.")
-@click.option("--limit", default=100, type=int, help="Max results.")
-@click.option("--offset", default=0, type=int, help="Skip N results.")
+@click.option("--limit", default=100, show_default=True, type=int, help="Max results.")
+@click.option("--offset", default=0, show_default=True, type=int, help="Skip N results.")
 @click.pass_context
 def list_sandboxes(ctx: click.Context, labels: tuple[str, ...], limit: int, offset: int) -> None:
     """List sandboxes with optional filtering.

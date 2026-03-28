@@ -32,10 +32,15 @@ Use this skill to drive the Treadstone control plane through the CLI without inv
 7. Pass `--email` and `--password` explicitly for automation.
    If you omit them, `auth register` and `auth login` prompt interactively.
 8. Never construct browser URLs from sandbox names. Read `urls.web`, `web_url`, or `open_link` from command output.
+9. `treadstone system`, `treadstone templates`, `treadstone sandboxes`, and `treadstone config`
+   run their most common subcommands by default.
+10. `sandboxes create` uses `--template` first, then `TREADSTONE_DEFAULT_TEMPLATE`,
+    then config key `default_template`, then built-in default `aio-sandbox-tiny`.
 
 ## Canonical Command Tree
 
 ```text
+treadstone system                  # same as treadstone system health
 treadstone system health
 treadstone auth register
 treadstone auth login
@@ -45,9 +50,12 @@ treadstone auth change-password
 treadstone auth users
 treadstone auth delete-user
 treadstone api-keys create|list|update|delete
+treadstone sandboxes               # same as treadstone sandboxes list
 treadstone sandboxes create|list|get|start|stop|delete
 treadstone sandboxes web enable|status|disable
+treadstone templates               # same as treadstone templates list
 treadstone templates list
+treadstone config                  # same as treadstone config get
 treadstone config set|get|unset|path
 treadstone guide agent
 treadstone --skills
@@ -58,7 +66,7 @@ treadstone --skills
 ### Check Access And Identity
 
 ```bash
-treadstone system health
+treadstone system
 treadstone auth whoami
 ```
 
@@ -71,7 +79,7 @@ treadstone auth login --email you@example.com --password YourPass123!
 ### First-Time Interactive Onboarding
 
 ```bash
-treadstone system health
+treadstone system
 treadstone auth register --email you@example.com --password YourPass123!
 treadstone auth login --email you@example.com --password YourPass123!
 treadstone auth whoami
@@ -86,9 +94,9 @@ treadstone api-keys create --name automation --save
 ### Create A Sandbox, Capture Its ID, And Inspect It
 
 ```bash
-treadstone --json templates list
-treadstone --json sandboxes create --template aio-sandbox-tiny --name demo
-treadstone --json sandboxes list
+treadstone --json templates
+treadstone --json sandboxes create --name demo
+treadstone --json sandboxes
 treadstone sandboxes get SANDBOX_ID
 ```
 

@@ -11,17 +11,20 @@ import click
 
 import treadstone_cli._client as client_state
 
-_VALID_KEYS = ("base_url", "api_key")
+_VALID_KEYS = ("base_url", "api_key", "default_template")
 
 
-@click.group()
-def config() -> None:
+@click.group(invoke_without_command=True)
+@click.pass_context
+def config(ctx: click.Context) -> None:
     """Manage local CLI configuration.
 
     Configuration is stored in ~/.config/treadstone/config.toml and provides
-    default values for --base-url and --api-key so they don't need to be
-    repeated on every command invocation. Saved login sessions live in a
-    separate local state file and are not managed by this command group.
+    default values for --base-url, --api-key, and sandbox creation defaults so
+    they don't need to be repeated on every command invocation. Saved login
+    sessions live in a separate local state file and are not managed by this
+    command group. Running `treadstone config` with no subcommand is the same
+    as `treadstone config get`.
 
     \b
     Priority (highest to lowest):
@@ -29,6 +32,8 @@ def config() -> None:
       2. Env vars    (TREADSTONE_BASE_URL, TREADSTONE_API_KEY)
       3. Config file (~/.config/treadstone/config.toml)
     """
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(get_value, key=None)
 
 
 @config.command("set")
@@ -41,11 +46,13 @@ def set_value(key: str, value: str) -> None:
     Available keys:
       base_url   Base URL of the Treadstone server
       api_key    Default API key for authentication
+      default_template    Default sandbox template for `sandboxes create`
 
     \b
     Examples:
       treadstone config set base_url https://my-server.example.com
       treadstone config set api_key ts_live_xxxxxxxxxxxx
+      treadstone config set default_template aio-sandbox-medium
     """
     client_state.set_config_value(key, value)
     click.echo(f"Set {key} = {value}")
@@ -60,6 +67,7 @@ def get_value(key: str | None) -> None:
     Examples:
       treadstone config get              Show all config values
       treadstone config get base_url     Show only base_url
+      treadstone config                  Same as `treadstone config get`
     """
     data = client_state._read_config()
     if not data:

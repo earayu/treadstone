@@ -20,6 +20,7 @@ CONFIG_FILE = CONFIG_DIR / "config.toml"
 SESSION_FILE = CONFIG_DIR / "session.json"
 
 _DEFAULT_BASE_URL = "https://api.treadstone-ai.dev"
+_DEFAULT_SANDBOX_TEMPLATE = "aio-sandbox-tiny"
 
 
 def _normalize_base_url(url: str) -> str:
@@ -130,6 +131,10 @@ def get_api_key(ctx: click.Context) -> str | None:
     return ctx.obj.get("api_key") or _read_config().get("api_key")
 
 
+def get_default_template() -> str:
+    return _read_config().get("default_template") or _DEFAULT_SANDBOX_TEMPLATE
+
+
 def effective_base_url() -> tuple[str, str]:
     """Return (url, source) without requiring a Click context.
 
@@ -148,6 +153,17 @@ def effective_base_url() -> tuple[str, str]:
 def effective_api_key() -> str | None:
     """Return API key without requiring a Click context."""
     return os.environ.get("TREADSTONE_API_KEY") or _read_config().get("api_key")
+
+
+def effective_default_template() -> tuple[str, str]:
+    """Return (template, source) for sandbox creation defaults."""
+    env = os.environ.get("TREADSTONE_DEFAULT_TEMPLATE")
+    if env:
+        return env, "env"
+    cfg = _read_config().get("default_template")
+    if cfg:
+        return cfg, "file"
+    return _DEFAULT_SANDBOX_TEMPLATE, "default"
 
 
 def effective_session(base_url: str | None = None) -> bool:

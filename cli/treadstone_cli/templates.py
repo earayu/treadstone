@@ -8,17 +8,23 @@ from treadstone_cli._client import require_auth
 from treadstone_cli._output import handle_error, is_json_mode, print_json, print_table
 
 
-@click.group()
-def templates() -> None:
+@click.group(invoke_without_command=True)
+@click.pass_context
+def templates(ctx: click.Context) -> None:
     """Manage sandbox templates.
 
     Templates define the runtime environment (image, CPU, memory) for sandboxes.
     List templates before creating a sandbox when you need a valid template name.
+    Running `treadstone templates` with no subcommand is the same as
+    `treadstone templates list`.
 
     \b
     Examples:
       treadstone templates list
+      treadstone templates
     """
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(list_templates)
 
 
 @templates.command("list")

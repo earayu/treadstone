@@ -8,14 +8,21 @@ from treadstone_cli._client import build_client, get_base_url
 from treadstone_cli._output import handle_error, is_json_mode, print_json
 
 
-@click.group()
-def system() -> None:
+@click.group(invoke_without_command=True)
+@click.pass_context
+def system(ctx: click.Context) -> None:
     """Inspect server reachability and other platform-wide state.
+
+    Running `treadstone system` with no subcommand is the same as
+    `treadstone system health`.
 
     \b
     Examples:
       treadstone system health
+      treadstone system
     """
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(health)
 
 
 @system.command("health")

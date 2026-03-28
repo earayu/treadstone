@@ -33,7 +33,7 @@ pip install treadstone-cli
 export TREADSTONE_BASE_URL="http://localhost:8000"
 
 # Check that the server is reachable
-treadstone system health
+treadstone system
 
 # Register an account (first time only)
 treadstone auth register
@@ -44,13 +44,16 @@ treadstone auth login
 # Create an API key for non-interactive use and save it locally
 treadstone api-keys create --name my-key --save
 
-# Create a sandbox
-treadstone sandboxes create --template aio-sandbox-tiny --name my-sandbox
+# Create a sandbox (defaults to aio-sandbox-tiny unless overridden)
+treadstone sandboxes create --name my-sandbox
 # Name rules: 1-55 chars, lowercase letters/numbers/hyphens only,
 # and must start/end with a letter or number. Names are only unique per user.
 
 # List sandboxes
-treadstone sandboxes list
+treadstone sandboxes
+
+# Optional: change the default template for future creates
+treadstone config set default_template aio-sandbox-medium
 
 # Create a browser hand-off URL for a human
 treadstone sandboxes web enable <sandbox-id>
@@ -65,13 +68,13 @@ treadstone --skills
 For automation and AI agents, prefer JSON output and capture the returned sandbox ID from command output.
 
 ```bash
-treadstone --json system health
+treadstone --json system
 treadstone auth register --email agent@example.com --password YourPass123!
 treadstone auth login --email agent@example.com --password YourPass123!
 treadstone --json api-keys create --name automation --save
 
-treadstone --json templates list
-treadstone --json sandboxes create --template aio-sandbox-tiny --name my-sandbox
+treadstone --json templates
+treadstone --json sandboxes create --name my-sandbox
 treadstone --json sandboxes get <sandbox-id>
 treadstone --json sandboxes web enable <sandbox-id>
 
@@ -96,14 +99,22 @@ The CLI reads configuration from three sources, in order of priority:
 Saved login sessions are stored separately in `~/.config/treadstone/session.json`
 and are only used when no API key is configured for the active base URL.
 
+For `treadstone sandboxes create`, template resolution works like this:
+
+1. `--template`
+2. `TREADSTONE_DEFAULT_TEMPLATE`
+3. `default_template` in `~/.config/treadstone/config.toml`
+4. built-in default `aio-sandbox-tiny`
+
 ### Config file
 
 Location: `~/.config/treadstone/config.toml`
 
 ```toml
 [default]
-base_url = "https://your-server.example.com"
-api_key  = "ts_live_xxxxxxxxxxxx"
+base_url         = "https://your-server.example.com"
+api_key          = "ts_live_xxxxxxxxxxxx"
+default_template = "aio-sandbox-medium"
 ```
 
 You can manage this file with the `config` subcommand:
@@ -112,12 +123,15 @@ You can manage this file with the `config` subcommand:
 # Set a value
 treadstone config set base_url https://your-server.example.com
 treadstone config set api_key ts_live_xxxxxxxxxxxx
+treadstone config set default_template aio-sandbox-medium
 
 # View current settings (api_key is partially masked)
+treadstone config
 treadstone config get
 
 # View a single key
 treadstone config get base_url
+treadstone config get default_template
 
 # Remove a value
 treadstone config unset api_key
@@ -132,6 +146,7 @@ treadstone config path
 |----------|-------------|---------|
 | `TREADSTONE_BASE_URL` | Base URL of the Treadstone server | `https://api.treadstone-ai.dev` |
 | `TREADSTONE_API_KEY` | API key for authentication | (none) |
+| `TREADSTONE_DEFAULT_TEMPLATE` | Default template for `sandboxes create` | `aio-sandbox-tiny` |
 
 ### Global flags
 
@@ -144,6 +159,17 @@ treadstone config path
 | `--version` | Show CLI version |
 | `--help` | Show help message |
 
+### Shortcut groups
+
+Some groups run the most common subcommand when no second-level command is given:
+
+```bash
+treadstone system      # same as: treadstone system health
+treadstone templates   # same as: treadstone templates list
+treadstone sandboxes   # same as: treadstone sandboxes list
+treadstone config      # same as: treadstone config get
+```
+
 ## Commands
 
 ### `system`
@@ -151,6 +177,7 @@ treadstone config path
 Inspect server reachability and other platform-wide state.
 
 ```bash
+treadstone system
 treadstone system health
 # Server is healthy
 ```
@@ -174,13 +201,15 @@ treadstone auth delete-user <user-id>    # Delete a user (admin)
 Create and manage sandboxes.
 
 Custom sandbox names must be 1-55 characters of lowercase letters, numbers, or hyphens. They must start and end
-with a letter or number. Sandbox names only need to be unique for the current user.
+with a letter or number. Sandbox names only need to be unique for the current user. `treadstone sandboxes create`
+defaults to `aio-sandbox-tiny` unless you override it with `--template`, `TREADSTONE_DEFAULT_TEMPLATE`, or config
+key `default_template`.
 
 ```bash
-treadstone sandboxes create --template aio-sandbox-tiny --name my-box
+treadstone sandboxes
+treadstone sandboxes create --name my-box
 treadstone sandboxes create --template aio-sandbox-medium --label env:dev --persist
 treadstone sandboxes create --template aio-sandbox-large --persist --storage-size 5Gi
-treadstone sandboxes list
 treadstone sandboxes list --label env:prod --label team:agent --limit 10
 treadstone sandboxes get <sandbox-id>
 treadstone sandboxes start <sandbox-id>
@@ -198,6 +227,7 @@ Persistent sandbox storage currently supports the preset tiers `5Gi`, `10Gi`, an
 List available sandbox templates.
 
 ```bash
+treadstone templates
 treadstone templates list
 ```
 
@@ -220,6 +250,8 @@ treadstone api-keys delete <key-id>
 Manage local CLI configuration.
 
 ```bash
+treadstone config
+treadstone config set default_template aio-sandbox-medium
 treadstone config set base_url https://...
 treadstone config set api_key ts_...
 treadstone config get
@@ -234,7 +266,7 @@ Pass `--json` before any command to get machine-readable JSON output:
 
 ```bash
 treadstone --json sandboxes list
-treadstone --json system health
+treadstone --json system
 treadstone --json sandboxes web enable <sandbox-id>
 treadstone --json api-keys list
 ```
@@ -248,9 +280,9 @@ hand-off URL, disable web access first and then enable it again.
 Use the CLI as a JSON-first interface when an agent needs to chain commands:
 
 ```bash
-treadstone --json system health
-treadstone --json templates list
-treadstone --json sandboxes create --template aio-sandbox-tiny --name demo
+treadstone --json system
+treadstone --json templates
+treadstone --json sandboxes create --name demo
 treadstone --json sandboxes get <sandbox-id>
 treadstone --json sandboxes web enable <sandbox-id>
 ```

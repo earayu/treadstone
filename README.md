@@ -179,7 +179,7 @@ What is planned next:
 - Managed hosting
 - More production hardening and monitoring
 
-Design documents and implementation plans are available in [docs/zh-CN/plans/](docs/zh-CN/plans/).
+Current Chinese module documentation is available in [docs/zh-CN/README.md](docs/zh-CN/README.md).
 
 ## Development
 
