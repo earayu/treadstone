@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import click
 
-from treadstone_cli._client import effective_api_key, effective_base_url, effective_session
+from treadstone_cli._client import effective_api_key, effective_base_url, effective_default_template, effective_session
 from treadstone_cli._guide_text import AGENT_GUIDE
 from treadstone_cli._output import friendly_exception_handler
 
@@ -41,11 +41,28 @@ def _active_auth_mode(api_key_present: bool, session_present: bool) -> str:
     return "none"
 
 
+def _leaf_command_rows(group: click.Group, ctx: click.Context, prefix: str = "") -> list[tuple[str, str]]:
+    rows: list[tuple[str, str]] = []
+    for name in group.list_commands(ctx):
+        if not prefix and name == "sb":
+            continue
+        command = group.get_command(ctx, name)
+        if command is None:
+            continue
+        path = f"{prefix} {name}".strip()
+        if isinstance(command, click.Group):
+            rows.extend(_leaf_command_rows(command, ctx, path))
+        else:
+            rows.append((path, command.get_short_help_str()))
+    return rows
+
+
 class _TreadstoneGroup(click.Group):
     """Custom root group with richer help sections."""
 
     def format_epilog(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
         base_url, source = _active_base_url(ctx)
+        default_template, template_source = effective_default_template()
         api_key_present = _active_api_key_status(ctx) != "not set"
         session_present = effective_session(base_url)
 
@@ -60,13 +77,26 @@ class _TreadstoneGroup(click.Group):
                 "'treadstone config --help' to manage local defaults."
             )
 
+        with formatter.section("Shortcuts"):
+            formatter.write_dl(
+                [
+                    ("treadstone system", "Runs `treadstone system health`"),
+                    ("treadstone templates", "Runs `treadstone templates list`"),
+                    ("treadstone sandboxes", "Runs `treadstone sandboxes list`"),
+                    ("treadstone config", "Runs `treadstone config get`"),
+                ]
+            )
+
+        with formatter.section("Command tree"):
+            formatter.write_dl(_leaf_command_rows(self, ctx))
+
         with formatter.section("Common workflows"):
             formatter.write_dl(
                 [
                     ("Check connectivity", "treadstone system health"),
                     ("Sign in interactively", "treadstone auth login"),
                     ("List templates (JSON)", "treadstone --json templates list"),
-                    ("Create a sandbox (JSON)", "treadstone --json sandboxes create --template aio-sandbox-tiny"),
+                    ("Create a sandbox (JSON)", "treadstone --json sandboxes create --name demo"),
                     ("Get a browser hand-off URL", "treadstone --json sandboxes web enable SANDBOX_ID"),
                     ("Print the agent skill", "treadstone guide agent  or  treadstone --skills"),
                 ]
@@ -76,6 +106,7 @@ class _TreadstoneGroup(click.Group):
             formatter.write_dl(
                 [
                     ("Base URL", f"{base_url}  [{source}]"),
+                    ("Default sandbox template", f"{default_template}  [{template_source}]"),
                     ("API key", _active_api_key_status(ctx)),
                     ("Saved session", "available" if session_present else "not set"),
                     ("Auth used by protected commands", _active_auth_mode(api_key_present, session_present)),
@@ -113,11 +144,15 @@ def cli(ctx: click.Context, json_output: bool, api_key: str | None, base_url: st
     \b
     Canonical command paths:
       treadstone system health
+      treadstone system
       treadstone auth ...
       treadstone api-keys ...
       treadstone sandboxes ...
+      treadstone sandboxes create
       treadstone templates list
+      treadstone templates
       treadstone config ...
+      treadstone config
     """
     ctx.ensure_object(dict)
     ctx.obj["json_output"] = json_output

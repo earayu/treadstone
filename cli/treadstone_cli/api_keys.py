@@ -48,7 +48,7 @@ def _build_scope(control_plane: bool | None, data_plane: str | None, sandbox_ids
 
 
 @api_keys.command("create")
-@click.option("--name", default="default", help="Key name.")
+@click.option("--name", default="default", show_default=True, help="Key name.")
 @click.option("--expires-in", default=None, type=int, help="Key lifetime in seconds.")
 @click.option("--control-plane/--no-control-plane", default=None, help="Enable or disable control plane access.")
 @click.option(

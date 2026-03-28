@@ -208,8 +208,8 @@ def change_password(ctx: click.Context, old_password: str, new_password: str) ->
 
 
 @auth.command("users")
-@click.option("--limit", default=100, type=int, help="Max results.")
-@click.option("--offset", default=0, type=int, help="Skip N results.")
+@click.option("--limit", default=100, show_default=True, type=int, help="Max results.")
+@click.option("--offset", default=0, show_default=True, type=int, help="Skip N results.")
 @click.pass_context
 def list_users(ctx: click.Context, limit: int, offset: int) -> None:
     """List users visible to the current account.
