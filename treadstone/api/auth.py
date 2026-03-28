@@ -701,6 +701,17 @@ async def _oauth_callback(
     except fastapi_users_exceptions.UserAlreadyExists as exc:
         raise ConflictError("Email already registered") from exc
 
+    # fastapi-users only applies is_verified_by_default when creating a brand-new user.
+    # When an existing unverified user links via OAuth the flag is ignored, leaving
+    # is_verified=False even though the OAuth provider has already confirmed ownership
+    # of the email address. Fix that here.
+    if outcome == "link" and not user.is_verified:
+        db_user = await session.get(User, user.id)
+        if db_user and not db_user.is_verified:
+            db_user.is_verified = True
+            session.add(db_user)
+            user = db_user
+
     surface = "cli" if cli_flow_id_from_state else surface
 
     set_request_context(request, actor_user_id=user.id, credential_type="cookie")
