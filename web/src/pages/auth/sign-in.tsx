@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router"
 import { toast } from "sonner"
 
 import { useAppConfig } from "@/api/config"
-import { useLogin } from "@/hooks/use-auth"
+import { useCurrentUser, useLogin } from "@/hooks/use-auth"
 import { HttpError } from "@/lib/api-client"
 
 const inputClassName =
@@ -53,6 +53,7 @@ export function SignInPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const login = useLogin()
+  const { data: currentUser, isLoading: userLoading } = useCurrentUser()
   const { data: config, isLoading: configLoading } = useAppConfig()
 
   const returnTo = searchParams.get("return_to")
@@ -64,6 +65,16 @@ export function SignInPage() {
   useEffect(() => {
     if (errorParam) toast.error(errorParam)
   }, [errorParam])
+
+  useEffect(() => {
+    if (userLoading) return
+    if (!currentUser) return
+    if (returnTo) {
+      window.location.assign(`/v1/browser/bootstrap?return_to=${encodeURIComponent(returnTo)}`)
+    } else {
+      navigate("/app", { replace: true })
+    }
+  }, [currentUser, userLoading, returnTo, navigate])
 
   const googleOAuthEnabled = config?.auth.login_methods.includes("google") ?? false
   const githubOAuthEnabled = config?.auth.login_methods.includes("github") ?? false

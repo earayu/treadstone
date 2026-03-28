@@ -338,8 +338,11 @@ async def test_oauth_callback_with_expired_flow_does_not_create_user(db_session,
             follow_redirects=False,
         )
 
-    assert callback.status_code == 400
-    assert "expired" in callback.json()["error"]["message"].lower()
+    assert callback.status_code == 303
+    location = callback.headers["location"]
+    assert "/auth/cli/login?" in location
+    assert "result=failed" in location
+    assert "error=" in location
 
     async with _test_session_factory() as session:
         users = (await session.execute(select(User).where(User.email == "ghost@example.com"))).unique().scalars().all()
@@ -426,3 +429,26 @@ async def test_session_based_approve_requires_auth(db_session, monkeypatch):
         flow = await _create_flow(http_client)
         resp = await http_client.post(f"/v1/auth/cli/flows/{flow['flow_id']}/approve")
         assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_session_based_approve_is_not_replayable(db_session, monkeypatch):
+    """Second call to /approve on an already-approved flow returns 400."""
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
+        reg_resp = await http_client.post("/v1/auth/register", json={"email": "u@b.com", "password": "Pass123!"})
+        session_cookie = reg_resp.cookies.get("session")
+        flow = await _create_flow(http_client)
+
+        first = await http_client.post(
+            f"/v1/auth/cli/flows/{flow['flow_id']}/approve",
+            cookies={"session": session_cookie},
+        )
+        assert first.status_code == 200
+
+        second = await http_client.post(
+            f"/v1/auth/cli/flows/{flow['flow_id']}/approve",
+            cookies={"session": session_cookie},
+        )
+        assert second.status_code == 400
+        assert "already been used or has expired" in second.json()["error"]["message"]

@@ -631,7 +631,12 @@ async def _oauth_callback(
         raise BadRequestError(message)
 
     if cli_flow_id_from_state:
-        await _validate_cli_flow_pending(session, cli_flow_id_from_state)
+        try:
+            await _validate_cli_flow_pending(session, cli_flow_id_from_state)
+        except BadRequestError as exc:
+            response = _cli_oauth_redirect(cli_flow_id_from_state, "failed", str(exc))
+            _clear_oauth_flow_cookies(response, provider)
+            return response
 
     existing_oauth = await session.execute(
         select(OAuthAccount).where(

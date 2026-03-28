@@ -201,7 +201,7 @@ async def approve_cli_flow(
     flow_id: str,
     current_user: User = Depends(optional_cookie_user),
     session: AsyncSession = Depends(get_session),
-):
+) -> dict[str, str]:
     """Approve a pending CLI login flow using the current browser session."""
     if current_user is None:
         raise AuthRequiredError("You must be signed in to approve a CLI login flow.")
