@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,6 +34,7 @@ from treadstone.api.schemas import (
 )
 from treadstone.core.database import get_session
 from treadstone.core.errors import NotFoundError
+from treadstone.models.email_verification_log import EmailVerificationLog
 from treadstone.models.user import User
 from treadstone.services.audit import record_audit_event
 from treadstone.services.metering_service import MeteringService
@@ -266,4 +267,70 @@ async def admin_batch_grants(
         "succeeded": succeeded,
         "failed": failed,
         "results": results,
+    }
+
+
+# ── Email Verification (Admin) ───────────────────────────────────────────────
+
+
+@router.get("/users/{user_id}/verification-token")
+async def get_user_verification_token(
+    user_id: str,
+    admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """Return the latest verification token for a user (admin only)."""
+    target = await session.get(User, user_id)
+    if not target:
+        raise NotFoundError("User", user_id)
+
+    latest = (
+        await session.execute(
+            select(EmailVerificationLog)
+            .where(EmailVerificationLog.user_id == user_id)
+            .order_by(EmailVerificationLog.gmt_created.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+    if latest is None:
+        raise NotFoundError("verification token", user_id)
+
+    return {
+        "user_id": latest.user_id,
+        "email": latest.email,
+        "token": latest.token,
+        "verify_url": latest.verify_url,
+        "created_at": latest.gmt_created,
+    }
+
+
+@router.get("/verification-token-by-email")
+async def get_verification_token_by_email(
+    email: str = Query(..., description="Email address to look up."),
+    admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """Return the latest verification token for an email (admin only).
+
+    Convenience endpoint for E2E tests where user_id is not yet known.
+    """
+    latest = (
+        await session.execute(
+            select(EmailVerificationLog)
+            .where(EmailVerificationLog.email == email)
+            .order_by(EmailVerificationLog.gmt_created.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+    if latest is None:
+        raise NotFoundError("verification token", email)
+
+    return {
+        "user_id": latest.user_id,
+        "email": latest.email,
+        "token": latest.token,
+        "verify_url": latest.verify_url,
+        "created_at": latest.gmt_created,
     }

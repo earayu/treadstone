@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from treadstone.config import settings
 from treadstone.core.database import get_session
+from treadstone.models.email_verification_log import EmailVerificationLog
 from treadstone.models.user import OAuthAccount, Role, User
 from treadstone.services.email import get_email_backend
 
@@ -66,6 +67,12 @@ class UserManager(BaseUserManager[User, str]):
 
     async def on_after_request_verify(self, user: User, token: str, request: Request | None = None) -> None:
         verify_url = f"{settings.app_base_url.rstrip('/')}/auth/verify-email?token={token}"
+
+        session = self.user_db.session
+        log_entry = EmailVerificationLog(user_id=user.id, email=user.email, token=token, verify_url=verify_url)
+        session.add(log_entry)
+        await session.commit()
+
         backend = get_email_backend()
         await backend.send_verification_email(to=user.email, token=token, verify_url=verify_url)
 

@@ -1,6 +1,5 @@
 """API tests for email verification flow."""
 
-import pytest
 from fastapi_users.db import SQLAlchemyUserDatabase
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
@@ -10,14 +9,14 @@ from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
 from treadstone.models.audit_event import AuditEvent
+from treadstone.models.email_verification_log import EmailVerificationLog
 from treadstone.models.user import OAuthAccount, User
-from treadstone.services.email import MemoryBackend, get_email_backend, reset_email_backend
+from treadstone.services.email import reset_email_backend
 
 _test_session_factory = None
 
 
-@pytest.fixture
-async def db_session():
+async def db_session_setup():
     global _test_session_factory
     test_engine = create_async_engine("sqlite+aiosqlite://", echo=False)
     async with test_engine.begin() as conn:
@@ -42,6 +41,15 @@ async def db_session():
     app.dependency_overrides[get_user_db] = override_get_user_db
     app.dependency_overrides[get_user_manager] = override_get_user_manager
     reset_email_backend()
+    return test_engine
+
+
+import pytest  # noqa: E402
+
+
+@pytest.fixture
+async def db_session():
+    test_engine = await db_session_setup()
     yield
     app.dependency_overrides.clear()
     reset_email_backend()
@@ -62,21 +70,19 @@ async def _login(client: AsyncClient, email: str = "test@example.com", password:
 
 
 async def _get_verification_token(email: str) -> str:
-    backend = get_email_backend()
-    assert isinstance(backend, MemoryBackend)
-    for entry in reversed(backend.sent):
-        if entry.to == email:
-            return entry.token
-    raise AssertionError(f"No verification email found for {email}")
-
-
-async def _verify_user_in_db(email: str) -> None:
-    """Directly set is_verified=True in the DB (for fixture use)."""
+    """Fetch the latest verification token from the DB."""
     async with _test_session_factory() as session:
-        user = (await session.execute(select(User).where(User.email == email))).unique().scalar_one()
-        user.is_verified = True
-        session.add(user)
-        await session.commit()
+        latest = (
+            await session.execute(
+                select(EmailVerificationLog)
+                .where(EmailVerificationLog.email == email)
+                .order_by(EmailVerificationLog.gmt_created.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+    if latest is None:
+        raise AssertionError(f"No verification token found for {email}")
+    return latest.token
 
 
 async def test_register_first_user_is_auto_verified(db_session):
@@ -102,11 +108,11 @@ async def test_register_triggers_verification_email(db_session):
         await _register(client, "first@example.com")
         await _register(client, "second@example.com")
 
-    backend = get_email_backend()
-    assert isinstance(backend, MemoryBackend)
-    assert len(backend.sent) == 1
-    assert backend.sent[0].to == "second@example.com"
-    assert "verify-email?token=" in backend.sent[0].verify_url
+    async with _test_session_factory() as session:
+        logs = (await session.execute(select(EmailVerificationLog))).scalars().all()
+    assert len(logs) == 1
+    assert logs[0].email == "second@example.com"
+    assert "verify-email?token=" in logs[0].verify_url
 
 
 async def test_confirm_verification_succeeds(db_session):
@@ -166,19 +172,40 @@ async def test_get_user_includes_is_verified(db_session):
 
 
 async def test_resend_verification_succeeds(db_session):
+    from datetime import timedelta
+
+    from treadstone.models.user import utc_now
+
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await _register(client, "first@example.com")
         await _register(client, "user@example.com")
         await _login(client, "user@example.com")
 
-        backend = get_email_backend()
-        assert isinstance(backend, MemoryBackend)
-        initial_count = len(backend.sent)
+        async with _test_session_factory() as session:
+            log = (
+                await session.execute(
+                    select(EmailVerificationLog).where(EmailVerificationLog.email == "user@example.com")
+                )
+            ).scalar_one()
+            log.gmt_created = utc_now() - timedelta(seconds=120)
+            session.add(log)
+            await session.commit()
 
         resp = await client.post("/v1/auth/verification/request")
     assert resp.status_code == 200
     assert resp.json()["detail"] == "Verification email sent"
-    assert len(backend.sent) == initial_count + 1
+
+    async with _test_session_factory() as session:
+        logs = (
+            (
+                await session.execute(
+                    select(EmailVerificationLog).where(EmailVerificationLog.email == "user@example.com")
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert len(logs) == 2
 
 
 async def test_resend_verification_already_verified_returns_400(db_session):
@@ -253,3 +280,54 @@ async def test_full_verification_flow(db_session):
 
         sandbox_resp = await client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny"})
         assert sandbox_resp.status_code == 202
+
+
+async def test_admin_can_get_verification_token_by_email(db_session):
+    """Admin endpoint returns the latest verification token for a given email."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await _register(client, "admin@example.com")
+        await _register(client, "user@example.com")
+
+        await _login(client, "admin@example.com")
+        resp = await client.get("/v1/admin/verification-token-by-email?email=user@example.com")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["email"] == "user@example.com"
+    assert "token" in data
+    assert len(data["token"]) > 0
+
+
+async def test_non_admin_cannot_access_verification_token(db_session):
+    """Non-admin user gets 403 when trying to access admin verification endpoint."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await _register(client, "admin@example.com")
+        await _register(client, "user@example.com")
+
+        await _login(client, "user@example.com")
+        resp = await client.get("/v1/admin/verification-token-by-email?email=user@example.com")
+
+    assert resp.status_code == 403
+
+
+async def test_confirm_invalid_token_records_audit_event(db_session):
+    """Failed verification attempt is recorded in audit log."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post("/v1/auth/verification/confirm", json={"token": "bad-token"})
+    assert resp.status_code == 400
+
+    async with _test_session_factory() as session:
+        events = (
+            (
+                await session.execute(
+                    select(AuditEvent).where(
+                        AuditEvent.action == "auth.verify",
+                        AuditEvent.result == "failure",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert len(events) == 1
+    assert events[0].error_code == "email_verification_token_invalid"

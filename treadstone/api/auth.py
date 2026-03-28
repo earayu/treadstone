@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import secrets
-from datetime import timedelta
+from datetime import UTC, timedelta
 from urllib.parse import urlencode
 
 import jwt
@@ -60,6 +60,7 @@ from treadstone.models.api_key import (
     build_api_key_preview,
     hash_api_key_secret,
 )
+from treadstone.models.email_verification_log import EmailVerificationLog
 from treadstone.models.sandbox import Sandbox
 from treadstone.models.user import OAuthAccount, Role, User, random_id, utc_now
 from treadstone.services.audit import record_audit_event
@@ -856,7 +857,6 @@ async def set_password(
 
 
 VERIFICATION_RESEND_COOLDOWN_SECONDS = 60
-_verification_last_sent: dict[str, float] = {}
 
 
 @router.post("/verification/request", response_model=MessageResponse)
@@ -864,21 +864,43 @@ async def request_verification(
     request: Request,
     current_user: User = Depends(get_current_control_plane_user),
     user_manager: UserManager = Depends(get_user_manager),
+    session: AsyncSession = Depends(get_session),
 ):
     """Resend verification email for the current user."""
     if current_user.is_verified:
         raise EmailAlreadyVerifiedError()
 
-    now_ts = utc_now().timestamp()
-    last_sent = _verification_last_sent.get(current_user.id, 0)
-    elapsed = now_ts - last_sent
-    if elapsed < VERIFICATION_RESEND_COOLDOWN_SECONDS:
-        raise BadRequestError(
-            f"Please wait {int(VERIFICATION_RESEND_COOLDOWN_SECONDS - elapsed)} seconds before resending."
+    latest = (
+        await session.execute(
+            select(EmailVerificationLog)
+            .where(EmailVerificationLog.user_id == current_user.id)
+            .order_by(EmailVerificationLog.gmt_created.desc())
+            .limit(1)
         )
+    ).scalar_one_or_none()
 
+    if latest is not None:
+        now = utc_now()
+        last_created = latest.gmt_created
+        if last_created.tzinfo is None:
+            last_created = last_created.replace(tzinfo=UTC)
+        elapsed = (now - last_created).total_seconds()
+        if elapsed < VERIFICATION_RESEND_COOLDOWN_SECONDS:
+            raise BadRequestError(
+                f"Please wait {int(VERIFICATION_RESEND_COOLDOWN_SECONDS - elapsed)} seconds before resending."
+            )
+
+    set_request_context(request, actor_user_id=current_user.id)
     await user_manager.request_verify(current_user, request)
-    _verification_last_sent[current_user.id] = now_ts
+    await record_audit_event(
+        session,
+        action="auth.verification.request",
+        target_type="user",
+        target_id=current_user.id,
+        metadata={"email": current_user.email},
+        request=request,
+    )
+    await session.commit()
     return {"detail": "Verification email sent"}
 
 
@@ -896,8 +918,26 @@ async def confirm_verification(
         fastapi_users_exceptions.InvalidVerifyToken,
         fastapi_users_exceptions.UserNotExists,
     ):
+        await record_audit_event(
+            session,
+            action="auth.verify",
+            target_type="user",
+            result="failure",
+            error_code="email_verification_token_invalid",
+            request=request,
+        )
+        await session.commit()
         raise EmailVerificationTokenInvalidError() from None
     except fastapi_users_exceptions.UserAlreadyVerified:
+        await record_audit_event(
+            session,
+            action="auth.verify",
+            target_type="user",
+            result="failure",
+            error_code="email_already_verified",
+            request=request,
+        )
+        await session.commit()
         raise EmailAlreadyVerifiedError() from None
 
     set_request_context(request, actor_user_id=user.id)

@@ -20,12 +20,28 @@ Content-Type: application/json
 }
 HTTP 200
 
-# ── Verify email ───────────────────────────────────────────────────────────
+# ── Verify email (admin fetches token) ─────────────────────────────────────
 
-GET {{base_url}}/v1/test-support/emails/latest-verification?email={{email_03}}
+POST {{base_url}}/v1/auth/login
+Content-Type: application/json
+{
+    "email": "{{admin_email}}",
+    "password": "{{admin_password}}"
+}
+HTTP 200
+
+GET {{base_url}}/v1/admin/verification-token-by-email?email={{email_03}}
 HTTP 200
 [Captures]
 verify_token: jsonpath "$.token"
+
+POST {{base_url}}/v1/auth/login
+Content-Type: application/json
+{
+    "email": "{{email_03}}",
+    "password": "{{test_password}}"
+}
+HTTP 200
 
 POST {{base_url}}/v1/auth/verification/confirm
 Content-Type: application/json
