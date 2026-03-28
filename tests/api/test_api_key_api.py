@@ -4,6 +4,7 @@ import pytest
 import sqlalchemy as sa
 from fastapi_users.db import SQLAlchemyUserDatabase
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from treadstone.core.database import Base, get_session
@@ -58,6 +59,11 @@ async def auth_client(db_session):
     """Register + login, return client with auth cookie."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/v1/auth/register", json={"email": "keyuser@test.com", "password": "Pass123!"})
+        async with _test_session_factory() as session:
+            user = (await session.execute(select(User).where(User.email == "keyuser@test.com"))).unique().scalar_one()
+            user.is_verified = True
+            session.add(user)
+            await session.commit()
         await client.post("/v1/auth/login", json={"email": "keyuser@test.com", "password": "Pass123!"})
         yield client
 

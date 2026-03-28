@@ -18,7 +18,7 @@ from treadstone.api.schemas import (
 )
 from treadstone.config import settings
 from treadstone.core.database import get_session
-from treadstone.core.errors import SandboxNotFoundError, ValidationError
+from treadstone.core.errors import EmailVerificationRequiredError, SandboxNotFoundError, ValidationError
 from treadstone.core.request_context import set_request_context
 from treadstone.models.sandbox_web_link import SandboxWebLink
 from treadstone.models.user import User, utc_now
@@ -193,6 +193,19 @@ async def create_sandbox(
     user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
 ):
+    if not user.is_verified:
+        await record_audit_event(
+            session,
+            action="sandbox.create",
+            target_type="sandbox",
+            result="failure",
+            error_code="email_verification_required",
+            metadata={"email": user.email, "template": body.template},
+            request=request,
+        )
+        await session.commit()
+        raise EmailVerificationRequiredError()
+
     service = SandboxService(session=session)
     sandbox = await service.create(
         owner_id=user.id,

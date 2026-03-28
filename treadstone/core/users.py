@@ -12,7 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from treadstone.config import settings
 from treadstone.core.database import get_session
+from treadstone.models.email_verification_log import EmailVerificationLog
 from treadstone.models.user import OAuthAccount, Role, User
+from treadstone.services.email import get_email_backend
 
 COOKIE_MAX_AGE = settings.session_ttl_seconds
 
@@ -43,6 +45,7 @@ def get_github_oauth_client() -> GitHubOAuth2 | None:
 class UserManager(BaseUserManager[User, str]):
     reset_password_token_secret = settings.jwt_secret
     verification_token_secret = settings.jwt_secret
+    verification_token_lifetime_seconds = settings.verification_token_lifetime_seconds
 
     def parse_id(self, value: str) -> str:
         return value
@@ -63,7 +66,22 @@ class UserManager(BaseUserManager[User, str]):
         pass  # TODO: send email
 
     async def on_after_request_verify(self, user: User, token: str, request: Request | None = None) -> None:
-        pass  # TODO: send email
+        verify_url = f"{settings.app_base_url.rstrip('/')}/auth/verify-email?token={token}"
+
+        # fastapi-users request_verify() does not stage any DB writes before calling
+        # this hook, so committing here is safe. If upgrading fastapi-users, verify this.
+        session = self.user_db.session
+        log_entry = EmailVerificationLog(user_id=user.id, email=user.email, token=token, verify_url=verify_url)
+        session.add(log_entry)
+
+        backend = get_email_backend()
+        try:
+            await backend.send_verification_email(to=user.email, token=token, verify_url=verify_url)
+        except Exception:
+            await session.rollback()
+            raise
+
+        await session.commit()
 
 
 # ── FastAPI-Users DB dependency ──

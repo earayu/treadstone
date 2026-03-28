@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     logto_domain: str = ""
     logto_app_id: str = ""
 
+    # Email verification
+    email_backend: Literal["resend", "memory"] = "memory"
+    resend_api_key: str = ""
+    email_from: str = "noreply@treadstone-ai.dev"
+    verification_token_lifetime_seconds: int = 3600
+
     # Sandbox proxy defaults (overridable per-request via X-Sandbox-* headers)
     sandbox_namespace: str = "treadstone-local"
     sandbox_port: int = 8080
@@ -104,6 +110,9 @@ def validate_runtime_settings(cfg: Settings) -> None:
             f"TREADSTONE_AUTH_TYPE={cfg.auth_type!r} is not supported yet. "
             "External OIDC bearer auth is disabled until principal mapping is implemented."
         )
+
+    if cfg.email_backend == "resend" and not cfg.resend_api_key:
+        raise RuntimeError("TREADSTONE_RESEND_API_KEY must be set when TREADSTONE_EMAIL_BACKEND=resend.")
 
     if cfg.sandbox_domain and not is_local_sandbox_domain(cfg.sandbox_domain):
         parsed = urlparse(cfg.app_base_url)

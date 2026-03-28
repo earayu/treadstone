@@ -201,18 +201,24 @@ class UserResponse(BaseModel):
 
 
 class RegisterResponse(UserResponse):
-    pass
+    is_verified: bool = Field(..., examples=[True])
+    verification_email_sent: bool = Field(..., examples=[True])
 
 
 class UserDetailResponse(UserResponse):
     username: str | None = Field(default=None, examples=["alice"])
     is_active: bool = Field(..., examples=[True])
+    is_verified: bool = Field(..., examples=[True])
     has_local_password: bool = Field(..., examples=[True])
 
 
 class UserListResponse(BaseModel):
     items: list[UserResponse]
     total: int = Field(..., examples=[1])
+
+
+class VerificationConfirmRequest(BaseModel):
+    token: str = Field(..., examples=["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."])
 
 
 class ChangePasswordRequest(BaseModel):
