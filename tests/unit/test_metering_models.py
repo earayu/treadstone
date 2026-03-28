@@ -225,19 +225,19 @@ def test_storage_ledger_indexes():
 
 class TestCalculateCreditRate:
     def test_tiny(self):
-        assert calculate_credit_rate("tiny") == Decimal("0.25")
+        assert calculate_credit_rate("aio-sandbox-tiny") == Decimal("0.25")
 
     def test_small(self):
-        assert calculate_credit_rate("small") == Decimal("0.5")
+        assert calculate_credit_rate("aio-sandbox-small") == Decimal("0.5")
 
     def test_medium(self):
-        assert calculate_credit_rate("medium") == Decimal("1")
+        assert calculate_credit_rate("aio-sandbox-medium") == Decimal("1")
 
     def test_large(self):
-        assert calculate_credit_rate("large") == Decimal("2")
+        assert calculate_credit_rate("aio-sandbox-large") == Decimal("2")
 
     def test_xlarge(self):
-        assert calculate_credit_rate("xlarge") == Decimal("4")
+        assert calculate_credit_rate("aio-sandbox-xlarge") == Decimal("4")
 
     def test_unknown_template_raises(self):
         with pytest.raises(ValueError, match="Unknown template"):
@@ -246,7 +246,14 @@ class TestCalculateCreditRate:
 
 class TestTemplateSpecs:
     def test_all_templates_present(self):
-        assert set(TEMPLATE_SPECS.keys()) == {"tiny", "small", "medium", "large", "xlarge"}
+        expected = {
+            "aio-sandbox-tiny",
+            "aio-sandbox-small",
+            "aio-sandbox-medium",
+            "aio-sandbox-large",
+            "aio-sandbox-xlarge",
+        }
+        assert set(TEMPLATE_SPECS.keys()) == expected
 
     def test_ratio_is_1_to_2(self):
         for name, spec in TEMPLATE_SPECS.items():

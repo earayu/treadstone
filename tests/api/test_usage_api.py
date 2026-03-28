@@ -30,7 +30,7 @@ async def _seed_tier_templates(session: AsyncSession) -> None:
             storage_credits_monthly=0,
             max_concurrent_running=1,
             max_sandbox_duration_seconds=1800,
-            allowed_templates=["tiny", "small"],
+            allowed_templates=["aio-sandbox-tiny", "aio-sandbox-small"],
             grace_period_seconds=600,
         ),
         TierTemplate(
@@ -39,7 +39,7 @@ async def _seed_tier_templates(session: AsyncSession) -> None:
             storage_credits_monthly=10,
             max_concurrent_running=3,
             max_sandbox_duration_seconds=7200,
-            allowed_templates=["tiny", "small", "medium"],
+            allowed_templates=["aio-sandbox-tiny", "aio-sandbox-small", "aio-sandbox-medium"],
             grace_period_seconds=1800,
         ),
     ]
@@ -112,7 +112,7 @@ async def test_get_usage_returns_summary(user_client):
     assert data["storage"]["unit"] == "GiB"
 
     assert data["limits"]["max_concurrent_running"] == 1
-    assert data["limits"]["allowed_templates"] == ["tiny", "small"]
+    assert data["limits"]["allowed_templates"] == ["aio-sandbox-tiny", "aio-sandbox-small"]
 
     assert data["grace_period"]["active"] is False
     assert data["grace_period"]["grace_period_seconds"] == 600
@@ -146,7 +146,7 @@ async def test_get_plan_returns_full_details(user_client):
     assert data["storage_credits_monthly_limit"] == 0
     assert data["max_concurrent_running"] == 1
     assert data["max_sandbox_duration_seconds"] == 1800
-    assert data["allowed_templates"] == ["tiny", "small"]
+    assert data["allowed_templates"] == ["aio-sandbox-tiny", "aio-sandbox-small"]
     assert data["grace_period_seconds"] == 600
     assert data["billing_period_start"] is not None
     assert data["billing_period_end"] is not None

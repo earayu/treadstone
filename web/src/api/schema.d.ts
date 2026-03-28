@@ -977,7 +977,7 @@ export interface components {
             sandbox_id: string;
             /**
              * Template
-             * @example small
+             * @example aio-sandbox-small
              */
             template: string;
             /**
@@ -1685,9 +1685,9 @@ export interface components {
             /**
              * Allowed Templates
              * @example [
-             *       "tiny",
-             *       "small",
-             *       "medium"
+             *       "aio-sandbox-tiny",
+             *       "aio-sandbox-small",
+             *       "aio-sandbox-medium"
              *     ]
              */
             allowed_templates: string[];
@@ -1780,10 +1780,10 @@ export interface components {
             /**
              * Allowed Templates
              * @example [
-             *       "tiny",
-             *       "small",
-             *       "medium",
-             *       "large"
+             *       "aio-sandbox-tiny",
+             *       "aio-sandbox-small",
+             *       "aio-sandbox-medium",
+             *       "aio-sandbox-large"
              *     ]
              */
             allowed_templates?: string[] | null;
@@ -1828,9 +1828,9 @@ export interface components {
             /**
              * Allowed Templates
              * @example [
-             *       "tiny",
-             *       "small",
-             *       "medium"
+             *       "aio-sandbox-tiny",
+             *       "aio-sandbox-small",
+             *       "aio-sandbox-medium"
              *     ]
              */
             allowed_templates: string[];
@@ -1880,9 +1880,9 @@ export interface components {
             /**
              * Allowed Templates
              * @example [
-             *       "tiny",
-             *       "small",
-             *       "medium"
+             *       "aio-sandbox-tiny",
+             *       "aio-sandbox-small",
+             *       "aio-sandbox-medium"
              *     ]
              */
             allowed_templates: string[];
@@ -1986,9 +1986,9 @@ export interface components {
             /**
              * Allowed Templates
              * @example [
-             *       "tiny",
-             *       "small",
-             *       "medium"
+             *       "aio-sandbox-tiny",
+             *       "aio-sandbox-small",
+             *       "aio-sandbox-medium"
              *     ]
              */
             allowed_templates: string[];

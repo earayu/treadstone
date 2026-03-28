@@ -43,7 +43,7 @@ def _make_template(tier_name: str = "free", **kwargs) -> TierTemplate:
             "storage_credits_monthly": 0,
             "max_concurrent_running": 1,
             "max_sandbox_duration_seconds": 1800,
-            "allowed_templates": ["tiny", "small"],
+            "allowed_templates": ["aio-sandbox-tiny", "aio-sandbox-small"],
             "grace_period_seconds": 600,
         },
         "pro": {
@@ -51,7 +51,7 @@ def _make_template(tier_name: str = "free", **kwargs) -> TierTemplate:
             "storage_credits_monthly": 10,
             "max_concurrent_running": 3,
             "max_sandbox_duration_seconds": 7200,
-            "allowed_templates": ["tiny", "small", "medium"],
+            "allowed_templates": ["aio-sandbox-tiny", "aio-sandbox-small", "aio-sandbox-medium"],
             "grace_period_seconds": 1800,
         },
     }
@@ -67,7 +67,7 @@ def _make_plan(user_id: str = "user01", tier: str = "free", **kwargs) -> UserPla
         "storage_credits_monthly_limit": 0,
         "max_concurrent_running": 1,
         "max_sandbox_duration_seconds": 1800,
-        "allowed_templates": ["tiny", "small"],
+        "allowed_templates": ["aio-sandbox-tiny", "aio-sandbox-small"],
         "grace_period_seconds": 600,
         "period_start": datetime(2026, 3, 1, 0, 0, 0, tzinfo=UTC),
         "period_end": datetime(2026, 4, 1, 0, 0, 0, tzinfo=UTC),
@@ -319,7 +319,7 @@ class TestApplyOverrides:
             "storage_credits_monthly_limit": 999,
             "max_concurrent_running": 99,
             "max_sandbox_duration_seconds": 99999,
-            "allowed_templates": ["tiny"],
+            "allowed_templates": ["aio-sandbox-tiny"],
             "grace_period_seconds": 9999,
         }
         MeteringService.apply_overrides(plan, overrides)
@@ -492,11 +492,11 @@ class TestOpenComputeSession:
         )
         svc = MeteringService()
 
-        cs = await svc.open_compute_session(session, "sb01", "user01", "small")
+        cs = await svc.open_compute_session(session, "sb01", "user01", "aio-sandbox-small")
 
         assert cs.sandbox_id == "sb01"
         assert cs.user_id == "user01"
-        assert cs.template == "small"
+        assert cs.template == "aio-sandbox-small"
         assert cs.credit_rate_per_hour == Decimal("0.5")
         assert cs.started_at == FIXED_NOW
         assert cs.last_metered_at == FIXED_NOW
@@ -508,7 +508,7 @@ class TestOpenComputeSession:
         existing = ComputeSession(
             sandbox_id="sb01",
             user_id="user01",
-            template="small",
+            template="aio-sandbox-small",
             credit_rate_per_hour=Decimal("0.5"),
             started_at=FIXED_NOW,
             last_metered_at=FIXED_NOW,
@@ -516,7 +516,7 @@ class TestOpenComputeSession:
         session = _mock_session(_MockResult(value=existing))
         svc = MeteringService()
 
-        cs = await svc.open_compute_session(session, "sb01", "user01", "small")
+        cs = await svc.open_compute_session(session, "sb01", "user01", "aio-sandbox-small")
 
         assert cs is existing
         session.flush.assert_not_awaited()
@@ -545,7 +545,7 @@ class TestCloseComputeSession:
         cs = ComputeSession(
             sandbox_id="sb01",
             user_id="user01",
-            template="small",
+            template="aio-sandbox-small",
             credit_rate_per_hour=Decimal("0.5"),
             started_at=started,
             last_metered_at=started,
@@ -574,7 +574,7 @@ class TestCloseComputeSession:
         cs = ComputeSession(
             sandbox_id="sb01",
             user_id="user01",
-            template="tiny",
+            template="aio-sandbox-tiny",
             credit_rate_per_hour=Decimal("0.25"),
             started_at=FIXED_NOW,
             last_metered_at=FIXED_NOW,
@@ -676,21 +676,21 @@ class TestRecordStorageRelease:
 
 class TestCheckTemplateAllowed:
     async def test_allowed_template_passes(self):
-        plan = _make_plan("user01", allowed_templates=["tiny", "small", "medium"])
+        plan = _make_plan("user01", allowed_templates=["aio-sandbox-tiny", "aio-sandbox-small", "aio-sandbox-medium"])
         svc = MeteringService()
         svc.get_user_plan = AsyncMock(return_value=plan)
 
-        await svc.check_template_allowed(AsyncMock(), "user01", "small")
+        await svc.check_template_allowed(AsyncMock(), "user01", "aio-sandbox-small")
 
     async def test_disallowed_template_raises(self):
-        plan = _make_plan("user01", tier="free", allowed_templates=["tiny", "small"])
+        plan = _make_plan("user01", tier="free", allowed_templates=["aio-sandbox-tiny", "aio-sandbox-small"])
         svc = MeteringService()
         svc.get_user_plan = AsyncMock(return_value=plan)
 
         with pytest.raises(TemplateNotAllowedError) as exc_info:
-            await svc.check_template_allowed(AsyncMock(), "user01", "medium")
+            await svc.check_template_allowed(AsyncMock(), "user01", "aio-sandbox-medium")
         assert exc_info.value.status == 403
-        assert "medium" in exc_info.value.message
+        assert "aio-sandbox-medium" in exc_info.value.message
         assert "free" in exc_info.value.message
 
     async def test_empty_allowed_list_always_raises(self):
@@ -699,11 +699,11 @@ class TestCheckTemplateAllowed:
         svc.get_user_plan = AsyncMock(return_value=plan)
 
         with pytest.raises(TemplateNotAllowedError) as exc_info:
-            await svc.check_template_allowed(AsyncMock(), "user01", "tiny")
+            await svc.check_template_allowed(AsyncMock(), "user01", "aio-sandbox-tiny")
         assert "Allowed templates: none" in exc_info.value.message
 
     async def test_all_allowed_templates_pass(self):
-        templates = ["tiny", "small", "medium", "large"]
+        templates = ["aio-sandbox-tiny", "aio-sandbox-small", "aio-sandbox-medium", "aio-sandbox-large"]
         plan = _make_plan("user01", allowed_templates=templates)
         svc = MeteringService()
         svc.get_user_plan = AsyncMock(return_value=plan)

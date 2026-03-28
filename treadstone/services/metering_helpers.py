@@ -7,11 +7,11 @@ from decimal import Decimal
 from treadstone.core.errors import BadRequestError
 
 TEMPLATE_SPECS: dict[str, dict[str, Decimal]] = {
-    "tiny": {"vcpu": Decimal("0.25"), "memory_gib": Decimal("0.5")},
-    "small": {"vcpu": Decimal("0.5"), "memory_gib": Decimal("1")},
-    "medium": {"vcpu": Decimal("1"), "memory_gib": Decimal("2")},
-    "large": {"vcpu": Decimal("2"), "memory_gib": Decimal("4")},
-    "xlarge": {"vcpu": Decimal("4"), "memory_gib": Decimal("8")},
+    "aio-sandbox-tiny": {"vcpu": Decimal("0.25"), "memory_gib": Decimal("0.5")},
+    "aio-sandbox-small": {"vcpu": Decimal("0.5"), "memory_gib": Decimal("1")},
+    "aio-sandbox-medium": {"vcpu": Decimal("1"), "memory_gib": Decimal("2")},
+    "aio-sandbox-large": {"vcpu": Decimal("2"), "memory_gib": Decimal("4")},
+    "aio-sandbox-xlarge": {"vcpu": Decimal("4"), "memory_gib": Decimal("8")},
 }
 
 

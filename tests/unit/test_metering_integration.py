@@ -28,7 +28,7 @@ def _make_sandbox(**overrides) -> Sandbox:
         "id": "sb1234567890abcdef",
         "name": "test-sandbox",
         "owner_id": "user1234567890abcd",
-        "template": "small",
+        "template": "aio-sandbox-small",
         "labels": {},
         "auto_stop_interval": 15,
         "auto_delete_interval": -1,
@@ -58,7 +58,7 @@ def _make_plan(tier: str = "pro", **kwargs) -> UserPlan:
         "storage_credits_monthly_limit": 10,
         "max_concurrent_running": 3,
         "max_sandbox_duration_seconds": 7200,
-        "allowed_templates": ["tiny", "small", "medium"],
+        "allowed_templates": ["aio-sandbox-tiny", "aio-sandbox-small", "aio-sandbox-medium"],
         "grace_period_seconds": 1800,
         "period_start": datetime(2026, 3, 1, 0, 0, 0, tzinfo=UTC),
         "period_end": datetime(2026, 4, 1, 0, 0, 0, tzinfo=UTC),
@@ -97,7 +97,7 @@ def _mock_k8s_client():
     k8s.list_sandbox_templates = AsyncMock(
         return_value=[
             {
-                "name": "small",
+                "name": "aio-sandbox-small",
                 "image": "ghcr.io/agent-infra/sandbox:latest",
                 "resource_spec": {"cpu": "500m", "memory": "1Gi"},
             },
@@ -135,7 +135,7 @@ class TestSandboxServiceCreateWithMetering:
         metering = _mock_metering()
         service = SandboxService(session=session, k8s_client=k8s, metering=metering)
 
-        await service.create(owner_id="user1234567890abcd", template="small")
+        await service.create(owner_id="user1234567890abcd", template="aio-sandbox-small")
 
         metering.check_template_allowed.assert_awaited_once()
         metering.check_compute_quota.assert_awaited_once()
@@ -150,7 +150,9 @@ class TestSandboxServiceCreateWithMetering:
         metering = _mock_metering()
         service = SandboxService(session=session, k8s_client=k8s, metering=metering)
 
-        await service.create(owner_id="user1234567890abcd", template="small", persist=True, storage_size="5Gi")
+        await service.create(
+            owner_id="user1234567890abcd", template="aio-sandbox-small", persist=True, storage_size="5Gi"
+        )
 
         metering.check_storage_quota.assert_awaited_once_with(session, "user1234567890abcd", 5)
 
@@ -162,7 +164,7 @@ class TestSandboxServiceCreateWithMetering:
         metering = _mock_metering()
         service = SandboxService(session=session, k8s_client=k8s, metering=metering)
 
-        await service.create(owner_id="user1234567890abcd", template="small", persist=False)
+        await service.create(owner_id="user1234567890abcd", template="aio-sandbox-small", persist=False)
 
         metering.check_storage_quota.assert_not_awaited()
 
@@ -175,7 +177,7 @@ class TestSandboxServiceCreateWithMetering:
         service = SandboxService(session=session, k8s_client=k8s, metering=metering)
 
         result = await service.create(
-            owner_id="user1234567890abcd", template="small", persist=True, storage_size="10Gi"
+            owner_id="user1234567890abcd", template="aio-sandbox-small", persist=True, storage_size="10Gi"
         )
 
         metering.record_storage_allocation.assert_awaited_once_with(session, "user1234567890abcd", result.id, 10)
@@ -187,12 +189,12 @@ class TestSandboxServiceCreateWithMetering:
         k8s = _mock_k8s_client()
         metering = _mock_metering()
         metering.check_template_allowed = AsyncMock(
-            side_effect=TemplateNotAllowedError("free", "large", ["tiny", "small"])
+            side_effect=TemplateNotAllowedError("free", "aio-sandbox-large", ["aio-sandbox-tiny", "aio-sandbox-small"])
         )
         service = SandboxService(session=session, k8s_client=k8s, metering=metering)
 
         with pytest.raises(TemplateNotAllowedError):
-            await service.create(owner_id="user1234567890abcd", template="large")
+            await service.create(owner_id="user1234567890abcd", template="aio-sandbox-large")
 
         session.add.assert_not_called()
         k8s.create_sandbox_claim.assert_not_called()
@@ -207,7 +209,7 @@ class TestSandboxServiceCreateWithMetering:
         service = SandboxService(session=session, k8s_client=k8s, metering=metering)
 
         with pytest.raises(ComputeQuotaExceededError):
-            await service.create(owner_id="user1234567890abcd", template="small")
+            await service.create(owner_id="user1234567890abcd", template="aio-sandbox-small")
 
         session.add.assert_not_called()
 
@@ -221,7 +223,7 @@ class TestSandboxServiceCreateWithMetering:
         service = SandboxService(session=session, k8s_client=k8s, metering=metering)
 
         with pytest.raises(ConcurrentLimitError):
-            await service.create(owner_id="user1234567890abcd", template="small")
+            await service.create(owner_id="user1234567890abcd", template="aio-sandbox-small")
 
         session.add.assert_not_called()
 
@@ -235,7 +237,9 @@ class TestSandboxServiceCreateWithMetering:
         service = SandboxService(session=session, k8s_client=k8s, metering=metering)
 
         with pytest.raises(StorageQuotaExceededError):
-            await service.create(owner_id="user1234567890abcd", template="small", persist=True, storage_size="5Gi")
+            await service.create(
+                owner_id="user1234567890abcd", template="aio-sandbox-small", persist=True, storage_size="5Gi"
+            )
 
         session.add.assert_not_called()
 
@@ -251,7 +255,7 @@ class TestSandboxServiceCreateWithMetering:
         with pytest.raises(SandboxDurationExceededError):
             await service.create(
                 owner_id="user1234567890abcd",
-                template="small",
+                template="aio-sandbox-small",
                 auto_stop_interval=60,
             )
 
@@ -266,7 +270,7 @@ class TestSandboxServiceCreateWithMetering:
 
         result = await service.create(
             owner_id="user1234567890abcd",
-            template="small",
+            template="aio-sandbox-small",
             auto_stop_interval=-1,
         )
         assert result.status == SandboxStatus.CREATING
@@ -278,7 +282,7 @@ class TestSandboxServiceCreateWithMetering:
         k8s = _mock_k8s_client()
         service = SandboxService(session=session, k8s_client=k8s, metering=None)
 
-        result = await service.create(owner_id="user1234567890abcd", template="small")
+        result = await service.create(owner_id="user1234567890abcd", template="aio-sandbox-small")
 
         assert result.status == SandboxStatus.CREATING
 
@@ -390,7 +394,9 @@ class TestSandboxServiceDeleteWithMetering:
         metering.record_storage_allocation = AsyncMock(side_effect=RuntimeError("DB error"))
         service = SandboxService(session=session, k8s_client=k8s, metering=metering)
 
-        result = await service.create(owner_id="user1234567890abcd", template="small", persist=True, storage_size="5Gi")
+        result = await service.create(
+            owner_id="user1234567890abcd", template="aio-sandbox-small", persist=True, storage_size="5Gi"
+        )
 
         assert result.status == SandboxStatus.CREATING
         assert result.persist is True
@@ -574,7 +580,7 @@ class TestReconcileMetering:
             id="cs_test",
             sandbox_id=stopped_sandbox.id,
             user_id=stopped_sandbox.owner_id,
-            template="small",
+            template="aio-sandbox-small",
             credit_rate_per_hour=Decimal("0.5"),
             started_at=FIXED_NOW,
             last_metered_at=FIXED_NOW,
@@ -617,7 +623,7 @@ class TestReconcileMetering:
             id="cs_orphan",
             sandbox_id="sb_deleted",
             user_id="user01",
-            template="small",
+            template="aio-sandbox-small",
             credit_rate_per_hour=Decimal("0.5"),
             started_at=FIXED_NOW,
             last_metered_at=FIXED_NOW,

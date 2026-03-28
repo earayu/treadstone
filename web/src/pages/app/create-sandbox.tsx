@@ -67,7 +67,9 @@ export function CreateSandboxPage() {
   }, [templatesData, usage])
 
   const defaultTemplate = useMemo(() => {
-    return visibleTemplates.length > 0 ? visibleTemplates[0].name : ""
+    if (visibleTemplates.length === 0) return ""
+    const tiny = visibleTemplates.find((t) => t.name === "aio-sandbox-tiny")
+    return tiny ? tiny.name : visibleTemplates[0].name
   }, [visibleTemplates])
 
   const [selectedTemplate, setSelectedTemplate] = useState<string>("")
