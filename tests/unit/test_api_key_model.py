@@ -14,9 +14,15 @@ def test_api_key_fields():
     assert hasattr(k, "key_preview")
     assert hasattr(k, "user_id")
     assert hasattr(k, "name")
+    assert hasattr(k, "is_enabled")
     assert hasattr(k, "control_plane_enabled")
     assert hasattr(k, "data_plane_mode")
     assert hasattr(k, "gmt_updated")
+
+
+def test_api_key_has_is_enabled_field():
+    k = ApiKey()
+    assert hasattr(k, "is_enabled")
 
 
 def test_api_key_soft_delete_defaults_none():

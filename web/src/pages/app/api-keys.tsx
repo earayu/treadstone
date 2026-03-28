@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import {
   useApiKeys,
   useCreateApiKey,
+  useUpdateApiKey,
   useDeleteApiKey,
   type ApiKey,
 } from "@/api/api-keys"
@@ -74,6 +75,7 @@ function ScopeBadges({ keyRow }: { keyRow: ApiKey }) {
 export function ApiKeysPage() {
   const { data, isLoading } = useApiKeys()
   const createKey = useCreateApiKey()
+  const updateKey = useUpdateApiKey()
   const deleteKey = useDeleteApiKey()
 
   const items = useMemo(() => data?.items ?? [], [data])
@@ -150,6 +152,15 @@ export function ApiKeysPage() {
     }
   }
 
+  async function handleToggleEnabled(id: string, currentlyEnabled: boolean) {
+    try {
+      await updateKey.mutateAsync({ id, body: { is_enabled: !currentlyEnabled } })
+      toast.success(currentlyEnabled ? "API key disabled." : "API key enabled.")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update key.")
+    }
+  }
+
   function copySecret() {
     if (!createdSecret) return
     void navigator.clipboard.writeText(createdSecret)
@@ -213,17 +224,18 @@ export function ApiKeysPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px]">
+          <table className="w-full min-w-[960px]">
             <thead>
               <tr className="border-b border-border/15 bg-card">
                 {(
                   [
-                    ["Name", "w-[16%]"],
-                    ["Key preview", "w-[20%]"],
-                    ["Scope", "w-[18%]"],
-                    ["Created at", "w-[16%]"],
-                    ["Expiry", "w-[16%]"],
-                    ["Actions", "w-[14%] text-right"],
+                    ["Name", "w-[15%]"],
+                    ["Key preview", "w-[18%]"],
+                    ["Scope", "w-[16%]"],
+                    ["Created at", "w-[14%]"],
+                    ["Expiry", "w-[14%]"],
+                    ["Status", "w-[10%]"],
+                    ["Actions", "w-[13%] text-right"],
                   ] as const
                 ).map(([label, cls]) => (
                   <th
@@ -241,13 +253,13 @@ export function ApiKeysPage() {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-sm text-muted-foreground">
+                  <td colSpan={7} className="px-6 py-12 text-center text-sm text-muted-foreground">
                     Loading…
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-sm text-muted-foreground">
+                  <td colSpan={7} className="px-6 py-12 text-center text-sm text-muted-foreground">
                     {filter ? "No keys match your search." : "No API keys yet."}
                   </td>
                 </tr>
@@ -258,6 +270,7 @@ export function ApiKeysPage() {
                     className={cn(
                       "transition-colors hover:bg-card/50",
                       idx > 0 && "border-t border-border/5",
+                      !row.is_enabled && "opacity-60",
                     )}
                   >
                     <td className="px-6 py-4 text-sm font-medium text-foreground">{row.name}</td>
@@ -278,6 +291,17 @@ export function ApiKeysPage() {
                       ) : (
                         <span className="text-muted-foreground">Never</span>
                       )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <Switch.Root
+                        checked={row.is_enabled}
+                        onCheckedChange={() => void handleToggleEnabled(row.id, row.is_enabled)}
+                        disabled={updateKey.isPending}
+                        aria-label={row.is_enabled ? "Disable key" : "Enable key"}
+                        className="h-5 w-9 shrink-0 rounded-full bg-muted-foreground/30 outline-none transition-colors data-[state=checked]:bg-primary disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <Switch.Thumb className="block size-4 translate-x-0.5 rounded-full bg-background transition-transform will-change-transform data-[state=checked]:translate-x-[18px]" />
+                      </Switch.Root>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <button

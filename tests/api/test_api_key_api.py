@@ -222,3 +222,60 @@ async def test_delete_api_key(auth_client):
     key_id = create_resp.json()["id"]
     resp = await auth_client.delete(f"/v1/auth/api-keys/{key_id}")
     assert resp.status_code == 204
+
+
+async def test_create_api_key_is_enabled_by_default(auth_client):
+    resp = await auth_client.post("/v1/auth/api-keys", json={"name": "enabled-by-default"})
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["is_enabled"] is True
+
+
+async def test_disable_api_key_blocks_authentication(auth_client):
+    create_resp = await auth_client.post("/v1/auth/api-keys", json={"name": "to-disable"})
+    assert create_resp.status_code == 201
+    key_id = create_resp.json()["id"]
+    api_key_value = create_resp.json()["key"]
+
+    # Key works before disabling
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/v1/auth/user", headers={"Authorization": f"Bearer {api_key_value}"})
+    assert resp.status_code == 200
+
+    # Disable the key
+    patch_resp = await auth_client.patch(f"/v1/auth/api-keys/{key_id}", json={"is_enabled": False})
+    assert patch_resp.status_code == 200
+    assert patch_resp.json()["is_enabled"] is False
+
+    # Key no longer works after disabling
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/v1/auth/user", headers={"Authorization": f"Bearer {api_key_value}"})
+    assert resp.status_code == 401
+
+
+async def test_re_enable_api_key_restores_authentication(auth_client):
+    create_resp = await auth_client.post("/v1/auth/api-keys", json={"name": "re-enable"})
+    key_id = create_resp.json()["id"]
+    api_key_value = create_resp.json()["key"]
+
+    await auth_client.patch(f"/v1/auth/api-keys/{key_id}", json={"is_enabled": False})
+
+    # Re-enable
+    patch_resp = await auth_client.patch(f"/v1/auth/api-keys/{key_id}", json={"is_enabled": True})
+    assert patch_resp.status_code == 200
+    assert patch_resp.json()["is_enabled"] is True
+
+    # Key works again
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/v1/auth/user", headers={"Authorization": f"Bearer {api_key_value}"})
+    assert resp.status_code == 200
+
+
+async def test_list_api_keys_includes_is_enabled(auth_client):
+    await auth_client.post("/v1/auth/api-keys", json={"name": "listed-key"})
+    resp = await auth_client.get("/v1/auth/api-keys")
+    assert resp.status_code == 200
+    items = resp.json()["items"]
+    assert len(items) >= 1
+    for item in items:
+        assert "is_enabled" in item

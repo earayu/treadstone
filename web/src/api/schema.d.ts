@@ -132,7 +132,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Admin Create Storage Quota Grant */
+        /** Admin Create Storage Grant */
         post: operations["admin-admin_create_storage_grant"];
         delete?: never;
         options?: never;
@@ -166,7 +166,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Admin Batch Storage Quota Grants */
+        /** Admin Batch Storage Grants */
         post: operations["admin-admin_batch_storage_grants"];
         delete?: never;
         options?: never;
@@ -700,6 +700,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/usage/storage-ledger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Storage Ledger */
+        get: operations["usage-list_storage_ledger"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/usage/grants": {
         parameters: {
             query?: never;
@@ -790,6 +807,11 @@ export interface components {
              */
             name: string;
             /**
+             * Is Enabled
+             * @example true
+             */
+            is_enabled: boolean;
+            /**
              * Key
              * @example sk-0123456789abcdef0123456789abcdef01234567
              */
@@ -844,6 +866,11 @@ export interface components {
              * @example my-api-key
              */
             name: string;
+            /**
+             * Is Enabled
+             * @example true
+             */
+            is_enabled: boolean;
             /**
              * Key Prefix
              * @example sk-0123...cdef
@@ -1045,36 +1072,6 @@ export interface components {
              */
             expires_at?: string | null;
         };
-        /** BatchStorageQuotaGrantRequest */
-        BatchStorageQuotaGrantRequest: {
-            /** User Ids */
-            user_ids: string[];
-            /**
-             * Size Gib
-             * @example 10
-             */
-            size_gib: number;
-            /**
-             * Grant Type
-             * @example campaign
-             */
-            grant_type: string;
-            /**
-             * Campaign Id
-             * @example spring_2026_promo
-             */
-            campaign_id?: string | null;
-            /**
-             * Reason
-             * @example Spring promotion
-             */
-            reason?: string | null;
-            /**
-             * Expires At
-             * @example 2026-06-01T00:00:00Z
-             */
-            expires_at?: string | null;
-        };
         /** BatchGrantResponse */
         BatchGrantResponse: {
             /**
@@ -1115,6 +1112,36 @@ export interface components {
             /** Error */
             error?: string | null;
         };
+        /** BatchStorageQuotaGrantRequest */
+        BatchStorageQuotaGrantRequest: {
+            /** User Ids */
+            user_ids: string[];
+            /**
+             * Size Gib
+             * @example 10
+             */
+            size_gib: number;
+            /**
+             * Grant Type
+             * @example campaign
+             */
+            grant_type: string;
+            /**
+             * Campaign Id
+             * @example spring_2026_promo
+             */
+            campaign_id?: string | null;
+            /**
+             * Reason
+             * @example Spring promotion
+             */
+            reason?: string | null;
+            /**
+             * Expires At
+             * @example 2026-06-01T00:00:00Z
+             */
+            expires_at?: string | null;
+        };
         /** BillingPeriod */
         BillingPeriod: {
             /**
@@ -1140,6 +1167,53 @@ export interface components {
              * @example NewPass456!
              */
             new_password: string;
+        };
+        /** ComputeGrantItem */
+        ComputeGrantItem: {
+            /**
+             * Id
+             * @example cgabc123def456
+             */
+            id: string;
+            /**
+             * Grant Type
+             * @example admin_grant
+             */
+            grant_type: string;
+            /**
+             * Original Amount
+             * @example 100
+             */
+            original_amount: number;
+            /**
+             * Remaining Amount
+             * @example 50
+             */
+            remaining_amount: number;
+            /**
+             * Reason
+             * @example Special support
+             */
+            reason?: string | null;
+            /** Granted By */
+            granted_by?: string | null;
+            /** Campaign Id */
+            campaign_id?: string | null;
+            /**
+             * Status
+             * @example active
+             */
+            status: string;
+            /**
+             * Granted At
+             * @example 2026-03-01T00:00:00+00:00
+             */
+            granted_at: string;
+            /**
+             * Expires At
+             * @example 2026-06-01T00:00:00+00:00
+             */
+            expires_at?: string | null;
         };
         /** ComputeSessionItem */
         ComputeSessionItem: {
@@ -1274,31 +1348,6 @@ export interface components {
              */
             expires_at?: string | null;
         };
-        /** CreateStorageQuotaGrantRequest */
-        CreateStorageQuotaGrantRequest: {
-            /**
-             * Size Gib
-             * @example 20
-             */
-            size_gib: number;
-            /**
-             * Grant Type
-             * @example admin_grant
-             */
-            grant_type: string;
-            /**
-             * Reason
-             * @example Storage addon
-             */
-            reason?: string | null;
-            /** Campaign Id */
-            campaign_id?: string | null;
-            /**
-             * Expires At
-             * @example 2026-06-01T00:00:00Z
-             */
-            expires_at?: string | null;
-        };
         /** CreateComputeGrantResponse */
         CreateComputeGrantResponse: {
             /**
@@ -1321,42 +1370,6 @@ export interface components {
              * @example 100
              */
             remaining_amount: number;
-            /**
-             * Grant Type
-             * @example admin_grant
-             */
-            grant_type: string;
-            /** Reason */
-            reason?: string | null;
-            /** Granted By */
-            granted_by?: string | null;
-            /** Campaign Id */
-            campaign_id?: string | null;
-            /**
-             * Granted At
-             * @example 2026-03-26T12:00:00+00:00
-             */
-            granted_at: string;
-            /** Expires At */
-            expires_at?: string | null;
-        };
-        /** CreateStorageQuotaGrantResponse */
-        CreateStorageQuotaGrantResponse: {
-            /**
-             * Id
-             * @example sqgabc123def456
-             */
-            id: string;
-            /**
-             * User Id
-             * @example userabc123def456
-             */
-            user_id: string;
-            /**
-             * Size Gib
-             * @example 20
-             */
-            size_gib: number;
             /**
              * Grant Type
              * @example admin_grant
@@ -1425,101 +1438,66 @@ export interface components {
              */
             storage_size?: ("5Gi" | "10Gi" | "20Gi") | null;
         };
-        /** ComputeGrantItem */
-        ComputeGrantItem: {
-            /**
-             * Id
-             * @example cgabc123def456
-             */
-            id: string;
-            /**
-             * Grant Type
-             * @example admin_grant
-             */
-            grant_type: string;
-            /**
-             * Original Amount
-             * @example 100
-             */
-            original_amount: number;
-            /**
-             * Remaining Amount
-             * @example 50
-             */
-            remaining_amount: number;
-            /**
-             * Reason
-             * @example Special support
-             */
-            reason?: string | null;
-            /** Granted By */
-            granted_by?: string | null;
-            /** Campaign Id */
-            campaign_id?: string | null;
-            /**
-             * Status
-             * @example active
-             */
-            status: string;
-            /**
-             * Granted At
-             * @example 2026-03-01T00:00:00+00:00
-             */
-            granted_at: string;
-            /**
-             * Expires At
-             * @example 2026-06-01T00:00:00+00:00
-             */
-            expires_at?: string | null;
-        };
-        /** StorageQuotaGrantItem */
-        StorageQuotaGrantItem: {
-            /**
-             * Id
-             * @example sqgabc123def456
-             */
-            id: string;
-            /**
-             * Grant Type
-             * @example admin_grant
-             */
-            grant_type: string;
+        /** CreateStorageQuotaGrantRequest */
+        CreateStorageQuotaGrantRequest: {
             /**
              * Size Gib
              * @example 20
              */
             size_gib: number;
             /**
+             * Grant Type
+             * @example admin_grant
+             */
+            grant_type: string;
+            /**
              * Reason
              * @example Storage addon
              */
+            reason?: string | null;
+            /** Campaign Id */
+            campaign_id?: string | null;
+            /**
+             * Expires At
+             * @example 2026-06-01T00:00:00Z
+             */
+            expires_at?: string | null;
+        };
+        /** CreateStorageQuotaGrantResponse */
+        CreateStorageQuotaGrantResponse: {
+            /**
+             * Id
+             * @example sqgabc123def456
+             */
+            id: string;
+            /**
+             * User Id
+             * @example userabc123def456
+             */
+            user_id: string;
+            /**
+             * Size Gib
+             * @example 20
+             */
+            size_gib: number;
+            /**
+             * Grant Type
+             * @example admin_grant
+             */
+            grant_type: string;
+            /** Reason */
             reason?: string | null;
             /** Granted By */
             granted_by?: string | null;
             /** Campaign Id */
             campaign_id?: string | null;
             /**
-             * Status
-             * @example active
-             */
-            status: string;
-            /**
              * Granted At
-             * @example 2026-03-01T00:00:00+00:00
+             * @example 2026-03-26T12:00:00+00:00
              */
             granted_at: string;
-            /**
-             * Expires At
-             * @example 2026-06-01T00:00:00+00:00
-             */
+            /** Expires At */
             expires_at?: string | null;
-        };
-        /** GrantsResponse */
-        GrantsResponse: {
-            /** Compute Grants */
-            compute_grants: components["schemas"]["ComputeGrantItem"][];
-            /** Storage Quota Grants */
-            storage_quota_grants: components["schemas"]["StorageQuotaGrantItem"][];
         };
         /** GracePeriodStatus */
         GracePeriodStatus: {
@@ -1543,6 +1521,13 @@ export interface components {
              * @example 1800
              */
             grace_period_seconds: number;
+        };
+        /** GrantsResponse */
+        GrantsResponse: {
+            /** Compute Grants */
+            compute_grants: components["schemas"]["ComputeGrantItem"][];
+            /** Storage Quota Grants */
+            storage_quota_grants: components["schemas"]["StorageQuotaGrantItem"][];
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1944,6 +1929,108 @@ export interface components {
              */
             new_password: string;
         };
+        /** StorageLedgerItem */
+        StorageLedgerItem: {
+            /**
+             * Id
+             * @example slabc123def456
+             */
+            id: string;
+            /**
+             * Sandbox Id
+             * @example sbabc123def456
+             */
+            sandbox_id?: string | null;
+            /**
+             * Size Gib
+             * @example 10
+             */
+            size_gib: number;
+            /**
+             * Storage State
+             * @example active
+             */
+            storage_state: string;
+            /**
+             * Allocated At
+             * @example 2026-03-26T08:00:00+00:00
+             */
+            allocated_at: string;
+            /** Released At */
+            released_at?: string | null;
+            /**
+             * Gib Hours Consumed
+             * @example 120
+             */
+            gib_hours_consumed: number;
+            /**
+             * Last Metered At
+             * @example 2026-03-26T09:00:00+00:00
+             */
+            last_metered_at: string;
+        };
+        /** StorageLedgerListResponse */
+        StorageLedgerListResponse: {
+            /** Items */
+            items: components["schemas"]["StorageLedgerItem"][];
+            /**
+             * Total
+             * @example 5
+             */
+            total: number;
+            /**
+             * Limit
+             * @example 20
+             */
+            limit: number;
+            /**
+             * Offset
+             * @example 0
+             */
+            offset: number;
+        };
+        /** StorageQuotaGrantItem */
+        StorageQuotaGrantItem: {
+            /**
+             * Id
+             * @example sqgabc123def456
+             */
+            id: string;
+            /**
+             * Grant Type
+             * @example admin_grant
+             */
+            grant_type: string;
+            /**
+             * Size Gib
+             * @example 20
+             */
+            size_gib: number;
+            /**
+             * Reason
+             * @example Storage addon
+             */
+            reason?: string | null;
+            /** Granted By */
+            granted_by?: string | null;
+            /** Campaign Id */
+            campaign_id?: string | null;
+            /**
+             * Status
+             * @example active
+             */
+            status: string;
+            /**
+             * Granted At
+             * @example 2026-03-01T00:00:00+00:00
+             */
+            granted_at: string;
+            /**
+             * Expires At
+             * @example 2026-06-01T00:00:00+00:00
+             */
+            expires_at?: string | null;
+        };
         /** StorageUsage */
         StorageUsage: {
             /**
@@ -1980,7 +2067,7 @@ export interface components {
              */
             compute_credits_monthly: number;
             /**
-             * Storage Credits Monthly
+             * Storage Capacity Gib
              * @example 10
              */
             storage_capacity_gib: number;
@@ -2037,6 +2124,12 @@ export interface components {
              */
             name?: string | null;
             /**
+             * Is Enabled
+             * @description Enable or disable the API key.
+             * @example true
+             */
+            is_enabled?: boolean | null;
+            /**
              * Expires In
              * @description Reset the key lifetime from now in seconds.
              * @example 86400
@@ -2075,7 +2168,7 @@ export interface components {
              */
             compute_credits_monthly?: number | null;
             /**
-             * Storage Credits Monthly
+             * Storage Capacity Gib
              * @example 15
              */
             storage_capacity_gib?: number | null;
@@ -2123,7 +2216,7 @@ export interface components {
              */
             compute_credits_monthly: number;
             /**
-             * Storage Credits Monthly
+             * Storage Capacity Gib
              * @example 10
              */
             storage_capacity_gib: number;
@@ -2308,7 +2401,7 @@ export interface components {
              */
             compute_credits_monthly_used: number;
             /**
-             * Storage Credits Monthly Limit
+             * Storage Capacity Limit Gib
              * @example 10
              */
             storage_capacity_limit_gib: number;
@@ -3741,6 +3834,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ComputeSessionListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "usage-list_storage_ledger": {
+        parameters: {
+            query?: {
+                status?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageLedgerListResponse"];
                 };
             };
             /** @description Validation Error */
