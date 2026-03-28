@@ -32,6 +32,7 @@ from treadstone.api.schemas import (
     UsageSummaryResponse,
     UserPlanResponse,
 )
+from treadstone.config import settings
 from treadstone.core.database import get_session
 from treadstone.core.errors import NotFoundError
 from treadstone.models.email_verification_log import EmailVerificationLog
@@ -273,13 +274,21 @@ async def admin_batch_grants(
 # ── Email Verification (Admin) ───────────────────────────────────────────────
 
 
-@router.get("/users/{user_id}/verification-token")
+def _require_non_production_email_backend() -> None:
+    """Block verification-token endpoints in production (email_backend=resend)."""
+    if settings.email_backend != "memory":
+        raise NotFoundError("endpoint", "verification-token")
+
+
+@router.get("/users/{user_id}/verification-token", include_in_schema=False)
 async def get_user_verification_token(
     user_id: str,
     admin: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_session),
 ):
-    """Return the latest verification token for a user (admin only)."""
+    """Return the latest verification token for a user (admin only, non-production)."""
+    _require_non_production_email_backend()
+
     target = await session.get(User, user_id)
     if not target:
         raise NotFoundError("User", user_id)
@@ -305,16 +314,18 @@ async def get_user_verification_token(
     }
 
 
-@router.get("/verification-token-by-email")
+@router.get("/verification-token-by-email", include_in_schema=False)
 async def get_verification_token_by_email(
     email: str = Query(..., description="Email address to look up."),
     admin: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_session),
 ):
-    """Return the latest verification token for an email (admin only).
+    """Return the latest verification token for an email (admin only, non-production).
 
-    Convenience endpoint for E2E tests where user_id is not yet known.
+    Available only when TREADSTONE_EMAIL_BACKEND=memory. Used by E2E tests.
     """
+    _require_non_production_email_backend()
+
     latest = (
         await session.execute(
             select(EmailVerificationLog)

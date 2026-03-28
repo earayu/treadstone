@@ -68,13 +68,20 @@ class UserManager(BaseUserManager[User, str]):
     async def on_after_request_verify(self, user: User, token: str, request: Request | None = None) -> None:
         verify_url = f"{settings.app_base_url.rstrip('/')}/auth/verify-email?token={token}"
 
+        # fastapi-users request_verify() does not stage any DB writes before calling
+        # this hook, so committing here is safe. If upgrading fastapi-users, verify this.
         session = self.user_db.session
         log_entry = EmailVerificationLog(user_id=user.id, email=user.email, token=token, verify_url=verify_url)
         session.add(log_entry)
-        await session.commit()
 
         backend = get_email_backend()
-        await backend.send_verification_email(to=user.email, token=token, verify_url=verify_url)
+        try:
+            await backend.send_verification_email(to=user.email, token=token, verify_url=verify_url)
+        except Exception:
+            await session.rollback()
+            raise
+
+        await session.commit()
 
 
 # ── FastAPI-Users DB dependency ──

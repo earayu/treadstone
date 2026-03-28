@@ -1,5 +1,8 @@
 """API tests for email verification flow."""
 
+from datetime import timedelta
+
+import pytest
 from fastapi_users.db import SQLAlchemyUserDatabase
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
@@ -10,13 +13,14 @@ from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
 from treadstone.models.audit_event import AuditEvent
 from treadstone.models.email_verification_log import EmailVerificationLog
-from treadstone.models.user import OAuthAccount, User
+from treadstone.models.user import OAuthAccount, User, utc_now
 from treadstone.services.email import reset_email_backend
 
 _test_session_factory = None
 
 
-async def db_session_setup():
+@pytest.fixture
+async def db_session():
     global _test_session_factory
     test_engine = create_async_engine("sqlite+aiosqlite://", echo=False)
     async with test_engine.begin() as conn:
@@ -41,15 +45,6 @@ async def db_session_setup():
     app.dependency_overrides[get_user_db] = override_get_user_db
     app.dependency_overrides[get_user_manager] = override_get_user_manager
     reset_email_backend()
-    return test_engine
-
-
-import pytest  # noqa: E402
-
-
-@pytest.fixture
-async def db_session():
-    test_engine = await db_session_setup()
     yield
     app.dependency_overrides.clear()
     reset_email_backend()
@@ -172,10 +167,6 @@ async def test_get_user_includes_is_verified(db_session):
 
 
 async def test_resend_verification_succeeds(db_session):
-    from datetime import timedelta
-
-    from treadstone.models.user import utc_now
-
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await _register(client, "first@example.com")
         await _register(client, "user@example.com")
@@ -285,7 +276,9 @@ async def test_full_verification_flow(db_session):
 async def test_admin_can_get_verification_token_by_email(db_session):
     """Admin endpoint returns the latest verification token for a given email."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        await _register(client, "admin@example.com")
+        admin_data = await _register(client, "admin@example.com")
+        assert admin_data["role"] == "admin"
+
         await _register(client, "user@example.com")
 
         await _login(client, "admin@example.com")
@@ -331,3 +324,15 @@ async def test_confirm_invalid_token_records_audit_event(db_session):
         )
     assert len(events) == 1
     assert events[0].error_code == "email_verification_token_invalid"
+
+
+async def test_resend_verification_cooldown_rejects(db_session):
+    """Resend within 60 seconds is rejected with 400."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await _register(client, "first@example.com")
+        await _register(client, "user@example.com")
+        await _login(client, "user@example.com")
+
+        resp = await client.post("/v1/auth/verification/request")
+    assert resp.status_code == 400
+    assert "wait" in resp.json()["error"]["message"].lower()
