@@ -3,6 +3,8 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import {
   useTierTemplates,
+  useLookupUserByEmail,
+  useResolveEmails,
   useAdminUserUsage,
   useAdminUpdatePlan,
   useAdminCreateGrant,
@@ -119,21 +121,37 @@ function TierRow({ tier, odd }: { tier: TierTemplate; odd: boolean }) {
 }
 
 function UserPlanSection() {
-  const [inputId, setInputId] = useState("")
-  const [lookupId, setLookupId] = useState<string | null>(null)
-  const { data: usage, isLoading, error } = useAdminUserUsage(lookupId)
+  const [inputEmail, setInputEmail] = useState("")
+  const [resolvedUserId, setResolvedUserId] = useState<string | null>(null)
+  const [resolvedEmail, setResolvedEmail] = useState<string | null>(null)
+  const [lookupError, setLookupError] = useState<string | null>(null)
+  const lookupByEmail = useLookupUserByEmail()
+  const { data: usage, isLoading, error } = useAdminUserUsage(resolvedUserId)
   const updatePlan = useAdminUpdatePlan()
   const createGrant = useAdminCreateGrant()
 
   const handleLookup = () => {
-    const trimmed = inputId.trim()
-    if (trimmed) setLookupId(trimmed)
+    const trimmed = inputEmail.trim()
+    if (!trimmed) return
+    setLookupError(null)
+    lookupByEmail.mutate(trimmed, {
+      onSuccess: (res) => {
+        setResolvedUserId(res.user_id)
+        setResolvedEmail(res.email)
+        setLookupError(null)
+      },
+      onError: () => {
+        setResolvedUserId(null)
+        setResolvedEmail(null)
+        setLookupError(`No user found for "${trimmed}"`)
+      },
+    })
   }
 
   const handleChangeTier = (newTier: string) => {
-    if (!lookupId) return
+    if (!resolvedUserId) return
     updatePlan.mutate(
-      { userId: lookupId, body: { tier: newTier } },
+      { userId: resolvedUserId, body: { tier: newTier } },
       {
         onSuccess: () => toast.success(`Tier updated to ${newTier}`),
         onError: (e) => toast.error(e.message),
@@ -142,10 +160,10 @@ function UserPlanSection() {
   }
 
   const handleGrantCredits = () => {
-    if (!lookupId) return
+    if (!resolvedUserId) return
     createGrant.mutate(
       {
-        userId: lookupId,
+        userId: resolvedUserId,
         body: { credit_type: "compute", amount: 50, grant_type: "admin_grant" },
       },
       {
@@ -175,31 +193,46 @@ function UserPlanSection() {
       </div>
 
       <div className="flex items-center gap-3 border-b border-border/15 px-5 py-3">
-        <label className="text-[11px] font-medium text-muted-foreground">User ID</label>
+        <label className="text-[11px] font-medium text-muted-foreground">Email</label>
         <input
-          type="text"
-          value={inputId}
-          onChange={(e) => setInputId(e.target.value)}
+          type="email"
+          value={inputEmail}
+          onChange={(e) => setInputEmail(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleLookup()}
-          placeholder="usr-xxxx-yyyy-zzzz"
+          placeholder="user@example.com"
           className="h-[34px] w-[400px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
         />
         <button
           onClick={handleLookup}
-          className="h-[34px] rounded-sm bg-accent px-5 text-xs font-medium text-foreground transition-colors hover:bg-accent/80"
+          disabled={lookupByEmail.isPending}
+          className="h-[34px] rounded-sm bg-accent px-5 text-xs font-medium text-foreground transition-colors hover:bg-accent/80 disabled:opacity-50"
         >
-          Lookup
+          {lookupByEmail.isPending ? "Looking up…" : "Lookup"}
         </button>
       </div>
 
-      {lookupId && (
+      {lookupError && (
+        <div className="mx-5 mt-5 rounded-sm border border-destructive/30 bg-destructive/10 px-4 py-3">
+          <p className="text-sm text-destructive">{lookupError}</p>
+        </div>
+      )}
+
+      {resolvedUserId && (
         <div className="m-5 rounded-sm border border-border/20 bg-background p-5">
           {isLoading ? (
-            <p className="text-sm text-muted-foreground">Looking up user…</p>
+            <p className="text-sm text-muted-foreground">Loading usage data…</p>
           ) : error ? (
-            <p className="text-sm text-destructive">User not found or error occurred.</p>
+            <p className="text-sm text-destructive">Failed to load usage data.</p>
           ) : (
             <>
+              <div className="mb-4 flex items-center gap-4 text-xs text-muted-foreground">
+                <span>
+                  <span className="font-medium text-foreground">{resolvedEmail}</span>
+                </span>
+                <span className="text-muted-foreground/40">|</span>
+                <span className="font-mono text-[10px]">{resolvedUserId}</span>
+              </div>
+
               <div className="grid grid-cols-4 gap-6">
                 <div>
                   <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -264,19 +297,21 @@ function UserPlanSection() {
 }
 
 function BatchGrantsSection() {
-  const [userIds, setUserIds] = useState("")
+  const [emails, setEmails] = useState("")
   const [creditType, setCreditType] = useState<"compute" | "storage">("compute")
   const [amount, setAmount] = useState("50.0")
   const [grantType, setGrantType] = useState("campaign")
+  const resolveEmails = useResolveEmails()
   const batchGrants = useAdminBatchGrants()
+  const isPending = resolveEmails.isPending || batchGrants.isPending
 
   const handleSubmit = () => {
-    const ids = userIds
+    const emailList = emails
       .split("\n")
       .map((s) => s.trim())
       .filter(Boolean)
-    if (ids.length === 0) {
-      toast.error("Please provide at least one user ID.")
+    if (emailList.length === 0) {
+      toast.error("Please provide at least one email.")
       return
     }
     const amt = parseFloat(amount)
@@ -284,14 +319,28 @@ function BatchGrantsSection() {
       toast.error("Amount must be a positive number.")
       return
     }
-    batchGrants.mutate(
-      { user_ids: ids, credit_type: creditType, amount: amt, grant_type: grantType },
-      {
-        onSuccess: (res) =>
-          toast.success(`Batch grant complete: ${res.succeeded}/${res.total_requested} succeeded`),
-        onError: (e) => toast.error(e.message),
+
+    resolveEmails.mutate(emailList, {
+      onSuccess: (resolved) => {
+        const notFound = resolved.results.filter((r) => !r.user_id)
+        if (notFound.length > 0) {
+          toast.error(`Users not found: ${notFound.map((r) => r.email).join(", ")}`)
+          return
+        }
+        const userIds = resolved.results.map((r) => r.user_id!)
+        batchGrants.mutate(
+          { user_ids: userIds, credit_type: creditType, amount: amt, grant_type: grantType },
+          {
+            onSuccess: (res) =>
+              toast.success(
+                `Batch grant complete: ${res.succeeded}/${res.total_requested} succeeded`,
+              ),
+            onError: (e) => toast.error(e.message),
+          },
+        )
       },
-    )
+      onError: (e) => toast.error(e.message),
+    })
   }
 
   return (
@@ -309,13 +358,13 @@ function BatchGrantsSection() {
         <div className="flex gap-4">
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-medium text-muted-foreground">
-              User IDs (one per line)
+              Emails (one per line)
             </label>
             <textarea
               rows={3}
-              value={userIds}
-              onChange={(e) => setUserIds(e.target.value)}
-              placeholder={"usr-aaaa-bbbb\nusr-cccc-dddd\n..."}
+              value={emails}
+              onChange={(e) => setEmails(e.target.value)}
+              placeholder={"alice@example.com\nbob@example.com\n..."}
               className="h-[72px] w-[340px] resize-none rounded-sm border border-border/40 bg-card px-3 py-2 text-[11px] text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
@@ -360,10 +409,10 @@ function BatchGrantsSection() {
           <div className="flex flex-col justify-end">
             <button
               onClick={handleSubmit}
-              disabled={batchGrants.isPending}
+              disabled={isPending}
               className="h-[34px] rounded-sm bg-primary px-5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
             >
-              Run Batch Grant
+              {isPending ? "Processing…" : "Run Batch Grant"}
             </button>
           </div>
         </div>

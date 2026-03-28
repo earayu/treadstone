@@ -25,11 +25,14 @@ from treadstone.api.schemas import (
     BatchGrantResponse,
     CreateGrantRequest,
     CreateGrantResponse,
+    ResolveEmailsRequest,
+    ResolveEmailsResponse,
     TierTemplateListResponse,
     UpdatePlanRequest,
     UpdateTierTemplateRequest,
     UpdateTierTemplateResponse,
     UsageSummaryResponse,
+    UserLookupResponse,
     UserPlanResponse,
 )
 from treadstone.config import settings
@@ -86,6 +89,39 @@ async def update_tier_template(
     result = serialize_template(template)
     result["users_affected"] = users_affected
     return result
+
+
+# ── User Lookup by Email ─────────────────────────────────────────────────────
+
+
+@router.get("/users/lookup-by-email", response_model=UserLookupResponse)
+async def admin_lookup_user_by_email(
+    email: str = Query(..., description="Email address to look up."),
+    _admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(select(User).where(User.email == email))
+    user = result.unique().scalar_one_or_none()
+    if user is None:
+        raise NotFoundError("User", email)
+    return {"user_id": user.id, "email": user.email}
+
+
+@router.post("/users/resolve-emails", response_model=ResolveEmailsResponse)
+async def admin_resolve_emails(
+    body: ResolveEmailsRequest,
+    _admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    results = []
+    for email in body.emails:
+        row = await session.execute(select(User).where(User.email == email))
+        user = row.unique().scalar_one_or_none()
+        if user is None:
+            results.append({"email": email, "user_id": None, "error": "User not found"})
+        else:
+            results.append({"email": email, "user_id": user.id, "error": None})
+    return {"results": results}
 
 
 # ── User Usage (Admin View) ──────────────────────────────────────────────────

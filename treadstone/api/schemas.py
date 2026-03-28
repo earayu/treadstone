@@ -605,3 +605,28 @@ class BatchGrantResponse(BaseModel):
     succeeded: int = Field(..., examples=[2])
     failed: int = Field(..., examples=[1])
     results: list[BatchGrantResultItem]
+
+
+class UserLookupResponse(BaseModel):
+    user_id: str = Field(..., examples=["userabc123def456"])
+    email: str = Field(..., examples=["alice@example.com"])
+
+
+class ResolveEmailsRequest(BaseModel):
+    emails: list[str] = Field(..., min_length=1, max_length=1000, examples=[["alice@example.com"]])
+
+
+class ResolveEmailsResultItem(BaseModel):
+    email: str = Field(..., examples=["alice@example.com"])
+    user_id: str | None = Field(default=None, examples=["userabc123def456"])
+    error: str | None = Field(default=None)
+
+
+class ResolveEmailsResponse(BaseModel):
+    results: list[ResolveEmailsResultItem]
+
+
+class AuditFilterOptionsResponse(BaseModel):
+    actions: list[str] = Field(default_factory=list)
+    target_types: list[str] = Field(default_factory=list)
+    results: list[str] = Field(default_factory=list)
