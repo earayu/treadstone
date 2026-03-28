@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from "react"
-import { Link, useNavigate } from "react-router"
+import { useEffect, useState, type FormEvent } from "react"
+import { Link, useNavigate, useSearchParams } from "react-router"
 import { toast } from "sonner"
 
 import { useAppConfig } from "@/api/config"
@@ -43,17 +43,27 @@ function GoogleGlyph({ className }: { className?: string }) {
   )
 }
 
-function oauthAuthorizeUrl(provider: "google" | "github"): string {
-  return `/v1/auth/${provider}/authorize`
+function oauthAuthorizeUrl(provider: "google" | "github", returnTo: string | null): string {
+  const base = `/v1/auth/${provider}/authorize`
+  if (returnTo) return `${base}?return_to=${encodeURIComponent(returnTo)}`
+  return base
 }
 
 export function SignInPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const login = useLogin()
   const { data: config, isLoading: configLoading } = useAppConfig()
 
+  const returnTo = searchParams.get("return_to")
+  const errorParam = searchParams.get("error")
+
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+
+  useEffect(() => {
+    if (errorParam) toast.error(errorParam)
+  }, [errorParam])
 
   const googleOAuthEnabled = config?.auth.login_methods.includes("google") ?? false
   const githubOAuthEnabled = config?.auth.login_methods.includes("github") ?? false
@@ -64,7 +74,11 @@ export function SignInPage() {
     try {
       await login.mutateAsync({ email: email.trim(), password })
       toast.success("Signed in successfully.")
-      navigate("/app")
+      if (returnTo) {
+        window.location.assign(`/v1/browser/bootstrap?return_to=${encodeURIComponent(returnTo)}`)
+      } else {
+        navigate("/app")
+      }
     } catch (err) {
       if (err instanceof HttpError) {
         toast.error(err.message)
@@ -146,7 +160,7 @@ export function SignInPage() {
                 type="button"
                 className="flex h-11 items-center justify-center gap-2 rounded-md border border-border bg-secondary text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent"
                 onClick={() => {
-                  window.location.assign(oauthAuthorizeUrl("google"))
+                  window.location.assign(oauthAuthorizeUrl("google", returnTo))
                 }}
               >
                 <GoogleGlyph className="size-4 shrink-0" />
@@ -158,7 +172,7 @@ export function SignInPage() {
                 type="button"
                 className="flex h-11 items-center justify-center gap-2 rounded-md border border-border bg-secondary text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent"
                 onClick={() => {
-                  window.location.assign(oauthAuthorizeUrl("github"))
+                  window.location.assign(oauthAuthorizeUrl("github", returnTo))
                 }}
               >
                 <GitHubGlyph className="size-4 shrink-0" />

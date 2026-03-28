@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -17,7 +16,6 @@ from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
 from treadstone.models.cli_login_flow import CliLoginFlow
 from treadstone.models.user import OAuthAccount, User, utc_now
-from treadstone.services import login_page as login_page_service
 
 _test_session_factory = None
 
@@ -77,7 +75,7 @@ async def test_create_flow_returns_flow_data(db_session, monkeypatch):
         data = await _create_flow(http_client)
 
     assert data["flow_id"].startswith("clf")
-    assert "http://test/v1/auth/cli/login?flow_id=" in data["browser_url"]
+    assert "http://test/auth/cli/login?flow_id=" in data["browser_url"]
     assert data["poll_interval"] == 2
 
 
@@ -130,7 +128,7 @@ async def test_email_login_approves_flow_and_exchange_returns_session(db_session
             data={"email": "u@b.com", "password": "Pass123!", "flow_id": flow["flow_id"]},
         )
         assert login_resp.status_code == 200
-        assert "close this window" in login_resp.text.lower()
+        assert login_resp.json()["status"] == "approved"
 
         poll = await http_client.get(
             f"/v1/auth/cli/flows/{flow['flow_id']}/status",
@@ -204,27 +202,14 @@ async def test_cli_login_page_renders(db_session, monkeypatch):
     monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
         flow = await _create_flow(http_client)
-        resp = await http_client.get(f"/v1/auth/cli/login?flow_id={flow['flow_id']}")
+        resp = await http_client.get(
+            f"/v1/auth/cli/login?flow_id={flow['flow_id']}",
+            follow_redirects=False,
+        )
 
-    assert resp.status_code == 200
-    assert "Sign in to Treadstone" in resp.text
-    assert flow["flow_id"] in resp.text
-
-
-@pytest.mark.asyncio
-async def test_cli_login_page_with_oauth_buttons(db_session, monkeypatch):
-    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
-    monkeypatch.setattr(login_page_service, "get_google_oauth_client", lambda: SimpleNamespace(name="google"))
-    monkeypatch.setattr(login_page_service, "get_github_oauth_client", lambda: SimpleNamespace(name="github"))
-
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
-        flow = await _create_flow(http_client)
-        resp = await http_client.get(f"/v1/auth/cli/login?flow_id={flow['flow_id']}")
-
-    assert resp.status_code == 200
-    assert "Continue with Google" in resp.text
-    assert "Continue with GitHub" in resp.text
-    assert f"cli_flow_id={flow['flow_id']}" in resp.text
+    assert resp.status_code == 303
+    location = resp.headers["location"]
+    assert f"/auth/cli/login?flow_id={flow['flow_id']}" in location
 
 
 @pytest.mark.asyncio
@@ -240,12 +225,14 @@ async def test_email_login_wrong_password_re_renders_page(db_session, monkeypatc
         )
 
     assert resp.status_code == 400
-    assert "Invalid email or password" in resp.text
+    body = resp.json()
+    assert body["error"]["code"] == "bad_request"
+    assert body["error"]["message"] == "Invalid email or password"
 
 
 @pytest.mark.asyncio
 async def test_oauth_callback_approves_cli_flow(db_session, monkeypatch):
-    """Google OAuth callback with cli_flow_id approves the flow and renders CLI success page."""
+    """Google OAuth callback with cli_flow_id approves the flow and redirects to SPA."""
     monkeypatch.setattr(auth_api.settings, "app_base_url", "http://test")
     monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
 
@@ -271,8 +258,10 @@ async def test_oauth_callback_approves_cli_flow(db_session, monkeypatch):
             follow_redirects=False,
         )
 
-        assert callback.status_code == 200
-        assert "close this window" in callback.text.lower()
+        assert callback.status_code == 303
+        location = callback.headers["location"]
+        assert "/auth/cli/login?" in location
+        assert "result=approved" in location
         assert callback.cookies.get("session") is None
 
         poll = await http_client.get(
@@ -359,7 +348,7 @@ async def test_oauth_callback_with_expired_flow_does_not_create_user(db_session,
 
 @pytest.mark.asyncio
 async def test_oauth_access_denied_marks_cli_flow_as_failed(db_session, monkeypatch):
-    """P2 regression: provider deny must mark CLI flow as failed so CLI stops polling."""
+    """P2 regression: provider deny must mark CLI flow as failed and redirect to SPA."""
     monkeypatch.setattr(auth_api.settings, "app_base_url", "http://test")
     monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
 
@@ -383,10 +372,57 @@ async def test_oauth_access_denied_marks_cli_flow_as_failed(db_session, monkeypa
             params={"state": state, "error": "access_denied"},
             follow_redirects=False,
         )
-        assert callback.status_code == 400
+        assert callback.status_code == 303
+        location = callback.headers["location"]
+        assert "/auth/cli/login?" in location
+        assert "result=failed" in location
+        assert "error=" in location
 
         poll = await http_client.get(
             f"/v1/auth/cli/flows/{flow['flow_id']}/status",
             headers={"X-Flow-Secret": flow["flow_secret"]},
         )
         assert poll.json()["status"] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_session_based_approve(db_session, monkeypatch):
+    """Approve CLI flow using browser session cookie from the /approve endpoint."""
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
+        reg_resp = await http_client.post("/v1/auth/register", json={"email": "u@b.com", "password": "Pass123!"})
+        assert reg_resp.status_code == 201
+        session_cookie = reg_resp.cookies.get("session")
+        assert session_cookie is not None
+
+        flow = await _create_flow(http_client)
+
+        resp = await http_client.post(
+            f"/v1/auth/cli/flows/{flow['flow_id']}/approve",
+            cookies={"session": session_cookie},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "approved"
+
+        poll = await http_client.get(
+            f"/v1/auth/cli/flows/{flow['flow_id']}/status",
+            headers={"X-Flow-Secret": flow["flow_secret"]},
+        )
+        assert poll.json()["status"] == "approved"
+
+        exchange = await http_client.post(
+            f"/v1/auth/cli/flows/{flow['flow_id']}/exchange",
+            headers={"X-Flow-Secret": flow["flow_secret"]},
+        )
+        assert exchange.status_code == 200
+        assert "session_token" in exchange.json()
+
+
+@pytest.mark.asyncio
+async def test_session_based_approve_requires_auth(db_session, monkeypatch):
+    """POST /v1/auth/cli/flows/{flow_id}/approve requires a valid session cookie."""
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
+        flow = await _create_flow(http_client)
+        resp = await http_client.post(f"/v1/auth/cli/flows/{flow['flow_id']}/approve")
+        assert resp.status_code == 401

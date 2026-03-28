@@ -1,20 +1,22 @@
 """CLI browser-based authentication flow.
 
 Endpoints for creating, polling, and exchanging CLI login flows,
-plus HTML pages for browser-side authentication.
+plus redirect stubs that point browsers to the SPA login pages.
 """
 
 from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Form, Header, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from treadstone.api.auth import authenticate_email_password
+from treadstone.api.deps import optional_cookie_user
 from treadstone.config import settings
 from treadstone.core.database import get_session
 from treadstone.core.errors import AuthRequiredError, BadRequestError, NotFoundError
@@ -28,7 +30,6 @@ from treadstone.models.cli_login_flow import (
 )
 from treadstone.models.user import User, utc_now
 from treadstone.services.audit import record_audit_event
-from treadstone.services.login_page import render_login_page, render_success_page
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,7 @@ async def create_cli_flow(session: AsyncSession = Depends(get_session)):
     await session.commit()
     await session.refresh(flow)
 
-    browser_url = f"{settings.app_base_url.rstrip('/')}/v1/auth/cli/login?flow_id={flow.id}"
+    browser_url = f"{settings.app_base_url.rstrip('/')}/auth/cli/login?flow_id={flow.id}"
     return {
         "flow_id": flow.id,
         "flow_secret": raw_secret,
@@ -139,26 +140,14 @@ async def exchange_cli_flow(
 
 @router.get("/login", include_in_schema=False)
 async def cli_login_page(
-    request: Request,
     flow_id: str = Query(...),
     error: str | None = Query(default=None),
-    session: AsyncSession = Depends(get_session),
-) -> HTMLResponse:
-    """Render the CLI login page in the browser."""
-    flow = await _get_flow_or_404(session, flow_id)
-    status = _effective_status(flow)
-    if status != "pending":
-        return render_success_page("This login link has already been used or has expired.")
-
-    return render_login_page(
-        title="Sign in to Treadstone",
-        subtitle="Complete sign-in to authenticate your CLI session.",
-        form_action="/v1/auth/cli/login",
-        hidden_fields={"flow_id": flow_id},
-        google_authorize_params={"cli_flow_id": flow_id},
-        github_authorize_params={"cli_flow_id": flow_id},
-        error=error,
-    )
+) -> RedirectResponse:
+    """Redirect to the SPA CLI login page."""
+    params: dict[str, str] = {"flow_id": flow_id}
+    if error:
+        params["error"] = error
+    return RedirectResponse(url=f"/auth/cli/login?{urlencode(params)}", status_code=303)
 
 
 @router.post("/login", include_in_schema=False)
@@ -168,12 +157,12 @@ async def cli_login_submit(
     password: str = Form(...),
     flow_id: str = Form(...),
     session: AsyncSession = Depends(get_session),
-) -> HTMLResponse:
-    """Handle email/password login from the CLI login page."""
+) -> JSONResponse:
+    """Handle email/password login from the SPA CLI login page."""
     flow = await _get_flow_or_404(session, flow_id)
     status = _effective_status(flow)
     if status != "pending":
-        return render_success_page("This login link has already been used or has expired.")
+        raise BadRequestError("CLI login flow has already been used or has expired.")
 
     try:
         user = await authenticate_email_password(session, email, password)
@@ -188,16 +177,7 @@ async def cli_login_submit(
             request=request,
         )
         await session.commit()
-        return render_login_page(
-            title="Sign in to Treadstone",
-            subtitle="Complete sign-in to authenticate your CLI session.",
-            form_action="/v1/auth/cli/login",
-            hidden_fields={"flow_id": flow_id},
-            google_authorize_params={"cli_flow_id": flow_id},
-            github_authorize_params={"cli_flow_id": flow_id},
-            error="Invalid email or password.",
-            status_code=400,
-        )
+        raise
 
     _mark_approved(flow, user, provider="email")
     set_request_context(request, actor_user_id=user.id, credential_type="cookie")
@@ -212,4 +192,36 @@ async def cli_login_submit(
     session.add(flow)
     await session.commit()
 
-    return render_success_page()
+    return JSONResponse({"status": "approved"})
+
+
+@router.post("/flows/{flow_id}/approve")
+async def approve_cli_flow(
+    request: Request,
+    flow_id: str,
+    current_user: User = Depends(optional_cookie_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Approve a pending CLI login flow using the current browser session."""
+    if current_user is None:
+        raise AuthRequiredError("You must be signed in to approve a CLI login flow.")
+
+    flow = await _get_flow_or_404(session, flow_id)
+    status = _effective_status(flow)
+    if status != "pending":
+        raise BadRequestError("CLI login flow has already been used or has expired.")
+
+    _mark_approved(flow, current_user, provider="session")
+    set_request_context(request, actor_user_id=current_user.id, credential_type="cookie")
+    await record_audit_event(
+        session,
+        action="auth.login",
+        target_type="user",
+        target_id=current_user.id,
+        metadata={"email": current_user.email, "provider": "session", "surface": "cli"},
+        request=request,
+    )
+    session.add(flow)
+    await session.commit()
+
+    return {"status": "approved"}

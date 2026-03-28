@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react"
 import { useSearchParams } from "react-router"
 
+import { useAppConfig } from "@/api/config"
+import { useCurrentUser } from "@/hooks/use-auth"
 import { client } from "@/lib/api-client"
 
 type FlowStatus = "pending" | "approved" | "expired" | "used" | "failed" | string
@@ -19,15 +21,26 @@ export function CliLoginPage() {
   const flowSecret =
     searchParams.get("flow_secret") ?? searchParams.get("secret") ?? ""
 
-  const [status, setStatus] = useState<FlowStatus | null>(null)
+  const oauthResult = searchParams.get("result")
+  const oauthError = searchParams.get("error")
+
+  const { data: currentUser, isLoading: userLoading } = useCurrentUser()
+  const { data: config, isLoading: configLoading } = useAppConfig()
+
+  const googleOAuthEnabled = config?.auth.login_methods.includes("google") ?? false
+  const githubOAuthEnabled = config?.auth.login_methods.includes("github") ?? false
+
+  const [status, setStatus] = useState<FlowStatus | null>(
+    oauthResult === "approved" ? "approved" : oauthResult === "failed" ? "failed" : null,
+  )
   const [pollError, setPollError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [formError, setFormError] = useState<string | null>(null)
+  const [formError, setFormError] = useState<string | null>(oauthError ?? null)
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
 
-  const [localSuccess, setLocalSuccess] = useState(false)
+  const [localSuccess, setLocalSuccess] = useState(oauthResult === "approved")
 
   const poll = useCallback(async () => {
     if (!flowId || !flowSecret) return
@@ -44,6 +57,7 @@ export function CliLoginPage() {
   }, [flowId, flowSecret])
 
   useEffect(() => {
+    if (oauthResult) return
     if (!flowId) {
       setStatus(null)
       return
@@ -55,7 +69,7 @@ export function CliLoginPage() {
     void poll()
     const t = window.setInterval(() => void poll(), 2000)
     return () => window.clearInterval(t)
-  }, [flowId, flowSecret, poll])
+  }, [flowId, flowSecret, poll, oauthResult])
 
   async function handleApprove(e: React.FormEvent) {
     e.preventDefault()
@@ -63,29 +77,44 @@ export function CliLoginPage() {
     setFormError(null)
     setSubmitting(true)
     try {
-      const body = new FormData()
-      body.set("email", email)
-      body.set("password", password)
-      body.set("flow_id", flowId)
-
       const res = await fetch("/v1/auth/cli/login", {
         method: "POST",
-        body,
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ email, password, flow_id: flowId }),
         credentials: "include",
       })
 
-      const text = await res.text()
-      if (res.ok && text.includes("Login successful")) {
+      if (res.ok) {
         setLocalSuccess(true)
         setStatus("approved")
         void poll()
-      } else if (res.status === 400 && text.includes("Invalid email or password")) {
-        setFormError("Invalid email or password.")
-      } else if (!res.ok) {
-        setFormError("Sign-in failed. Try again or use OAuth from the API login page.")
       } else {
+        const body = await res.json().catch(() => null)
+        const message = body?.error?.message ?? "Sign-in failed. Try again."
+        setFormError(message)
+      }
+    } catch {
+      setFormError("Network error. Check your connection and try again.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleSessionApprove() {
+    if (!flowId) return
+    setFormError(null)
+    setSubmitting(true)
+    try {
+      const res = await fetch(`/v1/auth/cli/flows/${encodeURIComponent(flowId)}/approve`, {
+        method: "POST",
+        credentials: "include",
+      })
+      if (res.ok) {
         setLocalSuccess(true)
         setStatus("approved")
+      } else {
+        const body = await res.json().catch(() => null)
+        setFormError(body?.error?.message ?? "Approval failed.")
       }
     } catch {
       setFormError("Network error. Check your connection and try again.")
@@ -95,6 +124,9 @@ export function CliLoginPage() {
   }
 
   const displayStatus = localSuccess ? "approved" : status ?? (flowId ? "pending" : null)
+  const isLoggedIn = !userLoading && currentUser != null
+  const showLoginForm = !isLoggedIn && displayStatus === "pending"
+  const showSessionApprove = isLoggedIn && displayStatus === "pending"
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
@@ -125,10 +157,10 @@ export function CliLoginPage() {
                 {displayStatus ?? "—"}
               </p>
               {pollError && <p className="mt-2 text-sm text-destructive">{pollError}</p>}
-              {!flowSecret && (
+              {!flowSecret && !oauthResult && displayStatus === "pending" && (
                 <p className="mt-2 text-xs text-muted-foreground">
                   Polling requires <span className="font-mono">flow_secret</span> in the URL (optional). You can
-                  still approve with your password below.
+                  still approve below.
                 </p>
               )}
             </div>
@@ -143,7 +175,29 @@ export function CliLoginPage() {
               <p className="mt-8 text-sm text-muted-foreground">
                 This flow was already used. If the CLI did not receive a token, start a new login.
               </p>
-            ) : (
+            ) : displayStatus === "failed" ? (
+              <div className="mt-8">
+                {formError && <p className="text-sm text-destructive">{formError}</p>}
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Login failed. You can try again or run a new login from the CLI.
+                </p>
+              </div>
+            ) : showSessionApprove ? (
+              <div className="mt-8 space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  You are signed in as <span className="font-medium text-foreground">{currentUser?.email}</span>.
+                </p>
+                {formError && <p className="text-sm text-destructive">{formError}</p>}
+                <button
+                  type="button"
+                  onClick={() => void handleSessionApprove()}
+                  disabled={submitting}
+                  className="w-full bg-primary py-3 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {submitting ? "Approving…" : "Approve login"}
+                </button>
+              </div>
+            ) : showLoginForm ? (
               <form className="mt-8 space-y-4" onSubmit={(e) => void handleApprove(e)}>
                 <label className="block">
                   <span className="text-xs font-semibold text-muted-foreground">Email</span>
@@ -175,23 +229,31 @@ export function CliLoginPage() {
                 >
                   {submitting ? "Signing in…" : "Approve login"}
                 </button>
-                <p className="text-center text-xs text-muted-foreground">or</p>
-                <div className="flex flex-col gap-2">
-                  <a
-                    href={`/v1/auth/google/authorize?cli_flow_id=${encodeURIComponent(flowId)}`}
-                    className="flex h-10 items-center justify-center border border-border/40 text-sm font-medium text-foreground hover:bg-accent"
-                  >
-                    Continue with Google
-                  </a>
-                  <a
-                    href={`/v1/auth/github/authorize?cli_flow_id=${encodeURIComponent(flowId)}`}
-                    className="flex h-10 items-center justify-center border border-border/40 text-sm font-medium text-foreground hover:bg-accent"
-                  >
-                    Continue with GitHub
-                  </a>
-                </div>
+                {!configLoading && (googleOAuthEnabled || githubOAuthEnabled) && (
+                  <>
+                    <p className="text-center text-xs text-muted-foreground">or</p>
+                    <div className="flex flex-col gap-2">
+                      {googleOAuthEnabled && (
+                        <a
+                          href={`/v1/auth/google/authorize?cli_flow_id=${encodeURIComponent(flowId)}`}
+                          className="flex h-10 items-center justify-center border border-border/40 text-sm font-medium text-foreground hover:bg-accent"
+                        >
+                          Continue with Google
+                        </a>
+                      )}
+                      {githubOAuthEnabled && (
+                        <a
+                          href={`/v1/auth/github/authorize?cli_flow_id=${encodeURIComponent(flowId)}`}
+                          className="flex h-10 items-center justify-center border border-border/40 text-sm font-medium text-foreground hover:bg-accent"
+                        >
+                          Continue with GitHub
+                        </a>
+                      )}
+                    </div>
+                  </>
+                )}
               </form>
-            )}
+            ) : null}
           </>
         )}
       </div>

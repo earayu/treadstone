@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -15,7 +14,6 @@ from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
 from treadstone.models.user import OAuthAccount, User
 from treadstone.services import browser_login as browser_login_service
-from treadstone.services import login_page as login_page_service
 
 _test_session_factory = None
 
@@ -217,7 +215,7 @@ async def test_google_callback_provider_denied_redirects_back_to_browser_login(d
         )
 
     assert callback.status_code == 303
-    assert callback.headers["location"].startswith("/v1/browser/login?")
+    assert callback.headers["location"].startswith("/auth/sign-in?")
     assert "return_to=https%3A%2F%2Fsandbox-demo.sandbox.localhost%2F" in callback.headers["location"]
 
 
@@ -280,20 +278,3 @@ async def test_github_callback_rejects_unverified_email_and_does_not_link_existi
 
     assert len(users) == 1
     assert oauth_accounts == []
-
-
-@pytest.mark.asyncio
-async def test_browser_login_page_renders_google_and_github_buttons_when_configured(db_session, monkeypatch):
-    _enable_browser_flow(monkeypatch)
-    monkeypatch.setattr(login_page_service, "get_google_oauth_client", lambda: SimpleNamespace(name="google"))
-    monkeypatch.setattr(login_page_service, "get_github_oauth_client", lambda: SimpleNamespace(name="github"))
-
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
-        response = await http_client.get(
-            "/v1/browser/login",
-            params={"return_to": "https://sandbox-demo.sandbox.localhost/"},
-        )
-
-    assert response.status_code == 200
-    assert "Continue with Google" in response.text
-    assert "Continue with GitHub" in response.text

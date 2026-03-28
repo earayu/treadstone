@@ -307,32 +307,23 @@ class TestSubdomainRouting:
         assert second_status.status_code == 200
         assert second_status.json()["last_used_at"] == first_status.json()["last_used_at"]
 
-    async def test_browser_login_page_can_log_in_and_continue(self, auth_client: AsyncClient, monkeypatch):
+    async def test_unauthenticated_browser_redirects_to_spa_signin(self, auth_client: AsyncClient, monkeypatch):
         _enable_subdomain(monkeypatch)
         sandbox_id = await _create_ready_sandbox(auth_client)
-        mock_client, _ = _capture_mock()
+        sandbox_url = f"https://sandbox-{sandbox_id}.sandbox.localhost/"
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="https://app.localhost") as browser:
-            first = await browser.get(f"https://sandbox-{sandbox_id}.sandbox.localhost/", follow_redirects=False)
-            bootstrap_url = first.headers["location"]
-            bootstrap = await browser.get(bootstrap_url, follow_redirects=False)
-            login_url = bootstrap.headers["location"]
-            login_page = await browser.get(login_url)
-            assert login_page.status_code == 200
+            step1 = await browser.get(sandbox_url, follow_redirects=False)
+            assert step1.status_code == 303
+            bootstrap_loc = urlparse(step1.headers["location"])
+            assert bootstrap_loc.path == "/v1/browser/bootstrap"
+            assert parse_qs(bootstrap_loc.query)["return_to"] == [sandbox_url]
 
-            with patch("treadstone.services.sandbox_proxy._http_client", mock_client):
-                with patch("treadstone.middleware.sandbox_subdomain.get_http_client", return_value=mock_client):
-                    final = await browser.post(
-                        "https://app.localhost/v1/browser/login",
-                        data={
-                            "email": "sandbox@test.com",
-                            "password": "Pass123!",
-                            "return_to": f"https://sandbox-{sandbox_id}.sandbox.localhost/",
-                        },
-                        follow_redirects=True,
-                    )
-
-        assert final.status_code == 200
+            step2 = await browser.get(step1.headers["location"], follow_redirects=False)
+            assert step2.status_code == 303
+            signin_loc = urlparse(step2.headers["location"])
+            assert signin_loc.path == "/auth/sign-in"
+            assert sandbox_url in parse_qs(signin_loc.query)["return_to"][0]
 
     async def test_non_sandbox_subdomain_falls_through(self, db_session, monkeypatch):
         _enable_subdomain(monkeypatch)
