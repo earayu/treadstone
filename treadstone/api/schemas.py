@@ -198,6 +198,7 @@ class UserResponse(BaseModel):
     id: str = Field(..., examples=["usr-abc123def456"])
     email: EmailStr = Field(..., examples=["user@example.com"])
     role: Role = Field(..., examples=["admin"])
+    is_active: bool = Field(..., examples=[True])
 
 
 class RegisterResponse(UserResponse):
@@ -207,7 +208,6 @@ class RegisterResponse(UserResponse):
 
 class UserDetailResponse(UserResponse):
     username: str | None = Field(default=None, examples=["alice"])
-    is_active: bool = Field(..., examples=[True])
     is_verified: bool = Field(..., examples=[True])
     has_local_password: bool = Field(..., examples=[True])
 
@@ -215,6 +215,10 @@ class UserDetailResponse(UserResponse):
 class UserListResponse(BaseModel):
     items: list[UserResponse]
     total: int = Field(..., examples=[1])
+
+
+class UpdateUserStatusRequest(BaseModel):
+    is_active: bool = Field(..., examples=[False], description="Set to false to disable the user account.")
 
 
 class VerificationConfirmRequest(BaseModel):

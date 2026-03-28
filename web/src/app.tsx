@@ -20,6 +20,7 @@ import { UsagePage } from "@/pages/app/usage"
 import { SettingsPage } from "@/pages/app/settings"
 
 import { AdminMeteringPage } from "@/pages/internal/admin-metering"
+import { AdminUsersPage } from "@/pages/internal/admin-users"
 import { AuditEventsPage } from "@/pages/internal/audit-events"
 
 function NotFoundPage() {
@@ -75,6 +76,7 @@ const router = createBrowserRouter([
     path: "internal",
     element: <AdminLayout />,
     children: [
+      { path: "admin/users", element: <AdminUsersPage /> },
       { path: "admin/metering", element: <AdminMeteringPage /> },
       { path: "audit", element: <AuditEventsPage /> },
     ],

@@ -9,8 +9,9 @@ def test_user_fields_exist():
     assert hasattr(u, "has_local_password")
     assert hasattr(u, "role")
     assert hasattr(u, "is_active")
-    assert hasattr(u, "is_superuser")
     assert hasattr(u, "is_verified")
+    assert hasattr(u, "gmt_created")
+    assert hasattr(u, "gmt_updated")
 
 
 def test_oauth_account_fields_exist():

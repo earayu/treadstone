@@ -57,7 +57,6 @@ class UserManager(BaseUserManager[User, str]):
         count = result.scalar_one()
         if count == 1:
             user.role = Role.ADMIN.value
-            user.is_superuser = True
             session.add(user)
             await session.commit()
             await session.refresh(user)

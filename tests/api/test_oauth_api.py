@@ -166,7 +166,6 @@ async def test_google_callback_auto_links_existing_user_by_email(db_session, mon
             hashed_password="hashed",
             has_local_password=True,
             is_active=True,
-            is_superuser=False,
             is_verified=True,
             role="ro",
         )
@@ -255,7 +254,6 @@ async def test_github_callback_rejects_unverified_email_and_does_not_link_existi
             hashed_password="hashed",
             has_local_password=True,
             is_active=True,
-            is_superuser=False,
             is_verified=True,
             role="ro",
         )

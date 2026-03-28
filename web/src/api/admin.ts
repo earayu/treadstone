@@ -4,6 +4,7 @@ import type { components } from "@/api/schema"
 
 export type TierTemplate = components["schemas"]["TierTemplateItem"]
 export type UsageSummary = components["schemas"]["UsageSummaryResponse"]
+export type UserItem = components["schemas"]["UserResponse"]
 
 export function useTierTemplates() {
   return useQuery({
@@ -118,5 +119,31 @@ export function useAdminBatchGrants() {
       const { data } = await client.POST("/v1/admin/grants/batch", { body })
       return data!
     },
+  })
+}
+
+export function useAdminListUsers() {
+  return useQuery({
+    queryKey: ["admin", "users"],
+    queryFn: async () => {
+      const { data } = await client.GET("/v1/auth/users", {
+        params: { query: { limit: 1000, offset: 0 } },
+      })
+      return data!
+    },
+  })
+}
+
+export function useAdminUpdateUserStatus() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ userId, isActive }: { userId: string; isActive: boolean }) => {
+      const { data } = await client.PATCH("/v1/auth/users/{user_id}/status", {
+        params: { path: { user_id: userId } },
+        body: { is_active: isActive },
+      })
+      return data!
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "users"] }),
   })
 }
