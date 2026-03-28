@@ -1,12 +1,14 @@
 """Unit tests for metering background tasks (Layer 4: F18–F23)."""
 
+import re
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from sqlalchemy.dialects import postgresql
+
 from treadstone.models.metering import ComputeSession, StorageLedger, StorageState, UserPlan
 from treadstone.models.sandbox import Sandbox, SandboxStatus
-from treadstone.services.metering_helpers import ConsumeResult
 
 # ── Helpers ──────────────────────────────────────────────
 
@@ -20,26 +22,51 @@ def _make_open_session(
     sandbox_id: str = "sb_test01",
     user_id: str = "user_01",
     template: str = "aio-sandbox-small",
-    rate: Decimal = Decimal("0.5"),
+    vcpu_request: Decimal | None = None,
+    memory_gib_request: Decimal | None = None,
     last_metered_at: datetime = ONE_MINUTE_AGO,
     gmt_updated: datetime = ONE_MINUTE_AGO,
-    credits_consumed: Decimal = Decimal("0"),
-    credits_consumed_monthly: Decimal = Decimal("0"),
-    credits_consumed_extra: Decimal = Decimal("0"),
+    vcpu_hours: Decimal = Decimal("0"),
+    memory_gib_hours: Decimal = Decimal("0"),
 ) -> ComputeSession:
+    if vcpu_request is None:
+        vcpu_request = Decimal("1") if template == "aio-sandbox-medium" else Decimal("0.5")
+    if memory_gib_request is None:
+        memory_gib_request = Decimal("2") if template == "aio-sandbox-medium" else Decimal("1")
     return ComputeSession(
         id=session_id,
         sandbox_id=sandbox_id,
         user_id=user_id,
         template=template,
-        credit_rate_per_hour=rate,
+        vcpu_request=vcpu_request,
+        memory_gib_request=memory_gib_request,
         started_at=FIXED_NOW - timedelta(hours=1),
         last_metered_at=last_metered_at,
-        credits_consumed=credits_consumed,
-        credits_consumed_monthly=credits_consumed_monthly,
-        credits_consumed_extra=credits_consumed_extra,
+        vcpu_hours=vcpu_hours,
+        memory_gib_hours=memory_gib_hours,
         gmt_updated=gmt_updated,
     )
+
+
+def _assert_tick_update_resource_hours(
+    stmt,
+    *,
+    expected_delta_vcpu: Decimal,
+    expected_delta_mem: Decimal,
+) -> None:
+    """tick_metering issues UPDATE compute_session with incremental vcpu_hours / memory_gib_hours."""
+    sql_text = str(stmt).lower()
+    assert "vcpu_hours" in sql_text
+    assert "memory_gib_hours" in sql_text
+    compiled = stmt.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
+    sql_literal = str(compiled).lower()
+    m_vcpu = re.search(r"compute_session\.vcpu_hours \+ ([0-9.]+)", sql_literal)
+    m_mem = re.search(r"compute_session\.memory_gib_hours \+ ([0-9.]+)", sql_literal)
+    assert m_vcpu and m_mem, sql_literal
+    got_vcpu = Decimal(m_vcpu.group(1))
+    got_mem = Decimal(m_mem.group(1))
+    assert abs(got_vcpu - expected_delta_vcpu) < Decimal("1e-15")
+    assert abs(got_mem - expected_delta_mem) < Decimal("1e-15")
 
 
 def _make_storage_entry(
@@ -78,7 +105,7 @@ def _make_plan(
         tier=tier,
         compute_credits_monthly_limit=monthly_limit,
         compute_credits_monthly_used=monthly_used,
-        storage_credits_monthly_limit=10,
+        storage_capacity_limit_gib=10,
         max_concurrent_running=3,
         max_sandbox_duration_seconds=7200,
         allowed_templates=["aio-sandbox-tiny", "aio-sandbox-small", "aio-sandbox-medium"],
@@ -144,7 +171,7 @@ class _MockDistinct:
         return [(i,) for i in self._items]
 
 
-def _make_tick_session(open_sessions, update_rowcount=1):
+def _make_tick_session(open_sessions, update_rowcount=1, capture_update_stmts: list | None = None):
     """Create a mock session that supports begin_nested() savepoints for tick_metering tests."""
     session = AsyncMock()
     call_count = 0
@@ -154,6 +181,8 @@ def _make_tick_session(open_sessions, update_rowcount=1):
         call_count += 1
         if call_count == 1:
             return _MockScalars(open_sessions)
+        if capture_update_stmts is not None:
+            capture_update_stmts.append(stmt)
         return _MockRowCount(update_rowcount)
 
     session.execute = AsyncMock(side_effect=mock_execute)
@@ -174,21 +203,25 @@ def _make_tick_session(open_sessions, update_rowcount=1):
 
 class TestTickMetering:
     @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
-    async def test_meters_open_session_and_consumes_credits(self, mock_now):
+    async def test_meters_open_session_and_updates_resource_hours(self, mock_now):
         from treadstone.services.metering_tasks import tick_metering
 
         cs = _make_open_session(last_metered_at=ONE_MINUTE_AGO, gmt_updated=ONE_MINUTE_AGO)
-        consume_result = ConsumeResult(monthly=Decimal("0.0083"), extra=Decimal("0"), shortfall=Decimal("0"))
+        captured: list = []
+        session = _make_tick_session([cs], capture_update_stmts=captured)
 
-        session = _make_tick_session([cs])
-
-        with patch("treadstone.services.metering_tasks._metering") as mock_metering:
-            mock_metering.consume_compute_credits = AsyncMock(return_value=consume_result)
-            result = await tick_metering(session)
+        result = await tick_metering(session)
 
         assert result == 1
-        mock_metering.consume_compute_credits.assert_awaited_once()
         session.commit.assert_awaited_once()
+        assert len(captured) == 1
+        elapsed_seconds = (FIXED_NOW - ONE_MINUTE_AGO).total_seconds()
+        eh = Decimal(str(elapsed_seconds)) / Decimal("3600")
+        _assert_tick_update_resource_hours(
+            captured[0],
+            expected_delta_vcpu=cs.vcpu_request * eh,
+            expected_delta_mem=cs.memory_gib_request * eh,
+        )
 
     @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_skips_session_with_zero_elapsed(self, mock_now):
@@ -197,26 +230,19 @@ class TestTickMetering:
         cs = _make_open_session(last_metered_at=FIXED_NOW, gmt_updated=FIXED_NOW)
         session = _make_tick_session([cs])
 
-        with patch("treadstone.services.metering_tasks._metering") as mock_metering:
-            mock_metering.consume_compute_credits = AsyncMock()
-            result = await tick_metering(session)
+        result = await tick_metering(session)
 
         assert result == 0
-        mock_metering.consume_compute_credits.assert_not_awaited()
 
     @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_handles_optimistic_lock_conflict_with_savepoint_rollback(self, mock_now):
-        """Lock conflict rolls back the savepoint — consume side-effects are reverted."""
+        """Lock conflict rolls back the savepoint — that session is skipped without failing the tick."""
         from treadstone.services.metering_tasks import tick_metering
 
         cs = _make_open_session()
-        consume_result = ConsumeResult(monthly=Decimal("0.0083"), extra=Decimal("0"), shortfall=Decimal("0"))
-
         session = _make_tick_session([cs], update_rowcount=0)
 
-        with patch("treadstone.services.metering_tasks._metering") as mock_metering:
-            mock_metering.consume_compute_credits = AsyncMock(return_value=consume_result)
-            result = await tick_metering(session)
+        result = await tick_metering(session)
 
         assert result == 0
 
@@ -226,8 +252,7 @@ class TestTickMetering:
 
         session = _make_tick_session([])
 
-        with patch("treadstone.services.metering_tasks._metering"):
-            result = await tick_metering(session)
+        result = await tick_metering(session)
 
         assert result == 0
         session.commit.assert_not_awaited()
@@ -240,25 +265,23 @@ class TestTickMetering:
         cs = _make_open_session(
             last_metered_at=FIVE_MINUTES_AGO,
             gmt_updated=FIVE_MINUTES_AGO,
-            rate=Decimal("0.5"),
         )
-        expected_credits = Decimal("300") / Decimal("3600") * Decimal("0.5")
+        elapsed_seconds = (FIXED_NOW - FIVE_MINUTES_AGO).total_seconds()
+        eh = Decimal(str(elapsed_seconds)) / Decimal("3600")
+        expected_delta_vcpu = cs.vcpu_request * eh
+        expected_delta_mem = cs.memory_gib_request * eh
 
-        captured_amount = None
+        captured: list = []
+        session = _make_tick_session([cs], capture_update_stmts=captured)
 
-        async def capture_consume(session, user_id, amount):
-            nonlocal captured_amount
-            captured_amount = amount
-            return ConsumeResult(monthly=amount, extra=Decimal("0"), shortfall=Decimal("0"))
+        await tick_metering(session)
 
-        session = _make_tick_session([cs])
-
-        with patch("treadstone.services.metering_tasks._metering") as mock_metering:
-            mock_metering.consume_compute_credits = AsyncMock(side_effect=capture_consume)
-            await tick_metering(session)
-
-        assert captured_amount is not None
-        assert abs(captured_amount - expected_credits) < Decimal("0.0001")
+        assert len(captured) == 1
+        _assert_tick_update_resource_hours(
+            captured[0],
+            expected_delta_vcpu=expected_delta_vcpu,
+            expected_delta_mem=expected_delta_mem,
+        )
 
 
 # ═══════════════════════════════════════════════════════════
@@ -621,23 +644,19 @@ class TestHandlePeriodRollover:
 
         cs = _make_open_session(
             last_metered_at=datetime(2026, 3, 31, 23, 59, 0, tzinfo=UTC),
-            rate=Decimal("2.0"),
+            template="aio-sandbox-medium",
         )
         plan = _make_plan(period_end=period_end, monthly_used=Decimal("50"))
         sandbox = _make_sandbox(status=SandboxStatus.READY)
-
-        consume_result = ConsumeResult(monthly=Decimal("0.0333"), extra=Decimal("0"), shortfall=Decimal("0"))
 
         session = AsyncMock()
         session.get = AsyncMock(return_value=sandbox)
         session.add = MagicMock()
         session.flush = AsyncMock()
 
-        with patch("treadstone.services.metering_tasks._metering") as mock_metering:
-            mock_metering.consume_compute_credits = AsyncMock(return_value=consume_result)
-            with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
-                mock_audit.return_value = MagicMock()
-                new_cs = await handle_period_rollover(session, cs, plan)
+        with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
+            mock_audit.return_value = MagicMock()
+            new_cs = await handle_period_rollover(session, cs, plan)
 
         assert cs.ended_at == period_end
         assert plan.compute_credits_monthly_used == Decimal("0")
@@ -646,6 +665,8 @@ class TestHandlePeriodRollover:
         assert plan.warning_100_notified_at is None
         assert new_cs is not None
         assert new_cs.started_at == period_end
+        assert new_cs.vcpu_request == cs.vcpu_request
+        assert new_cs.memory_gib_request == cs.memory_gib_request
 
     @patch("treadstone.services.metering_tasks.utc_now")
     async def test_no_rollover_when_within_period(self, mock_now):
@@ -674,18 +695,14 @@ class TestHandlePeriodRollover:
         plan = _make_plan(period_end=period_end)
         sandbox = _make_sandbox(status=SandboxStatus.STOPPED)
 
-        consume_result = ConsumeResult(monthly=Decimal("0"), extra=Decimal("0"), shortfall=Decimal("0"))
-
         session = AsyncMock()
         session.get = AsyncMock(return_value=sandbox)
         session.add = MagicMock()
         session.flush = AsyncMock()
 
-        with patch("treadstone.services.metering_tasks._metering") as mock_metering:
-            mock_metering.consume_compute_credits = AsyncMock(return_value=consume_result)
-            with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
-                mock_audit.return_value = MagicMock()
-                new_cs = await handle_period_rollover(session, cs, plan)
+        with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
+            mock_audit.return_value = MagicMock()
+            new_cs = await handle_period_rollover(session, cs, plan)
 
         assert cs.ended_at == period_end
         assert new_cs is None

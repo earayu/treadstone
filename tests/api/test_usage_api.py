@@ -27,7 +27,7 @@ async def _seed_tier_templates(session: AsyncSession) -> None:
         TierTemplate(
             tier_name="free",
             compute_credits_monthly=Decimal("10"),
-            storage_credits_monthly=0,
+            storage_capacity_gib=0,
             max_concurrent_running=1,
             max_sandbox_duration_seconds=1800,
             allowed_templates=["aio-sandbox-tiny", "aio-sandbox-small"],
@@ -36,7 +36,7 @@ async def _seed_tier_templates(session: AsyncSession) -> None:
         TierTemplate(
             tier_name="pro",
             compute_credits_monthly=Decimal("100"),
-            storage_credits_monthly=10,
+            storage_capacity_gib=10,
             max_concurrent_running=3,
             max_sandbox_duration_seconds=7200,
             allowed_templates=["aio-sandbox-tiny", "aio-sandbox-small", "aio-sandbox-medium"],
@@ -104,12 +104,13 @@ async def test_get_usage_returns_summary(user_client):
     assert data["billing_period"]["start"] is not None
     assert data["billing_period"]["end"] is not None
 
-    assert data["compute"]["monthly_limit"] == 10.0
-    assert data["compute"]["monthly_used"] == 0.0
-    assert data["compute"]["unit"] == "vCPU-hours"
+    assert data["compute"]["vcpu_hours"] == 0.0
+    assert data["compute"]["memory_gib_hours"] == 0.0
 
-    assert data["storage"]["monthly_limit"] == 0
-    assert data["storage"]["unit"] == "GiB"
+    assert data["storage"]["gib_hours"] == 0.0
+    assert data["storage"]["current_used_gib"] == 0
+    assert data["storage"]["total_quota_gib"] == 0
+    assert data["storage"]["available_gib"] == 0
 
     assert data["limits"]["max_concurrent_running"] == 1
     assert data["limits"]["allowed_templates"] == ["aio-sandbox-tiny", "aio-sandbox-small"]
@@ -119,11 +120,24 @@ async def test_get_usage_returns_summary(user_client):
 
 
 async def test_get_usage_includes_extra_credits(user_client):
-    resp = await user_client.get("/v1/usage")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["compute"]["extra_remaining"] == 50.0
-    assert data["compute"]["total_remaining"] == 60.0
+    """Welcome compute grant is listed under /v1/usage/grants; summary compute is raw usage only."""
+    usage = await user_client.get("/v1/usage")
+    assert usage.status_code == 200
+    u = usage.json()
+    assert u["compute"]["vcpu_hours"] == 0.0
+    assert u["compute"]["memory_gib_hours"] == 0.0
+
+    grants = await user_client.get("/v1/usage/grants")
+    assert grants.status_code == 200
+    welcome = next((g for g in grants.json()["items"] if g["grant_type"] == "welcome_bonus"), None)
+    assert welcome is not None
+    assert welcome["credit_type"] == "compute"
+    assert welcome["remaining_amount"] == 50.0
+
+    plan = await user_client.get("/v1/usage/plan")
+    assert plan.status_code == 200
+    assert plan.json()["compute_credits_monthly_limit"] == 10.0
+    assert plan.json()["compute_credits_monthly_used"] == 0.0
 
 
 async def test_get_usage_unauthenticated(db_session):
@@ -143,7 +157,7 @@ async def test_get_plan_returns_full_details(user_client):
     assert data["tier"] == "free"
     assert data["compute_credits_monthly_limit"] == 10.0
     assert data["compute_credits_monthly_used"] == 0.0
-    assert data["storage_credits_monthly_limit"] == 0
+    assert data["storage_capacity_limit_gib"] == 0
     assert data["max_concurrent_running"] == 1
     assert data["max_sandbox_duration_seconds"] == 1800
     assert data["allowed_templates"] == ["aio-sandbox-tiny", "aio-sandbox-small"]

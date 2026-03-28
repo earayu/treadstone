@@ -44,7 +44,7 @@ def test_tier_template_fields_exist():
         "id",
         "tier_name",
         "compute_credits_monthly",
-        "storage_credits_monthly",
+        "storage_capacity_gib",
         "max_concurrent_running",
         "max_sandbox_duration_seconds",
         "allowed_templates",
@@ -80,7 +80,7 @@ def test_user_plan_fields_exist():
         "user_id",
         "tier",
         "compute_credits_monthly_limit",
-        "storage_credits_monthly_limit",
+        "storage_capacity_limit_gib",
         "max_concurrent_running",
         "max_sandbox_duration_seconds",
         "allowed_templates",
@@ -160,13 +160,13 @@ def test_compute_session_fields_exist():
         "sandbox_id",
         "user_id",
         "template",
-        "credit_rate_per_hour",
+        "vcpu_request",
+        "memory_gib_request",
         "started_at",
         "ended_at",
         "last_metered_at",
-        "credits_consumed",
-        "credits_consumed_monthly",
-        "credits_consumed_extra",
+        "vcpu_hours",
+        "memory_gib_hours",
         "gmt_created",
         "gmt_updated",
     ]:
@@ -240,7 +240,7 @@ class TestCalculateCreditRate:
         assert calculate_credit_rate("aio-sandbox-xlarge") == Decimal("4")
 
     def test_unknown_template_raises(self):
-        with pytest.raises(ValueError, match="Unknown template"):
+        with pytest.raises(BadRequestError, match="Unknown sandbox template"):
             calculate_credit_rate("nonexistent")
 
 

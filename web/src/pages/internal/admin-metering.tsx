@@ -30,7 +30,7 @@ function EditTierDialog({ tier, onClose }: EditTierDialogProps) {
   const updateTierTemplate = useUpdateTierTemplate()
 
   const [compute, setCompute] = useState(String(tier.compute_credits_monthly))
-  const [storage, setStorage] = useState(String(tier.storage_credits_monthly))
+  const [storage, setStorage] = useState(String(tier.storage_capacity_gib))
   const [maxConcurrent, setMaxConcurrent] = useState(String(tier.max_concurrent_running))
   const [maxDuration, setMaxDuration] = useState(String(tier.max_sandbox_duration_seconds))
   const [gracePeriod, setGracePeriod] = useState(String(tier.grace_period_seconds))
@@ -65,7 +65,7 @@ function EditTierDialog({ tier, onClose }: EditTierDialogProps) {
         tierName: tier.tier,
         body: {
           compute_credits_monthly: computeVal,
-          storage_credits_monthly: storageVal,
+          storage_capacity_gib: storageVal,
           max_concurrent_running: maxConcurrentVal,
           max_sandbox_duration_seconds: maxDurationVal,
           grace_period_seconds: gracePeriodVal,
@@ -302,7 +302,7 @@ function TierRow({
         {tier.compute_credits_monthly} vCPU-h
       </td>
       <td className="px-5 py-3 text-xs text-foreground">
-        {tier.storage_credits_monthly} GiB
+        {tier.storage_capacity_gib} GiB
       </td>
       <td className="px-5 py-3 text-xs text-foreground">{tier.max_concurrent_running}</td>
       <td className="px-5 py-3 text-xs text-foreground">

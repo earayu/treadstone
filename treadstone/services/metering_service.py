@@ -54,8 +54,8 @@ from treadstone.models.sandbox import Sandbox, SandboxStatus
 from treadstone.models.user import utc_now
 from treadstone.services.metering_helpers import (
     ConsumeResult,
-    calculate_credit_rate,
     compute_period_bounds,
+    get_template_resource_spec,
 )
 
 logger = logging.getLogger(__name__)
@@ -66,7 +66,7 @@ WELCOME_BONUS_EXPIRY_DAYS = 90
 ALLOWED_PLAN_OVERRIDES = frozenset(
     {
         "compute_credits_monthly_limit",
-        "storage_credits_monthly_limit",
+        "storage_capacity_limit_gib",
         "max_concurrent_running",
         "max_sandbox_duration_seconds",
         "allowed_templates",
@@ -107,7 +107,7 @@ class MeteringService:
             user_id=user_id,
             tier=template.tier_name,
             compute_credits_monthly_limit=template.compute_credits_monthly,
-            storage_credits_monthly_limit=template.storage_credits_monthly,
+            storage_capacity_limit_gib=template.storage_capacity_gib,
             max_concurrent_running=template.max_concurrent_running,
             max_sandbox_duration_seconds=template.max_sandbox_duration_seconds,
             allowed_templates=list(template.allowed_templates),
@@ -162,7 +162,7 @@ class MeteringService:
 
         plan.tier = template.tier_name
         plan.compute_credits_monthly_limit = template.compute_credits_monthly
-        plan.storage_credits_monthly_limit = template.storage_credits_monthly
+        plan.storage_capacity_limit_gib = template.storage_capacity_gib
         plan.max_concurrent_running = template.max_concurrent_running
         plan.max_sandbox_duration_seconds = template.max_sandbox_duration_seconds
         plan.allowed_templates = list(template.allowed_templates)
@@ -293,8 +293,8 @@ class MeteringService:
         uses ``FOR UPDATE`` so that concurrent Watch + Reconcile callers
         serialize rather than both inserting.
 
-        The credit rate is locked at open time based on the template spec;
-        subsequent pricing changes do not affect this session.
+        Raw resource specs (vCPU, memory) are locked at open time from the
+        template spec; subsequent spec changes do not affect this session.
         """
         result = await session.execute(
             select(ComputeSession)
@@ -308,14 +308,15 @@ class MeteringService:
         if existing is not None:
             return existing
 
-        credit_rate = calculate_credit_rate(template)
+        vcpu, memory_gib = get_template_resource_spec(template)
         now = utc_now()
 
         cs = ComputeSession(
             sandbox_id=sandbox_id,
             user_id=user_id,
             template=template,
-            credit_rate_per_hour=credit_rate,
+            vcpu_request=vcpu,
+            memory_gib_request=memory_gib,
             started_at=now,
             last_metered_at=now,
         )
@@ -330,8 +331,8 @@ class MeteringService:
     ) -> ComputeSession | None:
         """Close the open ComputeSession for a sandbox.
 
-        Calculates final credits from ``last_metered_at`` → now, consumes
-        them through the dual-pool algorithm, and sets ``ended_at``.
+        Accumulates final raw resource-hours from ``last_metered_at`` → now,
+        and sets ``ended_at``.
 
         Idempotent: returns ``None`` if no open session exists.
         """
@@ -351,11 +352,9 @@ class MeteringService:
         elapsed_seconds = (now - cs.last_metered_at).total_seconds()
 
         if elapsed_seconds > 0:
-            final_credits = Decimal(str(elapsed_seconds)) / Decimal("3600") * cs.credit_rate_per_hour
-            consume_result = await self.consume_compute_credits(session, cs.user_id, final_credits)
-            cs.credits_consumed += final_credits
-            cs.credits_consumed_monthly += consume_result.monthly
-            cs.credits_consumed_extra += consume_result.extra
+            elapsed_hours = Decimal(str(elapsed_seconds)) / Decimal("3600")
+            cs.vcpu_hours += cs.vcpu_request * elapsed_hours
+            cs.memory_gib_hours += cs.memory_gib_request * elapsed_hours
 
         cs.ended_at = now
         cs.last_metered_at = now
@@ -375,7 +374,24 @@ class MeteringService:
         sandbox_id: str,
         size_gib: int,
     ) -> StorageLedger:
-        """Record a new storage allocation for a persistent sandbox."""
+        """Record a new storage allocation for a persistent sandbox.
+
+        Idempotent: if an ACTIVE entry already exists for this sandbox it is
+        returned instead of creating a duplicate.  The existing-row check
+        uses ``FOR UPDATE`` so that concurrent callers serialize.
+        """
+        result = await session.execute(
+            select(StorageLedger)
+            .where(
+                StorageLedger.sandbox_id == sandbox_id,
+                StorageLedger.storage_state == StorageState.ACTIVE,
+            )
+            .with_for_update()
+        )
+        existing = result.scalar_one_or_none()
+        if existing is not None:
+            return existing
+
         now = utc_now()
         ledger = StorageLedger(
             user_id=user_id,
@@ -402,10 +418,12 @@ class MeteringService:
         Idempotent: returns ``None`` if no active entry exists.
         """
         result = await session.execute(
-            select(StorageLedger).where(
+            select(StorageLedger)
+            .where(
                 StorageLedger.sandbox_id == sandbox_id,
                 StorageLedger.storage_state == StorageState.ACTIVE,
             )
+            .with_for_update()
         )
         ledger = result.scalar_one_or_none()
         if ledger is None:
@@ -540,7 +558,7 @@ class MeteringService:
         """Return total storage quota in GiB (monthly limit + extra storage grants)."""
         plan = await self.get_user_plan(session, user_id)
         extra_storage = await self.get_extra_credits_remaining(session, user_id, "storage")
-        return plan.storage_credits_monthly_limit + int(extra_storage)
+        return plan.storage_capacity_limit_gib + int(extra_storage)
 
     async def get_current_storage_used(
         self,
@@ -631,15 +649,51 @@ class MeteringService:
     #  Usage Queries  (F24)
     # ═══════════════════════════════════════════════════════
 
+    async def get_compute_usage_for_period(
+        self,
+        session: AsyncSession,
+        user_id: str,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> tuple[Decimal, Decimal]:
+        """Sum raw resource-hours from ComputeSessions overlapping a billing period.
+
+        Returns (total_vcpu_hours, total_memory_gib_hours).
+        """
+        result = await session.execute(
+            select(
+                func.coalesce(func.sum(ComputeSession.vcpu_hours), Decimal("0")),
+                func.coalesce(func.sum(ComputeSession.memory_gib_hours), Decimal("0")),
+            ).where(
+                ComputeSession.user_id == user_id,
+                ComputeSession.started_at < period_end,
+                or_(ComputeSession.ended_at.is_(None), ComputeSession.ended_at > period_start),
+            )
+        )
+        row = result.one()
+        return row[0], row[1]
+
     async def get_usage_summary(self, session: AsyncSession, user_id: str) -> dict:
         """Assemble the complete usage overview for GET /v1/usage."""
         plan = await self.get_user_plan(session, user_id)
-        monthly_remaining = plan.compute_credits_monthly_limit - plan.compute_credits_monthly_used
-        extra_compute = await self.get_extra_credits_remaining(session, user_id, "compute")
         extra_storage = await self.get_extra_credits_remaining(session, user_id, "storage")
-        total_storage_quota = plan.storage_credits_monthly_limit + int(extra_storage)
+        total_storage_quota = plan.storage_capacity_limit_gib + int(extra_storage)
         current_storage_used = await self.get_current_storage_used(session, user_id)
         running_count = await self._count_running_sandboxes(session, user_id)
+
+        vcpu_hours, memory_gib_hours = await self.get_compute_usage_for_period(
+            session, user_id, plan.period_start, plan.period_end
+        )
+
+        # Storage gib-hours for the current period
+        storage_result = await session.execute(
+            select(func.coalesce(func.sum(StorageLedger.gib_hours_consumed), Decimal("0"))).where(
+                StorageLedger.user_id == user_id,
+                StorageLedger.allocated_at < plan.period_end,
+                or_(StorageLedger.released_at.is_(None), StorageLedger.released_at > plan.period_start),
+            )
+        )
+        storage_gib_hours = storage_result.scalar_one()
 
         grace_active = plan.grace_period_started_at is not None
         grace_expires_at = None
@@ -653,20 +707,14 @@ class MeteringService:
                 "end": plan.period_end.isoformat(),
             },
             "compute": {
-                "monthly_limit": float(plan.compute_credits_monthly_limit),
-                "monthly_used": float(plan.compute_credits_monthly_used),
-                "monthly_remaining": float(max(Decimal("0"), monthly_remaining)),
-                "extra_remaining": float(extra_compute),
-                "total_remaining": float(monthly_remaining + extra_compute),
-                "unit": "vCPU-hours",
+                "vcpu_hours": float(vcpu_hours),
+                "memory_gib_hours": float(memory_gib_hours),
             },
             "storage": {
-                "monthly_limit": plan.storage_credits_monthly_limit,
-                "extra_remaining": int(extra_storage),
-                "total_quota": total_storage_quota,
-                "current_used": current_storage_used,
-                "available": total_storage_quota - current_storage_used,
-                "unit": "GiB",
+                "gib_hours": float(storage_gib_hours),
+                "current_used_gib": current_storage_used,
+                "total_quota_gib": total_storage_quota,
+                "available_gib": total_storage_quota - current_storage_used,
             },
             "limits": {
                 "max_concurrent_running": plan.max_concurrent_running,
@@ -779,7 +827,7 @@ class MeteringService:
 
         updatable_fields = {
             "compute_credits_monthly",
-            "storage_credits_monthly",
+            "storage_capacity_gib",
             "max_concurrent_running",
             "max_sandbox_duration_seconds",
             "allowed_templates",
@@ -802,7 +850,7 @@ class MeteringService:
             plans = result.scalars().all()
             field_map = {
                 "compute_credits_monthly": "compute_credits_monthly_limit",
-                "storage_credits_monthly": "storage_credits_monthly_limit",
+                "storage_capacity_gib": "storage_capacity_limit_gib",
                 "max_concurrent_running": "max_concurrent_running",
                 "max_sandbox_duration_seconds": "max_sandbox_duration_seconds",
                 "allowed_templates": "allowed_templates",

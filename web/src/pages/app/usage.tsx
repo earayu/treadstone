@@ -77,11 +77,10 @@ export function UsagePage() {
       ? formatPeriod(usage.billing_period.start, usage.billing_period.end)
       : "—"
 
-  const computeUsed = usage?.compute.monthly_used
-  const computeLimit = usage?.compute.monthly_limit
-  const storageUsed = usage?.storage.current_used
-  const storageQuota = usage?.storage.total_quota
-  const storageUnit = usage?.storage.unit ?? "GiB"
+  const computeVcpuHours = usage?.compute.vcpu_hours ?? 0
+  const computeMemGibHours = usage?.compute.memory_gib_hours ?? 0
+  const storageUsed = usage?.storage.current_used_gib
+  const storageQuota = usage?.storage.total_quota_gib
 
   return (
     <div className="flex flex-col gap-10">
@@ -100,15 +99,19 @@ export function UsagePage() {
           {loading ? (
             <p className="mt-3 text-sm text-muted-foreground">Loading…</p>
           ) : (
-            <div className="mt-3 flex items-baseline gap-2">
-              <span className="text-2xl font-bold tabular-nums text-foreground">
-                {computeUsed != null && computeLimit != null
-                  ? `${computeUsed.toFixed(1)} / ${computeLimit.toFixed(1)}`
-                  : "—"}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {usage?.compute.unit ?? "vCPU-hours"} used
-              </span>
+            <div className="mt-3 flex flex-col gap-1">
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-bold tabular-nums text-foreground">
+                  {computeVcpuHours.toFixed(2)}
+                </span>
+                <span className="text-xs text-muted-foreground">vCPU-hours</span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-lg font-semibold tabular-nums text-foreground">
+                  {computeMemGibHours.toFixed(2)}
+                </span>
+                <span className="text-xs text-muted-foreground">GiB-hours</span>
+              </div>
             </div>
           )}
         </div>
@@ -138,7 +141,7 @@ export function UsagePage() {
                   ? `${storageUsed} / ${storageQuota}`
                   : "—"}
               </span>
-              <span className="text-xs text-muted-foreground">{storageUnit} used</span>
+              <span className="text-xs text-muted-foreground">GiB used</span>
             </div>
           )}
         </div>
@@ -188,12 +191,12 @@ export function UsagePage() {
               <tr className="border-b border-border/15 bg-card">
                 {(
                   [
-                    ["Sandbox", "w-[22%]"],
+                    ["Sandbox", "w-[20%]"],
                     ["Template", "w-[14%]"],
-                    ["Rate", "w-[12%]"],
-                    ["Duration", "w-[12%]"],
-                    ["Credits", "w-[12%]"],
-                    ["Status", "w-[14%]"],
+                    ["Duration", "w-[14%]"],
+                    ["vCPU-hours", "w-[14%]"],
+                    ["Mem GiB-hours", "w-[14%]"],
+                    ["Status", "w-[12%]"],
                   ] as const
                 ).map(([label, cls]) => (
                   <th
@@ -230,13 +233,13 @@ export function UsagePage() {
                     <td className="px-6 py-4 font-mono text-xs text-foreground">{row.sandbox_id}</td>
                     <td className="px-6 py-4 text-xs text-muted-foreground">{row.template}</td>
                     <td className="px-6 py-4 text-xs tabular-nums text-muted-foreground">
-                      {row.credit_rate_per_hour}/hr
-                    </td>
-                    <td className="px-6 py-4 text-xs tabular-nums text-muted-foreground">
                       {formatDuration(row.duration_seconds)}
                     </td>
                     <td className="px-6 py-4 text-xs tabular-nums text-foreground">
-                      {row.credits_consumed.toFixed(2)}
+                      {row.vcpu_hours.toFixed(4)}
+                    </td>
+                    <td className="px-6 py-4 text-xs tabular-nums text-foreground">
+                      {row.memory_gib_hours.toFixed(4)}
                     </td>
                     <td className="px-6 py-4 text-xs capitalize text-foreground">{row.status}</td>
                   </tr>

@@ -43,13 +43,13 @@ def _serialize_session(cs: ComputeSession) -> dict:
         "id": cs.id,
         "sandbox_id": cs.sandbox_id,
         "template": cs.template,
-        "credit_rate_per_hour": float(cs.credit_rate_per_hour),
+        "vcpu_request": float(cs.vcpu_request),
+        "memory_gib_request": float(cs.memory_gib_request),
         "started_at": iso(cs.started_at),
         "ended_at": iso(cs.ended_at),
         "duration_seconds": duration,
-        "credits_consumed": float(cs.credits_consumed),
-        "credits_consumed_monthly": float(cs.credits_consumed_monthly),
-        "credits_consumed_extra": float(cs.credits_consumed_extra),
+        "vcpu_hours": float(cs.vcpu_hours),
+        "memory_gib_hours": float(cs.memory_gib_hours),
         "status": "active" if cs.ended_at is None else "completed",
     }
 

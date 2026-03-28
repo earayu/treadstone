@@ -66,7 +66,7 @@ jsonpath "$.user_id" isString
 jsonpath "$.tier" == "free"
 jsonpath "$.compute_credits_monthly_limit" == 10.0
 jsonpath "$.compute_credits_monthly_used" == 0.0
-jsonpath "$.storage_credits_monthly_limit" == 0
+jsonpath "$.storage_capacity_limit_gib" == 0
 jsonpath "$.max_concurrent_running" == 1
 jsonpath "$.max_sandbox_duration_seconds" == 1800
 jsonpath "$.allowed_templates" count >= 1

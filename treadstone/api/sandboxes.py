@@ -24,9 +24,12 @@ from treadstone.models.sandbox_web_link import SandboxWebLink
 from treadstone.models.user import User, utc_now
 from treadstone.services.audit import record_audit_event
 from treadstone.services.browser_auth import OPEN_LINK_TTL_SECONDS, build_open_link_token, build_open_link_url
+from treadstone.services.metering_service import MeteringService
 from treadstone.services.sandbox_service import SandboxService
 
 router = APIRouter(prefix="/v1/sandboxes", tags=["sandboxes"])
+
+_metering = MeteringService()
 
 
 def _web_port_suffix(api_base: str) -> str:
@@ -206,7 +209,7 @@ async def create_sandbox(
         await session.commit()
         raise EmailVerificationRequiredError()
 
-    service = SandboxService(session=session)
+    service = SandboxService(session=session, metering=_metering)
     sandbox = await service.create(
         owner_id=user.id,
         template=body.template,
@@ -289,7 +292,7 @@ async def delete_sandbox(
     user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
 ):
-    service = SandboxService(session=session)
+    service = SandboxService(session=session, metering=_metering)
     await service.delete(sandbox_id=sandbox_id, owner_id=user.id)
     set_request_context(request, sandbox_id=sandbox_id)
     await record_audit_event(
@@ -309,7 +312,7 @@ async def start_sandbox(
     user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
 ):
-    service = SandboxService(session=session)
+    service = SandboxService(session=session, metering=_metering)
     sandbox = await service.start(sandbox_id=sandbox_id, owner_id=user.id)
     set_request_context(request, sandbox_id=sandbox.id)
     await record_audit_event(
@@ -331,7 +334,7 @@ async def stop_sandbox(
     user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
 ):
-    service = SandboxService(session=session)
+    service = SandboxService(session=session, metering=_metering)
     sandbox = await service.stop(sandbox_id=sandbox_id, owner_id=user.id)
     set_request_context(request, sandbox_id=sandbox.id)
     await record_audit_event(
