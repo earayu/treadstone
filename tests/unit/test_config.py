@@ -17,9 +17,9 @@ def test_settings_override():
     assert s.debug is True
 
 
-def test_settings_api_base_url_default():
+def test_settings_app_base_url_default():
     s = Settings(_env_file=None, database_url=DB_URL)
-    assert s.api_base_url == "http://localhost"
+    assert s.app_base_url == "http://localhost"
 
 
 def test_auth_defaults():
@@ -85,20 +85,20 @@ def test_validate_runtime_settings_allows_public_sandbox_domain():
         database_url=DB_URL,
         jwt_secret="x" * 32,
         sandbox_domain="treadstone-ai.dev",
-        api_base_url="https://api.treadstone-ai.dev",
+        app_base_url="https://app.treadstone-ai.dev",
     )
     validate_runtime_settings(s)
 
 
-def test_validate_runtime_settings_rejects_public_sandbox_domain_with_local_api_base_url():
+def test_validate_runtime_settings_rejects_public_sandbox_domain_with_local_app_base_url():
     s = Settings(
         _env_file=None,
         database_url=DB_URL,
         jwt_secret="x" * 32,
         sandbox_domain="treadstone-ai.dev",
-        api_base_url="http://localhost:8000",
+        app_base_url="http://localhost:8000",
     )
-    with pytest.raises(RuntimeError, match="TREADSTONE_API_BASE_URL"):
+    with pytest.raises(RuntimeError, match="TREADSTONE_APP_BASE_URL"):
         validate_runtime_settings(s)
 
 

@@ -73,7 +73,7 @@ def _oauth_return_to_cookie_name(provider: str) -> str:
 
 
 def _oauth_callback_url(provider: str) -> str:
-    return f"{settings.api_base_url.rstrip('/')}/v1/auth/{provider}/callback"
+    return f"{settings.app_base_url.rstrip('/')}/v1/auth/{provider}/callback"
 
 
 def _oauth_state_payload(provider: str, csrf_token: str, return_to: str | None, cli_flow_id: str | None = None) -> str:

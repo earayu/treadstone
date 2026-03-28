@@ -60,7 +60,7 @@ async def db_session():
 
 @pytest.fixture
 async def auth_client(db_session):
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="https://api.localhost") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="https://app.localhost") as client:
         await client.post("/v1/auth/register", json={"email": "sandbox@test.com", "password": "Pass123!"})
         await client.post("/v1/auth/login", json={"email": "sandbox@test.com", "password": "Pass123!"})
         yield client
@@ -91,12 +91,12 @@ def _capture_mock():
     return mock_client, captured
 
 
-def _enable_subdomain(monkeypatch, domain: str = "sandbox.localhost", api_base_url: str = "https://api.localhost"):
+def _enable_subdomain(monkeypatch, domain: str = "sandbox.localhost", app_base_url: str = "https://app.localhost"):
     monkeypatch.setenv("TREADSTONE_SANDBOX_DOMAIN", domain)
     monkeypatch.setenv("TREADSTONE_SANDBOX_SUBDOMAIN_PREFIX", "sandbox-")
     monkeypatch.setenv("TREADSTONE_SANDBOX_NAMESPACE", "default")
     monkeypatch.setenv("TREADSTONE_SANDBOX_PORT", "8080")
-    monkeypatch.setenv("TREADSTONE_API_BASE_URL", api_base_url)
+    monkeypatch.setenv("TREADSTONE_APP_BASE_URL", app_base_url)
     monkeypatch.setenv("TREADSTONE_JWT_SECRET", "test-jwt-secret-should-be-32-bytes!")
     from treadstone.config import Settings
 
@@ -155,7 +155,7 @@ class TestSubdomainRouting:
         assert resp.status_code == 303
         location = resp.headers["location"]
         parsed = urlparse(location)
-        assert parsed.netloc == "api.localhost"
+        assert parsed.netloc == "app.localhost"
         assert parsed.path == "/v1/browser/bootstrap"
         assert parse_qs(parsed.query)["return_to"] == [f"https://sandbox-{sandbox_id}.sandbox.localhost/"]
 
@@ -203,7 +203,7 @@ class TestSubdomainRouting:
         mock_client, _ = _capture_mock()
         with patch("treadstone.services.sandbox_proxy._http_client", mock_client):
             with patch("treadstone.middleware.sandbox_subdomain.get_http_client", return_value=mock_client):
-                async with AsyncClient(transport=ASGITransport(app=app), base_url="https://api.localhost") as client:
+                async with AsyncClient(transport=ASGITransport(app=app), base_url="https://app.localhost") as client:
                     resp = await client.get(open_link, follow_redirects=True)
                     followup = await client.get(
                         f"https://sandbox-{sandbox_id}.sandbox.localhost/",
@@ -237,7 +237,7 @@ class TestSubdomainRouting:
 
         assert first == second
 
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://api.localhost") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://app.localhost") as client:
             first_resp = await client.get(first, follow_redirects=False)
             second_resp = await client.get(second, follow_redirects=False)
 
@@ -252,7 +252,7 @@ class TestSubdomainRouting:
         delete_resp = await auth_client.delete(f"/v1/sandboxes/{sandbox_id}/web-link")
         status_resp = await auth_client.get(f"/v1/sandboxes/{sandbox_id}/web-link")
 
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://api.localhost") as browser:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://app.localhost") as browser:
             open_resp = await browser.get(open_link, follow_redirects=False)
 
         assert delete_resp.status_code == 204
@@ -279,7 +279,7 @@ class TestSubdomainRouting:
         second_resp = await auth_client.post(f"/v1/sandboxes/{sandbox_id}/web-link")
         second_link = second_resp.json()["open_link"]
 
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://api.localhost") as browser:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://app.localhost") as browser:
             first_open = await browser.get(first_link, follow_redirects=False)
             second_open = await browser.get(second_link, follow_redirects=False)
 
@@ -294,7 +294,7 @@ class TestSubdomainRouting:
         sandbox_id = await _create_ready_sandbox(auth_client)
         first_link = (await auth_client.post(f"/v1/sandboxes/{sandbox_id}/web-link")).json()["open_link"]
 
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://api.localhost") as browser:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://app.localhost") as browser:
             await browser.get(first_link, follow_redirects=False)
 
         first_status = await auth_client.get(f"/v1/sandboxes/{sandbox_id}/web-link")
@@ -312,7 +312,7 @@ class TestSubdomainRouting:
         sandbox_id = await _create_ready_sandbox(auth_client)
         mock_client, _ = _capture_mock()
 
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://api.localhost") as browser:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://app.localhost") as browser:
             first = await browser.get(f"https://sandbox-{sandbox_id}.sandbox.localhost/", follow_redirects=False)
             bootstrap_url = first.headers["location"]
             bootstrap = await browser.get(bootstrap_url, follow_redirects=False)
@@ -323,7 +323,7 @@ class TestSubdomainRouting:
             with patch("treadstone.services.sandbox_proxy._http_client", mock_client):
                 with patch("treadstone.middleware.sandbox_subdomain.get_http_client", return_value=mock_client):
                     final = await browser.post(
-                        "https://api.localhost/v1/browser/login",
+                        "https://app.localhost/v1/browser/login",
                         data={
                             "email": "sandbox@test.com",
                             "password": "Pass123!",

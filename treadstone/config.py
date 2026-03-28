@@ -13,8 +13,11 @@ class Settings(BaseSettings):
     app_name: str = "treadstone"
     debug: bool = False
     database_url: str = "postgresql+asyncpg://user:pass@ep-xxx.us-east-2.aws.neon.tech/treadstone?sslmode=require"
-    # Public API origin used in browser bootstrap redirects and public sandbox Web UI flows.
-    api_base_url: str = "http://localhost"
+    # Public web-app origin used for browser auth flows (OAuth callbacks, sandbox
+    # bootstrap redirects, CLI browser login).  In production this should point to
+    # the frontend domain (e.g. https://app.treadstone-ai.dev) whose nginx reverse-
+    # proxies /v1/ to the backend, so that cookies stay on a single host.
+    app_base_url: str = "http://localhost"
 
     # Auth
     auth_type: str = "cookie"  # cookie | auth0 | authing | logto | none
@@ -103,9 +106,9 @@ def validate_runtime_settings(cfg: Settings) -> None:
         )
 
     if cfg.sandbox_domain and not is_local_sandbox_domain(cfg.sandbox_domain):
-        parsed = urlparse(cfg.api_base_url)
+        parsed = urlparse(cfg.app_base_url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc or is_local_hostname(parsed.hostname):
             raise RuntimeError(
-                "TREADSTONE_API_BASE_URL must be set to the public API origin "
-                "when sandbox Web UI subdomains are enabled."
+                "TREADSTONE_APP_BASE_URL must be set to the public app origin "
+                "(e.g. https://app.treadstone-ai.dev) when sandbox Web UI subdomains are enabled."
             )

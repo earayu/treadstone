@@ -96,7 +96,7 @@ def _extract_state(location: str) -> str:
 
 
 def _enable_browser_flow(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(auth_api.settings, "api_base_url", "http://test")
+    monkeypatch.setattr(auth_api.settings, "app_base_url", "http://test")
     monkeypatch.setattr(auth_api.settings, "sandbox_domain", "sandbox.localhost")
     monkeypatch.setattr(browser_login_service.settings, "sandbox_domain", "sandbox.localhost")
 
@@ -126,7 +126,7 @@ async def test_google_authorize_redirects_to_provider_and_sets_flow_cookies(db_s
 
 @pytest.mark.asyncio
 async def test_google_callback_creates_user_and_sets_session_cookie(db_session, monkeypatch):
-    monkeypatch.setattr(auth_api.settings, "api_base_url", "http://test")
+    monkeypatch.setattr(auth_api.settings, "app_base_url", "http://test")
     client = FakeOAuthClient("google", account_id="acct-new", account_email="new@example.com")
     monkeypatch.setattr(auth_api, "get_google_oauth_client", lambda: client, raising=False)
 
@@ -156,7 +156,7 @@ async def test_google_callback_creates_user_and_sets_session_cookie(db_session, 
 
 @pytest.mark.asyncio
 async def test_google_callback_auto_links_existing_user_by_email(db_session, monkeypatch):
-    monkeypatch.setattr(auth_api.settings, "api_base_url", "http://test")
+    monkeypatch.setattr(auth_api.settings, "app_base_url", "http://test")
     client = FakeOAuthClient("google", account_id="acct-link", account_email="existing@example.com")
     monkeypatch.setattr(auth_api, "get_google_oauth_client", lambda: client, raising=False)
 
@@ -223,7 +223,7 @@ async def test_google_callback_provider_denied_redirects_back_to_browser_login(d
 
 @pytest.mark.asyncio
 async def test_google_callback_invalid_state_returns_treadstone_error(db_session, monkeypatch):
-    monkeypatch.setattr(auth_api.settings, "api_base_url", "http://test")
+    monkeypatch.setattr(auth_api.settings, "app_base_url", "http://test")
     client = FakeOAuthClient("google")
     monkeypatch.setattr(auth_api, "get_google_oauth_client", lambda: client, raising=False)
 
@@ -239,7 +239,7 @@ async def test_google_callback_invalid_state_returns_treadstone_error(db_session
 
 @pytest.mark.asyncio
 async def test_github_callback_rejects_unverified_email_and_does_not_link_existing_user(db_session, monkeypatch):
-    monkeypatch.setattr(auth_api.settings, "api_base_url", "http://test")
+    monkeypatch.setattr(auth_api.settings, "app_base_url", "http://test")
     client = FakeGitHubOAuthClient(
         account_id="gh-unverified",
         account_email="existing@example.com",

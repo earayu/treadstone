@@ -118,9 +118,9 @@
 
 当 `sandbox_domain` 是公网域名而不是 `localhost` 变体时，代码会强制要求：
 
-- `TREADSTONE_API_BASE_URL` 必须是可公开访问的 API 根地址
+- `TREADSTONE_APP_BASE_URL` 必须是可公开访问的 Web App 地址（如 `https://app.treadstone-ai.dev`）
 
-这是为了让浏览器跳转和 OAuth callback 都能返回正确地址。
+这是为了让浏览器跳转和 OAuth callback 都能返回正确地址，且 cookie 保持在同一个域名上。
 
 ## 6. 当前实现现状
 

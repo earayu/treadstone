@@ -72,7 +72,7 @@ async def _create_flow(http_client: AsyncClient) -> dict:
 
 @pytest.mark.asyncio
 async def test_create_flow_returns_flow_data(db_session, monkeypatch):
-    monkeypatch.setattr(cli_auth_api.settings, "api_base_url", "http://test")
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
         data = await _create_flow(http_client)
 
@@ -83,7 +83,7 @@ async def test_create_flow_returns_flow_data(db_session, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_poll_flow_pending(db_session, monkeypatch):
-    monkeypatch.setattr(cli_auth_api.settings, "api_base_url", "http://test")
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
         flow = await _create_flow(http_client)
         resp = await http_client.get(
@@ -97,7 +97,7 @@ async def test_poll_flow_pending(db_session, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_poll_flow_wrong_secret_returns_401(db_session, monkeypatch):
-    monkeypatch.setattr(cli_auth_api.settings, "api_base_url", "http://test")
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
         flow = await _create_flow(http_client)
         resp = await http_client.get(
@@ -110,7 +110,7 @@ async def test_poll_flow_wrong_secret_returns_401(db_session, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_poll_flow_missing_secret_returns_401(db_session, monkeypatch):
-    monkeypatch.setattr(cli_auth_api.settings, "api_base_url", "http://test")
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
         flow = await _create_flow(http_client)
         resp = await http_client.get(f"/v1/auth/cli/flows/{flow['flow_id']}/status")
@@ -120,7 +120,7 @@ async def test_poll_flow_missing_secret_returns_401(db_session, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_email_login_approves_flow_and_exchange_returns_session(db_session, monkeypatch):
-    monkeypatch.setattr(cli_auth_api.settings, "api_base_url", "http://test")
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
         await _register_user(http_client)
         flow = await _create_flow(http_client)
@@ -148,7 +148,7 @@ async def test_email_login_approves_flow_and_exchange_returns_session(db_session
 
 @pytest.mark.asyncio
 async def test_exchange_marks_flow_as_used(db_session, monkeypatch):
-    monkeypatch.setattr(cli_auth_api.settings, "api_base_url", "http://test")
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
         await _register_user(http_client)
         flow = await _create_flow(http_client)
@@ -167,7 +167,7 @@ async def test_exchange_marks_flow_as_used(db_session, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_exchange_pending_flow_returns_error(db_session, monkeypatch):
-    monkeypatch.setattr(cli_auth_api.settings, "api_base_url", "http://test")
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
         flow = await _create_flow(http_client)
 
@@ -181,7 +181,7 @@ async def test_exchange_pending_flow_returns_error(db_session, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_expired_flow_returns_expired_status(db_session, monkeypatch):
-    monkeypatch.setattr(cli_auth_api.settings, "api_base_url", "http://test")
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
         flow = await _create_flow(http_client)
 
@@ -201,7 +201,7 @@ async def test_expired_flow_returns_expired_status(db_session, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_cli_login_page_renders(db_session, monkeypatch):
-    monkeypatch.setattr(cli_auth_api.settings, "api_base_url", "http://test")
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
         flow = await _create_flow(http_client)
         resp = await http_client.get(f"/v1/auth/cli/login?flow_id={flow['flow_id']}")
@@ -213,7 +213,7 @@ async def test_cli_login_page_renders(db_session, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_cli_login_page_with_oauth_buttons(db_session, monkeypatch):
-    monkeypatch.setattr(cli_auth_api.settings, "api_base_url", "http://test")
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
     monkeypatch.setattr(login_page_service, "get_google_oauth_client", lambda: SimpleNamespace(name="google"))
     monkeypatch.setattr(login_page_service, "get_github_oauth_client", lambda: SimpleNamespace(name="github"))
 
@@ -229,7 +229,7 @@ async def test_cli_login_page_with_oauth_buttons(db_session, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_email_login_wrong_password_re_renders_page(db_session, monkeypatch):
-    monkeypatch.setattr(cli_auth_api.settings, "api_base_url", "http://test")
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
         await _register_user(http_client)
         flow = await _create_flow(http_client)
@@ -246,8 +246,8 @@ async def test_email_login_wrong_password_re_renders_page(db_session, monkeypatc
 @pytest.mark.asyncio
 async def test_oauth_callback_approves_cli_flow(db_session, monkeypatch):
     """Google OAuth callback with cli_flow_id approves the flow and renders CLI success page."""
-    monkeypatch.setattr(auth_api.settings, "api_base_url", "http://test")
-    monkeypatch.setattr(cli_auth_api.settings, "api_base_url", "http://test")
+    monkeypatch.setattr(auth_api.settings, "app_base_url", "http://test")
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
 
     from tests.api.test_oauth_api import FakeOAuthClient
 
@@ -292,7 +292,7 @@ async def test_oauth_callback_approves_cli_flow(db_session, monkeypatch):
 @pytest.mark.asyncio
 async def test_session_token_from_exchange_is_valid(db_session, monkeypatch):
     """Session token from CLI flow exchange can be used to call authenticated endpoints."""
-    monkeypatch.setattr(cli_auth_api.settings, "api_base_url", "http://test")
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
         await _register_user(http_client)
         flow = await _create_flow(http_client)
@@ -319,8 +319,8 @@ async def test_session_token_from_exchange_is_valid(db_session, monkeypatch):
 @pytest.mark.asyncio
 async def test_oauth_callback_with_expired_flow_does_not_create_user(db_session, monkeypatch):
     """P1 regression: expired CLI flow must reject BEFORE creating user/OAuthAccount."""
-    monkeypatch.setattr(auth_api.settings, "api_base_url", "http://test")
-    monkeypatch.setattr(cli_auth_api.settings, "api_base_url", "http://test")
+    monkeypatch.setattr(auth_api.settings, "app_base_url", "http://test")
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
 
     from tests.api.test_oauth_api import FakeOAuthClient
 
@@ -360,8 +360,8 @@ async def test_oauth_callback_with_expired_flow_does_not_create_user(db_session,
 @pytest.mark.asyncio
 async def test_oauth_access_denied_marks_cli_flow_as_failed(db_session, monkeypatch):
     """P2 regression: provider deny must mark CLI flow as failed so CLI stops polling."""
-    monkeypatch.setattr(auth_api.settings, "api_base_url", "http://test")
-    monkeypatch.setattr(cli_auth_api.settings, "api_base_url", "http://test")
+    monkeypatch.setattr(auth_api.settings, "app_base_url", "http://test")
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
 
     from tests.api.test_oauth_api import FakeOAuthClient
 

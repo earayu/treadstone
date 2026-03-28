@@ -18,7 +18,7 @@ COOKIE_MAX_AGE = settings.session_ttl_seconds
 
 
 def should_use_secure_cookies() -> bool:
-    return not settings.debug and urlparse(settings.api_base_url).scheme == "https"
+    return not settings.debug and urlparse(settings.app_base_url).scheme == "https"
 
 
 def get_google_oauth_client() -> GoogleOAuth2 | None:
