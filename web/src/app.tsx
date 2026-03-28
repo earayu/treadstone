@@ -6,16 +6,12 @@ import { AppLayout } from "@/components/layout/app-layout"
 import { AdminLayout } from "@/components/layout/admin-layout"
 
 import { LandingPage } from "@/pages/public/landing"
-import { PricingPage } from "@/pages/public/pricing"
-import { QuickstartPage } from "@/pages/public/quickstart"
 
 import { SignInPage } from "@/pages/auth/sign-in"
 import { SignUpPage } from "@/pages/auth/sign-up"
 import { CliLoginPage } from "@/pages/auth/cli-login"
 
 import { DashboardPage } from "@/pages/app/dashboard"
-import { TemplatesPage } from "@/pages/app/templates"
-import { SandboxesPage } from "@/pages/app/sandboxes"
 import { CreateSandboxPage } from "@/pages/app/create-sandbox"
 import { SandboxDetailPage } from "@/pages/app/sandbox-detail"
 import { ApiKeysPage } from "@/pages/app/api-keys"
@@ -47,8 +43,6 @@ const router = createBrowserRouter([
     element: <PublicLayout />,
     children: [
       { index: true, element: <LandingPage /> },
-      { path: "pricing", element: <PricingPage /> },
-      { path: "quickstart", element: <QuickstartPage /> },
     ],
   },
   {
@@ -68,8 +62,6 @@ const router = createBrowserRouter([
     element: <AppLayout />,
     children: [
       { index: true, element: <DashboardPage /> },
-      { path: "templates", element: <TemplatesPage /> },
-      { path: "sandboxes", element: <SandboxesPage /> },
       { path: "sandboxes/new", element: <CreateSandboxPage /> },
       { path: "sandboxes/:id", element: <SandboxDetailPage /> },
       { path: "api-keys", element: <ApiKeysPage /> },

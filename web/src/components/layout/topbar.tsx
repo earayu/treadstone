@@ -5,7 +5,6 @@ import { useCurrentUser, useLogout } from "@/hooks/use-auth"
 const ROUTE_LABELS: Record<string, string> = {
   "/app": "Sandboxes",
   "/app/api-keys": "API Keys",
-  "/app/templates": "Templates",
   "/app/usage": "Usage",
   "/app/settings": "Settings",
   "/app/sandboxes/new": "Create Sandbox",
@@ -16,7 +15,9 @@ export function Topbar() {
   const logout = useLogout()
   const location = useLocation()
 
-  const pageLabel = ROUTE_LABELS[location.pathname] ?? "Console"
+  const pageLabel = location.pathname.startsWith("/app/sandboxes/")
+    ? "Sandbox Detail"
+    : (ROUTE_LABELS[location.pathname] ?? "Console")
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-background px-6">
@@ -37,12 +38,6 @@ export function Topbar() {
         </div>
 
         <div className="flex items-center gap-3">
-          <a
-            href="/quickstart"
-            className="text-xs uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Docs
-          </a>
           <Link
             to="/app/sandboxes/new"
             className="bg-secondary px-3 py-1.5 text-xs font-medium uppercase tracking-widest text-secondary-foreground transition-colors hover:bg-secondary/80"

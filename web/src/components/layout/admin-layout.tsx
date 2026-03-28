@@ -2,6 +2,7 @@ import { Outlet, Navigate, useLocation } from "react-router"
 import { LogOut } from "lucide-react"
 import { AdminSidebar } from "./admin-sidebar"
 import { useCurrentUser, useLogout } from "@/hooks/use-auth"
+import { APP_VERSION } from "@/lib/app-version"
 
 const ADMIN_ROUTE_LABELS: Record<string, string> = {
   "/internal/admin/metering": "METERING",
@@ -71,7 +72,7 @@ export function AdminLayout() {
           </div>
           <footer className="border-t border-border/10 py-6 text-center">
             <span className="text-[10px] uppercase tracking-[3px] text-muted-foreground/60">
-              Treadstone&nbsp;&middot;&nbsp;v0.5.1
+              Treadstone&nbsp;&middot;&nbsp;v{APP_VERSION}
             </span>
           </footer>
         </main>
