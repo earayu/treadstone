@@ -44,6 +44,7 @@ def get_github_oauth_client() -> GitHubOAuth2 | None:
 class UserManager(BaseUserManager[User, str]):
     reset_password_token_secret = settings.jwt_secret
     verification_token_secret = settings.jwt_secret
+    verification_token_lifetime_seconds = settings.verification_token_lifetime_seconds
 
     def parse_id(self, value: str) -> str:
         return value

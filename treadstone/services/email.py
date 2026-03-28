@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Protocol
 
 from treadstone.config import settings
@@ -21,8 +21,6 @@ class EmailBackend(Protocol):
 
 
 class MemoryBackend:
-    sent: list[VerificationEmail] = field(default_factory=list)
-
     def __init__(self) -> None:
         self.sent: list[VerificationEmail] = []
 
@@ -40,7 +38,10 @@ class ResendBackend:
         self._resend = resend
 
     async def send_verification_email(self, to: str, token: str, verify_url: str) -> None:
-        self._resend.Emails.send(
+        import asyncio
+
+        await asyncio.to_thread(
+            self._resend.Emails.send,
             {
                 "from": settings.email_from,
                 "to": [to],
@@ -50,7 +51,7 @@ class ResendBackend:
                     f'<p><a href="{verify_url}">{verify_url}</a></p>'
                     f"<p>This link will expire in {settings.verification_token_lifetime_seconds // 60} minutes.</p>"
                 ),
-            }
+            },
         )
         logger.info("Resend verification email sent to=%s", to)
 

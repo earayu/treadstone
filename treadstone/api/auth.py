@@ -896,9 +896,9 @@ async def confirm_verification(
         fastapi_users_exceptions.InvalidVerifyToken,
         fastapi_users_exceptions.UserNotExists,
     ):
-        raise EmailVerificationTokenInvalidError()
+        raise EmailVerificationTokenInvalidError() from None
     except fastapi_users_exceptions.UserAlreadyVerified:
-        raise EmailAlreadyVerifiedError()
+        raise EmailAlreadyVerifiedError() from None
 
     set_request_context(request, actor_user_id=user.id)
     await record_audit_event(
