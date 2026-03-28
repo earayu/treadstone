@@ -1,6 +1,10 @@
 import { Link } from "react-router"
 import { Terminal, Globe, Shield, Clock, Cpu, ArrowRight } from "lucide-react"
 
+const RELEASES_URL = "https://github.com/earayu/treadstone/releases"
+const INSTALL_SH_COMMAND = "curl -fsSL https://github.com/earayu/treadstone/releases/latest/download/install.sh | sh"
+const INSTALL_PS_COMMAND = "irm https://github.com/earayu/treadstone/releases/latest/download/install.ps1 | iex"
+
 const FEATURES = [
   {
     icon: Globe,
@@ -63,17 +67,78 @@ export function LandingPage() {
           >
             Start Free
           </Link>
-          <Link
-            to="/quickstart"
+          <a
+            href="#install-cli"
             className="border border-border px-6 py-3 text-sm font-bold uppercase tracking-widest text-foreground transition-colors hover:bg-accent"
           >
             Install CLI
-          </Link>
+          </a>
+        </div>
+      </section>
+
+      {/* CLI Install Section */}
+      <section id="install-cli" className="mx-auto max-w-6xl px-6 py-20">
+        <div className="grid gap-10 border border-border/15 bg-card p-8 md:grid-cols-[1.1fr_1.4fr]">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground">
+              Install CLI
+            </p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-foreground">
+              Ship sandboxes from your terminal
+            </h2>
+            <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
+              Install the latest Treadstone CLI directly from GitHub Releases, then authenticate and create
+              sandboxes from your shell.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <a
+                href={RELEASES_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 bg-primary px-5 py-2 text-xs font-bold uppercase tracking-widest text-primary-foreground transition-colors hover:bg-primary/90"
+              >
+                Browse Releases
+                <ArrowRight className="size-3" />
+              </a>
+              <Link
+                to="/auth/sign-up"
+                className="inline-flex items-center gap-2 border border-border px-5 py-2 text-xs font-bold uppercase tracking-widest text-foreground transition-colors hover:bg-accent"
+              >
+                Create Account
+              </Link>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="border border-border/10 bg-background/60 p-4">
+              <div className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground">
+                macOS / Linux
+              </div>
+              <pre className="mt-3 overflow-x-auto font-mono text-[12px] leading-6 text-foreground">
+                <code>{INSTALL_SH_COMMAND}</code>
+              </pre>
+            </div>
+            <div className="border border-border/10 bg-background/60 p-4">
+              <div className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground">
+                Windows PowerShell
+              </div>
+              <pre className="mt-3 overflow-x-auto font-mono text-[12px] leading-6 text-foreground">
+                <code>{INSTALL_PS_COMMAND}</code>
+              </pre>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Need a pinned version instead of the latest installer? Download a specific asset from{" "}
+              <a href={RELEASES_URL} target="_blank" rel="noreferrer" className="text-foreground underline underline-offset-4">
+                GitHub Releases
+              </a>
+              .
+            </p>
+          </div>
         </div>
       </section>
 
       {/* Browser Hand-off Section */}
-      <section className="mx-auto grid max-w-6xl gap-12 px-6 py-20 md:grid-cols-2">
+      <section id="platform-features" className="mx-auto grid max-w-6xl gap-12 px-6 py-20 md:grid-cols-2">
         <div>
           <h2 className="text-3xl font-bold tracking-tight text-foreground">
             Browser
@@ -148,12 +213,6 @@ export function LandingPage() {
               Choose the right compute template for your workload.
             </p>
           </div>
-          <Link
-            to="/quickstart"
-            className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Read Full Docs
-          </Link>
         </div>
 
         <div className="mt-8 overflow-x-auto">
@@ -233,7 +292,7 @@ export function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-border/10 px-6 py-12">
-        <div className="mx-auto grid max-w-6xl gap-10 md:grid-cols-4">
+        <div className="mx-auto grid max-w-6xl gap-10 md:grid-cols-3">
           <div>
             <div className="text-sm font-bold uppercase tracking-widest text-primary">
               Treadstone
@@ -247,19 +306,9 @@ export function LandingPage() {
               Resources
             </h4>
             <div className="mt-3 space-y-2 text-xs text-muted-foreground">
-              <div><Link to="/quickstart" className="hover:text-foreground">API Reference</Link></div>
-              <div><Link to="/quickstart" className="hover:text-foreground">Changelog</Link></div>
-              <div><Link to="/quickstart" className="hover:text-foreground">Docs</Link></div>
-            </div>
-          </div>
-          <div>
-            <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              Legal
-            </h4>
-            <div className="mt-3 space-y-2 text-xs text-muted-foreground">
-              <div><a href="#" className="hover:text-foreground">Privacy</a></div>
-              <div><a href="#" className="hover:text-foreground">Terms</a></div>
-              <div><a href="#" className="hover:text-foreground">Legal</a></div>
+              <div><a href="#install-cli" className="hover:text-foreground">Install CLI</a></div>
+              <div><a href={RELEASES_URL} target="_blank" rel="noreferrer" className="hover:text-foreground">GitHub Releases</a></div>
+              <div><Link to="/auth/sign-in" className="hover:text-foreground">Sign In</Link></div>
             </div>
           </div>
           <div>
@@ -268,7 +317,6 @@ export function LandingPage() {
             </h4>
             <div className="mt-3 space-y-2 text-xs text-muted-foreground">
               <div><a href="https://github.com/earayu/treadstone" className="hover:text-foreground">GitHub</a></div>
-              <div><a href="#" className="hover:text-foreground">Discord</a></div>
             </div>
           </div>
         </div>

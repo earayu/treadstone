@@ -213,7 +213,7 @@ bump: ## Bump version files: make bump V=0.4.2  (run on feature branch, then ope
 	@echo "Bumping versions to $(V)..."
 	uv run python scripts/set_release_versions.py "$(V)"
 	uv lock
-	git add pyproject.toml cli/pyproject.toml sdk/python/pyproject.toml uv.lock
+	git add pyproject.toml cli/pyproject.toml sdk/python/pyproject.toml web/package.json web/src/lib/app-version.ts uv.lock
 	git commit -m "chore: bump version to $(V)"
 	git push -u origin HEAD
 	@echo "✓ Version bumped and pushed. Open a PR, merge, then run: make release V=$(V)"

@@ -13,7 +13,7 @@ def _write_file(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
-def test_set_release_versions_updates_server_cli_and_sdk_versions(tmp_path: Path) -> None:
+def test_set_release_versions_updates_all_release_version_files(tmp_path: Path) -> None:
     _write_file(
         tmp_path / "pyproject.toml",
         """
@@ -38,6 +38,19 @@ name = "treadstone-sdk"
 version = "0.1.0"
 """.strip(),
     )
+    _write_file(
+        tmp_path / "web" / "package.json",
+        """
+{
+  "name": "treadstone-web",
+  "version": "0.1.0"
+}
+""".strip(),
+    )
+    _write_file(
+        tmp_path / "web" / "src" / "lib" / "app-version.ts",
+        'export const APP_VERSION = "0.1.0";',
+    )
 
     result = subprocess.run(
         [sys.executable, str(SCRIPT_PATH), "0.3.4", "--root", str(tmp_path)],
@@ -50,6 +63,8 @@ version = "0.1.0"
     assert 'version = "0.3.4"' in (tmp_path / "pyproject.toml").read_text(encoding="utf-8")
     assert 'version = "0.3.4"' in (tmp_path / "cli" / "pyproject.toml").read_text(encoding="utf-8")
     assert 'version = "0.3.4"' in (tmp_path / "sdk" / "python" / "pyproject.toml").read_text(encoding="utf-8")
+    assert '"version": "0.3.4"' in (tmp_path / "web" / "package.json").read_text(encoding="utf-8")
+    assert 'APP_VERSION = "0.3.4"' in (tmp_path / "web" / "src" / "lib" / "app-version.ts").read_text(encoding="utf-8")
 
 
 def test_set_release_versions_fails_when_a_target_file_is_missing(tmp_path: Path) -> None:

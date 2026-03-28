@@ -180,15 +180,7 @@ export function SignUpPage() {
       </div>
 
       <p className="mt-10 text-center text-[10px] font-medium uppercase leading-relaxed tracking-[0.12em] text-muted-foreground">
-        By creating an account, you agree to our{" "}
-        <Link to="/#terms" className="text-foreground underline underline-offset-2 hover:opacity-80">
-          Terms of Service
-        </Link>{" "}
-        and{" "}
-        <Link to="/#privacy" className="text-foreground underline underline-offset-2 hover:opacity-80">
-          Privacy Policy
-        </Link>
-        .
+        By creating an account, you agree to the Terms of Service and Privacy Policy.
       </p>
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
@@ -204,12 +196,9 @@ export function SignUpPage() {
           <Link to="/" className="transition-colors hover:text-foreground">
             Home
           </Link>
-          <Link to="/pricing" className="transition-colors hover:text-foreground">
-            Pricing
-          </Link>
-          <Link to="/quickstart" className="transition-colors hover:text-foreground">
-            Quickstart
-          </Link>
+          <a href="/#install-cli" className="transition-colors hover:text-foreground">
+            Install CLI
+          </a>
         </div>
       </footer>
     </div>

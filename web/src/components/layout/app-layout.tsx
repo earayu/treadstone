@@ -2,6 +2,7 @@ import { Outlet, Navigate } from "react-router"
 import { Sidebar } from "./sidebar"
 import { Topbar } from "./topbar"
 import { useCurrentUser } from "@/hooks/use-auth"
+import { APP_VERSION } from "@/lib/app-version"
 
 export function AppLayout() {
   const { data: user, isLoading } = useCurrentUser()
@@ -29,7 +30,7 @@ export function AppLayout() {
           </div>
           <footer className="border-t border-border/10 py-6 text-center">
             <span className="text-[10px] uppercase tracking-[3px] text-muted-foreground/60">
-              Treadstone&nbsp;&middot;&nbsp;v0.5.1
+              Treadstone&nbsp;&middot;&nbsp;v{APP_VERSION}
             </span>
           </footer>
         </main>
