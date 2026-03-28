@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react"
 import { Link, useNavigate } from "react-router"
-import { Plus, Search, ChevronLeft, ChevronRight, MoreHorizontal, Square, Play, Trash2, ExternalLink } from "lucide-react"
+import { Plus, Search, ChevronLeft, ChevronRight, MoreHorizontal, Square, Play, Trash2, ExternalLink, HardDrive } from "lucide-react"
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
 import * as Dialog from "@radix-ui/react-dialog"
 import { toast } from "sonner"
@@ -100,12 +100,20 @@ function InlineMetrics() {
   )
 }
 
+function formatAutoDelete(minutes: number): string {
+  if (minutes === -1) return "—"
+  if (minutes < 60) return `${minutes}m`
+  if (minutes < 1440) return `${Math.round(minutes / 60)}h`
+  return `${Math.round(minutes / 1440)}d`
+}
+
 const TABLE_COLUMNS = [
-  { key: "id", label: "Sandbox ID", className: "w-[18%]" },
-  { key: "status", label: "Status", className: "w-[12%]" },
-  { key: "template", label: "Template", className: "w-[15%]" },
-  { key: "created_at", label: "Created At", className: "w-[16%]" },
-  { key: "web_url", label: "Web URL", className: "w-[31%]" },
+  { key: "id", label: "Sandbox ID", className: "w-[17%]" },
+  { key: "status", label: "Status", className: "w-[10%]" },
+  { key: "template", label: "Template", className: "w-[17%]" },
+  { key: "created_at", label: "Created At", className: "w-[12%]" },
+  { key: "lifecycle", label: "Lifecycle", className: "w-[10%]" },
+  { key: "web_url", label: "Web URL", className: "w-[26%]" },
   { key: "actions", label: "", className: "w-[8%]" },
 ] as const
 
@@ -332,7 +340,7 @@ function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
         <tbody>
           {pageItems.length === 0 ? (
             <tr>
-              <td colSpan={6} className="px-6 py-12 text-center text-sm text-muted-foreground">
+              <td colSpan={7} className="px-6 py-12 text-center text-sm text-muted-foreground">
                 {filter ? "No sandboxes match your filter." : "No sandboxes yet."}
               </td>
             </tr>
@@ -356,9 +364,29 @@ function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
                 <td className="px-6 py-4">
                   <StatusDot status={sandbox.status} />
                 </td>
-                <td className="px-6 py-4 text-xs text-muted-foreground">{sandbox.template}</td>
+                <td className="px-6 py-4">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs text-muted-foreground">{sandbox.template}</span>
+                    {sandbox.persist && (
+                      <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/60">
+                        <HardDrive className="size-2.5 shrink-0" />
+                        {sandbox.storage_size ?? "PV"}
+                      </span>
+                    )}
+                  </div>
+                </td>
                 <td className="px-6 py-4 text-xs text-muted-foreground">
                   {formatRelativeTime(sandbox.created_at)}
+                </td>
+                <td className="px-6 py-4">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-muted-foreground">
+                      {formatAutoDelete(sandbox.auto_delete_interval)}
+                    </span>
+                    {sandbox.auto_delete_interval !== -1 && (
+                      <span className="text-[10px] text-muted-foreground/50">auto-del</span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-6 py-4">
                   {sandbox.urls?.web ? (

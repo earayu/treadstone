@@ -1,6 +1,6 @@
 import { Outlet, Navigate, useLocation } from "react-router"
 import { LogOut } from "lucide-react"
-import { AdminSidebar } from "./admin-sidebar"
+import { Sidebar } from "./sidebar"
 import { useCurrentUser, useLogout } from "@/hooks/use-auth"
 import { APP_VERSION } from "@/lib/app-version"
 
@@ -63,7 +63,7 @@ export function AdminLayout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      <AdminSidebar />
+      <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <AdminTopbar />
         <main className="relative flex-1 overflow-auto">

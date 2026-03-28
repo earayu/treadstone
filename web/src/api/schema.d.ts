@@ -38,6 +38,40 @@ export interface paths {
         patch: operations["admin-update_tier_template"];
         trace?: never;
     };
+    "/v1/admin/users/lookup-by-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Admin Lookup User By Email */
+        get: operations["admin-admin_lookup_user_by_email"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/users/resolve-emails": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Admin Resolve Emails */
+        post: operations["admin-admin_resolve_emails"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/users/{user_id}/usage": {
         parameters: {
             query?: never;
@@ -100,6 +134,23 @@ export interface paths {
         put?: never;
         /** Admin Batch Grants */
         post: operations["admin-admin_batch_grants"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/audit/filter-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Audit Filter Options */
+        get: operations["audit-get_audit_filter_options"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -242,6 +293,46 @@ export interface paths {
         put?: never;
         /** Set Password */
         post: operations["auth-set_password"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/verification/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request Verification
+         * @description Resend verification email for the current user.
+         */
+        post: operations["auth-request_verification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/verification/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Verification
+         * @description Confirm email verification using a token from the verification link.
+         */
+        post: operations["auth-confirm_verification"];
         delete?: never;
         options?: never;
         head?: never;
@@ -816,6 +907,15 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** AuditFilterOptionsResponse */
+        AuditFilterOptionsResponse: {
+            /** Actions */
+            actions?: string[];
+            /** Target Types */
+            target_types?: string[];
+            /** Results */
+            results?: string[];
+        };
         /** Auth0Config */
         Auth0Config: {
             /**
@@ -1367,6 +1467,62 @@ export interface components {
              */
             password: string;
         };
+        /** RegisterResponse */
+        RegisterResponse: {
+            /**
+             * Id
+             * @example usr-abc123def456
+             */
+            id: string;
+            /**
+             * Email
+             * Format: email
+             * @example user@example.com
+             */
+            email: string;
+            /** @example admin */
+            role: components["schemas"]["Role"];
+            /**
+             * Is Verified
+             * @example true
+             */
+            is_verified: boolean;
+            /**
+             * Verification Email Sent
+             * @example true
+             */
+            verification_email_sent: boolean;
+        };
+        /** ResolveEmailsRequest */
+        ResolveEmailsRequest: {
+            /**
+             * Emails
+             * @example [
+             *       "alice@example.com"
+             *     ]
+             */
+            emails: string[];
+        };
+        /** ResolveEmailsResponse */
+        ResolveEmailsResponse: {
+            /** Results */
+            results: components["schemas"]["ResolveEmailsResultItem"][];
+        };
+        /** ResolveEmailsResultItem */
+        ResolveEmailsResultItem: {
+            /**
+             * Email
+             * @example alice@example.com
+             */
+            email: string;
+            /**
+             * User Id
+             * @example userabc123def456
+             */
+            user_id?: string | null;
+            /** Error */
+            error?: string | null;
+        };
         /** ResourceSpec */
         ResourceSpec: {
             /**
@@ -1521,6 +1677,18 @@ export interface components {
              * @example -1
              */
             auto_delete_interval: number;
+            /**
+             * Persist
+             * @description Whether persistent storage is attached.
+             * @example false
+             */
+            persist: boolean;
+            /**
+             * Storage Size
+             * @description Persistent volume size when persist=true.
+             * @example 5Gi
+             */
+            storage_size?: "5Gi" | "10Gi" | "20Gi" | null;
             urls: components["schemas"]["SandboxUrls"];
             /**
              * Created At
@@ -1926,6 +2094,11 @@ export interface components {
              */
             is_active: boolean;
             /**
+             * Is Verified
+             * @example true
+             */
+            is_verified: boolean;
+            /**
              * Has Local Password
              * @example true
              */
@@ -1940,6 +2113,19 @@ export interface components {
              * @example 1
              */
             total: number;
+        };
+        /** UserLookupResponse */
+        UserLookupResponse: {
+            /**
+             * User Id
+             * @example userabc123def456
+             */
+            user_id: string;
+            /**
+             * Email
+             * @example alice@example.com
+             */
+            email: string;
         };
         /** UserPlanResponse */
         UserPlanResponse: {
@@ -2057,6 +2243,14 @@ export interface components {
             /** Context */
             ctx?: Record<string, never>;
         };
+        /** VerificationConfirmRequest */
+        VerificationConfirmRequest: {
+            /**
+             * Token
+             * @example eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+             */
+            token: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -2108,6 +2302,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UpdateTierTemplateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "admin-admin_lookup_user_by_email": {
+        parameters: {
+            query: {
+                /** @description Email address to look up. */
+                email: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserLookupResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "admin-admin_resolve_emails": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveEmailsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolveEmailsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2255,6 +2514,26 @@ export interface operations {
             };
         };
     };
+    "audit-get_audit_filter_options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditFilterOptionsResponse"];
+                };
+            };
+        };
+    };
     "audit-list_audit_events": {
         parameters: {
             query?: {
@@ -2262,6 +2541,7 @@ export interface operations {
                 target_type?: string | null;
                 target_id?: string | null;
                 actor_user_id?: string | null;
+                actor_email?: string | null;
                 request_id?: string | null;
                 result?: string | null;
                 since?: string | null;
@@ -2367,7 +2647,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RegisterResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2478,6 +2758,59 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SetPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "auth-request_verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
+                };
+            };
+        };
+    };
+    "auth-confirm_verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerificationConfirmRequest"];
             };
         };
         responses: {

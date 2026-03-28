@@ -79,6 +79,8 @@ def _to_response(sb, base_url: str, web_link: SandboxWebLink | None = None) -> d
         "labels": sb.labels or {},
         "auto_stop_interval": sb.auto_stop_interval,
         "auto_delete_interval": sb.auto_delete_interval,
+        "persist": sb.persist,
+        "storage_size": sb.storage_size,
         "urls": _build_urls(sb, base_url, web_link),
         "created_at": sb.gmt_created,
     }
@@ -90,8 +92,6 @@ def _to_detail(sb, base_url: str, web_link: SandboxWebLink | None = None) -> dic
         {
             "image": sb.image,
             "status_message": sb.status_message,
-            "persist": sb.persist,
-            "storage_size": sb.storage_size,
             "started_at": sb.gmt_started,
             "stopped_at": sb.gmt_stopped,
         }

@@ -446,3 +446,60 @@ async def test_batch_grants_empty_user_ids_rejected(admin_client):
         },
     )
     assert resp.status_code == 422
+
+
+# ── GET /v1/admin/users/lookup-by-email ──────────────────────────────────────
+
+
+async def test_lookup_user_by_email(admin_client):
+    resp = await admin_client.get("/v1/admin/users/lookup-by-email", params={"email": "admin@example.com"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["email"] == "admin@example.com"
+    assert data["user_id"] == _get_user_id(admin_client)
+
+
+async def test_lookup_user_by_email_not_found(admin_client):
+    resp = await admin_client.get("/v1/admin/users/lookup-by-email", params={"email": "nobody@example.com"})
+    assert resp.status_code == 404
+
+
+async def test_lookup_user_by_email_requires_admin(member_client):
+    resp = await member_client.get("/v1/admin/users/lookup-by-email", params={"email": "admin@example.com"})
+    assert resp.status_code == 403
+
+
+# ── POST /v1/admin/users/resolve-emails ──────────────────────────────────────
+
+
+async def test_resolve_emails_success(admin_client):
+    resp = await admin_client.post("/v1/admin/users/resolve-emails", json={"emails": ["admin@example.com"]})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["results"]) == 1
+    assert data["results"][0]["email"] == "admin@example.com"
+    assert data["results"][0]["user_id"] == _get_user_id(admin_client)
+    assert data["results"][0]["error"] is None
+
+
+async def test_resolve_emails_partial_not_found(admin_client):
+    resp = await admin_client.post(
+        "/v1/admin/users/resolve-emails",
+        json={"emails": ["admin@example.com", "nobody@example.com"]},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["results"]) == 2
+
+    found = next(r for r in data["results"] if r["email"] == "admin@example.com")
+    assert found["user_id"] is not None
+    assert found["error"] is None
+
+    not_found = next(r for r in data["results"] if r["email"] == "nobody@example.com")
+    assert not_found["user_id"] is None
+    assert not_found["error"] == "User not found"
+
+
+async def test_resolve_emails_requires_admin(member_client):
+    resp = await member_client.post("/v1/admin/users/resolve-emails", json={"emails": ["admin@example.com"]})
+    assert resp.status_code == 403

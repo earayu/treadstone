@@ -35,6 +35,28 @@ export function useUpdateTierTemplate() {
   })
 }
 
+export function useLookupUserByEmail() {
+  return useMutation({
+    mutationFn: async (email: string) => {
+      const { data } = await client.GET("/v1/admin/users/lookup-by-email", {
+        params: { query: { email } },
+      })
+      return data!
+    },
+  })
+}
+
+export function useResolveEmails() {
+  return useMutation({
+    mutationFn: async (emails: string[]) => {
+      const { data } = await client.POST("/v1/admin/users/resolve-emails", {
+        body: { emails },
+      })
+      return data!
+    },
+  })
+}
+
 export function useAdminUserUsage(userId: string | null) {
   return useQuery({
     queryKey: ["admin", "user-usage", userId],

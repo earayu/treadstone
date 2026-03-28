@@ -2,7 +2,7 @@ import { useState, useCallback } from "react"
 import { Copy, ChevronLeft, ChevronRight } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { useAuditEvents, type AuditEvent } from "@/api/audit"
+import { useAuditEvents, useAuditFilterOptions, type AuditEvent } from "@/api/audit"
 
 const PAGE_SIZE = 50
 
@@ -22,6 +22,44 @@ function formatTimestamp(iso: string): string {
   }
 }
 
+function FilterSelect({
+  label,
+  value,
+  options,
+  onChange,
+  placeholder,
+  width,
+}: {
+  label: string
+  value: string
+  options: string[]
+  onChange: (v: string) => void
+  placeholder: string
+  width: string
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-[10px] font-medium text-muted-foreground">{label}</label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={cn(
+          "h-8 rounded-sm border border-border/40 bg-background px-2 text-[10px] text-foreground focus:outline-none focus:ring-1 focus:ring-ring",
+          !value && "text-muted-foreground/40",
+          width,
+        )}
+      >
+        <option value="">{placeholder}</option>
+        {options.map((opt) => (
+          <option key={opt} value={opt}>
+            {opt}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
 function FilterBar({
   filters,
   onChange,
@@ -33,13 +71,7 @@ function FilterBar({
   onApply: () => void
   onReset: () => void
 }) {
-  const fields = [
-    { key: "action" as const, label: "Action", placeholder: "e.g. sandbox.created", width: "w-[180px]" },
-    { key: "target_type" as const, label: "Target Type", placeholder: "sandbox / user / api_key", width: "w-[180px]" },
-    { key: "target_id" as const, label: "Target ID", placeholder: "resource ID", width: "w-[160px]" },
-    { key: "actor_user_id" as const, label: "Actor User ID", placeholder: "usr-xxxx", width: "w-[160px]" },
-    { key: "result" as const, label: "Result", placeholder: "success / failure", width: "w-[140px]" },
-  ] as const
+  const { data: filterOptions } = useAuditFilterOptions()
 
   return (
     <div className="rounded border border-border/20 bg-card p-5">
@@ -47,22 +79,52 @@ function FilterBar({
         FILTERS
       </p>
       <div className="flex flex-wrap gap-4">
-        {fields.map((f) => (
-          <div key={f.key} className="flex flex-col gap-1">
-            <label className="text-[10px] font-medium text-muted-foreground">{f.label}</label>
-            <input
-              type="text"
-              value={filters[f.key]}
-              onChange={(e) => onChange({ [f.key]: e.target.value })}
-              onKeyDown={(e) => e.key === "Enter" && onApply()}
-              placeholder={f.placeholder}
-              className={cn(
-                "h-8 rounded-sm border border-border/40 bg-background px-2 text-[10px] text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring",
-                f.width,
-              )}
-            />
-          </div>
-        ))}
+        <FilterSelect
+          label="Action"
+          value={filters.action}
+          options={filterOptions?.actions ?? []}
+          onChange={(v) => onChange({ action: v })}
+          placeholder="All actions"
+          width="w-[200px]"
+        />
+        <FilterSelect
+          label="Target Type"
+          value={filters.target_type}
+          options={filterOptions?.target_types ?? []}
+          onChange={(v) => onChange({ target_type: v })}
+          placeholder="All types"
+          width="w-[180px]"
+        />
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-medium text-muted-foreground">Target ID</label>
+          <input
+            type="text"
+            value={filters.target_id}
+            onChange={(e) => onChange({ target_id: e.target.value })}
+            onKeyDown={(e) => e.key === "Enter" && onApply()}
+            placeholder="resource ID"
+            className="h-8 w-[160px] rounded-sm border border-border/40 bg-background px-2 text-[10px] text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-medium text-muted-foreground">Actor Email</label>
+          <input
+            type="email"
+            value={filters.actor_email}
+            onChange={(e) => onChange({ actor_email: e.target.value })}
+            onKeyDown={(e) => e.key === "Enter" && onApply()}
+            placeholder="user@example.com"
+            className="h-8 w-[200px] rounded-sm border border-border/40 bg-background px-2 text-[10px] text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+        <FilterSelect
+          label="Result"
+          value={filters.result}
+          options={filterOptions?.results ?? []}
+          onChange={(v) => onChange({ result: v })}
+          placeholder="All results"
+          width="w-[140px]"
+        />
       </div>
       <div className="mt-4 flex gap-2">
         <button
@@ -138,7 +200,7 @@ interface FilterState {
   action: string
   target_type: string
   target_id: string
-  actor_user_id: string
+  actor_email: string
   result: string
 }
 
@@ -146,7 +208,7 @@ const EMPTY_FILTERS: FilterState = {
   action: "",
   target_type: "",
   target_id: "",
-  actor_user_id: "",
+  actor_email: "",
   result: "",
 }
 
@@ -159,7 +221,7 @@ export function AuditEventsPage() {
     action: applied.action || undefined,
     target_type: applied.target_type || undefined,
     target_id: applied.target_id || undefined,
-    actor_user_id: applied.actor_user_id || undefined,
+    actor_email: applied.actor_email || undefined,
     result: applied.result || undefined,
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE,

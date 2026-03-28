@@ -7,9 +7,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from treadstone.api.deps import get_current_admin
-from treadstone.api.schemas import AuditEventListResponse
+from treadstone.api.schemas import AuditEventListResponse, AuditFilterOptionsResponse
 from treadstone.core.database import get_session
 from treadstone.models.audit_event import AuditEvent
+from treadstone.models.user import User
 
 router = APIRouter(prefix="/v1/audit", tags=["audit"])
 
@@ -65,6 +66,21 @@ def _serialize_event(event: AuditEvent) -> dict:
     }
 
 
+@router.get("/filter-options", response_model=AuditFilterOptionsResponse)
+async def get_audit_filter_options(
+    _admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    actions = (await session.execute(select(AuditEvent.action).distinct().order_by(AuditEvent.action))).scalars().all()
+    target_types = (
+        (await session.execute(select(AuditEvent.target_type).distinct().order_by(AuditEvent.target_type)))
+        .scalars()
+        .all()
+    )
+    results = (await session.execute(select(AuditEvent.result).distinct().order_by(AuditEvent.result))).scalars().all()
+    return {"actions": actions, "target_types": target_types, "results": results}
+
+
 @router.get("/events", response_model=AuditEventListResponse)
 async def list_audit_events(
     _admin=Depends(get_current_admin),
@@ -73,6 +89,7 @@ async def list_audit_events(
     target_type: str | None = Query(default=None),
     target_id: str | None = Query(default=None),
     actor_user_id: str | None = Query(default=None),
+    actor_email: str | None = Query(default=None),
     request_id: str | None = Query(default=None),
     result: str | None = Query(default=None),
     since: datetime | None = Query(default=None),
@@ -80,12 +97,21 @@ async def list_audit_events(
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
 ):
+    resolved_actor_user_id = actor_user_id
+    if actor_email and not actor_user_id:
+        user_row = await session.execute(select(User).where(User.email == actor_email))
+        user = user_row.unique().scalar_one_or_none()
+        if user:
+            resolved_actor_user_id = user.id
+        else:
+            return {"items": [], "total": 0}
+
     base_statement = _apply_filters(
         select(AuditEvent),
         action=action,
         target_type=target_type,
         target_id=target_id,
-        actor_user_id=actor_user_id,
+        actor_user_id=resolved_actor_user_id,
         request_id=request_id,
         result=result,
         since=since,
@@ -99,7 +125,7 @@ async def list_audit_events(
         action=action,
         target_type=target_type,
         target_id=target_id,
-        actor_user_id=actor_user_id,
+        actor_user_id=resolved_actor_user_id,
         request_id=request_id,
         result=result,
         since=since,

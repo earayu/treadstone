@@ -123,7 +123,7 @@ export function Topbar() {
         <div className="flex items-center gap-3">
           <Link
             to="/app/sandboxes/new"
-            className="bg-secondary px-3 py-1.5 text-xs font-medium uppercase tracking-widest text-secondary-foreground transition-colors hover:bg-secondary/80"
+            className="flex h-7 items-center bg-secondary px-3 text-xs font-medium uppercase tracking-widest text-secondary-foreground transition-colors hover:bg-secondary/80"
           >
             Create Sandbox
           </Link>
