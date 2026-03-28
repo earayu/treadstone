@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef } from "react"
 import { Link, useSearchParams } from "react-router"
 
 import { useConfirmVerification } from "@/hooks/use-auth"
@@ -7,13 +7,15 @@ export function VerifyEmailPage() {
   const [searchParams] = useSearchParams()
   const token = searchParams.get("token")
   const confirm = useConfirmVerification()
-  const [submitted, setSubmitted] = useState(false)
+  const calledRef = useRef(false)
 
   useEffect(() => {
-    if (!token || submitted) return
-    setSubmitted(true)
+    if (!token || calledRef.current) return
+    calledRef.current = true
     confirm.mutate({ token })
-  }, [token, submitted, confirm])
+    // confirm.mutate is stable across renders; token-only dependency is intentional
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token])
 
   if (!token) {
     return (
