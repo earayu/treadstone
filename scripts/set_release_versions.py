@@ -31,7 +31,12 @@ def _update_version_in_section(content: str, section: str, version: str, file_la
 
 
 def _update_package_json_version(content: str, version: str, file_label: str) -> str:
-    updated, count = re.subn(r'(?m)^(\s*"version":\s*")[^"]+(")$', rf'\g<1>{version}\g<2>', content, count=1)
+    updated, count = re.subn(
+        r'(?m)^(\s*"version":\s*")[^"]+(",?)$',
+        rf'\g<1>{version}\g<2>',
+        content,
+        count=1,
+    )
     if count != 1:
         raise ValueError(f"{file_label}: missing package.json version entry")
     return updated

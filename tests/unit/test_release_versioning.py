@@ -43,7 +43,8 @@ version = "0.1.0"
         """
 {
   "name": "treadstone-web",
-  "version": "0.1.0"
+  "version": "0.1.0",
+  "private": true
 }
 """.strip(),
     )
