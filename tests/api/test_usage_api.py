@@ -129,9 +129,9 @@ async def test_get_usage_includes_extra_credits(user_client):
 
     grants = await user_client.get("/v1/usage/grants")
     assert grants.status_code == 200
-    welcome = next((g for g in grants.json()["items"] if g["grant_type"] == "welcome_bonus"), None)
+    compute = grants.json()["compute_grants"]
+    welcome = next((g for g in compute if g["grant_type"] == "welcome_bonus"), None)
     assert welcome is not None
-    assert welcome["credit_type"] == "compute"
     assert welcome["remaining_amount"] == 50.0
 
     plan = await user_client.get("/v1/usage/plan")
@@ -210,11 +210,11 @@ async def test_list_grants_includes_welcome_bonus(user_client):
     resp = await user_client.get("/v1/usage/grants")
     assert resp.status_code == 200
     data = resp.json()
-    assert len(data["items"]) >= 1
+    assert len(data["compute_grants"]) >= 1
+    assert "storage_quota_grants" in data
 
-    welcome = next((g for g in data["items"] if g["grant_type"] == "welcome_bonus"), None)
+    welcome = next((g for g in data["compute_grants"] if g["grant_type"] == "welcome_bonus"), None)
     assert welcome is not None
-    assert welcome["credit_type"] == "compute"
     assert welcome["original_amount"] == 50.0
     assert welcome["remaining_amount"] == 50.0
     assert welcome["status"] == "active"
@@ -223,5 +223,8 @@ async def test_list_grants_includes_welcome_bonus(user_client):
 async def test_list_grants_shows_correct_status(user_client):
     resp = await user_client.get("/v1/usage/grants")
     assert resp.status_code == 200
-    for item in resp.json()["items"]:
+    body = resp.json()
+    for item in body["compute_grants"]:
         assert item["status"] in ("active", "exhausted", "expired")
+    for item in body["storage_quota_grants"]:
+        assert item["status"] in ("active", "expired")

@@ -92,7 +92,7 @@ export function useAdminUpdatePlan() {
   })
 }
 
-export function useAdminCreateGrant() {
+export function useAdminCreateComputeGrant() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({
@@ -100,9 +100,9 @@ export function useAdminCreateGrant() {
       body,
     }: {
       userId: string
-      body: components["schemas"]["CreateGrantRequest"]
+      body: components["schemas"]["CreateComputeGrantRequest"]
     }) => {
-      const { data } = await client.POST("/v1/admin/users/{user_id}/grants", {
+      const { data } = await client.POST("/v1/admin/users/{user_id}/compute-grants", {
         params: { path: { user_id: userId } },
         body,
       })
@@ -113,10 +113,40 @@ export function useAdminCreateGrant() {
   })
 }
 
-export function useAdminBatchGrants() {
+export function useAdminCreateStorageGrant() {
+  const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (body: components["schemas"]["BatchGrantRequest"]) => {
-      const { data } = await client.POST("/v1/admin/grants/batch", { body })
+    mutationFn: async ({
+      userId,
+      body,
+    }: {
+      userId: string
+      body: components["schemas"]["CreateStorageQuotaGrantRequest"]
+    }) => {
+      const { data } = await client.POST("/v1/admin/users/{user_id}/storage-grants", {
+        params: { path: { user_id: userId } },
+        body,
+      })
+      return data!
+    },
+    onSuccess: (_d, vars) =>
+      qc.invalidateQueries({ queryKey: ["admin", "user-usage", vars.userId] }),
+  })
+}
+
+export function useAdminBatchComputeGrants() {
+  return useMutation({
+    mutationFn: async (body: components["schemas"]["BatchComputeGrantRequest"]) => {
+      const { data } = await client.POST("/v1/admin/compute-grants/batch", { body })
+      return data!
+    },
+  })
+}
+
+export function useAdminBatchStorageGrants() {
+  return useMutation({
+    mutationFn: async (body: components["schemas"]["BatchStorageQuotaGrantRequest"]) => {
+      const { data } = await client.POST("/v1/admin/storage-grants/batch", { body })
       return data!
     },
   })

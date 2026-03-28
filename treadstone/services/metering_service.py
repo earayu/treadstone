@@ -43,9 +43,10 @@ from treadstone.core.errors import (
     ValidationError,
 )
 from treadstone.models.metering import (
+    ComputeGrant,
     ComputeSession,
-    CreditGrant,
     StorageLedger,
+    StorageQuotaGrant,
     StorageState,
     TierTemplate,
     UserPlan,
@@ -186,11 +187,10 @@ class MeteringService:
         session: AsyncSession,
         user_id: str,
         now: datetime,
-    ) -> CreditGrant:
-        """Create a welcome-bonus CreditGrant (50 compute credits, 90 days)."""
-        grant = CreditGrant(
+    ) -> ComputeGrant:
+        """Create a welcome-bonus ComputeGrant (50 compute credits, 90 days)."""
+        grant = ComputeGrant(
             user_id=user_id,
-            credit_type="compute",
             grant_type="welcome_bonus",
             original_amount=WELCOME_BONUS_AMOUNT,
             remaining_amount=WELCOME_BONUS_AMOUNT,
@@ -243,20 +243,19 @@ class MeteringService:
             plan.gmt_updated = utc_now()
             session.add(plan)
 
-        # ── Phase 2: Extra pool (CreditGrant FIFO) ──
+        # ── Phase 2: Extra pool (ComputeGrant FIFO) ──
         now = utc_now()
         result = await session.execute(
-            select(CreditGrant)
+            select(ComputeGrant)
             .where(
-                CreditGrant.user_id == user_id,
-                CreditGrant.credit_type == "compute",
-                CreditGrant.remaining_amount > 0,
+                ComputeGrant.user_id == user_id,
+                ComputeGrant.remaining_amount > 0,
                 or_(
-                    CreditGrant.expires_at.is_(None),
-                    CreditGrant.expires_at > now,
+                    ComputeGrant.expires_at.is_(None),
+                    ComputeGrant.expires_at > now,
                 ),
             )
-            .order_by(CreditGrant.expires_at.asc().nulls_last())
+            .order_by(ComputeGrant.expires_at.asc().nulls_last())
             .with_for_update()
         )
         grants = result.scalars().all()
@@ -469,12 +468,12 @@ class MeteringService:
     ) -> None:
         """Verify that the user has remaining compute credits.
 
-        Checks monthly remaining + extra CreditGrants.
+        Checks monthly remaining + extra ComputeGrants.
         Raises ComputeQuotaExceededError (402) when total_remaining <= 0.
         """
         plan = await self.get_user_plan(session, user_id)
         monthly_remaining = plan.compute_credits_monthly_limit - plan.compute_credits_monthly_used
-        extra_remaining = await self.get_extra_credits_remaining(session, user_id, "compute")
+        extra_remaining = await self.get_extra_compute_remaining(session, user_id)
         total_remaining = monthly_remaining + extra_remaining
         if total_remaining <= Decimal("0"):
             raise ComputeQuotaExceededError(
@@ -547,7 +546,7 @@ class MeteringService:
         """
         plan = await self.get_user_plan(session, user_id)
         monthly_remaining = plan.compute_credits_monthly_limit - plan.compute_credits_monthly_used
-        extra_remaining = await self.get_extra_credits_remaining(session, user_id, "compute")
+        extra_remaining = await self.get_extra_compute_remaining(session, user_id)
         return monthly_remaining + extra_remaining
 
     async def get_total_storage_quota(
@@ -555,10 +554,10 @@ class MeteringService:
         session: AsyncSession,
         user_id: str,
     ) -> int:
-        """Return total storage quota in GiB (monthly limit + extra storage grants)."""
+        """Return total storage quota in GiB (plan limit + active StorageQuotaGrants)."""
         plan = await self.get_user_plan(session, user_id)
-        extra_storage = await self.get_extra_credits_remaining(session, user_id, "storage")
-        return plan.storage_capacity_limit_gib + int(extra_storage)
+        extra_storage = await self.get_extra_storage_quota(session, user_id)
+        return plan.storage_capacity_limit_gib + extra_storage
 
     async def get_current_storage_used(
         self,
@@ -577,26 +576,42 @@ class MeteringService:
         )
         return int(result.scalar_one())
 
-    async def get_extra_credits_remaining(
+    async def get_extra_compute_remaining(
         self,
         session: AsyncSession,
         user_id: str,
-        credit_type: str,
     ) -> Decimal:
-        """Sum remaining amounts of all unexpired CreditGrants for the given type."""
+        """Sum remaining amounts of all unexpired ComputeGrants."""
         now = utc_now()
         result = await session.execute(
-            select(func.coalesce(func.sum(CreditGrant.remaining_amount), 0)).where(
-                CreditGrant.user_id == user_id,
-                CreditGrant.credit_type == credit_type,
-                CreditGrant.remaining_amount > 0,
+            select(func.coalesce(func.sum(ComputeGrant.remaining_amount), 0)).where(
+                ComputeGrant.user_id == user_id,
+                ComputeGrant.remaining_amount > 0,
                 or_(
-                    CreditGrant.expires_at.is_(None),
-                    CreditGrant.expires_at > now,
+                    ComputeGrant.expires_at.is_(None),
+                    ComputeGrant.expires_at > now,
                 ),
             )
         )
         return Decimal(str(result.scalar_one()))
+
+    async def get_extra_storage_quota(
+        self,
+        session: AsyncSession,
+        user_id: str,
+    ) -> int:
+        """Sum size_gib of all active (non-expired) StorageQuotaGrants."""
+        now = utc_now()
+        result = await session.execute(
+            select(func.coalesce(func.sum(StorageQuotaGrant.size_gib), 0)).where(
+                StorageQuotaGrant.user_id == user_id,
+                or_(
+                    StorageQuotaGrant.expires_at.is_(None),
+                    StorageQuotaGrant.expires_at > now,
+                ),
+            )
+        )
+        return int(result.scalar_one())
 
     async def _count_running_sandboxes(
         self,
@@ -676,8 +691,8 @@ class MeteringService:
     async def get_usage_summary(self, session: AsyncSession, user_id: str) -> dict:
         """Assemble the complete usage overview for GET /v1/usage."""
         plan = await self.get_user_plan(session, user_id)
-        extra_storage = await self.get_extra_credits_remaining(session, user_id, "storage")
-        total_storage_quota = plan.storage_capacity_limit_gib + int(extra_storage)
+        extra_storage = await self.get_extra_storage_quota(session, user_id)
+        total_storage_quota = plan.storage_capacity_limit_gib + extra_storage
         current_storage_used = await self.get_current_storage_used(session, user_id)
         running_count = await self._count_running_sandboxes(session, user_id)
 
@@ -755,22 +770,30 @@ class MeteringService:
         )
         return list(items_result.scalars().all()), total
 
-    async def list_credit_grants(self, session: AsyncSession, user_id: str) -> list[CreditGrant]:
-        """Return all CreditGrants for a user, newest first."""
+    async def list_compute_grants(self, session: AsyncSession, user_id: str) -> list[ComputeGrant]:
+        """Return all ComputeGrants for a user, newest first."""
         result = await session.execute(
-            select(CreditGrant).where(CreditGrant.user_id == user_id).order_by(CreditGrant.granted_at.desc())
+            select(ComputeGrant).where(ComputeGrant.user_id == user_id).order_by(ComputeGrant.granted_at.desc())
+        )
+        return list(result.scalars().all())
+
+    async def list_storage_quota_grants(self, session: AsyncSession, user_id: str) -> list[StorageQuotaGrant]:
+        """Return all StorageQuotaGrants for a user, newest first."""
+        result = await session.execute(
+            select(StorageQuotaGrant)
+            .where(StorageQuotaGrant.user_id == user_id)
+            .order_by(StorageQuotaGrant.granted_at.desc())
         )
         return list(result.scalars().all())
 
     # ═══════════════════════════════════════════════════════
-    #  Credit Grant Management  (F26)
+    #  Grant Management  (F26)
     # ═══════════════════════════════════════════════════════
 
-    async def create_credit_grant(
+    async def create_compute_grant(
         self,
         session: AsyncSession,
         user_id: str,
-        credit_type: str,
         amount: Decimal,
         grant_type: str,
         *,
@@ -778,16 +801,43 @@ class MeteringService:
         reason: str | None = None,
         campaign_id: str | None = None,
         expires_at: datetime | None = None,
-    ) -> CreditGrant:
-        """Create a new CreditGrant record."""
+    ) -> ComputeGrant:
+        """Create a new ComputeGrant (consumable compute credits)."""
         now = utc_now()
-        grant = CreditGrant(
+        grant = ComputeGrant(
             user_id=user_id,
-            credit_type=credit_type,
             grant_type=grant_type,
             campaign_id=campaign_id,
             original_amount=amount,
             remaining_amount=amount,
+            reason=reason,
+            granted_by=granted_by,
+            granted_at=now,
+            expires_at=expires_at,
+        )
+        session.add(grant)
+        await session.flush()
+        return grant
+
+    async def create_storage_quota_grant(
+        self,
+        session: AsyncSession,
+        user_id: str,
+        size_gib: int,
+        grant_type: str,
+        *,
+        granted_by: str | None = None,
+        reason: str | None = None,
+        campaign_id: str | None = None,
+        expires_at: datetime | None = None,
+    ) -> StorageQuotaGrant:
+        """Create a new StorageQuotaGrant (capacity entitlement addon)."""
+        now = utc_now()
+        grant = StorageQuotaGrant(
+            user_id=user_id,
+            grant_type=grant_type,
+            campaign_id=campaign_id,
+            size_gib=size_gib,
             reason=reason,
             granted_by=granted_by,
             granted_at=now,

@@ -7,9 +7,10 @@ import pytest
 
 from treadstone.core.errors import BadRequestError
 from treadstone.models.metering import (
+    ComputeGrant,
     ComputeSession,
-    CreditGrant,
     StorageLedger,
+    StorageQuotaGrant,
     StorageState,
     TierTemplate,
     UserPlan,
@@ -108,19 +109,18 @@ def test_user_plan_unique_user_constraint():
     assert "user_id" in cols
 
 
-# ── CreditGrant ──
+# ── ComputeGrant ──
 
 
-def test_credit_grant_tablename():
-    assert CreditGrant.__tablename__ == "credit_grant"
+def test_compute_grant_tablename():
+    assert ComputeGrant.__tablename__ == "compute_grant"
 
 
-def test_credit_grant_fields_exist():
-    cg = CreditGrant()
+def test_compute_grant_fields_exist():
+    cg = ComputeGrant()
     for field in [
         "id",
         "user_id",
-        "credit_type",
         "grant_type",
         "campaign_id",
         "original_amount",
@@ -135,15 +135,50 @@ def test_credit_grant_fields_exist():
         assert hasattr(cg, field), f"Missing field: {field}"
 
 
-def test_credit_grant_id_default_callable():
-    col = CreditGrant.__table__.columns["id"]
+def test_compute_grant_id_default_callable():
+    col = ComputeGrant.__table__.columns["id"]
     assert col.default is not None and col.default.is_callable
 
 
-def test_credit_grant_indexes():
-    index_names = {idx.name for idx in CreditGrant.__table__.indexes}
-    assert "ix_credit_grant_user_type" in index_names
-    assert "ix_credit_grant_expires" in index_names
+def test_compute_grant_indexes():
+    index_names = {idx.name for idx in ComputeGrant.__table__.indexes}
+    assert "ix_compute_grant_user" in index_names
+    assert "ix_compute_grant_expires" in index_names
+
+
+# ── StorageQuotaGrant ──
+
+
+def test_storage_quota_grant_tablename():
+    assert StorageQuotaGrant.__tablename__ == "storage_quota_grant"
+
+
+def test_storage_quota_grant_fields_exist():
+    sg = StorageQuotaGrant()
+    for field in [
+        "id",
+        "user_id",
+        "grant_type",
+        "campaign_id",
+        "size_gib",
+        "reason",
+        "granted_by",
+        "granted_at",
+        "expires_at",
+        "gmt_created",
+        "gmt_updated",
+    ]:
+        assert hasattr(sg, field), f"Missing field: {field}"
+
+
+def test_storage_quota_grant_id_default_callable():
+    col = StorageQuotaGrant.__table__.columns["id"]
+    assert col.default is not None and col.default.is_callable
+
+
+def test_storage_quota_grant_indexes():
+    index_names = {idx.name for idx in StorageQuotaGrant.__table__.indexes}
+    assert "ix_storage_quota_grant_user" in index_names
 
 
 # ── ComputeSession ──

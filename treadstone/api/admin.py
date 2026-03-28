@@ -7,8 +7,10 @@ Endpoints:
   POST   /v1/admin/users/resolve-emails         — batch-resolve emails to user IDs
   GET    /v1/admin/users/{user_id}/usage         — view any user's usage summary
   PATCH  /v1/admin/users/{user_id}/plan          — change user tier / overrides
-  POST   /v1/admin/users/{user_id}/grants        — issue extra credits to a user
-  POST   /v1/admin/grants/batch                  — batch-issue extra credits
+  POST   /v1/admin/users/{user_id}/compute-grants   — issue compute credits grant
+  POST   /v1/admin/users/{user_id}/storage-grants  — issue storage quota grant
+  POST   /v1/admin/compute-grants/batch           — batch-issue compute grants
+  POST   /v1/admin/storage-grants/batch           — batch-issue storage quota grants
 """
 
 from __future__ import annotations
@@ -21,12 +23,20 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from treadstone.api.deps import get_current_admin
-from treadstone.api.metering_serializers import iso, serialize_plan, serialize_template
+from treadstone.api.metering_serializers import (
+    serialize_compute_grant,
+    serialize_plan,
+    serialize_storage_quota_grant,
+    serialize_template,
+)
 from treadstone.api.schemas import (
-    BatchGrantRequest,
+    BatchComputeGrantRequest,
     BatchGrantResponse,
-    CreateGrantRequest,
-    CreateGrantResponse,
+    BatchStorageQuotaGrantRequest,
+    CreateComputeGrantRequest,
+    CreateComputeGrantResponse,
+    CreateStorageQuotaGrantRequest,
+    CreateStorageQuotaGrantResponse,
     ResolveEmailsRequest,
     ResolveEmailsResponse,
     TierTemplateListResponse,
@@ -41,6 +51,7 @@ from treadstone.config import settings
 from treadstone.core.database import get_session
 from treadstone.core.errors import NotFoundError
 from treadstone.models.email_verification_log import EmailVerificationLog
+from treadstone.models.metering import ComputeGrant, StorageQuotaGrant
 from treadstone.models.user import User
 from treadstone.services.audit import record_audit_event
 from treadstone.services.metering_service import MeteringService
@@ -50,6 +61,37 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
 
 _metering = MeteringService()
+
+
+def serialize_compute_grant_response(grant: ComputeGrant) -> dict:
+    base = serialize_compute_grant(grant)
+    return {
+        "id": base["id"],
+        "user_id": grant.user_id,
+        "original_amount": base["original_amount"],
+        "remaining_amount": base["remaining_amount"],
+        "grant_type": base["grant_type"],
+        "reason": base["reason"],
+        "granted_by": base["granted_by"],
+        "campaign_id": base["campaign_id"],
+        "granted_at": base["granted_at"],
+        "expires_at": base["expires_at"],
+    }
+
+
+def serialize_storage_quota_grant_response(grant: StorageQuotaGrant) -> dict:
+    base = serialize_storage_quota_grant(grant)
+    return {
+        "id": base["id"],
+        "user_id": grant.user_id,
+        "size_gib": base["size_gib"],
+        "grant_type": base["grant_type"],
+        "reason": base["reason"],
+        "granted_by": base["granted_by"],
+        "campaign_id": base["campaign_id"],
+        "granted_at": base["granted_at"],
+        "expires_at": base["expires_at"],
+    }
 
 
 # ── Tier Templates ───────────────────────────────────────────────────────────
@@ -190,20 +232,18 @@ async def admin_update_user_plan(
 # ── Grants (Single) ─────────────────────────────────────────────────────────
 
 
-@router.post("/users/{user_id}/grants", response_model=CreateGrantResponse, status_code=201)
-async def admin_create_grant(
+@router.post("/users/{user_id}/compute-grants", response_model=CreateComputeGrantResponse, status_code=201)
+async def admin_create_compute_grant(
     user_id: str,
-    body: CreateGrantRequest,
+    body: CreateComputeGrantRequest,
     request: Request,
     admin: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_session),
 ):
     await _require_user(session, user_id)
-
-    grant = await _metering.create_credit_grant(
+    grant = await _metering.create_compute_grant(
         session,
         user_id,
-        credit_type=body.credit_type,
         amount=Decimal(str(body.amount)),
         grant_type=body.grant_type,
         granted_by=admin.id,
@@ -211,45 +251,62 @@ async def admin_create_grant(
         campaign_id=body.campaign_id,
         expires_at=body.expires_at,
     )
-
     await record_audit_event(
         session,
-        action="metering.credits_granted",
-        target_type="credit_grant",
+        action="metering.compute_grant_created",
+        target_type="compute_grant",
+        target_id=grant.id,
+        actor_user_id=admin.id,
+        metadata={"user_id": user_id, "amount": body.amount, "grant_type": body.grant_type, "reason": body.reason},
+        request=request,
+    )
+    await session.commit()
+    return serialize_compute_grant_response(grant)
+
+
+@router.post("/users/{user_id}/storage-grants", response_model=CreateStorageQuotaGrantResponse, status_code=201)
+async def admin_create_storage_grant(
+    user_id: str,
+    body: CreateStorageQuotaGrantRequest,
+    request: Request,
+    admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    await _require_user(session, user_id)
+    grant = await _metering.create_storage_quota_grant(
+        session,
+        user_id,
+        size_gib=body.size_gib,
+        grant_type=body.grant_type,
+        granted_by=admin.id,
+        reason=body.reason,
+        campaign_id=body.campaign_id,
+        expires_at=body.expires_at,
+    )
+    await record_audit_event(
+        session,
+        action="metering.storage_quota_grant_created",
+        target_type="storage_quota_grant",
         target_id=grant.id,
         actor_user_id=admin.id,
         metadata={
             "user_id": user_id,
-            "credit_type": body.credit_type,
-            "amount": body.amount,
+            "size_gib": body.size_gib,
             "grant_type": body.grant_type,
             "reason": body.reason,
         },
         request=request,
     )
     await session.commit()
-
-    return {
-        "id": grant.id,
-        "user_id": grant.user_id,
-        "credit_type": grant.credit_type,
-        "original_amount": float(grant.original_amount),
-        "remaining_amount": float(grant.remaining_amount),
-        "grant_type": grant.grant_type,
-        "reason": grant.reason,
-        "granted_by": grant.granted_by,
-        "campaign_id": grant.campaign_id,
-        "granted_at": iso(grant.granted_at),
-        "expires_at": iso(grant.expires_at),
-    }
+    return serialize_storage_quota_grant_response(grant)
 
 
 # ── Grants (Batch) ──────────────────────────────────────────────────────────
 
 
-@router.post("/grants/batch", response_model=BatchGrantResponse)
-async def admin_batch_grants(
-    body: BatchGrantRequest,
+@router.post("/compute-grants/batch", response_model=BatchGrantResponse)
+async def admin_batch_compute_grants(
+    body: BatchComputeGrantRequest,
     request: Request,
     admin: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_session),
@@ -267,10 +324,9 @@ async def admin_batch_grants(
 
         try:
             async with session.begin_nested():
-                grant = await _metering.create_credit_grant(
+                grant = await _metering.create_compute_grant(
                     session,
                     uid,
-                    credit_type=body.credit_type,
                     amount=Decimal(str(body.amount)),
                     grant_type=body.grant_type,
                     granted_by=admin.id,
@@ -280,13 +336,12 @@ async def admin_batch_grants(
                 )
                 await record_audit_event(
                     session,
-                    action="metering.credits_granted",
-                    target_type="credit_grant",
+                    action="metering.compute_grant_created",
+                    target_type="compute_grant",
                     target_id=grant.id,
                     actor_user_id=admin.id,
                     metadata={
                         "user_id": uid,
-                        "credit_type": body.credit_type,
                         "amount": body.amount,
                         "grant_type": body.grant_type,
                         "campaign_id": body.campaign_id,
@@ -297,7 +352,69 @@ async def admin_batch_grants(
             results.append({"user_id": uid, "grant_id": grant.id, "status": "success", "error": None})
             succeeded += 1
         except Exception:
-            logger.exception("Failed to create grant for user %s", uid)
+            logger.exception("Failed to create compute grant for user %s", uid)
+            results.append({"user_id": uid, "grant_id": None, "status": "failed", "error": "Internal error"})
+            failed += 1
+
+    await session.commit()
+
+    return {
+        "total_requested": len(body.user_ids),
+        "succeeded": succeeded,
+        "failed": failed,
+        "results": results,
+    }
+
+
+@router.post("/storage-grants/batch", response_model=BatchGrantResponse)
+async def admin_batch_storage_grants(
+    body: BatchStorageQuotaGrantRequest,
+    request: Request,
+    admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    results: list[dict] = []
+    succeeded = 0
+    failed = 0
+
+    for uid in body.user_ids:
+        user_result = await session.execute(select(User).where(User.id == uid))
+        if user_result.unique().scalar_one_or_none() is None:
+            results.append({"user_id": uid, "grant_id": None, "status": "failed", "error": "User not found"})
+            failed += 1
+            continue
+
+        try:
+            async with session.begin_nested():
+                grant = await _metering.create_storage_quota_grant(
+                    session,
+                    uid,
+                    size_gib=body.size_gib,
+                    grant_type=body.grant_type,
+                    granted_by=admin.id,
+                    reason=body.reason,
+                    campaign_id=body.campaign_id,
+                    expires_at=body.expires_at,
+                )
+                await record_audit_event(
+                    session,
+                    action="metering.storage_quota_grant_created",
+                    target_type="storage_quota_grant",
+                    target_id=grant.id,
+                    actor_user_id=admin.id,
+                    metadata={
+                        "user_id": uid,
+                        "size_gib": body.size_gib,
+                        "grant_type": body.grant_type,
+                        "campaign_id": body.campaign_id,
+                        "reason": body.reason,
+                    },
+                    request=request,
+                )
+            results.append({"user_id": uid, "grant_id": grant.id, "status": "success", "error": None})
+            succeeded += 1
+        except Exception:
+            logger.exception("Failed to create storage quota grant for user %s", uid)
             results.append({"user_id": uid, "grant_id": None, "status": "failed", "error": "Internal error"})
             failed += 1
 

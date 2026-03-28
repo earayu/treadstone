@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from treadstone.models.metering import CreditGrant, TierTemplate, UserPlan
+from treadstone.models.metering import ComputeGrant, StorageQuotaGrant, TierTemplate, UserPlan
 from treadstone.models.user import utc_now
 
 
@@ -51,8 +51,8 @@ def serialize_template(tt: TierTemplate) -> dict:
     }
 
 
-def grant_status(grant: CreditGrant) -> str:
-    """Compute a virtual status field: active / exhausted / expired."""
+def compute_grant_status(grant: ComputeGrant) -> str:
+    """Virtual status for compute grants: active / exhausted / expired."""
     if grant.remaining_amount <= 0:
         return "exhausted"
     if grant.expires_at is not None:
@@ -65,17 +65,42 @@ def grant_status(grant: CreditGrant) -> str:
     return "active"
 
 
-def serialize_grant(grant: CreditGrant) -> dict:
+def storage_quota_grant_status(grant: StorageQuotaGrant) -> str:
+    """Virtual status for storage quota grants: active / expired."""
+    if grant.expires_at is not None:
+        now = utc_now()
+        expires = grant.expires_at
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=now.tzinfo)
+        if expires < now:
+            return "expired"
+    return "active"
+
+
+def serialize_compute_grant(grant: ComputeGrant) -> dict:
     return {
         "id": grant.id,
-        "credit_type": grant.credit_type,
         "grant_type": grant.grant_type,
         "original_amount": float(grant.original_amount),
         "remaining_amount": float(grant.remaining_amount),
         "reason": grant.reason,
         "granted_by": grant.granted_by,
         "campaign_id": grant.campaign_id,
-        "status": grant_status(grant),
+        "status": compute_grant_status(grant),
+        "granted_at": iso(grant.granted_at),
+        "expires_at": iso(grant.expires_at),
+    }
+
+
+def serialize_storage_quota_grant(grant: StorageQuotaGrant) -> dict:
+    return {
+        "id": grant.id,
+        "grant_type": grant.grant_type,
+        "size_gib": grant.size_gib,
+        "reason": grant.reason,
+        "granted_by": grant.granted_by,
+        "campaign_id": grant.campaign_id,
+        "status": storage_quota_grant_status(grant),
         "granted_at": iso(grant.granted_at),
         "expires_at": iso(grant.expires_at),
     }

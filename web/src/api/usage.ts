@@ -4,7 +4,9 @@ import type { components } from "@/api/schema"
 
 export type UsageSummary = components["schemas"]["UsageSummaryResponse"]
 export type ComputeSession = components["schemas"]["ComputeSessionItem"]
-export type CreditGrant = components["schemas"]["CreditGrantItem"]
+export type ComputeGrantItem = components["schemas"]["ComputeGrantItem"]
+export type StorageQuotaGrantItem = components["schemas"]["StorageQuotaGrantItem"]
+export type GrantsResponse = components["schemas"]["GrantsResponse"]
 export type UserPlan = components["schemas"]["UserPlanResponse"]
 
 export function useUsageOverview() {
@@ -43,7 +45,7 @@ export function useComputeSessions(params?: {
   })
 }
 
-export function useCreditGrants() {
+export function useGrants() {
   return useQuery({
     queryKey: ["usage", "grants"],
     queryFn: async () => {
