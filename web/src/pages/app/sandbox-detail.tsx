@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import * as Dialog from "@radix-ui/react-dialog"
 import { useNavigate, useParams } from "react-router"
-import { X, ExternalLink } from "lucide-react"
+import { X, ExternalLink, RefreshCw, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 
@@ -144,6 +144,17 @@ export function SandboxDetailPage() {
     }
   }
 
+  async function handleStart() {
+    if (!id) return
+    try {
+      await startSandbox.mutateAsync(id)
+      toast.success("Starting sandbox…")
+      await qc.invalidateQueries({ queryKey: ["sandboxes", id] })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to start sandbox.")
+    }
+  }
+
   async function handleDelete() {
     if (!id) return
     if (!window.confirm("Delete this sandbox permanently?")) return
@@ -154,28 +165,6 @@ export function SandboxDetailPage() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to delete sandbox.")
     }
-  }
-
-  async function handleOpenWebUi() {
-    if (!sandbox || !id) return
-    const web = sandbox.urls?.web
-    const proxy = sandbox.urls?.proxy
-    const openUrl = web ?? proxy
-    if (openUrl) {
-      window.open(openUrl, "_blank", "noopener,noreferrer")
-      return
-    }
-    if (!isRunning) {
-      try {
-        await startSandbox.mutateAsync(id)
-        toast.success("Starting sandbox…")
-        await qc.invalidateQueries({ queryKey: ["sandboxes", id] })
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Failed to start sandbox.")
-      }
-      return
-    }
-    toast.message("No URL yet. Try Recreate Link if browser hand-off is enabled.")
   }
 
   return (
@@ -264,17 +253,39 @@ export function SandboxDetailPage() {
                   <h3 className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground">
                     Browser hand-off
                   </h3>
-                  <div className="mt-3 space-y-2 rounded border border-border/15 bg-background/40 p-4">
+                  <div className="mt-3 space-y-3 rounded border border-border/15 bg-background/40 p-4">
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-[1px] text-muted-foreground">
-                        Web URL
-                      </p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[10px] font-bold uppercase tracking-[1px] text-muted-foreground">
+                          Web URL
+                        </p>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => void handleRecreateLink()}
+                            title="Recreate link"
+                            className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                          >
+                            <RefreshCw className="size-3" />
+                          </button>
+                          {webLink?.enabled && (
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteLink()}
+                              title="Delete link"
+                              className="rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                            >
+                              <Trash2 className="size-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
                       {sandbox.urls?.web ? (
                         <a
                           href={sandbox.urls.web}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="mt-1 inline-flex items-center gap-1 font-mono text-xs text-primary hover:underline"
+                          className="mt-1 inline-flex items-center gap-1 font-mono text-xs text-primary hover:underline break-all"
                         >
                           {sandbox.urls.web}
                           <ExternalLink className="size-3 shrink-0" />
@@ -312,39 +323,26 @@ export function SandboxDetailPage() {
                   </div>
                 </div>
 
-                <div className="mt-8 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void handleOpenWebUi()}
-                    disabled={startSandbox.isPending}
-                    className="bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-                  >
-                    Open Web UI
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleRecreateLink()}
-                    className="border border-border/40 bg-secondary px-4 py-2 text-sm font-semibold text-secondary-foreground transition-colors hover:bg-secondary/80"
-                  >
-                    Recreate Link
-                  </button>
-                  {webLink?.enabled && (
+                <div className="mt-8 flex items-center gap-2">
+                  {isRunning ? (
                     <button
                       type="button"
-                      onClick={() => void handleDeleteLink()}
-                      className="border border-border/40 bg-secondary px-4 py-2 text-sm font-semibold text-secondary-foreground transition-colors hover:bg-secondary/80"
+                      onClick={() => void handleStop()}
+                      disabled={stopSandbox.isPending}
+                      className="border border-border/40 bg-secondary px-4 py-2 text-sm font-semibold text-secondary-foreground transition-colors hover:bg-secondary/80 disabled:opacity-40"
                     >
-                      Delete Link
+                      Stop
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void handleStart()}
+                      disabled={startSandbox.isPending}
+                      className="border border-border/40 bg-secondary px-4 py-2 text-sm font-semibold text-secondary-foreground transition-colors hover:bg-secondary/80 disabled:opacity-40"
+                    >
+                      Start
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => void handleStop()}
-                    disabled={stopSandbox.isPending || !isRunning}
-                    className="border border-border/40 bg-secondary px-4 py-2 text-sm font-semibold text-secondary-foreground transition-colors hover:bg-secondary/80 disabled:opacity-40"
-                  >
-                    Stop
-                  </button>
                   <button
                     type="button"
                     onClick={() => void handleDelete()}

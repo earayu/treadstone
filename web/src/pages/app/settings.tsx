@@ -5,12 +5,9 @@ import { toast } from "sonner"
 
 import { useCurrentUser, useLogout } from "@/hooks/use-auth"
 import { client, HttpError } from "@/lib/api-client"
-import { cn } from "@/lib/utils"
 
 function roleLabel(role: string): string {
   if (role === "admin") return "Admin"
-  if (role === "rw") return "Member"
-  if (role === "ro") return "Read only"
   return role
 }
 
@@ -104,26 +101,16 @@ export function SettingsPage() {
               <dt className="text-[10px] font-bold uppercase tracking-[1px] text-muted-foreground">Email</dt>
               <dd className="mt-1 text-sm text-foreground">{user.email}</dd>
             </div>
-            <div className="flex flex-wrap items-center gap-3">
+            {user.role === "admin" && (
               <div>
                 <dt className="text-[10px] font-bold uppercase tracking-[1px] text-muted-foreground">Role</dt>
                 <dd className="mt-1">
-                  <span
-                    className={cn(
-                      "inline-block bg-primary/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary",
-                    )}
-                  >
+                  <span className="inline-block bg-primary/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
                     {roleLabel(user.role)}
                   </span>
                 </dd>
               </div>
-              <div>
-                <dt className="text-[10px] font-bold uppercase tracking-[1px] text-muted-foreground">Status</dt>
-                <dd className="mt-1">
-                  <span className="text-sm text-success">Active</span>
-                </dd>
-              </div>
-            </div>
+            )}
           </dl>
         )}
       </section>

@@ -219,7 +219,7 @@ export function ApiKeysPage() {
                 {(
                   [
                     ["Name", "w-[16%]"],
-                    ["Prefix", "w-[20%]"],
+                    ["Key preview", "w-[20%]"],
                     ["Scope", "w-[18%]"],
                     ["Created at", "w-[16%]"],
                     ["Expiry", "w-[16%]"],
