@@ -12,6 +12,7 @@ from treadstone.api import auth as auth_api
 from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
+from treadstone.models.audit_event import AuditEvent
 from treadstone.models.user import OAuthAccount, User
 from treadstone.services import browser_login as browser_login_service
 
@@ -148,6 +149,7 @@ async def test_google_callback_creates_user_and_sets_session_cookie(db_session, 
         ).scalar_one()
 
     assert user.role == "admin"
+    assert user.has_local_password is False
     assert oauth_account.oauth_name == "google"
     assert oauth_account.account_id == "acct-new"
 
@@ -162,6 +164,7 @@ async def test_google_callback_auto_links_existing_user_by_email(db_session, mon
         user = User(
             email="existing@example.com",
             hashed_password="hashed",
+            has_local_password=True,
             is_active=True,
             is_superuser=False,
             is_verified=True,
@@ -192,6 +195,7 @@ async def test_google_callback_auto_links_existing_user_by_email(db_session, mon
 
     assert user.id == existing_user_id
     assert user.role == "ro"
+    assert user.has_local_password is True
     assert oauth_account.account_id == "acct-link"
 
 
@@ -249,6 +253,7 @@ async def test_github_callback_rejects_unverified_email_and_does_not_link_existi
         user = User(
             email="existing@example.com",
             hashed_password="hashed",
+            has_local_password=True,
             is_active=True,
             is_superuser=False,
             is_verified=True,
@@ -278,3 +283,49 @@ async def test_github_callback_rejects_unverified_email_and_does_not_link_existi
 
     assert len(users) == 1
     assert oauth_accounts == []
+
+
+@pytest.mark.asyncio
+async def test_oauth_only_user_can_set_local_password_and_login_with_it(db_session, monkeypatch):
+    monkeypatch.setattr(auth_api.settings, "app_base_url", "http://test")
+    client = FakeOAuthClient("google", account_id="acct-set-password", account_email="setpass@example.com")
+    monkeypatch.setattr(auth_api, "get_google_oauth_client", lambda: client, raising=False)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
+        authorize = await http_client.get("/v1/auth/google/authorize", follow_redirects=False)
+        state = _extract_state(authorize.headers["location"])
+        callback = await http_client.get(
+            "/v1/auth/google/callback",
+            params={"code": "oauth-code", "state": state},
+            follow_redirects=False,
+        )
+        assert callback.status_code == 303
+
+        me_response = await http_client.get("/v1/auth/user")
+        assert me_response.status_code == 200
+        assert me_response.json()["has_local_password"] is False
+
+        set_response = await http_client.post("/v1/auth/set-password", json={"new_password": "NewPass123!"})
+        assert set_response.status_code == 200
+
+        me_after_response = await http_client.get("/v1/auth/user")
+        assert me_after_response.status_code == 200
+        assert me_after_response.json()["has_local_password"] is True
+
+        logout_response = await http_client.post("/v1/auth/logout")
+        assert logout_response.status_code == 200
+
+        login_response = await http_client.post(
+            "/v1/auth/login",
+            json={"email": "setpass@example.com", "password": "NewPass123!"},
+        )
+        assert login_response.status_code == 200
+
+    async with _test_session_factory() as session:
+        user = (await session.execute(select(User).where(User.email == "setpass@example.com"))).unique().scalar_one()
+        audit_event = (
+            await session.execute(select(AuditEvent).where(AuditEvent.action == "auth.password.set"))
+        ).scalar_one()
+
+    assert user.has_local_password is True
+    assert audit_event.target_id == user.id

@@ -19,6 +19,7 @@
 - `id`
 - `email`
 - `username`
+- `has_local_password`
 - `role`
 - `is_active`
 - `is_superuser`
@@ -87,12 +88,18 @@ API Key 的权限模型是：
 - `POST /v1/auth/login`
 - `POST /v1/auth/logout`
 - `GET /v1/auth/user`
+- `POST /v1/auth/set-password`
 - `POST /v1/auth/change-password`
 
 当前注册行为有两个重要约束：
 
 - **第一个注册用户自动成为 `admin`**
 - 注册成功后会直接写入 session cookie，相当于自动登录
+
+补充说明：
+
+- `has_local_password` 用于区分“用户自己设置过本地密码”与“OAuth 注册时框架自动生成的随机密码哈希”
+- 纯 OAuth 账号需要先调用 `POST /v1/auth/set-password`，之后才能使用邮箱 + 密码登录
 
 ### 用户管理
 
@@ -141,4 +148,3 @@ API Key 的权限模型是：
 ### 文档维护建议
 
 后续如果角色权限开始细化，应该优先更新这里，而不是再补一份新的“Phase 1 认证设计”。
-

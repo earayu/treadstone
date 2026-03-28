@@ -231,6 +231,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/set-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set Password */
+        post: operations["auth-set_password"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/users/{user_id}": {
         parameters: {
             query?: never;
@@ -1597,6 +1614,14 @@ export interface components {
              */
             last_used_at?: string | null;
         };
+        /** SetPasswordRequest */
+        SetPasswordRequest: {
+            /**
+             * New Password
+             * @example NewPass456!
+             */
+            new_password: string;
+        };
         /** StorageUsage */
         StorageUsage: {
             /**
@@ -1900,6 +1925,11 @@ export interface components {
              * @example true
              */
             is_active: boolean;
+            /**
+             * Has Local Password
+             * @example true
+             */
+            has_local_password: boolean;
         };
         /** UserListResponse */
         UserListResponse: {
@@ -2415,6 +2445,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ChangePasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "auth-set_password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPasswordRequest"];
             };
         };
         responses: {

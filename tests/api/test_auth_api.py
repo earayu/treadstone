@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from treadstone.core.database import Base, get_session
-from treadstone.core.users import UserManager, get_user_db, get_user_manager
+from treadstone.core.users import UserManager, get_jwt_strategy, get_user_db, get_user_manager
 from treadstone.main import app
 from treadstone.models.audit_event import AuditEvent
 from treadstone.models.user import OAuthAccount, User
@@ -120,6 +120,60 @@ async def test_get_user_after_login(db_session):
         resp = await client.get("/v1/auth/user", cookies=cookies)
     assert resp.status_code == 200
     assert resp.json()["email"] == "me@b.com"
+    assert resp.json()["has_local_password"] is True
+
+
+@pytest.mark.asyncio
+async def test_set_password_rejects_existing_local_password_user(db_session):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post("/v1/auth/register", json={"email": "local@b.com", "password": "Pass123!"})
+        response = await client.post("/v1/auth/set-password", json={"new_password": "NewPass123!"})
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "bad_request"
+    assert "change-password" in response.json()["error"]["message"]
+
+
+@pytest.mark.asyncio
+async def test_change_password_rejects_user_without_local_password(db_session):
+    async with _test_session_factory() as session:
+        user = User(
+            email="oauth-only@example.com",
+            hashed_password="hashed",
+            has_local_password=False,
+            is_active=True,
+            is_superuser=False,
+            is_verified=True,
+            role="rw",
+        )
+        session.add(user)
+        await session.commit()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        login_resp = await client.post(
+            "/v1/auth/login",
+            json={"email": "oauth-only@example.com", "password": "wrong"},
+        )
+        assert login_resp.status_code == 400
+
+        async with _test_session_factory() as session:
+            oauth_user = (
+                (await session.execute(select(User).where(User.email == "oauth-only@example.com")))
+                .unique()
+                .scalar_one()
+            )
+
+        session_cookie = await get_jwt_strategy().write_token(oauth_user)
+        client.cookies.set("session", session_cookie)
+
+        response = await client.post(
+            "/v1/auth/change-password",
+            json={"old_password": "anything", "new_password": "NewPass123!"},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "bad_request"
+    assert "set-password" in response.json()["error"]["message"]
 
 
 @pytest.mark.asyncio

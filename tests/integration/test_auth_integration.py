@@ -15,6 +15,7 @@ from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 import treadstone.core.database as db_mod
+from treadstone.core.users import get_jwt_strategy
 from treadstone.main import app
 from treadstone.models.api_key import ApiKey
 from treadstone.models.user import OAuthAccount, User
@@ -133,6 +134,61 @@ async def test_full_auth_flow():
         )
         assert login2_resp.status_code == 200
         assert login2_resp.cookies.get("session") is not None
+
+
+@pytest.mark.integration
+async def test_oauth_only_user_can_set_password_then_login():
+    oauth_email = f"inttest-oauth-{UNIQUE}@test.treadstone.dev"
+
+    eng = _make_engine()
+    session_factory = async_sessionmaker(eng, class_=AsyncSession, expire_on_commit=False)
+    async with session_factory() as session:
+        user = User(
+            email=oauth_email,
+            hashed_password="placeholder-hash",
+            has_local_password=False,
+            is_active=True,
+            is_superuser=False,
+            is_verified=True,
+            role="rw",
+        )
+        session.add(user)
+        await session.flush()
+        session.add(
+            OAuthAccount(
+                user_id=user.id,
+                oauth_name="google",
+                access_token="token",
+                account_id=f"acct-{UNIQUE}",
+                account_email=oauth_email,
+            )
+        )
+        await session.commit()
+        await session.refresh(user)
+        session_cookie = await get_jwt_strategy().write_token(user)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        client.cookies.set("session", session_cookie)
+
+        user_resp = await client.get("/v1/auth/user")
+        assert user_resp.status_code == 200
+        assert user_resp.json()["has_local_password"] is False
+
+        set_resp = await client.post("/v1/auth/set-password", json={"new_password": "NewStr0ng_Pass!"})
+        assert set_resp.status_code == 200
+
+        logout_resp = await client.post("/v1/auth/logout")
+        assert logout_resp.status_code == 200
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        login_resp = await client.post(
+            "/v1/auth/login",
+            json={"email": oauth_email, "password": "NewStr0ng_Pass!"},
+        )
+        assert login_resp.status_code == 200
+        assert login_resp.cookies.get("session") is not None
+
+    await eng.dispose()
 
 
 @pytest.mark.integration
