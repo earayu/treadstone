@@ -4,12 +4,11 @@ import json
 import logging
 import secrets
 from datetime import timedelta
-from html import escape
 from urllib.parse import urlencode
 
 import jwt
 from fastapi import APIRouter, Depends, Query, Request, Response, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import RedirectResponse
 from fastapi_users import exceptions as fastapi_users_exceptions
 from fastapi_users.password import PasswordHelper
 from sqlalchemy import delete, func, select
@@ -128,32 +127,6 @@ def _clear_oauth_flow_cookies(response: Response, provider: str) -> None:
     response.delete_cookie(key=_oauth_return_to_cookie_name(provider))
 
 
-def _oauth_success_page(provider: str) -> HTMLResponse:
-    title = escape(f"{provider.title()} login successful")
-    body_style = (
-        "font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f5;padding:40px;"
-    )
-    main_style = (
-        "max-width:420px;margin:0 auto;background:white;padding:24px;"
-        "border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.08);"
-    )
-    html = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{title}</title>
-</head>
-<body style="{body_style}">
-  <main style="{main_style}">
-    <h1 style="font-size:24px;margin-bottom:12px;">Login successful</h1>
-    <p style="color:#555;">You can close this window and return to Treadstone.</p>
-  </main>
-</body>
-</html>"""
-    return HTMLResponse(content=html)
-
-
 def _oauth_error_message(provider: str, error: str, error_description: str | None = None) -> str:
     if error == "access_denied":
         return f"{provider.title()} login was cancelled."
@@ -204,15 +177,16 @@ async def _fail_cli_flow(session: AsyncSession, cli_flow_id: str) -> None:
         await session.commit()
 
 
-def _cli_oauth_success_page() -> HTMLResponse:
-    from treadstone.services.login_page import render_success_page
-
-    return render_success_page()
+def _cli_oauth_redirect(cli_flow_id: str, result: str, error: str | None = None) -> RedirectResponse:
+    params: dict[str, str] = {"flow_id": cli_flow_id, "result": result}
+    if error:
+        params["error"] = error
+    return RedirectResponse(url=f"/auth/cli/login?{urlencode(params)}", status_code=303)
 
 
 def _oauth_login_redirect(return_to: str, message: str) -> RedirectResponse:
     return RedirectResponse(
-        url=f"/v1/browser/login?{urlencode({'return_to': return_to, 'error': message})}",
+        url=f"/auth/sign-in?{urlencode({'return_to': return_to, 'error': message})}",
         status_code=303,
     )
 
@@ -589,6 +563,9 @@ async def _oauth_callback(
         set_request_context(request, error_code=error)
         if cli_flow_id_from_state:
             await _fail_cli_flow(session, cli_flow_id_from_state)
+            response = _cli_oauth_redirect(cli_flow_id_from_state, "failed", message)
+            _clear_oauth_flow_cookies(response, provider)
+            return response
         if return_to is not None:
             response = _oauth_login_redirect(return_to, message)
             _clear_oauth_flow_cookies(response, provider)
@@ -604,6 +581,10 @@ async def _oauth_callback(
         set_request_context(request, error_code="oauth_invalid_state")
         if cli_flow_id_from_state:
             await _fail_cli_flow(session, cli_flow_id_from_state)
+            msg = "Your login session expired. Please try again."
+            response = _cli_oauth_redirect(cli_flow_id_from_state, "failed", msg)
+            _clear_oauth_flow_cookies(response, provider)
+            return response
         if return_to is not None:
             response = _oauth_login_redirect(return_to, "Your login session expired. Please try again.")
             _clear_oauth_flow_cookies(response, provider)
@@ -619,9 +600,12 @@ async def _oauth_callback(
             provider,
         )
         set_request_context(request, error_code="oauth_provider_error")
+        message = f"{provider.title()} login failed."
         if cli_flow_id_from_state:
             await _fail_cli_flow(session, cli_flow_id_from_state)
-        message = f"{provider.title()} login failed."
+            response = _cli_oauth_redirect(cli_flow_id_from_state, "failed", message)
+            _clear_oauth_flow_cookies(response, provider)
+            return response
         if return_to is not None:
             response = _oauth_login_redirect(return_to, message)
             _clear_oauth_flow_cookies(response, provider)
@@ -631,12 +615,15 @@ async def _oauth_callback(
     if account_email is None:
         error_code = "oauth_missing_verified_email" if provider == "github" else "oauth_missing_email"
         set_request_context(request, error_code=error_code)
-        if cli_flow_id_from_state:
-            await _fail_cli_flow(session, cli_flow_id_from_state)
         if provider == "github":
             message = "GitHub did not provide a verified email address."
         else:
             message = f"{provider.title()} did not provide an email address."
+        if cli_flow_id_from_state:
+            await _fail_cli_flow(session, cli_flow_id_from_state)
+            response = _cli_oauth_redirect(cli_flow_id_from_state, "failed", message)
+            _clear_oauth_flow_cookies(response, provider)
+            return response
         if return_to is not None:
             response = _oauth_login_redirect(return_to, message)
             _clear_oauth_flow_cookies(response, provider)
@@ -644,7 +631,12 @@ async def _oauth_callback(
         raise BadRequestError(message)
 
     if cli_flow_id_from_state:
-        await _validate_cli_flow_pending(session, cli_flow_id_from_state)
+        try:
+            await _validate_cli_flow_pending(session, cli_flow_id_from_state)
+        except BadRequestError as exc:
+            response = _cli_oauth_redirect(cli_flow_id_from_state, "failed", str(exc))
+            _clear_oauth_flow_cookies(response, provider)
+            return response
 
     existing_oauth = await session.execute(
         select(OAuthAccount).where(
@@ -692,7 +684,7 @@ async def _oauth_callback(
     await session.commit()
 
     if cli_flow_id_from_state:
-        response: Response = _cli_oauth_success_page()
+        response: Response = _cli_oauth_redirect(cli_flow_id_from_state, "approved")
         _clear_oauth_flow_cookies(response, provider)
         return response
 
