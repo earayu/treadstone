@@ -339,6 +339,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/users/{user_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update User Status
+         * @description Enable or disable a user account. Disabled users cannot authenticate.
+         */
+        patch: operations["auth-update_user_status"];
+        trace?: never;
+    };
     "/v1/auth/users/{user_id}": {
         parameters: {
             query?: never;
@@ -1483,6 +1503,11 @@ export interface components {
             /** @example admin */
             role: components["schemas"]["Role"];
             /**
+             * Is Active
+             * @example true
+             */
+            is_active: boolean;
+            /**
              * Is Verified
              * @example true
              */
@@ -1584,6 +1609,19 @@ export interface components {
              * @example -1
              */
             auto_delete_interval: number;
+            /**
+             * Persist
+             * @description Whether persistent storage is attached.
+             * @default false
+             * @example false
+             */
+            persist: boolean;
+            /**
+             * Storage Size
+             * @description Persistent volume size when persist=true. Supported tiers: 5Gi, 10Gi, 20Gi.
+             * @example 5Gi
+             */
+            storage_size?: ("5Gi" | "10Gi" | "20Gi") | null;
             urls: components["schemas"]["SandboxUrls"];
             /**
              * Created At
@@ -1601,18 +1639,6 @@ export interface components {
              * @example null
              */
             status_message?: string | null;
-            /**
-             * Persist
-             * @default false
-             * @example false
-             */
-            persist: boolean;
-            /**
-             * Storage Size
-             * @description Persistent volume size (only present when persist=true). Supported tiers: 5Gi, 10Gi, 20Gi.
-             * @example 5Gi
-             */
-            storage_size?: ("5Gi" | "10Gi" | "20Gi") | null;
             /**
              * Started At
              * @example 2026-03-21T12:01:00+00:00
@@ -1680,15 +1706,16 @@ export interface components {
             /**
              * Persist
              * @description Whether persistent storage is attached.
+             * @default false
              * @example false
              */
             persist: boolean;
             /**
              * Storage Size
-             * @description Persistent volume size when persist=true.
+             * @description Persistent volume size when persist=true. Supported tiers: 5Gi, 10Gi, 20Gi.
              * @example 5Gi
              */
-            storage_size?: "5Gi" | "10Gi" | "20Gi" | null;
+            storage_size?: ("5Gi" | "10Gi" | "20Gi") | null;
             urls: components["schemas"]["SandboxUrls"];
             /**
              * Created At
@@ -2028,6 +2055,15 @@ export interface components {
              */
             users_affected: number;
         };
+        /** UpdateUserStatusRequest */
+        UpdateUserStatusRequest: {
+            /**
+             * Is Active
+             * @description Set to false to disable the user account.
+             * @example false
+             */
+            is_active: boolean;
+        };
         /** UsageLimits */
         UsageLimits: {
             /**
@@ -2084,15 +2120,15 @@ export interface components {
             /** @example admin */
             role: components["schemas"]["Role"];
             /**
-             * Username
-             * @example alice
-             */
-            username?: string | null;
-            /**
              * Is Active
              * @example true
              */
             is_active: boolean;
+            /**
+             * Username
+             * @example alice
+             */
+            username?: string | null;
             /**
              * Is Verified
              * @example true
@@ -2229,6 +2265,11 @@ export interface components {
             email: string;
             /** @example admin */
             role: components["schemas"]["Role"];
+            /**
+             * Is Active
+             * @example true
+             */
+            is_active: boolean;
         };
         /** ValidationError */
         ValidationError: {
@@ -2811,6 +2852,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["VerificationConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "auth-update_user_status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateUserStatusRequest"];
             };
         };
         responses: {

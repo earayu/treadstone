@@ -30,6 +30,7 @@ from treadstone.api.schemas import (
     RegisterResponse,
     SetPasswordRequest,
     UpdateApiKeyRequest,
+    UpdateUserStatusRequest,
     UserDetailResponse,
     UserListResponse,
     VerificationConfirmRequest,
@@ -41,6 +42,7 @@ from treadstone.core.errors import (
     ConflictError,
     EmailAlreadyVerifiedError,
     EmailVerificationTokenInvalidError,
+    ForbiddenError,
     NotFoundError,
     ValidationError,
 )
@@ -306,8 +308,10 @@ async def authenticate_email_password(session: AsyncSession, email: str, passwor
     result = await session.execute(select(User).where(User.email == email))
     user = result.unique().scalar_one_or_none()
 
-    if user is None or not user.is_active:
+    if user is None:
         raise BadRequestError("Invalid email or password")
+    if not user.is_active:
+        raise ForbiddenError("Account is disabled. Contact your administrator.")
     if not user.has_local_password:
         raise BadRequestError("Invalid email or password")
 
@@ -418,13 +422,14 @@ async def login(
     """Authenticate with email + password, set session cookie."""
     try:
         user = await authenticate_email_password(session, str(body.email), body.password)
-    except BadRequestError:
+    except (BadRequestError, ForbiddenError) as exc:
+        error_code = "account_disabled" if isinstance(exc, ForbiddenError) else "bad_request"
         await record_audit_event(
             session,
             action="auth.login",
             target_type="user",
             result="failure",
-            error_code="bad_request",
+            error_code=error_code,
             metadata={"email": str(body.email), "surface": "api"},
             request=request,
         )
@@ -500,7 +505,6 @@ async def register(
         hashed_password=hashed,
         has_local_password=True,
         is_active=True,
-        is_superuser=(role == Role.ADMIN),
         is_verified=is_first_user,
         role=role.value,
     )
@@ -794,7 +798,10 @@ async def list_users(
         users = [current_user]
     total = len(users)
     page = users[offset : offset + limit]
-    return {"items": [{"id": u.id, "email": u.email, "role": u.role} for u in page], "total": total}
+    return {
+        "items": [{"id": u.id, "email": u.email, "role": u.role, "is_active": u.is_active} for u in page],
+        "total": total,
+    }
 
 
 @router.post("/change-password", response_model=MessageResponse)
@@ -951,6 +958,42 @@ async def confirm_verification(
     )
     await session.commit()
     return {"detail": "Email verified"}
+
+
+@router.patch("/users/{user_id}/status", response_model=MessageResponse)
+async def update_user_status(
+    request: Request,
+    user_id: str,
+    body: UpdateUserStatusRequest,
+    current_user: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """Enable or disable a user account. Disabled users cannot authenticate."""
+    if user_id == current_user.id:
+        raise BadRequestError("Cannot change your own status")
+    target = await session.get(User, user_id)
+    if not target:
+        raise NotFoundError("User", user_id)
+    if not body.is_active and target.role == Role.ADMIN.value:
+        admin_count = await session.execute(
+            select(func.count()).select_from(User).where(User.role == Role.ADMIN.value, User.is_active.is_(True))
+        )
+        if admin_count.scalar_one() <= 1:
+            raise BadRequestError("Cannot disable the last active admin")
+    old_status = target.is_active
+    target.is_active = body.is_active
+    session.add(target)
+    await record_audit_event(
+        session,
+        action="auth.user.status_change",
+        target_type="user",
+        target_id=user_id,
+        metadata={"email": target.email, "old_is_active": old_status, "new_is_active": body.is_active},
+        request=request,
+    )
+    await session.commit()
+    action = "enabled" if body.is_active else "disabled"
+    return {"detail": f"User {action}"}
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

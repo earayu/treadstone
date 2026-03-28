@@ -148,7 +148,6 @@ async def test_oauth_only_user_can_set_password_then_login():
             hashed_password="placeholder-hash",
             has_local_password=False,
             is_active=True,
-            is_superuser=False,
             is_verified=True,
             role="rw",
         )

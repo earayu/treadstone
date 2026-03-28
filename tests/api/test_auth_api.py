@@ -144,7 +144,6 @@ async def test_change_password_rejects_user_without_local_password(db_session):
             hashed_password="hashed",
             has_local_password=False,
             is_active=True,
-            is_superuser=False,
             is_verified=True,
             role="rw",
         )
@@ -184,3 +183,154 @@ async def test_invite_endpoint_is_removed(db_session):
         resp = await client.post("/v1/auth/invite", json={"email": "member@example.com", "role": "ro"})
 
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_admin_disable_user(db_session):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post("/v1/auth/register", json={"email": "admin@test.com", "password": "Pass123!"})
+        login = await client.post("/v1/auth/login", json={"email": "admin@test.com", "password": "Pass123!"})
+        admin_cookies = login.cookies
+
+    async with _test_session_factory() as session:
+        target = User(
+            email="target@test.com",
+            hashed_password="hashed",
+            has_local_password=True,
+            is_active=True,
+            is_verified=True,
+            role="rw",
+        )
+        session.add(target)
+        await session.commit()
+        target_id = target.id
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.patch(
+            f"/v1/auth/users/{target_id}/status",
+            json={"is_active": False},
+            cookies=admin_cookies,
+        )
+    assert resp.status_code == 200
+    assert "disabled" in resp.json()["detail"].lower()
+
+    async with _test_session_factory() as session:
+        user = (await session.execute(select(User).where(User.id == target_id))).unique().scalar_one()
+    assert user.is_active is False
+
+    async with _test_session_factory() as session:
+        event = (
+            await session.execute(select(AuditEvent).where(AuditEvent.action == "auth.user.status_change"))
+        ).scalar_one()
+    assert event.target_id == target_id
+
+
+@pytest.mark.asyncio
+async def test_admin_enable_user(db_session):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post("/v1/auth/register", json={"email": "admin2@test.com", "password": "Pass123!"})
+        login = await client.post("/v1/auth/login", json={"email": "admin2@test.com", "password": "Pass123!"})
+        admin_cookies = login.cookies
+
+    async with _test_session_factory() as session:
+        target = User(
+            email="disabled@test.com",
+            hashed_password="hashed",
+            has_local_password=True,
+            is_active=False,
+            is_verified=True,
+            role="rw",
+        )
+        session.add(target)
+        await session.commit()
+        target_id = target.id
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.patch(
+            f"/v1/auth/users/{target_id}/status",
+            json={"is_active": True},
+            cookies=admin_cookies,
+        )
+    assert resp.status_code == 200
+    assert "enabled" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_admin_cannot_disable_self(db_session):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        reg = await client.post("/v1/auth/register", json={"email": "selfadmin@test.com", "password": "Pass123!"})
+        admin_id = reg.json()["id"]
+        login = await client.post("/v1/auth/login", json={"email": "selfadmin@test.com", "password": "Pass123!"})
+        admin_cookies = login.cookies
+
+        resp = await client.patch(
+            f"/v1/auth/users/{admin_id}/status",
+            json={"is_active": False},
+            cookies=admin_cookies,
+        )
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_disabled_user_cannot_login(db_session):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post("/v1/auth/register", json={"email": "admin3@test.com", "password": "Pass123!"})
+        login = await client.post("/v1/auth/login", json={"email": "admin3@test.com", "password": "Pass123!"})
+        admin_cookies = login.cookies
+
+    async with _test_session_factory() as session:
+        from fastapi_users.password import PasswordHelper
+
+        ph = PasswordHelper()
+        target = User(
+            email="willbe-disabled@test.com",
+            hashed_password=ph.hash("Pass123!"),
+            has_local_password=True,
+            is_active=True,
+            is_verified=True,
+            role="rw",
+        )
+        session.add(target)
+        await session.commit()
+        target_id = target.id
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.patch(
+            f"/v1/auth/users/{target_id}/status",
+            json={"is_active": False},
+            cookies=admin_cookies,
+        )
+
+        resp = await client.post(
+            "/v1/auth/login",
+            json={"email": "willbe-disabled@test.com", "password": "Pass123!"},
+        )
+    assert resp.status_code == 403
+    assert "disabled" in resp.json()["error"]["message"].lower()
+
+    async with _test_session_factory() as session:
+        login_events = (
+            (
+                await session.execute(
+                    select(AuditEvent).where(
+                        AuditEvent.action == "auth.login",
+                        AuditEvent.error_code == "account_disabled",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert len(login_events) == 1
+
+
+@pytest.mark.asyncio
+async def test_list_users_includes_is_active(db_session):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post("/v1/auth/register", json={"email": "lister@test.com", "password": "Pass123!"})
+        login = await client.post("/v1/auth/login", json={"email": "lister@test.com", "password": "Pass123!"})
+        resp = await client.get("/v1/auth/users", cookies=login.cookies)
+    assert resp.status_code == 200
+    items = resp.json()["items"]
+    assert len(items) >= 1
+    assert "is_active" in items[0]

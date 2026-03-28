@@ -30,10 +30,10 @@ class User(SQLAlchemyBaseUserTable[str], Base):
     username: Mapped[str | None] = mapped_column(String(256), unique=True, nullable=True)
     has_local_password: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     role: Mapped[str] = mapped_column(String(16), nullable=False, default=Role.RW.value)
-    is_staff: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     gmt_created: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
-    gmt_updated: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
-    gmt_deleted: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    gmt_updated: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
+    )
     oauth_accounts: Mapped[list["OAuthAccount"]] = relationship("OAuthAccount", lazy="joined", back_populates="user")
 
 
