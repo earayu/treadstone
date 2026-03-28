@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import * as Dialog from "@radix-ui/react-dialog"
 import * as Switch from "@radix-ui/react-switch"
-import { Copy, Plus, Search, X, MoreVertical, Trash2 } from "lucide-react"
+import { Copy, Plus, Search, X, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -12,16 +12,35 @@ import {
 } from "@/api/api-keys"
 import { cn } from "@/lib/utils"
 
+const DATE_TIME_FORMAT: Intl.DateTimeFormatOptions = {
+  dateStyle: "medium",
+  timeStyle: "short",
+}
+
+const EXPIRY_PRESETS = [
+  { id: "30d", label: "30 days", seconds: 2_592_000 },
+  { id: "90d", label: "90 days", seconds: 7_776_000 },
+  { id: "360d", label: "360 days", seconds: 31_104_000 },
+  { id: "none", label: "No expiration", seconds: null },
+] as const
+
+type ExpiryPresetId = (typeof EXPIRY_PRESETS)[number]["id"]
+
 function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return "—"
   try {
-    return new Date(iso).toLocaleString(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    })
+    return new Date(iso).toLocaleString("en-US", DATE_TIME_FORMAT)
   } catch {
     return iso
   }
+}
+
+function formatExpiryPreview(seconds: number | null): string {
+  if (seconds === null) {
+    return "Does not expire"
+  }
+
+  return `Expires on ${new Date(Date.now() + seconds * 1000).toLocaleString("en-US", DATE_TIME_FORMAT)}`
 }
 
 function isExpired(expiresAt: string | null | undefined): boolean {
@@ -61,10 +80,9 @@ export function ApiKeysPage() {
 
   const [filter, setFilter] = useState("")
   const [createOpen, setCreateOpen] = useState(false)
-  const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
 
   const [newName, setNewName] = useState("my-api-key")
-  const [expiryDate, setExpiryDate] = useState("")
+  const [expiryPreset, setExpiryPreset] = useState<ExpiryPresetId>("360d")
   const [scopeControl, setScopeControl] = useState(true)
   const [scopeData, setScopeData] = useState(true)
 
@@ -86,25 +104,23 @@ export function ApiKeysPage() {
     () => items.filter((k) => !isExpired(k.expires_at)).length,
     [items],
   )
+  const selectedExpiryPreset = useMemo(
+    () => EXPIRY_PRESETS.find((option) => option.id === expiryPreset) ?? EXPIRY_PRESETS[2],
+    [expiryPreset],
+  )
+  const deletingId = deleteKey.isPending ? deleteKey.variables : null
 
   function resetCreateForm() {
     setNewName("my-api-key")
-    setExpiryDate("")
+    setExpiryPreset("360d")
     setScopeControl(true)
     setScopeData(true)
   }
 
   async function handleCreate() {
-    let expiresIn: number | null = null
-    if (expiryDate) {
-      const end = new Date(expiryDate).getTime()
-      const sec = Math.max(0, Math.floor((end - Date.now()) / 1000))
-      expiresIn = sec > 0 ? sec : null
-    }
-
     const body = {
       name: newName.trim() || "default",
-      expires_in: expiresIn,
+      expires_in: selectedExpiryPreset.seconds,
       scope: {
         control_plane: scopeControl,
         data_plane: scopeData
@@ -128,7 +144,6 @@ export function ApiKeysPage() {
     if (!window.confirm(`Delete API key “${name}”?`)) return
     try {
       await deleteKey.mutateAsync(id)
-      setMenuOpenId(null)
       toast.success("API key deleted.")
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to delete key.")
@@ -264,35 +279,17 @@ export function ApiKeysPage() {
                         <span className="text-muted-foreground">Never</span>
                       )}
                     </td>
-                    <td className="relative px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-right">
                       <button
                         type="button"
-                        onClick={() => setMenuOpenId((id) => (id === row.id ? null : row.id))}
-                        className="inline-flex text-muted-foreground transition-colors hover:text-foreground"
-                        aria-label="Actions"
+                        onClick={() => void handleDelete(row.id, row.name)}
+                        disabled={deleteKey.isPending}
+                        className="inline-flex items-center gap-1.5 text-sm font-semibold text-destructive transition-colors hover:text-destructive/80 disabled:cursor-not-allowed disabled:opacity-40"
+                        aria-label={`Delete ${row.name}`}
                       >
-                        <MoreVertical className="size-4" />
+                        <Trash2 className="size-3.5" />
+                        {deletingId === row.id ? "Deleting…" : "Delete"}
                       </button>
-                      {menuOpenId === row.id && (
-                        <>
-                          <button
-                            type="button"
-                            className="fixed inset-0 z-10 cursor-default bg-transparent"
-                            aria-label="Close menu"
-                            onClick={() => setMenuOpenId(null)}
-                          />
-                          <div className="absolute right-4 top-full z-20 mt-1 min-w-[140px] border border-border/20 bg-card py-1 shadow-lg">
-                            <button
-                              type="button"
-                              onClick={() => void handleDelete(row.id, row.name)}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10"
-                            >
-                              <Trash2 className="size-3.5" />
-                              Delete
-                            </button>
-                          </div>
-                        </>
-                      )}
                     </td>
                   </tr>
                 ))
@@ -319,23 +316,42 @@ export function ApiKeysPage() {
             </div>
 
             <div className="mt-6 space-y-4">
-              <label className="block">
-                <span className="text-xs font-semibold text-muted-foreground">Name</span>
+              <div className="block">
+                <label htmlFor="api-key-name" className="text-xs font-semibold text-muted-foreground">
+                  Name
+                </label>
                 <input
+                  id="api-key-name"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   className="mt-1.5 w-full border border-border/30 bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                 />
-              </label>
-              <label className="block">
-                <span className="text-xs font-semibold text-muted-foreground">Expiry date (optional)</span>
-                <input
-                  type="datetime-local"
-                  value={expiryDate}
-                  onChange={(e) => setExpiryDate(e.target.value)}
-                  className="mt-1.5 w-full border border-border/30 bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-              </label>
+              </div>
+              <div className="block">
+                <span className="text-xs font-semibold text-muted-foreground">Expiration</span>
+                <div role="radiogroup" aria-label="Expiration preset" className="mt-1.5 grid grid-cols-2 gap-2">
+                  {EXPIRY_PRESETS.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={expiryPreset === option.id}
+                      onClick={() => setExpiryPreset(option.id)}
+                      className={cn(
+                        "border px-3 py-2 text-left text-sm font-medium transition-colors focus:outline-none focus:ring-1 focus:ring-ring",
+                        expiryPreset === option.id
+                          ? "border-primary bg-primary/10 text-foreground"
+                          : "border-border/30 bg-background text-muted-foreground hover:border-border/60 hover:text-foreground",
+                      )}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {formatExpiryPreview(selectedExpiryPreset.seconds)}
+                </p>
+              </div>
 
               <div className="space-y-3 rounded border border-border/15 bg-background/50 p-4">
                 <div className="flex items-center justify-between gap-4">
