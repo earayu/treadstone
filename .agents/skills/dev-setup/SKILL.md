@@ -29,19 +29,19 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 brew install kind kubectl helm hurl
 ```
 
-## 2. Install Python Dependencies
+## 2. Install Repo Dependencies
 
 ```bash
 make install
 ```
 
-This runs `uv sync` (creates `.venv`, installs all deps) and configures git hooks.
+This installs Python dependencies with `uv`, installs web dependencies with `pnpm`, and configures git hooks.
 
 ## 3. Configure Database (Neon)
 
 The project uses [Neon](https://neon.tech) Serverless PostgreSQL — no local Postgres needed.
 
-For local API development (`make dev`), start from:
+For local API development (`make dev-api`), start from:
 
 ```bash
 cp .env.example .env
@@ -89,7 +89,7 @@ Expected: all tests pass (integration tests are excluded by default). If tests p
 Optional API sanity check:
 
 ```bash
-make dev
+make dev-api
 # In another terminal:
 curl http://localhost:8000/health
 ```
@@ -105,7 +105,7 @@ make up   # One-command: Kind cluster + build + deploy
 make test-e2e
 ```
 
-Pure API development (`make dev`) does not require a K8s cluster.
+Pure API development (`make dev-api`) does not require a K8s cluster.
 
 ---
 

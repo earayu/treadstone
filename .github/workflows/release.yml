@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --frozen
-      - run: make lint
+      - run: make lint-py
 
   test:
     runs-on: ubuntu-latest

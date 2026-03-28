@@ -12,16 +12,16 @@ echo ""
 if [ "$ENV" = "local" ]; then
     bash "$SCRIPT_DIR/kind-setup.sh"
     echo ""
-    echo "Building backend Docker image ..."
-    make image
+    echo "Building API Docker image ..."
+    make image-api
     echo ""
-    echo "Loading backend image into Kind cluster ..."
+    echo "Loading API image into Kind cluster ..."
     kind load docker-image treadstone:latest --name "$CLUSTER_NAME"
     echo ""
-    echo "Building frontend Docker image ..."
+    echo "Building web Docker image ..."
     make image-web
     echo ""
-    echo "Loading frontend image into Kind cluster ..."
+    echo "Loading web image into Kind cluster ..."
     kind load docker-image treadstone-web:latest --name "$CLUSTER_NAME"
 fi
 

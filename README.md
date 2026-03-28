@@ -185,13 +185,15 @@ Current Chinese module documentation is available in [docs/zh-CN/README.md](docs
 
 ```bash
 make help             # Show all available commands
-make dev              # Start local dev server (hot reload)
+make install          # Install Python/web dependencies and git hooks
+make dev-api          # Start local API dev server (hot reload)
+make dev-web          # Start local web dev server
 make test             # Run tests
-make lint             # Lint check
-make format           # Auto-format
+make lint             # Run Python + web lint checks
+make format-py        # Auto-format Python code
 make migrate          # Run database migrations
 make migration MSG=x  # Generate a new migration
-make image            # Build backend Docker image
+make image-api        # Build API Docker image
 make image-web        # Build frontend Docker image
 make up               # Spin up local Kind cluster + deploy
 make down             # Tear down local environment

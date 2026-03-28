@@ -19,8 +19,8 @@ Skills live under `.agents/skills/*/SKILL.md`. AGENTS.md defines repo facts and 
 
 - Python 3.12+, FastAPI, Uvicorn, SQLAlchemy (async), asyncpg
 - Database: Neon (Serverless PostgreSQL)
-- Package manager: uv
-- Linter/formatter: ruff
+- Package managers: uv (Python), pnpm (web)
+- Lint/format: ruff (Python), ESLint (web)
 - Testing: pytest + pytest-asyncio + httpx; Hurl for E2E
 - Containerization: Docker
 - Orchestration: Kubernetes (Kind for dev, GKE/EKS/AKS for prod)
@@ -97,7 +97,7 @@ Rules:
 - SQLAlchemy async engine + asyncpg driver.
 - Alembic migrations (Alembic uses a sync URL — `env.py` strips `+asyncpg` automatically).
 - All connection strings must include `?sslmode=require`.
-- For local `make dev`, use `.env`. For Kubernetes deployment, use `.env.<ENV>` such as `.env.local`.
+- For local `make dev-api`, use `.env`. For Kubernetes deployment, use `.env.<ENV>` such as `.env.local`.
 - For model design conventions and the migration workflow, see the `database-migration` skill.
 
 ## Testing
@@ -155,14 +155,17 @@ Run `make help` for the full list. Key commands:
 
 | Command | Purpose |
 |---------|---------|
-| `make dev` | Start dev server (localhost:8000, hot reload) |
+| `make install` | Install Python/web dependencies and git hooks |
+| `make dev-api` | Start API dev server (localhost:8000, hot reload) |
+| `make dev-web` | Start web dev server (localhost:5173, hot reload) |
 | `make test` | Run tests (excludes integration) |
 | `make test-all` | Run all tests including integration |
 | `make test-e2e` | Run E2E tests against deployed cluster |
-| `make lint` / `make format` | Lint check / auto-format |
+| `make lint` / `make format-py` | Repo lint checks / Python auto-format |
 | `make migrate` | Apply database migrations |
 | `make migration MSG=x` | Generate a new Alembic migration |
 | `make gen-openapi` | Export `openapi.json` from the FastAPI app |
+| `make gen-web-types` / `make gen-sdk-python` | Generate client artifacts from OpenAPI |
 | `make up` / `make down` | Full K8s environment up/down (see `deploy/README.md`) |
 | `make ship MSG=x` | git add + commit + push (feature branches only) |
 | `make bump V=x.y.z` | Bump version files, commit + push (feature branches only) |
