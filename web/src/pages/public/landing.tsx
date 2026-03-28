@@ -1,331 +1,328 @@
 import { Link } from "react-router"
-import { Terminal, Globe, Shield, Clock, Cpu, ArrowRight } from "lucide-react"
+import { useCurrentUser } from "@/hooks/use-auth"
 
+const GITHUB_URL = "https://github.com/earayu/treadstone"
 const RELEASES_URL = "https://github.com/earayu/treadstone/releases"
-const INSTALL_SH_COMMAND = "curl -fsSL https://github.com/earayu/treadstone/releases/latest/download/install.sh | sh"
-const INSTALL_PS_COMMAND = "irm https://github.com/earayu/treadstone/releases/latest/download/install.ps1 | iex"
+const PYPI_CLI_URL = "https://pypi.org/project/treadstone-cli/"
+const SUPPORT_EMAIL = "support@treadstone-ai.dev"
 
-const FEATURES = [
+const INSTALL_SH = "curl -fsSL https://github.com/earayu/treadstone/releases/latest/download/install.sh | sh"
+const INSTALL_PS = "irm https://github.com/earayu/treadstone/releases/latest/download/install.ps1 | iex"
+const INSTALL_PIP = "pip install treadstone-cli"
+
+const USAGE_LINES = [
+  { comment: "# Authenticate", cmd: "treadstone auth login" },
+  { comment: "# Create a sandbox", cmd: "treadstone sandboxes create --template aio-sandbox-tiny --name demo" },
+  { comment: "# List your sandboxes", cmd: "treadstone sandboxes list" },
+  { comment: "# Hand off to a human via browser", cmd: "treadstone sandboxes web enable <sandbox_id>" },
+]
+
+const PLANS = [
   {
-    icon: Globe,
-    title: "Instant Session Links",
-    desc: "Generate secure browser links with one click. Share sandbox access via URL with automatic expiration.",
+    name: "Free",
+    price: "$0",
+    period: "/month",
+    desc: "Get started with lightweight sandboxes.",
+    features: [
+      "aio-sandbox-tiny (0.25\u00a0core, 512\u00a0Mi)",
+      "Sandbox lifecycle via CLI, SDK & API",
+      "Browser hand-off sessions",
+      "Auth & API key management",
+      "Community support",
+    ],
+    cta: "Get Started",
+    ctaHref: "/auth/sign-up",
+    highlighted: false,
   },
   {
-    icon: Shield,
-    title: "Proxy-Based Access",
-    desc: "Access sandboxes through secure proxy URLs. No direct network exposure, all traffic routed safely.",
+    name: "Pro",
+    price: "Usage-based",
+    period: "",
+    tag: "COMING SOON",
+    desc: "More compute, more concurrency, priority support.",
+    features: [
+      "All templates up to aio-sandbox-large",
+      "Multiple concurrent sandboxes",
+      "Persistent storage (5\u201320\u00a0Gi)",
+      "Usage analytics & reporting",
+      "Priority support",
+    ],
+    cta: "Join Waitlist",
+    ctaHref: `mailto:${SUPPORT_EMAIL}`,
+    highlighted: true,
   },
   {
-    icon: Clock,
-    title: "Time-Limited Sessions",
-    desc: "Web links auto-expire for security. Monitor last-used timestamps and disable links at any time.",
+    name: "Enterprise",
+    price: "Custom",
+    period: "",
+    desc: "Self-host or fully managed.\u00a0Your infrastructure.",
+    features: [
+      "All templates including aio-sandbox-xlarge",
+      "Unlimited concurrency",
+      "Self-host on your Kubernetes cluster",
+      "RBAC & multi-tenancy",
+      "Dedicated SLA & integrations",
+    ],
+    cta: "Contact Us",
+    ctaHref: `mailto:${SUPPORT_EMAIL}`,
+    highlighted: false,
   },
 ]
 
-const TEMPLATES = [
-  { name: "Tiny", cpu: "0.5", memory: "512 MiB", duration: "30 min", concurrency: 1, cost: "0.5 credits/hr", price: "Free" },
-  { name: "Small", cpu: "1", memory: "1 GiB", duration: "20 min", concurrency: 1, cost: "1 credit/hr", price: "Coming Soon" },
-  { name: "Medium", cpu: "2", memory: "2 GiB", duration: "30 min", concurrency: 1, cost: "2 credits/hr", price: "Contact Us" },
-]
-
-const OPEN_SOURCE_FEATURES = [
-  {
-    icon: Cpu,
-    title: "Instant Spin-up",
-    desc: "Deploy complex agentic environments in under 3 seconds using our pre-cached core images.",
-  },
-  {
-    icon: Shield,
-    title: "Hardened Isolation",
-    desc: "Kernel-level separation ensures that even compromised agents cannot escape their sandbox.",
-  },
-]
-
-export function LandingPage() {
+function CodeBlock({ label, code }: { label: string; code: string }) {
   return (
     <div>
-      {/* Hero */}
-      <section className="flex flex-col items-center px-6 pb-24 pt-20 text-center">
-        <div className="mb-8 flex items-center gap-2 border border-border/30 px-4 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground">
-          <span className="inline-block size-1.5 bg-primary" />
-          System Status: Operational
-        </div>
-        <h1 className="text-5xl font-bold uppercase leading-tight tracking-tight text-foreground md:text-7xl">
+      <p className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/60">
+        {label}
+      </p>
+      <pre className="overflow-x-auto rounded border border-border/20 bg-black/40 px-4 py-3 font-mono text-[12px] leading-relaxed text-foreground">
+        <code>{code}</code>
+      </pre>
+    </div>
+  )
+}
+
+function Dot() {
+  return <span className="mt-[5px] inline-block size-[5px] shrink-0 rounded-full bg-primary" aria-hidden="true" />
+}
+
+export function LandingPage() {
+  const { data: user, isLoading } = useCurrentUser()
+  const isLoggedIn = !isLoading && !!user
+
+  return (
+    <div>
+      {/* ── Hero ──────────────────────────────────────────── */}
+      <section className="flex flex-col items-center px-16 pb-24 pt-20 text-center">
+        <h1 className="text-balance text-[clamp(3rem,8vw,5.5rem)] font-bold leading-[1.05] tracking-tight text-foreground">
           Sandbox
           <br />
-          <span className="text-primary">For AI Agents</span>
+          <span className="text-primary">for AI Agents</span>
         </h1>
-        <p className="mt-6 max-w-xl text-base text-muted-foreground">
-          Deploy, monitor, and hand-off agentic workflows with microscopic precision.
-          A high-density environment engineered for the next generation of autonomous compute.
+
+        <p className="mt-6 max-w-lg text-balance text-base leading-relaxed text-muted-foreground">
+          Run code, build software, and hand off browser sessions
+          from isolated, agent-native environments.
         </p>
-        <div className="mt-10 flex gap-4">
-          <Link
-            to="/auth/sign-up"
-            className="bg-primary px-6 py-3 text-sm font-bold uppercase tracking-widest text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            Start Free
-          </Link>
+
+        <div className="mt-10 flex flex-wrap justify-center gap-3">
+          {isLoggedIn ? (
+            <Link
+              to="/app"
+              className="rounded bg-primary px-7 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Open Dashboard
+            </Link>
+          ) : (
+            <Link
+              to="/auth/sign-up"
+              className="rounded bg-primary px-7 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Get Started
+            </Link>
+          )}
           <a
             href="#install-cli"
-            className="border border-border px-6 py-3 text-sm font-bold uppercase tracking-widest text-foreground transition-colors hover:bg-accent"
+            className="rounded border border-border px-7 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Install CLI
           </a>
         </div>
       </section>
 
-      {/* CLI Install Section */}
-      <section id="install-cli" className="mx-auto max-w-6xl px-6 py-20">
-        <div className="grid gap-10 border border-border/15 bg-card p-8 md:grid-cols-[1.1fr_1.4fr]">
+      <hr className="border-border/20" />
+
+      {/* ── Command Line ──────────────────────────────────── */}
+      <section id="install-cli" className="mx-auto grid max-w-[1280px] gap-16 px-16 py-20 md:grid-cols-[480px_1fr]">
+        {/* Left: Install */}
+        <div className="flex flex-col gap-7">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground">
-              Install CLI
+            <h2 className="text-xl font-bold text-foreground">Install</h2>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              Install the CLI and start managing sandboxes in seconds. Works on macOS, Linux, and Windows.
             </p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight text-foreground">
-              Ship sandboxes from your terminal
-            </h2>
-            <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
-              Install the latest Treadstone CLI directly from GitHub Releases, then authenticate and create
-              sandboxes from your shell.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <a
-                href={RELEASES_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 bg-primary px-5 py-2 text-xs font-bold uppercase tracking-widest text-primary-foreground transition-colors hover:bg-primary/90"
-              >
-                Browse Releases
-                <ArrowRight className="size-3" />
-              </a>
-              <Link
-                to="/auth/sign-up"
-                className="inline-flex items-center gap-2 border border-border px-5 py-2 text-xs font-bold uppercase tracking-widest text-foreground transition-colors hover:bg-accent"
-              >
-                Create Account
-              </Link>
-            </div>
           </div>
 
-          <div className="space-y-4">
-            <div className="border border-border/10 bg-background/60 p-4">
-              <div className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground">
-                macOS / Linux
-              </div>
-              <pre className="mt-3 overflow-x-auto font-mono text-[12px] leading-6 text-foreground">
-                <code>{INSTALL_SH_COMMAND}</code>
-              </pre>
-            </div>
-            <div className="border border-border/10 bg-background/60 p-4">
-              <div className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground">
-                Windows PowerShell
-              </div>
-              <pre className="mt-3 overflow-x-auto font-mono text-[12px] leading-6 text-foreground">
-                <code>{INSTALL_PS_COMMAND}</code>
-              </pre>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Need a pinned version instead of the latest installer? Download a specific asset from{" "}
-              <a href={RELEASES_URL} target="_blank" rel="noreferrer" className="text-foreground underline underline-offset-4">
-                GitHub Releases
-              </a>
-              .
-            </p>
+          <div className="flex flex-col gap-4">
+            <CodeBlock label="macOS / Linux" code={INSTALL_SH} />
+            <CodeBlock label="Windows PowerShell" code={INSTALL_PS} />
+            <CodeBlock label="pip" code={INSTALL_PIP} />
+          </div>
+
+          <div className="flex flex-wrap gap-5 text-sm text-muted-foreground">
+            <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+              GitHub&nbsp;→
+            </a>
+            <a href={RELEASES_URL} target="_blank" rel="noreferrer" className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+              Releases&nbsp;→
+            </a>
+            <a href={PYPI_CLI_URL} target="_blank" rel="noreferrer" className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+              PyPI&nbsp;→
+            </a>
+          </div>
+
+          <p className="text-xs text-muted-foreground/60">
+            Also available: <code className="font-mono">pip install treadstone-sdk</code>
+          </p>
+        </div>
+
+        {/* Right: Usage */}
+        <div className="flex flex-col gap-5">
+          <h2 className="text-xl font-bold text-foreground">Usage</h2>
+
+          <pre className="overflow-x-auto rounded border border-border/20 bg-black/40 px-6 py-5 font-mono text-[12.5px] leading-7 text-foreground">
+            <code>
+              {USAGE_LINES.map((line, i) => (
+                <span key={i}>
+                  <span className="text-muted-foreground/50">{line.comment}</span>
+                  {"\n"}
+                  <span className="text-primary">$&nbsp;</span>
+                  <span>{line.cmd}</span>
+                  {i < USAGE_LINES.length - 1 ? "\n\n" : ""}
+                </span>
+              ))}
+            </code>
+          </pre>
+
+          <div className="flex flex-wrap gap-3">
+            {["CLI", "Python SDK", "REST API"].map((label) => (
+              <span
+                key={label}
+                className="flex items-center gap-2 rounded border border-border/20 bg-card px-3.5 py-2 text-xs font-medium text-foreground"
+              >
+                <span className="inline-block size-[5px] rounded-full bg-primary" aria-hidden="true" />
+                {label}
+              </span>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Browser Hand-off Section */}
-      <section id="platform-features" className="mx-auto grid max-w-6xl gap-12 px-6 py-20 md:grid-cols-2">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight text-foreground">
-            Browser
-            <br />
-            Hand-off
-          </h2>
-          <div className="mt-8 space-y-6">
-            {FEATURES.map((f) => (
-              <div key={f.title} className="flex gap-3">
-                <f.icon className="mt-0.5 size-4 shrink-0 text-primary" />
-                <div>
-                  <h3 className="text-sm font-bold text-foreground">{f.title}</h3>
-                  <p className="mt-1 text-xs text-muted-foreground">{f.desc}</p>
+      <hr className="border-border/20" />
+
+      {/* ── Plans ─────────────────────────────────────────── */}
+      <section id="plans" className="bg-card/30 px-16 py-20">
+        <div className="mx-auto max-w-[1280px]">
+          <div className="mb-12 text-center">
+            <h2 className="text-balance text-2xl font-bold text-foreground">Plans</h2>
+            <p className="mt-2 text-sm text-muted-foreground">Start free. Scale when you need to.</p>
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-3">
+            {PLANS.map((plan) => (
+              <div
+                key={plan.name}
+                className={[
+                  "flex flex-col rounded-md border p-8 transition-shadow",
+                  plan.highlighted
+                    ? "border-primary bg-primary/5 shadow-[0_0_0_1px_hsl(var(--primary)/0.3)]"
+                    : "border-border/20 bg-card",
+                ].join(" ")}
+              >
+                {/* Name + tag */}
+                <div className="flex items-center gap-2.5">
+                  <span className="text-lg font-bold text-foreground">{plan.name}</span>
+                  {plan.tag && (
+                    <span className="rounded bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
+                      {plan.tag}
+                    </span>
+                  )}
                 </div>
+
+                {/* Price */}
+                <div className="mt-3 flex items-baseline gap-1">
+                  <span className={["font-bold", plan.price.length <= 3 ? "text-4xl" : "text-2xl", plan.highlighted ? "text-primary" : "text-foreground"].join(" ")}>
+                    {plan.price}
+                  </span>
+                  {plan.period && (
+                    <span className="text-sm text-muted-foreground">{plan.period}</span>
+                  )}
+                </div>
+
+                <p className="mt-2 text-sm text-muted-foreground">{plan.desc}</p>
+
+                <hr className="my-6 border-border/20" />
+
+                {/* Features */}
+                <ul className="flex flex-1 flex-col gap-3">
+                  {plan.features.map((f) => (
+                    <li key={f} className="flex items-start gap-2.5 text-sm text-foreground">
+                      <Dot />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+
+                {/* CTA */}
+                <a
+                  href={plan.ctaHref}
+                  {...(plan.ctaHref.startsWith("mailto") ? {} : {})}
+                  className={[
+                    "mt-8 block rounded py-3 text-center text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    plan.highlighted
+                      ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                      : "border border-border text-foreground hover:bg-accent",
+                  ].join(" ")}
+                >
+                  {plan.cta}
+                </a>
               </div>
             ))}
           </div>
         </div>
-        <div className="overflow-hidden border border-border/15 bg-card p-4">
-          <div className="space-y-2 font-mono text-[11px]">
-            <div className="text-muted-foreground">
-              <span className="text-primary">[READY]</span> Initializing sandbox environment…
-            </div>
-            <div className="text-muted-foreground">
-              <span className="text-primary">[SYNC]</span> Agent dispatched to sandbox: aio-sandbox-tiny
-            </div>
-            <div className="mt-4 border border-border/10 p-3">
-              <div className="flex items-center justify-between text-[10px] uppercase tracking-widest text-muted-foreground">
-                <span>Active Hand-off Session</span>
-                <span className="flex items-center gap-1.5 text-primary">
-                  <span className="inline-block size-1.5 rounded-full bg-primary" />
-                  Live
-                </span>
-              </div>
-              <div className="mt-3 grid grid-cols-3 gap-3">
-                <div>
-                  <div className="text-[10px] text-muted-foreground/60">LINKS</div>
-                  <div className="text-xs font-bold text-foreground">0 / 25</div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-muted-foreground/60">CPU</div>
-                  <div className="text-xs font-bold text-foreground">64 %</div>
-                </div>
-              </div>
-            </div>
-            <div className="mt-3 text-muted-foreground">
-              <span className="text-primary">[MKT]</span> Exclusive relay: Web link generated.
-            </div>
-          </div>
-          <div className="mt-4 flex gap-3">
-            <div className="bg-primary px-4 py-2 text-[11px] font-bold uppercase tracking-widest text-primary-foreground">
-              Authorize Session
-            </div>
-            <div className="border border-border px-4 py-2 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-              Full Preview →
-            </div>
-          </div>
-        </div>
       </section>
 
-      {/* Templates Table */}
-      <section className="mx-auto max-w-6xl px-6 py-20">
-        <div className="flex items-end justify-between">
+      <hr className="border-border/20" />
+
+      {/* ── Footer ────────────────────────────────────────── */}
+      <footer className="px-16 py-12">
+        <div className="mx-auto grid max-w-[1280px] gap-10 md:grid-cols-[1fr_auto_auto_auto]">
+          {/* Brand */}
           <div>
-            <h2 className="text-sm font-bold uppercase tracking-[2px] text-muted-foreground">
-              Sandbox
-            </h2>
-            <h2 className="text-sm font-bold uppercase tracking-[2px] text-muted-foreground">
-              Templates
-            </h2>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Choose the right compute template for your workload.
-            </p>
+            <p className="text-sm font-semibold tracking-wide text-primary">Treadstone</p>
+            <p className="mt-1.5 text-xs text-muted-foreground/70">Agent-native sandbox platform.</p>
+            <p className="mt-1 text-xs text-muted-foreground/40">&copy; 2026 Treadstone. Apache-2.0 License.</p>
           </div>
-        </div>
 
-        <div className="mt-8 overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-border/15 text-left text-[10px] uppercase tracking-[1px] text-muted-foreground">
-                <th className="py-3 pr-6 font-bold">Specification</th>
-                {TEMPLATES.map((t) => (
-                  <th key={t.name} className="py-3 pr-6 font-bold">
-                    {t.name}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="text-muted-foreground">
-              {[
-                { label: "vCPU", key: "cpu" as const },
-                { label: "Memory", key: "memory" as const },
-                { label: "Max Duration", key: "duration" as const },
-                { label: "Concurrency", key: "concurrency" as const },
-                { label: "Compute Cost", key: "cost" as const },
-              ].map((row) => (
-                <tr key={row.label} className="border-b border-border/5">
-                  <td className="py-3 pr-6 text-muted-foreground/80">{row.label}</td>
-                  {TEMPLATES.map((t) => (
-                    <td key={t.name} className="py-3 pr-6">
-                      {String(t[row.key])}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-              <tr>
-                <td className="py-3 pr-6 font-bold uppercase text-foreground">Monthly Price</td>
-                {TEMPLATES.map((t) => (
-                  <td key={t.name} className="py-3 pr-6 font-bold text-primary">
-                    {t.price}
-                  </td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* Open Source */}
-      <section className="mx-auto max-w-6xl px-6 py-20">
-        <h2 className="text-3xl font-bold tracking-tight text-foreground">Open Source</h2>
-        <p className="mt-2 max-w-lg text-sm text-muted-foreground">
-          Treadstone is open source and self-hostable. Deploy on your own Kubernetes cluster with full control.
-        </p>
-        <div className="mt-10 grid gap-6 md:grid-cols-2">
-          {OPEN_SOURCE_FEATURES.map((f) => (
-            <div key={f.title} className="border border-border/15 bg-card p-6">
-              <f.icon className="size-5 text-primary" />
-              <h3 className="mt-3 font-bold text-foreground">{f.title}</h3>
-              <p className="mt-1 text-xs text-muted-foreground">{f.desc}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-10 flex gap-4">
-          <input
-            type="email"
-            placeholder="Get started for free"
-            className="h-10 w-64 bg-card px-4 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
-            readOnly
-          />
-          <Link
-            to="/auth/sign-up"
-            className="flex items-center gap-2 bg-primary px-6 py-2 text-sm font-bold uppercase tracking-widest text-primary-foreground"
-          >
-            Sign Up Free
-            <ArrowRight className="size-3" />
-          </Link>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="border-t border-border/10 px-6 py-12">
-        <div className="mx-auto grid max-w-6xl gap-10 md:grid-cols-3">
+          {/* Resources */}
           <div>
-            <div className="text-sm font-bold uppercase tracking-widest text-primary">
-              Treadstone
-            </div>
-            <div className="mt-2 text-[10px] uppercase tracking-widest text-muted-foreground/60">
-              &copy; 2026 Treadstone.
-            </div>
-          </div>
-          <div>
-            <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            <h3 className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Resources
-            </h4>
-            <div className="mt-3 space-y-2 text-xs text-muted-foreground">
-              <div><a href="#install-cli" className="hover:text-foreground">Install CLI</a></div>
-              <div><a href={RELEASES_URL} target="_blank" rel="noreferrer" className="hover:text-foreground">GitHub Releases</a></div>
-              <div><Link to="/auth/sign-in" className="hover:text-foreground">Sign In</Link></div>
-            </div>
+            </h3>
+            <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+              <li><a href="#install-cli" className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">Install CLI</a></li>
+              <li><a href={RELEASES_URL} target="_blank" rel="noreferrer" className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">GitHub Releases</a></li>
+              <li><a href={PYPI_CLI_URL} target="_blank" rel="noreferrer" className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">Python SDK</a></li>
+              <li><Link to="/auth/sign-in" className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">Sign In</Link></li>
+            </ul>
           </div>
+
+          {/* Community */}
           <div>
-            <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            <h3 className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Community
-            </h4>
-            <div className="mt-3 space-y-2 text-xs text-muted-foreground">
-              <div><a href="https://github.com/earayu/treadstone" className="hover:text-foreground">GitHub</a></div>
-            </div>
+            </h3>
+            <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+              <li><a href={GITHUB_URL} target="_blank" rel="noreferrer" className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">GitHub</a></li>
+              <li><a href={`${GITHUB_URL}/stargazers`} target="_blank" rel="noreferrer" className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">Star on GitHub</a></li>
+            </ul>
+          </div>
+
+          {/* Support */}
+          <div>
+            <h3 className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+              Support
+            </h3>
+            <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+              <li>
+                <a href={`mailto:${SUPPORT_EMAIL}`} className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                  {SUPPORT_EMAIL}
+                </a>
+              </li>
+            </ul>
           </div>
         </div>
       </footer>
-
-      {/* Terminal Decoration */}
-      <div className="pointer-events-none fixed bottom-0 right-0 opacity-5">
-        <Terminal className="size-96" />
-      </div>
     </div>
   )
 }
