@@ -37,13 +37,15 @@ def test_concurrent_limit_error():
 
 
 def test_template_not_allowed_error():
-    err = TemplateNotAllowedError(tier="free", template="medium", allowed_templates=["tiny", "small"])
+    err = TemplateNotAllowedError(
+        tier="free", template="aio-sandbox-medium", allowed_templates=["aio-sandbox-tiny", "aio-sandbox-small"]
+    )
     d = err.to_dict()
     assert d["error"]["code"] == "template_not_allowed"
     assert d["error"]["status"] == 403
-    assert "'medium'" in d["error"]["message"]
+    assert "'aio-sandbox-medium'" in d["error"]["message"]
     assert "'free'" in d["error"]["message"]
-    assert "tiny, small" in d["error"]["message"]
+    assert "aio-sandbox-tiny, aio-sandbox-small" in d["error"]["message"]
 
 
 def test_sandbox_duration_exceeded_error_hours_only():

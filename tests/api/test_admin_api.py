@@ -29,7 +29,7 @@ async def _seed_tier_templates(session: AsyncSession) -> None:
             storage_credits_monthly=0,
             max_concurrent_running=1,
             max_sandbox_duration_seconds=1800,
-            allowed_templates=["tiny", "small"],
+            allowed_templates=["aio-sandbox-tiny", "aio-sandbox-small"],
             grace_period_seconds=600,
         ),
         TierTemplate(
@@ -38,7 +38,7 @@ async def _seed_tier_templates(session: AsyncSession) -> None:
             storage_credits_monthly=10,
             max_concurrent_running=3,
             max_sandbox_duration_seconds=7200,
-            allowed_templates=["tiny", "small", "medium"],
+            allowed_templates=["aio-sandbox-tiny", "aio-sandbox-small", "aio-sandbox-medium"],
             grace_period_seconds=1800,
         ),
         TierTemplate(
@@ -47,7 +47,7 @@ async def _seed_tier_templates(session: AsyncSession) -> None:
             storage_credits_monthly=20,
             max_concurrent_running=5,
             max_sandbox_duration_seconds=28800,
-            allowed_templates=["tiny", "small", "medium", "large"],
+            allowed_templates=["aio-sandbox-tiny", "aio-sandbox-small", "aio-sandbox-medium", "aio-sandbox-large"],
             grace_period_seconds=3600,
         ),
     ]

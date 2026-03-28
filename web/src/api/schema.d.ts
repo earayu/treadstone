@@ -344,6 +344,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/cli/flows/{flow_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Cli Flow
+         * @description Approve a pending CLI login flow using the current browser session.
+         */
+        post: operations["auth-approve_cli_flow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/config": {
         parameters: {
             query?: never;
@@ -940,7 +960,7 @@ export interface components {
             sandbox_id: string;
             /**
              * Template
-             * @example small
+             * @example aio-sandbox-small
              */
             template: string;
             /**
@@ -1330,22 +1350,6 @@ export interface components {
              */
             password: string;
         };
-        /** RegisterResponse */
-        RegisterResponse: {
-            /**
-             * Id
-             * @example usr-abc123def456
-             */
-            id: string;
-            /**
-             * Email
-             * Format: email
-             * @example user@example.com
-             */
-            email: string;
-            /** @example admin */
-            role: components["schemas"]["Role"];
-        };
         /** ResourceSpec */
         ResourceSpec: {
             /**
@@ -1656,9 +1660,9 @@ export interface components {
             /**
              * Allowed Templates
              * @example [
-             *       "tiny",
-             *       "small",
-             *       "medium"
+             *       "aio-sandbox-tiny",
+             *       "aio-sandbox-small",
+             *       "aio-sandbox-medium"
              *     ]
              */
             allowed_templates: string[];
@@ -1751,10 +1755,10 @@ export interface components {
             /**
              * Allowed Templates
              * @example [
-             *       "tiny",
-             *       "small",
-             *       "medium",
-             *       "large"
+             *       "aio-sandbox-tiny",
+             *       "aio-sandbox-small",
+             *       "aio-sandbox-medium",
+             *       "aio-sandbox-large"
              *     ]
              */
             allowed_templates?: string[] | null;
@@ -1799,9 +1803,9 @@ export interface components {
             /**
              * Allowed Templates
              * @example [
-             *       "tiny",
-             *       "small",
-             *       "medium"
+             *       "aio-sandbox-tiny",
+             *       "aio-sandbox-small",
+             *       "aio-sandbox-medium"
              *     ]
              */
             allowed_templates: string[];
@@ -1851,9 +1855,9 @@ export interface components {
             /**
              * Allowed Templates
              * @example [
-             *       "tiny",
-             *       "small",
-             *       "medium"
+             *       "aio-sandbox-tiny",
+             *       "aio-sandbox-small",
+             *       "aio-sandbox-medium"
              *     ]
              */
             allowed_templates: string[];
@@ -1952,9 +1956,9 @@ export interface components {
             /**
              * Allowed Templates
              * @example [
-             *       "tiny",
-             *       "small",
-             *       "medium"
+             *       "aio-sandbox-tiny",
+             *       "aio-sandbox-small",
+             *       "aio-sandbox-medium"
              *     ]
              */
             allowed_templates: string[];
@@ -2333,7 +2337,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RegisterResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -2653,6 +2657,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "auth-approve_cli_flow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                flow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
                 };
             };
             /** @description Validation Error */
