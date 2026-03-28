@@ -1431,3 +1431,59 @@ Migration `c4d5e6f7a8b9`（依赖 `b1c2d3e4f5a6`）：
 - `consume_compute_credits()` 函数保留在 MeteringService 中
 - `check_warning_thresholds`, `check_grace_periods` 函数保留（受 enforcement 开关控制）
 - StorageLedger 模型未修改（已经是原始数据模型）
+
+---
+
+## 17. Grant 系统重构记录
+
+**修复提交：** `b7403eb` (分支 `fix/metering-system-overhaul`)
+**修复日期：** 2026-03-29
+
+### 17.1 问题
+
+原 `CreditGrant` 表通过 `credit_type` 字段同时承载两种本质不同的概念：
+
+- **Compute grants** (`credit_type="compute"`): 可消费额度，`remaining_amount` 随使用递减
+- **Storage grants** (`credit_type="storage"`): 容量上限，`remaining_amount` 从不被扣减，仅作为配额上限求和
+
+这导致：
+- Storage grants 的 `remaining_amount` 永远等于 `original_amount`（语义错误）
+- `get_extra_credits_remaining()` 对两种类型含义完全不同（一个是余额，一个是配额）
+- 索引 `ix_credit_grant_expires` 检查 `remaining_amount > 0` 对 storage 无意义
+- API 用 `credit_type` 枚举混合两种完全不同的操作
+
+### 17.2 解决方案：拆分为两张表
+
+| 旧表 | 新表 | 语义 |
+| --- | --- | --- |
+| `credit_grant` WHERE `credit_type='compute'` | `compute_grant` | 可消费的计算额度，`remaining_amount` 随 tick 递减 |
+| `credit_grant` WHERE `credit_type='storage'` | `storage_quota_grant` | 存储容量附加包，`size_gib` 提升配额上限 |
+
+**`compute_grant`** 保留 `original_amount` / `remaining_amount`（消费型钱包）。
+
+**`storage_quota_grant`** 使用 `size_gib`（整数），无 `remaining_amount`：
+- 有效额外配额 = `SUM(size_gib)` of all active grants
+- Grant 过期时配额上限下降；用户如已超配额，禁止新建 persistent sandbox 但保留现有数据
+
+### 17.3 API 变更
+
+| 旧端点 | 新端点 |
+| --- | --- |
+| `GET /v1/usage/grants` | `GET /v1/usage/grants` (返回 `{compute_grants: [...], storage_quota_grants: [...]}`) |
+| `POST /v1/admin/users/{id}/grants` | `POST /v1/admin/users/{id}/compute-grants` + `POST /v1/admin/users/{id}/storage-grants` |
+| `POST /v1/admin/grants/batch` | `POST /v1/admin/compute-grants/batch` + `POST /v1/admin/storage-grants/batch` |
+
+### 17.4 数据库 Migration
+
+Migration `d7e8f9a0b1c2`（依赖 `c4d5e6f7a8b9`）：
+- 创建 `compute_grant` 表，从 `credit_grant WHERE credit_type='compute'` 迁移数据
+- 创建 `storage_quota_grant` 表，从 `credit_grant WHERE credit_type='storage'` 迁移数据（`original_amount` → `size_gib`）
+- 删除 `credit_grant` 表
+
+### 17.5 涉及文件
+
+后端：`models/metering.py`, `models/__init__.py`, `services/metering_service.py`, `api/schemas.py`, `api/usage.py`, `api/admin.py`, `api/metering_serializers.py`
+
+前端：`web/src/api/schema.d.ts`, `web/src/api/usage.ts`, `web/src/api/admin.ts`, `web/src/pages/app/usage.tsx`, `web/src/pages/app/dashboard.tsx`, `web/src/pages/internal/admin-metering.tsx`, `web/src/lib/constants.ts`
+
+测试：`tests/unit/test_metering_service.py`, `tests/unit/test_metering_models.py`, `tests/api/test_usage_api.py`, `tests/api/test_admin_api.py`, `tests/e2e/07-metering-usage.hurl`

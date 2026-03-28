@@ -4,11 +4,11 @@ Endpoints:
   GET /v1/usage          — aggregate usage overview
   GET /v1/usage/plan     — full UserPlan details
   GET /v1/usage/sessions — paginated ComputeSession list
-  GET /v1/usage/grants   — CreditGrant list
+  GET /v1/usage/grants   — ComputeGrant and StorageQuotaGrant lists
 
 Note: All endpoints call ``session.commit()`` because ``get_user_plan``
 (called internally by ``get_usage_summary``, etc.) may lazily create a
-UserPlan + welcome-bonus CreditGrant on first access.  The commit
+UserPlan + welcome-bonus ComputeGrant on first access.  The commit
 persists that side-effect.
 """
 
@@ -18,10 +18,15 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from treadstone.api.deps import get_current_control_plane_user
-from treadstone.api.metering_serializers import iso, serialize_grant, serialize_plan
+from treadstone.api.metering_serializers import (
+    iso,
+    serialize_compute_grant,
+    serialize_plan,
+    serialize_storage_quota_grant,
+)
 from treadstone.api.schemas import (
     ComputeSessionListResponse,
-    CreditGrantListResponse,
+    GrantsResponse,
     UsageSummaryResponse,
     UserPlanResponse,
 )
@@ -93,12 +98,16 @@ async def list_compute_sessions(
     }
 
 
-@router.get("/grants", response_model=CreditGrantListResponse)
-async def list_credit_grants(
+@router.get("/grants", response_model=GrantsResponse)
+async def list_grants(
     user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
 ):
     await _metering.ensure_user_plan(session, user.id)
-    grants = await _metering.list_credit_grants(session, user.id)
+    compute_grants = await _metering.list_compute_grants(session, user.id)
+    storage_grants = await _metering.list_storage_quota_grants(session, user.id)
     await session.commit()
-    return {"items": [serialize_grant(g) for g in grants]}
+    return {
+        "compute_grants": [serialize_compute_grant(g) for g in compute_grants],
+        "storage_quota_grants": [serialize_storage_quota_grant(g) for g in storage_grants],
+    }

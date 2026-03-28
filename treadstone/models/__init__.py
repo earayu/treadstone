@@ -3,9 +3,10 @@ from treadstone.models.audit_event import AuditActorType, AuditEvent, AuditResul
 from treadstone.models.cli_login_flow import CliLoginFlow
 from treadstone.models.email_verification_log import EmailVerificationLog
 from treadstone.models.metering import (
+    ComputeGrant,
     ComputeSession,
-    CreditGrant,
     StorageLedger,
+    StorageQuotaGrant,
     StorageState,
     TierTemplate,
     UserPlan,
@@ -21,8 +22,9 @@ __all__ = [
     "CliLoginFlow",
     "EmailVerificationLog",
     "ComputeSession",
-    "CreditGrant",
+    "ComputeGrant",
     "StorageLedger",
+    "StorageQuotaGrant",
     "StorageState",
     "TierTemplate",
     "User",

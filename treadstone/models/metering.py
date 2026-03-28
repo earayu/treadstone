@@ -75,12 +75,14 @@ class UserPlan(Base):
     gmt_updated: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
 
-class CreditGrant(Base):
-    __tablename__ = "credit_grant"
+class ComputeGrant(Base):
+    """Consumable compute credit grant — remaining_amount decreases over time."""
+
+    __tablename__ = "compute_grant"
     __table_args__ = (
-        Index("ix_credit_grant_user_type", "user_id", "credit_type"),
+        Index("ix_compute_grant_user", "user_id"),
         Index(
-            "ix_credit_grant_expires",
+            "ix_compute_grant_expires",
             "expires_at",
             postgresql_where=text("remaining_amount > 0"),
         ),
@@ -88,11 +90,29 @@ class CreditGrant(Base):
 
     id: Mapped[str] = mapped_column(String(24), primary_key=True, default=lambda: "cg" + random_id())
     user_id: Mapped[str] = mapped_column(String(24), ForeignKey("user.id", ondelete="CASCADE"), nullable=False)
-    credit_type: Mapped[str] = mapped_column(String(16), nullable=False)
     grant_type: Mapped[str] = mapped_column(String(32), nullable=False)
     campaign_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     original_amount: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
     remaining_amount: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    granted_by: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    gmt_created: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    gmt_updated: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class StorageQuotaGrant(Base):
+    """Storage capacity addon — size_gib raises the user's quota ceiling."""
+
+    __tablename__ = "storage_quota_grant"
+    __table_args__ = (Index("ix_storage_quota_grant_user", "user_id"),)
+
+    id: Mapped[str] = mapped_column(String(24), primary_key=True, default=lambda: "sqg" + random_id())
+    user_id: Mapped[str] = mapped_column(String(24), ForeignKey("user.id", ondelete="CASCADE"), nullable=False)
+    grant_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    campaign_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    size_gib: Mapped[int] = mapped_column(Integer, nullable=False)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     granted_by: Mapped[str | None] = mapped_column(String(24), nullable=True)
     granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)

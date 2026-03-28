@@ -293,15 +293,14 @@ async def test_admin_update_user_plan_invalid_override_key(admin_client):
     assert resp.status_code == 422
 
 
-# ── POST /v1/admin/users/{user_id}/grants ────────────────────────────────────
+# ── POST /v1/admin/users/{user_id}/compute-grants | storage-grants ───────────
 
 
 async def test_admin_create_grant(admin_client):
     user_id = _get_user_id(admin_client)
     resp = await admin_client.post(
-        f"/v1/admin/users/{user_id}/grants",
+        f"/v1/admin/users/{user_id}/compute-grants",
         json={
-            "credit_type": "compute",
             "amount": 100,
             "grant_type": "admin_grant",
             "reason": "Test grant",
@@ -309,7 +308,6 @@ async def test_admin_create_grant(admin_client):
     )
     assert resp.status_code == 201
     data = resp.json()
-    assert data["credit_type"] == "compute"
     assert data["original_amount"] == 100.0
     assert data["remaining_amount"] == 100.0
     assert data["grant_type"] == "admin_grant"
@@ -320,33 +318,32 @@ async def test_admin_create_grant(admin_client):
 async def test_admin_create_grant_with_expiry(admin_client):
     user_id = _get_user_id(admin_client)
     resp = await admin_client.post(
-        f"/v1/admin/users/{user_id}/grants",
+        f"/v1/admin/users/{user_id}/storage-grants",
         json={
-            "credit_type": "storage",
-            "amount": 5,
+            "size_gib": 5,
             "grant_type": "admin_grant",
             "expires_at": "2027-01-01T00:00:00Z",
         },
     )
     assert resp.status_code == 201
     data = resp.json()
-    assert data["credit_type"] == "storage"
+    assert data["size_gib"] == 5
     assert data["expires_at"] is not None
 
 
 async def test_admin_create_grant_user_not_found(admin_client):
     resp = await admin_client.post(
-        "/v1/admin/users/nonexistent_user/grants",
-        json={"credit_type": "compute", "amount": 50, "grant_type": "admin_grant"},
+        "/v1/admin/users/nonexistent_user/compute-grants",
+        json={"amount": 50, "grant_type": "admin_grant"},
     )
     assert resp.status_code == 404
 
 
-async def test_admin_create_grant_invalid_credit_type(admin_client):
+async def test_admin_create_compute_grant_negative_amount_rejected(admin_client):
     user_id = _get_user_id(admin_client)
     resp = await admin_client.post(
-        f"/v1/admin/users/{user_id}/grants",
-        json={"credit_type": "invalid", "amount": 50, "grant_type": "admin_grant"},
+        f"/v1/admin/users/{user_id}/compute-grants",
+        json={"amount": -5, "grant_type": "admin_grant"},
     )
     assert resp.status_code == 422
 
@@ -354,8 +351,8 @@ async def test_admin_create_grant_invalid_credit_type(admin_client):
 async def test_admin_create_grant_zero_amount_rejected(admin_client):
     user_id = _get_user_id(admin_client)
     resp = await admin_client.post(
-        f"/v1/admin/users/{user_id}/grants",
-        json={"credit_type": "compute", "amount": 0, "grant_type": "admin_grant"},
+        f"/v1/admin/users/{user_id}/compute-grants",
+        json={"amount": 0, "grant_type": "admin_grant"},
     )
     assert resp.status_code == 422
 
@@ -363,27 +360,24 @@ async def test_admin_create_grant_zero_amount_rejected(admin_client):
 async def test_admin_grant_shows_in_usage(admin_client):
     user_id = _get_user_id(admin_client)
     await admin_client.post(
-        f"/v1/admin/users/{user_id}/grants",
-        json={"credit_type": "compute", "amount": 200, "grant_type": "admin_grant"},
+        f"/v1/admin/users/{user_id}/compute-grants",
+        json={"amount": 200, "grant_type": "admin_grant"},
     )
     grants_resp = await admin_client.get("/v1/usage/grants")
     assert grants_resp.status_code == 200
-    admin_grants = [
-        g for g in grants_resp.json()["items"] if g["grant_type"] == "admin_grant" and g["credit_type"] == "compute"
-    ]
+    admin_grants = [g for g in grants_resp.json()["compute_grants"] if g["grant_type"] == "admin_grant"]
     assert any(g["remaining_amount"] >= 200.0 for g in admin_grants)
 
 
-# ── POST /v1/admin/grants/batch ──────────────────────────────────────────────
+# ── POST /v1/admin/compute-grants/batch ───────────────────────────────────────
 
 
 async def test_batch_grants_success(admin_client):
     user_id = _get_user_id(admin_client)
     resp = await admin_client.post(
-        "/v1/admin/grants/batch",
+        "/v1/admin/compute-grants/batch",
         json={
             "user_ids": [user_id],
-            "credit_type": "compute",
             "amount": 25,
             "grant_type": "campaign",
             "campaign_id": "test_campaign",
@@ -402,10 +396,9 @@ async def test_batch_grants_success(admin_client):
 async def test_batch_grants_partial_failure(admin_client):
     user_id = _get_user_id(admin_client)
     resp = await admin_client.post(
-        "/v1/admin/grants/batch",
+        "/v1/admin/compute-grants/batch",
         json={
             "user_ids": [user_id, "nonexistent_user"],
-            "credit_type": "compute",
             "amount": 25,
             "grant_type": "campaign",
         },
@@ -426,10 +419,9 @@ async def test_batch_grants_partial_failure(admin_client):
 
 async def test_batch_grants_requires_admin(member_client):
     resp = await member_client.post(
-        "/v1/admin/grants/batch",
+        "/v1/admin/compute-grants/batch",
         json={
             "user_ids": ["anyone"],
-            "credit_type": "compute",
             "amount": 25,
             "grant_type": "campaign",
         },
@@ -439,10 +431,9 @@ async def test_batch_grants_requires_admin(member_client):
 
 async def test_batch_grants_empty_user_ids_rejected(admin_client):
     resp = await admin_client.post(
-        "/v1/admin/grants/batch",
+        "/v1/admin/compute-grants/batch",
         json={
             "user_ids": [],
-            "credit_type": "compute",
             "amount": 25,
             "grant_type": "campaign",
         },

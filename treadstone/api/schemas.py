@@ -476,9 +476,8 @@ class ComputeSessionListResponse(BaseModel):
     offset: int = Field(..., examples=[0])
 
 
-class CreditGrantItem(BaseModel):
+class ComputeGrantItem(BaseModel):
     id: str = Field(..., examples=["cgabc123def456"])
-    credit_type: str = Field(..., examples=["compute"])
     grant_type: str = Field(..., examples=["admin_grant"])
     original_amount: float = Field(..., examples=[100.0])
     remaining_amount: float = Field(..., examples=[50.0])
@@ -490,8 +489,21 @@ class CreditGrantItem(BaseModel):
     expires_at: str | None = Field(default=None, examples=["2026-06-01T00:00:00+00:00"])
 
 
-class CreditGrantListResponse(BaseModel):
-    items: list[CreditGrantItem]
+class StorageQuotaGrantItem(BaseModel):
+    id: str = Field(..., examples=["sqgabc123def456"])
+    grant_type: str = Field(..., examples=["admin_grant"])
+    size_gib: int = Field(..., examples=[20])
+    reason: str | None = Field(default=None, examples=["Storage addon"])
+    granted_by: str | None = Field(default=None)
+    campaign_id: str | None = Field(default=None)
+    status: str = Field(..., examples=["active"])
+    granted_at: str = Field(..., examples=["2026-03-01T00:00:00+00:00"])
+    expires_at: str | None = Field(default=None, examples=["2026-06-01T00:00:00+00:00"])
+
+
+class GrantsResponse(BaseModel):
+    compute_grants: list[ComputeGrantItem]
+    storage_quota_grants: list[StorageQuotaGrantItem]
 
 
 # ── Metering — Admin ─────────────────────────────────────────────────────────
@@ -508,8 +520,7 @@ class UpdatePlanRequest(BaseModel):
         return self
 
 
-class CreateGrantRequest(BaseModel):
-    credit_type: Literal["compute", "storage"] = Field(..., examples=["compute"])
+class CreateComputeGrantRequest(BaseModel):
     amount: float = Field(..., gt=0, examples=[100])
     grant_type: str = Field(..., examples=["admin_grant"])
     reason: str | None = Field(default=None, examples=["Special support"])
@@ -517,12 +528,31 @@ class CreateGrantRequest(BaseModel):
     expires_at: datetime | None = Field(default=None, examples=["2026-06-01T00:00:00Z"])
 
 
-class CreateGrantResponse(BaseModel):
+class CreateStorageQuotaGrantRequest(BaseModel):
+    size_gib: int = Field(..., gt=0, examples=[20])
+    grant_type: str = Field(..., examples=["admin_grant"])
+    reason: str | None = Field(default=None, examples=["Storage addon"])
+    campaign_id: str | None = Field(default=None)
+    expires_at: datetime | None = Field(default=None, examples=["2026-06-01T00:00:00Z"])
+
+
+class CreateComputeGrantResponse(BaseModel):
     id: str = Field(..., examples=["cgabc123def456"])
     user_id: str = Field(..., examples=["userabc123def456"])
-    credit_type: str = Field(..., examples=["compute"])
     original_amount: float = Field(..., examples=[100.0])
     remaining_amount: float = Field(..., examples=[100.0])
+    grant_type: str = Field(..., examples=["admin_grant"])
+    reason: str | None = Field(default=None)
+    granted_by: str | None = Field(default=None)
+    campaign_id: str | None = Field(default=None)
+    granted_at: str = Field(..., examples=["2026-03-26T12:00:00+00:00"])
+    expires_at: str | None = Field(default=None)
+
+
+class CreateStorageQuotaGrantResponse(BaseModel):
+    id: str = Field(..., examples=["sqgabc123def456"])
+    user_id: str = Field(..., examples=["userabc123def456"])
+    size_gib: int = Field(..., examples=[20])
     grant_type: str = Field(..., examples=["admin_grant"])
     reason: str | None = Field(default=None)
     granted_by: str | None = Field(default=None)
@@ -581,10 +611,18 @@ class UpdateTierTemplateResponse(TierTemplateItem):
     users_affected: int = Field(..., examples=[0])
 
 
-class BatchGrantRequest(BaseModel):
+class BatchComputeGrantRequest(BaseModel):
     user_ids: list[str] = Field(..., min_length=1, max_length=1000)
-    credit_type: Literal["compute", "storage"] = Field(..., examples=["compute"])
     amount: float = Field(..., gt=0, examples=[50])
+    grant_type: str = Field(..., examples=["campaign"])
+    campaign_id: str | None = Field(default=None, examples=["spring_2026_promo"])
+    reason: str | None = Field(default=None, examples=["Spring promotion"])
+    expires_at: datetime | None = Field(default=None, examples=["2026-06-01T00:00:00Z"])
+
+
+class BatchStorageQuotaGrantRequest(BaseModel):
+    user_ids: list[str] = Field(..., min_length=1, max_length=1000)
+    size_gib: int = Field(..., gt=0, examples=[10])
     grant_type: str = Field(..., examples=["campaign"])
     campaign_id: str | None = Field(default=None, examples=["spring_2026_promo"])
     reason: str | None = Field(default=None, examples=["Spring promotion"])

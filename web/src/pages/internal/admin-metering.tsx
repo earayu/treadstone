@@ -8,8 +8,10 @@ import {
   useResolveEmails,
   useAdminUserUsage,
   useAdminUpdatePlan,
-  useAdminCreateGrant,
-  useAdminBatchGrants,
+  useAdminCreateComputeGrant,
+  useAdminCreateStorageGrant,
+  useAdminBatchComputeGrants,
+  useAdminBatchStorageGrants,
   type TierTemplate,
 } from "@/api/admin"
 
@@ -330,7 +332,10 @@ function UserPlanSection() {
   const lookupByEmail = useLookupUserByEmail()
   const { data: usage, isLoading, error } = useAdminUserUsage(resolvedUserId)
   const updatePlan = useAdminUpdatePlan()
-  const createGrant = useAdminCreateGrant()
+  const createComputeGrant = useAdminCreateComputeGrant()
+  const createStorageGrant = useAdminCreateStorageGrant()
+  const [computeGrantAmount, setComputeGrantAmount] = useState("50")
+  const [storageGrantGib, setStorageGrantGib] = useState("10")
 
   const handleLookup = () => {
     const trimmed = inputEmail.trim()
@@ -361,15 +366,33 @@ function UserPlanSection() {
     )
   }
 
-  const handleGrantCredits = () => {
+  const handleGrantCompute = () => {
     if (!resolvedUserId) return
-    createGrant.mutate(
+    const amt = parseFloat(computeGrantAmount)
+    if (isNaN(amt) || amt <= 0) {
+      toast.error("Compute amount must be a positive number.")
+      return
+    }
+    createComputeGrant.mutate(
+      { userId: resolvedUserId, body: { amount: amt, grant_type: "admin_grant" } },
       {
-        userId: resolvedUserId,
-        body: { credit_type: "compute", amount: 50, grant_type: "admin_grant" },
+        onSuccess: () => toast.success("Compute grant created"),
+        onError: (e) => toast.error(e.message),
       },
+    )
+  }
+
+  const handleGrantStorage = () => {
+    if (!resolvedUserId) return
+    const gib = parseInt(storageGrantGib, 10)
+    if (isNaN(gib) || gib <= 0) {
+      toast.error("Storage size (GiB) must be a positive integer.")
+      return
+    }
+    createStorageGrant.mutate(
+      { userId: resolvedUserId, body: { size_gib: gib, grant_type: "admin_grant" } },
       {
-        onSuccess: () => toast.success("Credits granted"),
+        onSuccess: () => toast.success("Storage quota grant created"),
         onError: (e) => toast.error(e.message),
       },
     )
@@ -468,27 +491,61 @@ function UserPlanSection() {
                 </div>
               </div>
 
-              <div className="mt-6 flex gap-3">
-                <button
-                  onClick={() => handleChangeTier("pro")}
-                  disabled={updatePlan.isPending}
-                  className="rounded-sm border border-border/40 px-4 py-1.5 text-[11px] font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
-                >
-                  Change Tier to Pro
-                </button>
-                <button
-                  disabled
-                  className="rounded-sm border border-border/40 px-4 py-1.5 text-[11px] font-medium text-foreground opacity-50"
-                >
-                  Apply Overrides
-                </button>
-                <button
-                  onClick={handleGrantCredits}
-                  disabled={createGrant.isPending}
-                  className="rounded-sm border border-border/40 px-4 py-1.5 text-[11px] font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
-                >
-                  Grant Credits
-                </button>
+              <div className="mt-6 flex flex-col gap-4">
+                <div className="flex flex-wrap items-end gap-3">
+                  <button
+                    onClick={() => handleChangeTier("pro")}
+                    disabled={updatePlan.isPending}
+                    className="rounded-sm border border-border/40 px-4 py-1.5 text-[11px] font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+                  >
+                    Change Tier to Pro
+                  </button>
+                  <button
+                    disabled
+                    className="rounded-sm border border-border/40 px-4 py-1.5 text-[11px] font-medium text-foreground opacity-50"
+                  >
+                    Apply Overrides
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-end gap-4 border-t border-border/15 pt-4">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-medium text-muted-foreground">
+                      Compute grant (vCPU-h)
+                    </label>
+                    <input
+                      type="text"
+                      value={computeGrantAmount}
+                      onChange={(e) => setComputeGrantAmount(e.target.value)}
+                      className="h-[34px] w-[100px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  </div>
+                  <button
+                    onClick={handleGrantCompute}
+                    disabled={createComputeGrant.isPending}
+                    className="h-[34px] rounded-sm border border-border/40 px-4 text-[11px] font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+                  >
+                    Grant compute
+                  </button>
+                  <div className="mx-1 hidden h-8 w-px bg-border/30 sm:block" aria-hidden />
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-medium text-muted-foreground">
+                      Storage grant (GiB)
+                    </label>
+                    <input
+                      type="text"
+                      value={storageGrantGib}
+                      onChange={(e) => setStorageGrantGib(e.target.value)}
+                      className="h-[34px] w-[100px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  </div>
+                  <button
+                    onClick={handleGrantStorage}
+                    disabled={createStorageGrant.isPending}
+                    className="h-[34px] rounded-sm border border-border/40 px-4 text-[11px] font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+                  >
+                    Grant storage quota
+                  </button>
+                </div>
               </div>
             </>
           )}
@@ -498,129 +555,210 @@ function UserPlanSection() {
   )
 }
 
-function BatchGrantsSection() {
-  const [emails, setEmails] = useState("")
-  const [creditType, setCreditType] = useState<"compute" | "storage">("compute")
-  const [amount, setAmount] = useState("50.0")
-  const [grantType, setGrantType] = useState("campaign")
-  const resolveEmails = useResolveEmails()
-  const batchGrants = useAdminBatchGrants()
-  const isPending = resolveEmails.isPending || batchGrants.isPending
+function parseEmailList(raw: string): string[] {
+  return raw
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
 
-  const handleSubmit = () => {
-    const emailList = emails
-      .split("\n")
-      .map((s) => s.trim())
-      .filter(Boolean)
+function BatchGrantsSection() {
+  const [computeEmails, setComputeEmails] = useState("")
+  const [computeAmount, setComputeAmount] = useState("50.0")
+  const [computeGrantType, setComputeGrantType] = useState("campaign")
+  const [storageEmails, setStorageEmails] = useState("")
+  const [storageGib, setStorageGib] = useState("10")
+  const [storageGrantType, setStorageGrantType] = useState("campaign")
+
+  const resolveComputeEmails = useResolveEmails()
+  const resolveStorageEmails = useResolveEmails()
+  const batchCompute = useAdminBatchComputeGrants()
+  const batchStorage = useAdminBatchStorageGrants()
+
+  const runBatchForEmails = (
+    emailsRaw: string,
+    resolveMutation: typeof resolveComputeEmails,
+    onResolved: (userIds: string[]) => void,
+  ) => {
+    const emailList = parseEmailList(emailsRaw)
     if (emailList.length === 0) {
       toast.error("Please provide at least one email.")
       return
     }
-    const amt = parseFloat(amount)
-    if (isNaN(amt) || amt <= 0) {
-      toast.error("Amount must be a positive number.")
-      return
-    }
-
-    resolveEmails.mutate(emailList, {
+    resolveMutation.mutate(emailList, {
       onSuccess: (resolved) => {
         const notFound = resolved.results.filter((r) => !r.user_id)
         if (notFound.length > 0) {
           toast.error(`Users not found: ${notFound.map((r) => r.email).join(", ")}`)
           return
         }
-        const userIds = resolved.results.map((r) => r.user_id!)
-        batchGrants.mutate(
-          { user_ids: userIds, credit_type: creditType, amount: amt, grant_type: grantType },
-          {
-            onSuccess: (res) =>
-              toast.success(
-                `Batch grant complete: ${res.succeeded}/${res.total_requested} succeeded`,
-              ),
-            onError: (e) => toast.error(e.message),
-          },
-        )
+        onResolved(resolved.results.map((r) => r.user_id!))
       },
       onError: (e) => toast.error(e.message),
     })
   }
 
+  const handleBatchCompute = () => {
+    const amt = parseFloat(computeAmount)
+    if (isNaN(amt) || amt <= 0) {
+      toast.error("Amount must be a positive number.")
+      return
+    }
+    runBatchForEmails(computeEmails, resolveComputeEmails, (userIds) => {
+      batchCompute.mutate(
+        { user_ids: userIds, amount: amt, grant_type: computeGrantType },
+        {
+          onSuccess: (res) =>
+            toast.success(
+              `Batch compute grants: ${res.succeeded}/${res.total_requested} succeeded`,
+            ),
+          onError: (e) => toast.error(e.message),
+        },
+      )
+    })
+  }
+
+  const handleBatchStorage = () => {
+    const gib = parseInt(storageGib, 10)
+    if (isNaN(gib) || gib <= 0) {
+      toast.error("Size (GiB) must be a positive integer.")
+      return
+    }
+    runBatchForEmails(storageEmails, resolveStorageEmails, (userIds) => {
+      batchStorage.mutate(
+        { user_ids: userIds, size_gib: gib, grant_type: storageGrantType },
+        {
+          onSuccess: (res) =>
+            toast.success(
+              `Batch storage grants: ${res.succeeded}/${res.total_requested} succeeded`,
+            ),
+          onError: (e) => toast.error(e.message),
+        },
+      )
+    })
+  }
+
+  const computePending =
+    resolveComputeEmails.isPending || batchCompute.isPending
+  const storagePending =
+    resolveStorageEmails.isPending || batchStorage.isPending
+
   return (
     <div className="border border-border/20 bg-black rounded">
       <div className="flex items-center gap-4 border-b border-border/20 bg-card px-5 py-4">
         <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-muted-foreground">
-          BATCH CREDIT GRANTS
+          BATCH GRANTS
         </span>
         <span className="text-[11px] text-muted-foreground/50">
-          — issue credits to multiple users at once
+          — compute credits or storage quota, separate workflows
         </span>
       </div>
 
-      <div className="p-5">
-        <div className="flex gap-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-medium text-muted-foreground">
-              Emails (one per line)
-            </label>
-            <textarea
-              rows={3}
-              value={emails}
-              onChange={(e) => setEmails(e.target.value)}
-              placeholder={"alice@example.com\nbob@example.com\n..."}
-              className="h-[72px] w-[340px] resize-none rounded-sm border border-border/40 bg-card px-3 py-2 text-[11px] text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-medium text-muted-foreground">Credit Type</label>
-            <select
-              value={creditType}
-              onChange={(e) => setCreditType(e.target.value as "compute" | "storage")}
-              className="h-[34px] w-[140px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-            >
-              <option value="compute">compute</option>
-              <option value="storage">storage</option>
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-medium text-muted-foreground">
-              Amount (vCPU-h)
-            </label>
-            <input
-              type="text"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="h-[34px] w-[100px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-medium text-muted-foreground">Grant Type</label>
-            <select
-              value={grantType}
-              onChange={(e) => setGrantType(e.target.value)}
-              className="h-[34px] w-[130px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-            >
-              <option value="campaign">campaign</option>
-              <option value="admin_grant">admin_grant</option>
-              <option value="support">support</option>
-            </select>
-          </div>
-
-          <div className="flex flex-col justify-end">
-            <button
-              onClick={handleSubmit}
-              disabled={isPending}
-              className="h-[34px] rounded-sm bg-primary px-5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-            >
-              {isPending ? "Processing…" : "Run Batch Grant"}
-            </button>
+      <div className="flex flex-col gap-8 p-5">
+        <div>
+          <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-primary">
+            Batch compute grants
+          </p>
+          <div className="flex flex-wrap gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-medium text-muted-foreground">
+                Emails (one per line)
+              </label>
+              <textarea
+                rows={3}
+                value={computeEmails}
+                onChange={(e) => setComputeEmails(e.target.value)}
+                placeholder={"alice@example.com\nbob@example.com\n..."}
+                className="h-[72px] w-[min(100%,340px)] resize-none rounded-sm border border-border/40 bg-card px-3 py-2 text-[11px] text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-medium text-muted-foreground">
+                Amount (vCPU-h)
+              </label>
+              <input
+                type="text"
+                value={computeAmount}
+                onChange={(e) => setComputeAmount(e.target.value)}
+                className="h-[34px] w-[100px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-medium text-muted-foreground">Grant type</label>
+              <select
+                value={computeGrantType}
+                onChange={(e) => setComputeGrantType(e.target.value)}
+                className="h-[34px] w-[130px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                <option value="campaign">campaign</option>
+                <option value="admin_grant">admin_grant</option>
+                <option value="support">support</option>
+              </select>
+            </div>
+            <div className="flex flex-col justify-end">
+              <button
+                onClick={handleBatchCompute}
+                disabled={computePending}
+                className="h-[34px] rounded-sm bg-primary px-5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+              >
+                {computePending ? "Processing…" : "Run batch (compute)"}
+              </button>
+            </div>
           </div>
         </div>
 
-        <p className="mt-4 text-[11px] text-warning">
-          ⚠ This action issues credits to all listed users. Double-check before submitting.
+        <div className="border-t border-border/15 pt-6">
+          <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-primary">
+            Batch storage quota grants
+          </p>
+          <div className="flex flex-wrap gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-medium text-muted-foreground">
+                Emails (one per line)
+              </label>
+              <textarea
+                rows={3}
+                value={storageEmails}
+                onChange={(e) => setStorageEmails(e.target.value)}
+                placeholder={"alice@example.com\nbob@example.com\n..."}
+                className="h-[72px] w-[min(100%,340px)] resize-none rounded-sm border border-border/40 bg-card px-3 py-2 text-[11px] text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-medium text-muted-foreground">Size (GiB)</label>
+              <input
+                type="text"
+                value={storageGib}
+                onChange={(e) => setStorageGib(e.target.value)}
+                className="h-[34px] w-[100px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-medium text-muted-foreground">Grant type</label>
+              <select
+                value={storageGrantType}
+                onChange={(e) => setStorageGrantType(e.target.value)}
+                className="h-[34px] w-[130px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                <option value="campaign">campaign</option>
+                <option value="admin_grant">admin_grant</option>
+                <option value="support">support</option>
+              </select>
+            </div>
+            <div className="flex flex-col justify-end">
+              <button
+                onClick={handleBatchStorage}
+                disabled={storagePending}
+                className="h-[34px] rounded-sm bg-primary px-5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+              >
+                {storagePending ? "Processing…" : "Run batch (storage)"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <p className="text-[11px] text-warning">
+          ⚠ Grants apply to all listed users. Double-check before submitting.
         </p>
       </div>
     </div>

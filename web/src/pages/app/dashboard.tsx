@@ -6,7 +6,7 @@ import * as Dialog from "@radix-ui/react-dialog"
 import { toast } from "sonner"
 import { useSandboxes, useStartSandbox, useStopSandbox, useDeleteSandbox, type Sandbox } from "@/api/sandboxes"
 import { useUsageOverview } from "@/api/usage"
-import { useCreditGrants } from "@/api/usage"
+import { useGrants } from "@/api/usage"
 import { cn } from "@/lib/utils"
 
 const PAGE_SIZE = 4
@@ -48,7 +48,7 @@ function StatusDot({ status }: { status: string }) {
 
 function InlineMetrics() {
   const { data: usage } = useUsageOverview()
-  const { data: grants } = useCreditGrants()
+  const { data: grants } = useGrants()
 
   const computeRemaining = usage
     ? (usage.compute.monthly_limit - usage.compute.monthly_used).toFixed(1)
@@ -56,10 +56,9 @@ function InlineMetrics() {
   const tier = usage?.tier ?? "—"
 
   const welcomeBonus = useMemo(() => {
-    if (!grants?.items) return "—"
-    const bonus = grants.items.find(
-      (g) => g.grant_type === "welcome_bonus" && g.status === "active",
-    )
+    const list = grants?.compute_grants
+    if (!list) return "—"
+    const bonus = list.find((g) => g.grant_type === "welcome_bonus" && g.status === "active")
     return bonus ? bonus.remaining_amount.toFixed(1) : "0"
   }, [grants])
 

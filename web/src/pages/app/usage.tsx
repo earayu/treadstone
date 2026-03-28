@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
-import { useCreditGrants, useComputeSessions, useUsageOverview, useUserPlan } from "@/api/usage"
+import { useGrants, useComputeSessions, useUsageOverview, useUserPlan } from "@/api/usage"
 import { cn } from "@/lib/utils"
 
 const SESSION_PAGE_SIZE = 10
@@ -53,18 +53,19 @@ export function UsagePage() {
     limit: SESSION_PAGE_SIZE,
     offset: sessionPage * SESSION_PAGE_SIZE,
   })
-  const { data: grantsData, isLoading: gLoading } = useCreditGrants()
+  const { data: grantsData, isLoading: gLoading } = useGrants()
 
   const welcomeRemaining = useMemo(() => {
-    const items = grantsData?.items ?? []
-    const bonus = items.find((g) => g.grant_type === "welcome_bonus" && g.status === "active")
+    const compute = grantsData?.compute_grants ?? []
+    const bonus = compute.find((g) => g.grant_type === "welcome_bonus" && g.status === "active")
     return bonus?.remaining_amount ?? null
-  }, [grantsData?.items])
+  }, [grantsData?.compute_grants])
 
   const sessions = sessionsData?.items ?? []
   const sessionsTotal = sessionsData?.total ?? 0
   const sessionsTotalPages = Math.ceil(sessionsTotal / SESSION_PAGE_SIZE)
-  const grants = grantsData?.items ?? []
+  const computeGrants = grantsData?.compute_grants ?? []
+  const storageGrants = grantsData?.storage_quota_grants ?? []
 
   const loading = uLoading || pLoading
 
@@ -276,21 +277,23 @@ export function UsagePage() {
       <div className="border border-border/15 bg-black">
         <div className="border-b border-border/15 bg-card px-6 py-4">
           <h3 className="text-xs font-bold uppercase tracking-[1.2px] text-muted-foreground">
-            Credit grants
+            Compute grants
           </h3>
+          <p className="mt-1 text-[11px] text-muted-foreground/80">
+            vCPU-hour credits (original / remaining).
+          </p>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[880px]">
+          <table className="w-full min-w-[720px]">
             <thead>
               <tr className="border-b border-border/15 bg-card">
                 {(
                   [
-                    ["Type", "w-[16%]"],
-                    ["Grant", "w-[14%]"],
-                    ["Original", "w-[14%]"],
-                    ["Remaining", "w-[14%]"],
+                    ["Grant type", "w-[22%]"],
+                    ["Original (vCPU-h)", "w-[18%]"],
+                    ["Remaining", "w-[18%]"],
                     ["Status", "w-[14%]"],
-                    ["Expires", "w-[18%]"],
+                    ["Expires", "w-[28%]"],
                   ] as const
                 ).map(([label, cls]) => (
                   <th
@@ -308,30 +311,99 @@ export function UsagePage() {
             <tbody>
               {gLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-sm text-muted-foreground">
+                  <td colSpan={5} className="px-6 py-12 text-center text-sm text-muted-foreground">
                     Loading…
                   </td>
                 </tr>
-              ) : grants.length === 0 ? (
+              ) : computeGrants.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-sm text-muted-foreground">
-                    No credit grants.
+                  <td colSpan={5} className="px-6 py-12 text-center text-sm text-muted-foreground">
+                    No compute grants.
                   </td>
                 </tr>
               ) : (
-                grants.map((row, idx) => (
+                computeGrants.map((row, idx) => (
                   <tr
                     key={row.id}
                     className={cn("hover:bg-card/50", idx > 0 && "border-t border-border/5")}
                   >
                     <td className="px-6 py-4 text-sm capitalize text-foreground">{row.grant_type}</td>
-                    <td className="px-6 py-4 text-xs capitalize text-muted-foreground">{row.credit_type}</td>
                     <td className="px-6 py-4 text-xs tabular-nums text-foreground">
                       {row.original_amount.toFixed(1)}
                     </td>
                     <td className="px-6 py-4 text-xs tabular-nums text-foreground">
                       {row.remaining_amount.toFixed(1)}
                     </td>
+                    <td className="px-6 py-4">
+                      <span className="bg-primary/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
+                        {row.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-xs text-muted-foreground">
+                      {formatDateTime(row.expires_at)}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="border border-border/15 bg-black">
+        <div className="border-b border-border/15 bg-card px-6 py-4">
+          <h3 className="text-xs font-bold uppercase tracking-[1.2px] text-muted-foreground">
+            Storage quota grants
+          </h3>
+          <p className="mt-1 text-[11px] text-muted-foreground/80">
+            Additional persistent storage quota (GiB).
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px]">
+            <thead>
+              <tr className="border-b border-border/15 bg-card">
+                {(
+                  [
+                    ["Grant type", "w-[28%]"],
+                    ["Size (GiB)", "w-[18%]"],
+                    ["Status", "w-[14%]"],
+                    ["Expires", "w-[40%]"],
+                  ] as const
+                ).map(([label, cls]) => (
+                  <th
+                    key={label}
+                    className={cn(
+                      "px-6 py-3 text-left text-[10px] font-bold uppercase tracking-[1px] text-muted-foreground",
+                      cls,
+                    )}
+                  >
+                    {label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {gLoading ? (
+                <tr>
+                  <td colSpan={4} className="px-6 py-12 text-center text-sm text-muted-foreground">
+                    Loading…
+                  </td>
+                </tr>
+              ) : storageGrants.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-6 py-12 text-center text-sm text-muted-foreground">
+                    No storage quota grants.
+                  </td>
+                </tr>
+              ) : (
+                storageGrants.map((row, idx) => (
+                  <tr
+                    key={row.id}
+                    className={cn("hover:bg-card/50", idx > 0 && "border-t border-border/5")}
+                  >
+                    <td className="px-6 py-4 text-sm capitalize text-foreground">{row.grant_type}</td>
+                    <td className="px-6 py-4 text-xs tabular-nums text-foreground">{row.size_gib}</td>
                     <td className="px-6 py-4">
                       <span className="bg-primary/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
                         {row.status}
