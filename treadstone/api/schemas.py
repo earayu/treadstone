@@ -117,6 +117,12 @@ class SandboxResponse(BaseModel):
     auto_delete_interval: int = Field(
         ..., examples=[-1], description="Minutes after stop before auto-delete. -1 means disabled."
     )
+    persist: bool = Field(default=False, examples=[False], description="Whether persistent storage is attached.")
+    storage_size: StorageSize | None = Field(
+        default=None,
+        examples=["5Gi"],
+        description="Persistent volume size when persist=true. Supported tiers: 5Gi, 10Gi, 20Gi.",
+    )
     urls: SandboxUrls
     created_at: datetime = Field(..., examples=["2026-03-21T12:00:00+00:00"])
 
@@ -126,12 +132,6 @@ class SandboxResponse(BaseModel):
 class SandboxDetailResponse(SandboxResponse):
     image: str | None = Field(default=None, examples=["ghcr.io/agent-infra/sandbox:latest"])
     status_message: str | None = Field(default=None, examples=[None])
-    persist: bool = Field(default=False, examples=[False])
-    storage_size: StorageSize | None = Field(
-        default=None,
-        examples=["5Gi"],
-        description="Persistent volume size (only present when persist=true). Supported tiers: 5Gi, 10Gi, 20Gi.",
-    )
     started_at: datetime | None = Field(default=None, examples=["2026-03-21T12:01:00+00:00"])
     stopped_at: datetime | None = Field(default=None, examples=[None])
 

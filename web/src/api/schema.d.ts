@@ -1677,6 +1677,18 @@ export interface components {
              * @example -1
              */
             auto_delete_interval: number;
+            /**
+             * Persist
+             * @description Whether persistent storage is attached.
+             * @example false
+             */
+            persist: boolean;
+            /**
+             * Storage Size
+             * @description Persistent volume size when persist=true.
+             * @example 5Gi
+             */
+            storage_size?: "5Gi" | "10Gi" | "20Gi" | null;
             urls: components["schemas"]["SandboxUrls"];
             /**
              * Created At
