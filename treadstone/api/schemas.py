@@ -613,7 +613,7 @@ class UserLookupResponse(BaseModel):
 
 
 class ResolveEmailsRequest(BaseModel):
-    emails: list[str] = Field(..., min_length=1, max_length=1000, examples=[["alice@example.com"]])
+    emails: list[EmailStr] = Field(..., min_length=1, max_length=1000, examples=[["alice@example.com"]])
 
 
 class ResolveEmailsResultItem(BaseModel):

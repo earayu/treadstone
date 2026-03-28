@@ -68,7 +68,7 @@ def _serialize_event(event: AuditEvent) -> dict:
 
 @router.get("/filter-options", response_model=AuditFilterOptionsResponse)
 async def get_audit_filter_options(
-    _admin=Depends(get_current_admin),
+    _admin: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_session),
 ):
     actions = (await session.execute(select(AuditEvent.action).distinct().order_by(AuditEvent.action))).scalars().all()

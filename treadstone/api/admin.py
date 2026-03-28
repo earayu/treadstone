@@ -3,6 +3,8 @@
 Endpoints:
   GET    /v1/admin/tier-templates               — list all tier templates
   PATCH  /v1/admin/tier-templates/{tier_name}    — update a tier template
+  GET    /v1/admin/users/lookup-by-email        — find user by email
+  POST   /v1/admin/users/resolve-emails         — batch-resolve emails to user IDs
   GET    /v1/admin/users/{user_id}/usage         — view any user's usage summary
   PATCH  /v1/admin/users/{user_id}/plan          — change user tier / overrides
   POST   /v1/admin/users/{user_id}/grants        — issue extra credits to a user
@@ -113,10 +115,12 @@ async def admin_resolve_emails(
     _admin: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_session),
 ):
+    unique_emails = list(dict.fromkeys(body.emails))
+    rows = await session.execute(select(User).where(User.email.in_(unique_emails)))
+    user_map = {u.email: u for u in rows.unique().scalars().all()}
     results = []
     for email in body.emails:
-        row = await session.execute(select(User).where(User.email == email))
-        user = row.unique().scalar_one_or_none()
+        user = user_map.get(email)
         if user is None:
             results.append({"email": email, "user_id": None, "error": "User not found"})
         else:

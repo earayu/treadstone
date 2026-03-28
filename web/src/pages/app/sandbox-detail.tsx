@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import * as Dialog from "@radix-ui/react-dialog"
 import { useNavigate, useParams } from "react-router"
-import { X, ExternalLink, RefreshCw, Trash2 } from "lucide-react"
+import { X, Copy, RefreshCw, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 
@@ -260,6 +260,19 @@ export function SandboxDetailPage() {
                           Web URL
                         </p>
                         <div className="flex items-center gap-1">
+                          {sandbox.urls?.web && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void navigator.clipboard.writeText(sandbox.urls!.web!)
+                                toast.success("Copied!")
+                              }}
+                              title="Copy web URL"
+                              className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                            >
+                              <Copy className="size-3" />
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => void handleRecreateLink()}
@@ -285,19 +298,33 @@ export function SandboxDetailPage() {
                           href={sandbox.urls.web}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="mt-1 inline-flex items-center gap-1 font-mono text-xs text-primary hover:underline break-all"
+                          className="mt-1 block font-mono text-xs text-primary hover:underline break-all"
                         >
                           {sandbox.urls.web}
-                          <ExternalLink className="size-3 shrink-0" />
                         </a>
                       ) : (
                         <p className="mt-1 text-xs text-muted-foreground">—</p>
                       )}
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-[1px] text-muted-foreground">
-                        Proxy URL
-                      </p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[10px] font-bold uppercase tracking-[1px] text-muted-foreground">
+                          Proxy URL
+                        </p>
+                        {sandbox.urls?.proxy && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void navigator.clipboard.writeText(sandbox.urls!.proxy!)
+                              toast.success("Copied!")
+                            }}
+                            title="Copy proxy URL"
+                            className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                          >
+                            <Copy className="size-3" />
+                          </button>
+                        )}
+                      </div>
                       <p className="mt-1 font-mono text-xs break-all text-muted-foreground">
                         {sandbox.urls?.proxy ?? "—"}
                       </p>

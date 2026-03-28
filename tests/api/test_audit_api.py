@@ -95,3 +95,50 @@ async def test_admin_can_list_and_filter_audit_events(admin_client):
     assert data["items"][0]["action"] == "sandbox.create"
     assert data["items"][0]["target_id"] == sandbox_id
     assert data["items"][0]["request_id"] == "req-admin-audit"
+
+
+@pytest.mark.asyncio
+async def test_audit_filter_options_returns_distinct_values(admin_client):
+    await admin_client.post(
+        "/v1/sandboxes",
+        json={"template": "aio-sandbox-tiny", "name": "filter-opt-box"},
+    )
+
+    response = await admin_client.get("/v1/audit/filter-options")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data["actions"], list)
+    assert isinstance(data["target_types"], list)
+    assert isinstance(data["results"], list)
+    assert "sandbox.create" in data["actions"]
+    assert "sandbox" in data["target_types"]
+    assert "success" in data["results"]
+
+
+@pytest.mark.asyncio
+async def test_audit_filter_options_requires_admin(member_client):
+    response = await member_client.get("/v1/audit/filter-options")
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_audit_events_filter_by_actor_email(admin_client):
+    await admin_client.post(
+        "/v1/sandboxes",
+        json={"template": "aio-sandbox-tiny", "name": "actor-email-box"},
+    )
+
+    response = await admin_client.get("/v1/audit/events", params={"actor_email": "admin@example.com"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] >= 1
+    assert all(item["actor_user_id"] is not None for item in data["items"])
+
+
+@pytest.mark.asyncio
+async def test_audit_events_filter_by_actor_email_not_found_returns_empty(admin_client):
+    response = await admin_client.get("/v1/audit/events", params={"actor_email": "nobody@example.com"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 0
+    assert data["items"] == []
