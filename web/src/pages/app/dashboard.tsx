@@ -1,7 +1,10 @@
 import { useState, useMemo } from "react"
-import { Link } from "react-router"
-import { Plus, Search, ChevronLeft, ChevronRight } from "lucide-react"
-import { useSandboxes, type Sandbox } from "@/api/sandboxes"
+import { Link, useNavigate } from "react-router"
+import { Plus, Search, ChevronLeft, ChevronRight, MoreHorizontal, Square, Play, Trash2, ExternalLink } from "lucide-react"
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
+import * as Dialog from "@radix-ui/react-dialog"
+import { toast } from "sonner"
+import { useSandboxes, useStartSandbox, useStopSandbox, useDeleteSandbox, type Sandbox } from "@/api/sandboxes"
 import { useUsageOverview } from "@/api/usage"
 import { useCreditGrants } from "@/api/usage"
 import { cn } from "@/lib/utils"
@@ -98,12 +101,181 @@ function InlineMetrics() {
 }
 
 const TABLE_COLUMNS = [
-  { key: "id", label: "Sandbox ID", className: "w-[20%]" },
-  { key: "status", label: "Status", className: "w-[14%]" },
-  { key: "template", label: "Template", className: "w-[16%]" },
-  { key: "created_at", label: "Created At", className: "w-[18%]" },
-  { key: "web_url", label: "Web URL", className: "w-[32%]" },
+  { key: "id", label: "Sandbox ID", className: "w-[18%]" },
+  { key: "status", label: "Status", className: "w-[12%]" },
+  { key: "template", label: "Template", className: "w-[15%]" },
+  { key: "created_at", label: "Created At", className: "w-[16%]" },
+  { key: "web_url", label: "Web URL", className: "w-[31%]" },
+  { key: "actions", label: "", className: "w-[8%]" },
 ] as const
+
+function DeleteConfirmDialog({
+  sandbox,
+  open,
+  onClose,
+}: {
+  sandbox: Sandbox
+  open: boolean
+  onClose: () => void
+}) {
+  const [input, setInput] = useState("")
+  const deleteSandbox = useDeleteSandbox()
+  const confirmName = sandbox.name || sandbox.id
+
+  async function handleDelete() {
+    try {
+      await deleteSandbox.mutateAsync(sandbox.id)
+      toast.success("Sandbox deleted.")
+      onClose()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete sandbox.")
+    }
+  }
+
+  return (
+    <Dialog.Root
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) {
+          setInput("")
+          onClose()
+        }
+      }}
+    >
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/70 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(100vw-2rem,420px)] -translate-x-1/2 -translate-y-1/2 border border-border/20 bg-card p-6 shadow-xl outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0">
+          <Dialog.Title className="text-base font-bold text-foreground">
+            Delete Sandbox
+          </Dialog.Title>
+          <Dialog.Description className="mt-2 text-sm text-muted-foreground">
+            This action is irreversible. Type{" "}
+            <span className="font-mono font-bold text-foreground">{confirmName}</span> to confirm.
+          </Dialog.Description>
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={confirmName}
+            className="mt-4 w-full border border-border/30 bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-destructive"
+          />
+          <div className="mt-4 flex justify-end gap-2">
+            <Dialog.Close className="border border-border/40 bg-secondary px-4 py-2 text-sm font-semibold text-secondary-foreground transition-colors hover:bg-secondary/80">
+              Cancel
+            </Dialog.Close>
+            <button
+              type="button"
+              onClick={() => void handleDelete()}
+              disabled={input !== confirmName || deleteSandbox.isPending}
+              className="bg-destructive px-4 py-2 text-sm font-bold text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:opacity-40"
+            >
+              Delete
+            </button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  )
+}
+
+function SandboxRowActions({ sandbox }: { sandbox: Sandbox }) {
+  const navigate = useNavigate()
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const stopSandbox = useStopSandbox()
+  const startSandbox = useStartSandbox()
+
+  const isRunning = sandbox.status === "ready" || sandbox.status === "creating"
+  const isStopped = !isRunning
+
+  async function handleStop() {
+    try {
+      await stopSandbox.mutateAsync(sandbox.id)
+      toast.success("Sandbox stopped.")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to stop sandbox.")
+    }
+  }
+
+  async function handleStart() {
+    try {
+      await startSandbox.mutateAsync(sandbox.id)
+      toast.success("Starting sandbox…")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to start sandbox.")
+    }
+  }
+
+  return (
+    <>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <button
+            type="button"
+            className="flex size-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none data-[state=open]:bg-accent data-[state=open]:text-foreground"
+          >
+            <MoreHorizontal className="size-4" />
+          </button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content
+            align="end"
+            sideOffset={4}
+            className="z-50 min-w-[160px] border border-border/20 bg-card py-1 shadow-xl"
+          >
+            <DropdownMenu.Item
+              onClick={() => void navigate(`/app/sandboxes/${sandbox.id}`)}
+              className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs text-foreground outline-none hover:bg-accent focus:bg-accent"
+            >
+              <ExternalLink className="size-3.5 text-muted-foreground" />
+              View Details
+            </DropdownMenu.Item>
+
+            <DropdownMenu.Separator className="my-1 border-t border-border/15" />
+
+            {isRunning ? (
+              <DropdownMenu.Item
+                onClick={() => void handleStop()}
+                disabled={stopSandbox.isPending}
+                className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs text-foreground outline-none hover:bg-accent focus:bg-accent disabled:pointer-events-none disabled:opacity-40"
+              >
+                <Square className="size-3.5 text-muted-foreground" />
+                Stop
+              </DropdownMenu.Item>
+            ) : (
+              <DropdownMenu.Item
+                onClick={() => void handleStart()}
+                disabled={startSandbox.isPending}
+                className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs text-foreground outline-none hover:bg-accent focus:bg-accent disabled:pointer-events-none disabled:opacity-40"
+              >
+                <Play className="size-3.5 text-muted-foreground" />
+                Start
+              </DropdownMenu.Item>
+            )}
+
+            {isStopped && (
+              <>
+                <DropdownMenu.Separator className="my-1 border-t border-border/15" />
+                <DropdownMenu.Item
+                  onClick={() => setDeleteOpen(true)}
+                  className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs text-destructive outline-none hover:bg-destructive/10 focus:bg-destructive/10"
+                >
+                  <Trash2 className="size-3.5" />
+                  Delete
+                </DropdownMenu.Item>
+              </>
+            )}
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+
+      <DeleteConfirmDialog
+        sandbox={sandbox}
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+      />
+    </>
+  )
+}
 
 function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
   const [filter, setFilter] = useState("")
@@ -160,7 +332,7 @@ function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
         <tbody>
           {pageItems.length === 0 ? (
             <tr>
-              <td colSpan={5} className="px-6 py-12 text-center text-sm text-muted-foreground">
+              <td colSpan={6} className="px-6 py-12 text-center text-sm text-muted-foreground">
                 {filter ? "No sandboxes match your filter." : "No sandboxes yet."}
               </td>
             </tr>
@@ -184,9 +356,7 @@ function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
                 <td className="px-6 py-4">
                   <StatusDot status={sandbox.status} />
                 </td>
-                <td className="px-6 py-4 text-xs text-muted-foreground">
-                  {sandbox.template}
-                </td>
+                <td className="px-6 py-4 text-xs text-muted-foreground">{sandbox.template}</td>
                 <td className="px-6 py-4 text-xs text-muted-foreground">
                   {formatRelativeTime(sandbox.created_at)}
                 </td>
@@ -212,6 +382,9 @@ function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
                   ) : (
                     <span className="text-xs text-muted-foreground/40">—</span>
                   )}
+                </td>
+                <td className="px-4 py-4">
+                  <SandboxRowActions sandbox={sandbox} />
                 </td>
               </tr>
             ))
