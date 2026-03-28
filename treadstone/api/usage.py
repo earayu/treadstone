@@ -1,10 +1,11 @@
 """Usage API — read-only endpoints for users to view their metering data.
 
 Endpoints:
-  GET /v1/usage          — aggregate usage overview
-  GET /v1/usage/plan     — full UserPlan details
-  GET /v1/usage/sessions — paginated ComputeSession list
-  GET /v1/usage/grants   — ComputeGrant and StorageQuotaGrant lists
+  GET /v1/usage                — aggregate usage overview
+  GET /v1/usage/plan           — full UserPlan details
+  GET /v1/usage/sessions       — paginated ComputeSession list
+  GET /v1/usage/storage-ledger — paginated StorageLedger list
+  GET /v1/usage/grants         — ComputeGrant and StorageQuotaGrant lists
 
 Note: All endpoints call ``session.commit()`` because ``get_user_plan``
 (called internally by ``get_usage_summary``, etc.) may lazily create a
@@ -27,11 +28,12 @@ from treadstone.api.metering_serializers import (
 from treadstone.api.schemas import (
     ComputeSessionListResponse,
     GrantsResponse,
+    StorageLedgerListResponse,
     UsageSummaryResponse,
     UserPlanResponse,
 )
 from treadstone.core.database import get_session
-from treadstone.models.metering import ComputeSession
+from treadstone.models.metering import ComputeSession, StorageLedger
 from treadstone.models.user import User, utc_now
 from treadstone.services.metering_service import MeteringService
 
@@ -92,6 +94,38 @@ async def list_compute_sessions(
     await session.commit()
     return {
         "items": [_serialize_session(cs) for cs in items],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+def _serialize_storage_ledger(entry: StorageLedger) -> dict:
+    return {
+        "id": entry.id,
+        "sandbox_id": entry.sandbox_id,
+        "size_gib": entry.size_gib,
+        "storage_state": entry.storage_state,
+        "allocated_at": iso(entry.allocated_at),
+        "released_at": iso(entry.released_at),
+        "gib_hours_consumed": float(entry.gib_hours_consumed),
+        "last_metered_at": iso(entry.last_metered_at),
+    }
+
+
+@router.get("/storage-ledger", response_model=StorageLedgerListResponse)
+async def list_storage_ledger(
+    user: User = Depends(get_current_control_plane_user),
+    session: AsyncSession = Depends(get_session),
+    status: str = Query(default="all", pattern="^(active|released|all)$"),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    await _metering.ensure_user_plan(session, user.id)
+    items, total = await _metering.list_storage_ledger(session, user.id, status=status, limit=limit, offset=offset)
+    await session.commit()
+    return {
+        "items": [_serialize_storage_ledger(entry) for entry in items],
         "total": total,
         "limit": limit,
         "offset": offset,

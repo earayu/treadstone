@@ -159,7 +159,7 @@ async def check_warning_thresholds(session: AsyncSession) -> None:
 
         monthly_limit = plan.compute_credits_monthly_limit
         monthly_used = plan.compute_credits_monthly_used
-        extra_remaining = await _metering.get_extra_credits_remaining(session, user_id, "compute")
+        extra_remaining = await _metering.get_extra_compute_remaining(session, user_id)
 
         # 100% warning: monthly + extra fully exhausted
         if total_remaining <= Decimal("0") and plan.warning_100_notified_at is None:

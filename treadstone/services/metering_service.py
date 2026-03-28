@@ -770,6 +770,31 @@ class MeteringService:
         )
         return list(items_result.scalars().all()), total
 
+    async def list_storage_ledger(
+        self,
+        session: AsyncSession,
+        user_id: str,
+        *,
+        status: str = "all",
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[StorageLedger], int]:
+        """Return paginated StorageLedger entries for a user."""
+        base = select(StorageLedger).where(StorageLedger.user_id == user_id)
+        count_base = select(func.count()).select_from(StorageLedger).where(StorageLedger.user_id == user_id)
+        if status == "active":
+            base = base.where(StorageLedger.storage_state == StorageState.ACTIVE)
+            count_base = count_base.where(StorageLedger.storage_state == StorageState.ACTIVE)
+        elif status == "released":
+            base = base.where(StorageLedger.storage_state == StorageState.DELETED)
+            count_base = count_base.where(StorageLedger.storage_state == StorageState.DELETED)
+
+        total = (await session.execute(count_base)).scalar_one()
+        items_result = await session.execute(
+            base.order_by(StorageLedger.allocated_at.desc()).limit(limit).offset(offset)
+        )
+        return list(items_result.scalars().all()), total
+
     async def list_compute_grants(self, session: AsyncSession, user_id: str) -> list[ComputeGrant]:
         """Return all ComputeGrants for a user, newest first."""
         result = await session.execute(

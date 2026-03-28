@@ -228,3 +228,39 @@ async def test_list_grants_shows_correct_status(user_client):
         assert item["status"] in ("active", "exhausted", "expired")
     for item in body["storage_quota_grants"]:
         assert item["status"] in ("active", "expired")
+
+
+# ── GET /v1/usage/storage-ledger ──────────────────────────────────────────
+
+
+async def test_list_storage_ledger_empty(user_client):
+    resp = await user_client.get("/v1/usage/storage-ledger")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["items"] == []
+    assert data["total"] == 0
+    assert data["limit"] == 20
+    assert data["offset"] == 0
+
+
+async def test_list_storage_ledger_with_status_filter(user_client):
+    resp = await user_client.get("/v1/usage/storage-ledger", params={"status": "active"})
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 0
+
+    resp = await user_client.get("/v1/usage/storage-ledger", params={"status": "released"})
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 0
+
+
+async def test_list_storage_ledger_invalid_status_rejected(user_client):
+    resp = await user_client.get("/v1/usage/storage-ledger", params={"status": "invalid"})
+    assert resp.status_code == 422
+
+
+async def test_list_storage_ledger_pagination(user_client):
+    resp = await user_client.get("/v1/usage/storage-ledger", params={"limit": 5, "offset": 0})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["limit"] == 5
+    assert data["offset"] == 0

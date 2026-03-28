@@ -358,7 +358,7 @@ class TestCheckWarningThresholds:
         with patch("treadstone.services.metering_tasks._metering") as mock_metering:
             mock_metering.get_user_plan = AsyncMock(return_value=plan)
             mock_metering.get_total_compute_remaining = AsyncMock(return_value=Decimal("15"))
-            mock_metering.get_extra_credits_remaining = AsyncMock(return_value=Decimal("0"))
+            mock_metering.get_extra_compute_remaining = AsyncMock(return_value=Decimal("0"))
             with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
                 mock_audit.return_value = MagicMock()
                 await check_warning_thresholds(session)
@@ -382,7 +382,7 @@ class TestCheckWarningThresholds:
         with patch("treadstone.services.metering_tasks._metering") as mock_metering:
             mock_metering.get_user_plan = AsyncMock(return_value=plan)
             mock_metering.get_total_compute_remaining = AsyncMock(return_value=Decimal("-5"))
-            mock_metering.get_extra_credits_remaining = AsyncMock(return_value=Decimal("0"))
+            mock_metering.get_extra_compute_remaining = AsyncMock(return_value=Decimal("0"))
             with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
                 mock_audit.return_value = MagicMock()
                 await check_warning_thresholds(session)
@@ -410,7 +410,7 @@ class TestCheckWarningThresholds:
         with patch("treadstone.services.metering_tasks._metering") as mock_metering:
             mock_metering.get_user_plan = AsyncMock(return_value=plan)
             mock_metering.get_total_compute_remaining = AsyncMock(return_value=Decimal("15"))
-            mock_metering.get_extra_credits_remaining = AsyncMock(return_value=Decimal("0"))
+            mock_metering.get_extra_compute_remaining = AsyncMock(return_value=Decimal("0"))
             with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
                 mock_audit.return_value = MagicMock()
                 await check_warning_thresholds(session)
