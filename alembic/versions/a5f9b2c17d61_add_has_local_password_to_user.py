@@ -1,7 +1,7 @@
 """add has_local_password to user
 
 Revision ID: a5f9b2c17d61
-Revises: 9f3a6a152a5c
+Revises: f7a1b3c5d9e2
 Create Date: 2026-03-28 12:00:00.000000
 
 """
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "a5f9b2c17d61"
-down_revision: Union[str, Sequence[str], None] = "9f3a6a152a5c"
+down_revision: Union[str, Sequence[str], None] = "f7a1b3c5d9e2"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
