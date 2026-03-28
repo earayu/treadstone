@@ -284,6 +284,48 @@ async def test_github_callback_rejects_unverified_email_and_does_not_link_existi
 
 
 @pytest.mark.asyncio
+async def test_oauth_link_marks_unverified_email_user_as_verified(db_session, monkeypatch):
+    """An unverified email-registered user becomes verified upon linking via OAuth.
+
+    OAuth providers (Google, GitHub) have already confirmed email ownership, so
+    there is no reason to keep is_verified=False after a successful OAuth link.
+    """
+    monkeypatch.setattr(auth_api.settings, "app_base_url", "http://test")
+    client = FakeOAuthClient("google", account_id="acct-verify-link", account_email="unverified@example.com")
+    monkeypatch.setattr(auth_api, "get_google_oauth_client", lambda: client, raising=False)
+
+    async with _test_session_factory() as session:
+        user = User(
+            email="unverified@example.com",
+            hashed_password="hashed",
+            has_local_password=True,
+            is_active=True,
+            is_verified=False,
+            role="rw",
+        )
+        session.add(user)
+        await session.commit()
+        existing_user_id = user.id
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
+        authorize = await http_client.get("/v1/auth/google/authorize", follow_redirects=False)
+        state = _extract_state(authorize.headers["location"])
+        callback = await http_client.get(
+            "/v1/auth/google/callback",
+            params={"code": "oauth-code", "state": state},
+            follow_redirects=False,
+        )
+
+    assert callback.status_code == 303
+
+    async with _test_session_factory() as session:
+        user = (await session.execute(select(User).where(User.id == existing_user_id))).unique().scalar_one()
+
+    assert user.is_verified is True
+    assert user.id == existing_user_id
+
+
+@pytest.mark.asyncio
 async def test_oauth_only_user_can_set_local_password_and_login_with_it(db_session, monkeypatch):
     monkeypatch.setattr(auth_api.settings, "app_base_url", "http://test")
     client = FakeOAuthClient("google", account_id="acct-set-password", account_email="setpass@example.com")
