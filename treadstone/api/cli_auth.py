@@ -83,7 +83,7 @@ async def create_cli_flow(session: AsyncSession = Depends(get_session)):
     await session.commit()
     await session.refresh(flow)
 
-    browser_url = f"{settings.api_base_url.rstrip('/')}/v1/auth/cli/login?flow_id={flow.id}"
+    browser_url = f"{settings.app_base_url.rstrip('/')}/v1/auth/cli/login?flow_id={flow.id}"
     return {
         "flow_id": flow.id,
         "flow_secret": raw_secret,

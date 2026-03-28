@@ -152,7 +152,7 @@ class SandboxSubdomainMiddleware:
 
     def _build_bootstrap_redirect(self, scope: Scope, host: str) -> str:
         return_to = self._build_return_to(scope, host)
-        return f"{settings.api_base_url.rstrip('/')}/v1/browser/bootstrap?{urlencode({'return_to': return_to})}"
+        return f"{settings.app_base_url.rstrip('/')}/v1/browser/bootstrap?{urlencode({'return_to': return_to})}"
 
     @staticmethod
     def _set_sandbox_cookie(response: Response, sandbox_id: str, issued_via: str) -> None:

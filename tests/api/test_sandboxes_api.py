@@ -66,12 +66,12 @@ async def second_auth_client(db_session):
         yield client
 
 
-def _enable_subdomain(monkeypatch, domain: str = "sandbox.localhost", api_base_url: str = "http://test"):
+def _enable_subdomain(monkeypatch, domain: str = "sandbox.localhost", app_base_url: str = "http://test"):
     monkeypatch.setenv("TREADSTONE_SANDBOX_DOMAIN", domain)
     monkeypatch.setenv("TREADSTONE_SANDBOX_SUBDOMAIN_PREFIX", "sandbox-")
     monkeypatch.setenv("TREADSTONE_SANDBOX_NAMESPACE", "default")
     monkeypatch.setenv("TREADSTONE_SANDBOX_PORT", "8080")
-    monkeypatch.setenv("TREADSTONE_API_BASE_URL", api_base_url)
+    monkeypatch.setenv("TREADSTONE_APP_BASE_URL", app_base_url)
     monkeypatch.setenv("TREADSTONE_JWT_SECRET", "test-jwt-secret-should-be-32-bytes!")
     from treadstone.config import Settings
 
