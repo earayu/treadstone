@@ -1357,7 +1357,7 @@ active -> deleted
 
 ## 16. 审计后修复记录
 
-**修复提交：** `54daa6d` (分支 `fix/metering-system-overhaul`)
+**修复提交：** `2fc7c1f` (分支 `fix/metering-system-overhaul`)
 **修复日期：** 2026-03-29
 
 ### 16.1 Bug 修复
