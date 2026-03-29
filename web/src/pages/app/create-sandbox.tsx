@@ -267,7 +267,7 @@ export function CreateSandboxPage() {
               </div>
             </div>
 
-            <div className="grid gap-6 border border-border/15 bg-card/40 p-6 md:grid-cols-2">
+            <div className="grid gap-6 border border-border/30 bg-card/70 p-6 md:grid-cols-2">
               <div className="space-y-5">
                 <div>
                   <label
@@ -329,9 +329,9 @@ export function CreateSandboxPage() {
                 </div>
               </div>
 
-              <div className="space-y-5 border-t border-border/15 pt-5 md:border-l md:border-t-0 md:pl-6 md:pt-0">
+              <div className="space-y-5 border-t border-border/30 pt-5 md:border-l md:border-t-0 md:pl-6 md:pt-0">
                 <div className="flex items-center justify-between gap-4">
-                  <span className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground">
+                  <span className="text-[10px] font-bold uppercase tracking-[2px] text-foreground/70">
                     Data persistence
                   </span>
                   <button
@@ -342,14 +342,16 @@ export function CreateSandboxPage() {
                     className={cn(
                       "relative h-7 w-12 shrink-0 rounded-full border transition-colors",
                       persist
-                        ? "border-primary bg-primary/20"
-                        : "border-border/50 bg-muted/30",
+                        ? "border-primary bg-primary/30"
+                        : "border-border/70 bg-muted/60",
                     )}
                   >
                     <span
                       className={cn(
-                        "absolute top-0.5 size-6 rounded-full bg-background shadow transition-transform",
-                        persist ? "translate-x-5" : "translate-x-0.5",
+                        "absolute top-0.5 size-6 rounded-full shadow transition-transform",
+                        persist
+                          ? "translate-x-5 bg-primary"
+                          : "translate-x-0.5 bg-foreground/40",
                       )}
                     />
                   </button>

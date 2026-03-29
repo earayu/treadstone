@@ -10,6 +10,9 @@ metadata:
   annotations:
     display-name: {{ .displayName | quote }}
     description: {{ .description | quote }}
+    {{- if .allowedStorageSizes }}
+    treadstone-ai.dev/allowed-storage-sizes: {{ .allowedStorageSizes | join "," | quote }}
+    {{- end }}
 spec:
   podTemplate:
     spec:

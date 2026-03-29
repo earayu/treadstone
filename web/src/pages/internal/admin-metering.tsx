@@ -590,6 +590,7 @@ function UserPlanSection() {
                     <label className="text-[10px] font-medium text-muted-foreground">Expires at (optional)</label>
                     <input
                       type="date"
+                      lang="en"
                       value={computeExpiresAt}
                       onChange={(e) => setComputeExpiresAt(e.target.value)}
                       className="h-[34px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
@@ -660,6 +661,7 @@ function UserPlanSection() {
                     <label className="text-[10px] font-medium text-muted-foreground">Expires at (optional)</label>
                     <input
                       type="date"
+                      lang="en"
                       value={storageExpiresAt}
                       onChange={(e) => setStorageExpiresAt(e.target.value)}
                       className="h-[34px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"

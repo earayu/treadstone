@@ -1,6 +1,5 @@
 """Sandbox CRUD API router — control plane endpoints."""
 
-from datetime import timedelta
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Query, Request, status
@@ -23,7 +22,7 @@ from treadstone.core.request_context import set_request_context
 from treadstone.models.sandbox_web_link import SandboxWebLink
 from treadstone.models.user import User, utc_now
 from treadstone.services.audit import record_audit_event
-from treadstone.services.browser_auth import OPEN_LINK_TTL_SECONDS, build_open_link_token, build_open_link_url
+from treadstone.services.browser_auth import build_open_link_token, build_open_link_url
 from treadstone.services.metering_service import MeteringService
 from treadstone.services.sandbox_service import SandboxService
 
@@ -137,12 +136,9 @@ async def _upsert_web_link(
     session: AsyncSession,
     sandbox,
     user_id: str,
-    *,
-    ttl_seconds: int = OPEN_LINK_TTL_SECONDS,
 ) -> SandboxWebLink:
     result = await session.execute(select(SandboxWebLink).where(SandboxWebLink.sandbox_id == sandbox.id))
     link = result.scalar_one_or_none()
-    expires_at = utc_now() + timedelta(seconds=ttl_seconds)
     link_id = build_open_link_token()
 
     if link is None:
@@ -150,12 +146,12 @@ async def _upsert_web_link(
             id=link_id,
             sandbox_id=sandbox.id,
             created_by_user_id=user_id,
-            gmt_expires=expires_at,
+            gmt_expires=None,
         )
     else:
         link.id = link_id
         link.created_by_user_id = user_id
-        link.gmt_expires = expires_at
+        link.gmt_expires = None
         link.gmt_last_used = None
         link.gmt_updated = utc_now()
         link.gmt_deleted = None
@@ -168,13 +164,11 @@ async def _ensure_active_web_link(
     session: AsyncSession,
     sandbox,
     user_id: str,
-    *,
-    ttl_seconds: int = OPEN_LINK_TTL_SECONDS,
 ) -> SandboxWebLink:
     link = await _load_active_web_link(session, sandbox.id)
     if link is not None:
         return link
-    return await _upsert_web_link(session, sandbox, user_id, ttl_seconds=ttl_seconds)
+    return await _upsert_web_link(session, sandbox, user_id)
 
 
 def _parse_label_filters(labels: list[str]) -> dict[str, str]:

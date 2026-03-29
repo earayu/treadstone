@@ -335,7 +335,7 @@ export function SandboxDetailPage() {
                           Link expires
                         </p>
                         <p className="mt-1 text-xs text-foreground">
-                          {formatDateTime(webLink?.expires_at)}
+                          {webLink?.expires_at ? formatDateTime(webLink.expires_at) : "Never"}
                         </p>
                       </div>
                       <div>
