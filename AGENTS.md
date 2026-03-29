@@ -12,6 +12,9 @@ Use the matching local skill before you act:
 | Make any shippable change | `dev-lifecycle` |
 | Add or change SQLAlchemy models / Alembic migrations | `database-migration` |
 | Answer Neon-specific questions or plan Neon usage | `neon-postgres` |
+| Audit a subsystem against the current code and write a detailed report | `system-audit-report` |
+| Refresh an existing audit report against the latest code | `audit-report-refresh` |
+| Trace runtime architecture and end-to-end data flow | `architecture-data-flow-trace` |
 
 Skills live under `.agents/skills/*/SKILL.md`. AGENTS.md defines repo facts and guardrails; skills define procedures.
 
@@ -59,6 +62,9 @@ scripts/           # Helper scripts (release, install, deploy, E2E)
 | `dev-lifecycle` | Every feature/fix: branch, TDD, ship, PR, merge |
 | `database-migration` | Adding/modifying SQLAlchemy models and Alembic migrations |
 | `neon-postgres` | Neon-specific questions (branching, connection methods, SDKs) |
+| `system-audit-report` | First-pass or general subsystem audits grounded in the current code |
+| `audit-report-refresh` | Re-auditing a subsystem and updating an existing report against the latest code |
+| `architecture-data-flow-trace` | Tracing runtime architecture, state transitions, and end-to-end data flow |
 
 For K8s deployment (Kind cluster, Helm, smoke tests), see [`deploy/README.md`](deploy/README.md).
 
