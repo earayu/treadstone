@@ -103,6 +103,7 @@ def _enable_subdomain(monkeypatch, domain: str = "sandbox.localhost", app_base_u
     monkeypatch.setenv("TREADSTONE_SANDBOX_PORT", "8080")
     monkeypatch.setenv("TREADSTONE_APP_BASE_URL", app_base_url)
     monkeypatch.setenv("TREADSTONE_JWT_SECRET", "test-jwt-secret-should-be-32-bytes!")
+    monkeypatch.setenv("TREADSTONE_METERING_ENFORCEMENT_ENABLED", "false")
     from treadstone.config import Settings
 
     s = Settings()

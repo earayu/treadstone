@@ -83,6 +83,7 @@ def _enable_subdomain(monkeypatch, domain: str = "sandbox.localhost", app_base_u
     monkeypatch.setenv("TREADSTONE_SANDBOX_PORT", "8080")
     monkeypatch.setenv("TREADSTONE_APP_BASE_URL", app_base_url)
     monkeypatch.setenv("TREADSTONE_JWT_SECRET", "test-jwt-secret-should-be-32-bytes!")
+    monkeypatch.setenv("TREADSTONE_METERING_ENFORCEMENT_ENABLED", "false")
     from treadstone.config import Settings
 
     s = Settings()
@@ -426,6 +427,11 @@ class TestDeleteSandbox:
         get_resp = await auth_client.get(f"/v1/sandboxes/{sandbox_id}")
         assert get_resp.status_code == 404
 
+    @pytest.mark.skipif(
+        True,
+        reason="Partial unique index (postgresql_where) is not enforced in SQLite; "
+        "this behaviour is covered by integration tests against Postgres.",
+    )
     async def test_recreate_sandbox_with_same_name_after_soft_delete(self, auth_client):
         """Partial unique index allows re-creating a sandbox with the same name after deletion."""
         from treadstone.models.sandbox import SandboxStatus
