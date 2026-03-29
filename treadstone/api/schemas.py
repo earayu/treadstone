@@ -36,7 +36,7 @@ class CreateSandboxRequest(BaseModel):
     name: str | None = Field(default=None, examples=["my-sandbox"], description=SANDBOX_NAME_DESCRIPTION)
     labels: dict[str, str] = Field(default_factory=dict, examples=[{"env": "dev"}])
     auto_stop_interval: int = Field(
-        default=15, examples=[15], description="Minutes of inactivity before the sandbox is automatically stopped."
+        default=60, examples=[60], description="Minutes of inactivity before the sandbox is automatically stopped."
     )
     auto_delete_interval: int = Field(
         default=-1,
