@@ -18,7 +18,7 @@ from treadstone.models.metering import (
 from treadstone.services.metering_helpers import (
     TEMPLATE_SPECS,
     ConsumeResult,
-    calculate_credit_rate,
+    calculate_cu_rate,
     compute_period_bounds,
     parse_storage_size_gib,
     validate_template_specs,
@@ -45,7 +45,7 @@ def test_tier_template_fields_exist():
     for field in [
         "id",
         "tier_name",
-        "compute_credits_monthly",
+        "compute_units_monthly",
         "storage_capacity_gib",
         "max_concurrent_running",
         "max_sandbox_duration_seconds",
@@ -81,7 +81,7 @@ def test_user_plan_fields_exist():
         "id",
         "user_id",
         "tier",
-        "compute_credits_monthly_limit",
+        "compute_units_monthly_limit",
         "storage_capacity_limit_gib",
         "max_concurrent_running",
         "max_sandbox_duration_seconds",
@@ -89,7 +89,7 @@ def test_user_plan_fields_exist():
         "grace_period_seconds",
         "period_start",
         "period_end",
-        "compute_credits_monthly_used",
+        "compute_units_monthly_used",
         "overrides",
         "grace_period_started_at",
         "warning_80_notified_at",
@@ -259,25 +259,25 @@ def test_storage_ledger_indexes():
 # ── Metering Helpers (F04) ──
 
 
-class TestCalculateCreditRate:
+class TestCalculateCuRate:
     def test_tiny(self):
-        assert calculate_credit_rate("aio-sandbox-tiny") == Decimal("0.25")
+        assert calculate_cu_rate("aio-sandbox-tiny") == Decimal("0.25")
 
     def test_small(self):
-        assert calculate_credit_rate("aio-sandbox-small") == Decimal("0.5")
+        assert calculate_cu_rate("aio-sandbox-small") == Decimal("0.5")
 
     def test_medium(self):
-        assert calculate_credit_rate("aio-sandbox-medium") == Decimal("1")
+        assert calculate_cu_rate("aio-sandbox-medium") == Decimal("1")
 
     def test_large(self):
-        assert calculate_credit_rate("aio-sandbox-large") == Decimal("2")
+        assert calculate_cu_rate("aio-sandbox-large") == Decimal("2")
 
     def test_xlarge(self):
-        assert calculate_credit_rate("aio-sandbox-xlarge") == Decimal("4")
+        assert calculate_cu_rate("aio-sandbox-xlarge") == Decimal("4")
 
     def test_unknown_template_raises(self):
         with pytest.raises(BadRequestError, match="Unknown sandbox template"):
-            calculate_credit_rate("nonexistent")
+            calculate_cu_rate("nonexistent")
 
 
 class TestTemplateSpecs:

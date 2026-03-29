@@ -18,8 +18,8 @@ def serialize_plan(plan: UserPlan) -> dict:
         "id": plan.id,
         "user_id": plan.user_id,
         "tier": plan.tier,
-        "compute_credits_monthly_limit": float(plan.compute_credits_monthly_limit),
-        "compute_credits_monthly_used": float(plan.compute_credits_monthly_used),
+        "compute_units_monthly_limit": float(plan.compute_units_monthly_limit),
+        "compute_units_monthly_used": float(plan.compute_units_monthly_used),
         "storage_capacity_limit_gib": plan.storage_capacity_limit_gib,
         "max_concurrent_running": plan.max_concurrent_running,
         "max_sandbox_duration_seconds": plan.max_sandbox_duration_seconds,
@@ -39,7 +39,7 @@ def serialize_plan(plan: UserPlan) -> dict:
 def serialize_template(tt: TierTemplate) -> dict:
     return {
         "tier": tt.tier_name,
-        "compute_credits_monthly": float(tt.compute_credits_monthly),
+        "compute_units_monthly": float(tt.compute_units_monthly),
         "storage_capacity_gib": tt.storage_capacity_gib,
         "max_concurrent_running": tt.max_concurrent_running,
         "max_sandbox_duration_seconds": tt.max_sandbox_duration_seconds,

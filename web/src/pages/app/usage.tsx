@@ -78,8 +78,7 @@ export function UsagePage() {
       ? formatPeriod(usage.billing_period.start, usage.billing_period.end)
       : "—"
 
-  const computeVcpuHours = usage?.compute.vcpu_hours ?? 0
-  const computeMemGibHours = usage?.compute.memory_gib_hours ?? 0
+  const computeUnitHours = usage?.compute.compute_unit_hours ?? 0
   const monthlyLimit = usage?.compute.monthly_limit ?? 0
   const monthlyUsed = usage?.compute.monthly_used ?? 0
   const totalRemaining = usage?.compute.total_remaining ?? 0
@@ -106,26 +105,20 @@ export function UsagePage() {
             <div className="mt-3 flex flex-col gap-1">
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-bold tabular-nums text-foreground">
-                  {computeVcpuHours.toFixed(2)}
+                  {computeUnitHours.toFixed(2)}
                 </span>
-                <span className="text-xs text-muted-foreground">vCPU-hours</span>
-              </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-lg font-semibold tabular-nums text-foreground">
-                  {computeMemGibHours.toFixed(2)}
-                </span>
-                <span className="text-xs text-muted-foreground">GiB-hours</span>
+                <span className="text-xs text-muted-foreground">CU-hours</span>
               </div>
               <div className="mt-3 border-t border-border/15 pt-3">
                 <p className="text-sm text-foreground">
                   <span className="tabular-nums">{monthlyUsed.toFixed(1)}</span>
                   {" / "}
                   <span className="tabular-nums">{monthlyLimit.toFixed(1)}</span>
-                  {" credits used"}
+                  {" CU-hours used"}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Total remaining:{" "}
-                  <span className="tabular-nums">{totalRemaining.toFixed(1)}</span> credits
+                  <span className="tabular-nums">{totalRemaining.toFixed(1)}</span> CU-hours
                 </p>
               </div>
             </div>
@@ -207,12 +200,11 @@ export function UsagePage() {
               <tr className="border-b border-border/15 bg-card">
                 {(
                   [
-                    ["Sandbox", "w-[20%]"],
-                    ["Template", "w-[14%]"],
-                    ["Duration", "w-[14%]"],
-                    ["vCPU-hours", "w-[14%]"],
-                    ["Mem GiB-hours", "w-[14%]"],
-                    ["Status", "w-[12%]"],
+                    ["Sandbox", "w-[22%]"],
+                    ["Template", "w-[16%]"],
+                    ["Duration", "w-[16%]"],
+                    ["CU-hours", "w-[16%]"],
+                    ["Status", "w-[14%]"],
                   ] as const
                 ).map(([label, cls]) => (
                   <th
@@ -236,7 +228,7 @@ export function UsagePage() {
                 </tr>
               ) : sessions.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-sm text-muted-foreground">
+                  <td colSpan={5} className="px-6 py-12 text-center text-sm text-muted-foreground">
                     No compute sessions yet.
                   </td>
                 </tr>
@@ -252,10 +244,7 @@ export function UsagePage() {
                       {formatDuration(row.duration_seconds)}
                     </td>
                     <td className="px-6 py-4 text-xs tabular-nums text-foreground">
-                      {row.vcpu_hours.toFixed(4)}
-                    </td>
-                    <td className="px-6 py-4 text-xs tabular-nums text-foreground">
-                      {row.memory_gib_hours.toFixed(4)}
+                      {row.compute_unit_hours.toFixed(4)}
                     </td>
                     <td className="px-6 py-4 text-xs capitalize text-foreground">{row.status}</td>
                   </tr>
@@ -295,7 +284,7 @@ export function UsagePage() {
             Compute grants
           </h3>
           <p className="mt-1 text-[11px] text-muted-foreground/80">
-            Compute credit grants (original / remaining).
+            Compute Unit grants (original / remaining).
           </p>
         </div>
         <div className="overflow-x-auto">
@@ -305,7 +294,7 @@ export function UsagePage() {
                 {(
                   [
                     ["Grant type", "w-[22%]"],
-                    ["Original (vCPU-h)", "w-[18%]"],
+                    ["Original (CU-h)", "w-[18%]"],
                     ["Remaining", "w-[18%]"],
                     ["Status", "w-[14%]"],
                     ["Expires", "w-[28%]"],

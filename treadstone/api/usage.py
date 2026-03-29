@@ -46,6 +46,7 @@ def _serialize_session(cs: ComputeSession) -> dict:
     now = utc_now()
     end = cs.ended_at or now
     duration = (end - cs.started_at).total_seconds()
+    cu_hours = float(max(cs.vcpu_hours, cs.memory_gib_hours / 2))
     return {
         "id": cs.id,
         "sandbox_id": cs.sandbox_id,
@@ -55,6 +56,7 @@ def _serialize_session(cs: ComputeSession) -> dict:
         "started_at": iso(cs.started_at),
         "ended_at": iso(cs.ended_at),
         "duration_seconds": duration,
+        "compute_unit_hours": cu_hours,
         "vcpu_hours": float(cs.vcpu_hours),
         "memory_gib_hours": float(cs.memory_gib_hours),
         "status": "active" if cs.ended_at is None else "completed",

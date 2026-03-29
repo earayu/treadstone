@@ -31,7 +31,7 @@ interface EditTierDialogProps {
 function EditTierDialog({ tier, onClose }: EditTierDialogProps) {
   const updateTierTemplate = useUpdateTierTemplate()
 
-  const [compute, setCompute] = useState(String(tier.compute_credits_monthly))
+  const [compute, setCompute] = useState(String(tier.compute_units_monthly))
   const [storage, setStorage] = useState(String(tier.storage_capacity_gib))
   const [maxConcurrent, setMaxConcurrent] = useState(String(tier.max_concurrent_running))
   const [maxDuration, setMaxDuration] = useState(String(tier.max_sandbox_duration_seconds))
@@ -66,7 +66,7 @@ function EditTierDialog({ tier, onClose }: EditTierDialogProps) {
       {
         tierName: tier.tier,
         body: {
-          compute_credits_monthly: computeVal,
+          compute_units_monthly: computeVal,
           storage_capacity_gib: storageVal,
           max_concurrent_running: maxConcurrentVal,
           max_sandbox_duration_seconds: maxDurationVal,
@@ -301,7 +301,7 @@ function TierRow({
     <tr className={cn("border-b border-border/15", odd && "bg-[hsl(0,0%,4%)]")}>
       <td className="px-5 py-3 text-xs font-medium text-primary">{tier.tier}</td>
       <td className="px-5 py-3 text-xs text-foreground">
-        {tier.compute_credits_monthly} vCPU-h
+        {tier.compute_units_monthly} CU-h
       </td>
       <td className="px-5 py-3 text-xs text-foreground">
         {tier.storage_capacity_gib} GiB
@@ -399,8 +399,7 @@ function UserPlanSection() {
   }
 
   const tier = usage?.tier ?? "—"
-  const vcpuHours = usage?.compute.vcpu_hours ?? 0
-  const memGibHours = usage?.compute.memory_gib_hours ?? 0
+  const cuHours = usage?.compute.compute_unit_hours ?? 0
   const maxConcurrent = usage?.limits.max_concurrent_running ?? "—"
   const runningNow = usage?.limits.current_running ?? 0
 
@@ -471,15 +470,9 @@ function UserPlanSection() {
                 </div>
                 <div>
                   <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-                    VCPU-HOURS
+                    CU-HOURS
                   </p>
-                  <p className="mt-1 text-base font-semibold text-foreground">{vcpuHours.toFixed(2)}</p>
-                </div>
-                <div>
-                  <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-                    MEM GIB-HOURS
-                  </p>
-                  <p className="mt-1 text-base font-semibold text-foreground">{memGibHours.toFixed(2)}</p>
+                  <p className="mt-1 text-base font-semibold text-foreground">{cuHours.toFixed(2)}</p>
                 </div>
                 <div>
                   <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -510,7 +503,7 @@ function UserPlanSection() {
                 <div className="flex flex-wrap items-end gap-4 border-t border-border/15 pt-4">
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-medium text-muted-foreground">
-                      Compute grant (vCPU-h)
+                      Compute grant (CU-h)
                     </label>
                     <input
                       type="text"
@@ -650,7 +643,7 @@ function BatchGrantsSection() {
           BATCH GRANTS
         </span>
         <span className="text-[11px] text-muted-foreground/50">
-          — compute credits or storage quota, separate workflows
+          — Compute Unit or storage quota, separate workflows
         </span>
       </div>
 
@@ -674,7 +667,7 @@ function BatchGrantsSection() {
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-medium text-muted-foreground">
-                Amount (vCPU-h)
+                Amount (CU-h)
               </label>
               <input
                 type="text"
@@ -771,7 +764,7 @@ export function AdminMeteringPage() {
       <div>
         <h1 className="text-[28px] font-bold tracking-tight text-foreground">Admin Metering</h1>
         <p className="mt-1 text-[13px] text-muted-foreground">
-          Manage tier templates, user plans, and credit grants.
+          Manage tier templates, user plans, and Compute Unit grants.
         </p>
       </div>
 
