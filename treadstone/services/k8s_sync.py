@@ -104,6 +104,8 @@ async def handle_watch_event(
 
         if event_type == "DELETED":
             await _try_close_compute_session(session, sandbox.id)
+            if sandbox.persist:
+                await _try_release_storage_ledger(session, sandbox.id)
             if sandbox.status == SandboxStatus.DELETING:
                 await _record_status_change(
                     session,
@@ -215,6 +217,8 @@ async def reconcile(
             if cr is None:
                 if sandbox.status == SandboxStatus.DELETING:
                     await _try_close_compute_session(session, sandbox.id)
+                    if sandbox.persist:
+                        await _try_release_storage_ledger(session, sandbox.id)
                     await _record_status_change(
                         session,
                         sandbox_id=sandbox.id,
@@ -441,6 +445,14 @@ async def _try_close_compute_session(session: AsyncSession, sandbox_id: str) -> 
         await _metering.close_compute_session(session, sandbox_id)
     except Exception:
         logger.exception("Failed to close compute session for sandbox %s", sandbox_id)
+
+
+async def _try_release_storage_ledger(session: AsyncSession, sandbox_id: str) -> None:
+    """Best-effort release of ACTIVE StorageLedger for a persistent sandbox."""
+    try:
+        await _metering.record_storage_release(session, sandbox_id)
+    except Exception:
+        logger.exception("Failed to release storage ledger for sandbox %s", sandbox_id)
 
 
 async def reconcile_metering(

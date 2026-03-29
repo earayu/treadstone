@@ -1,7 +1,10 @@
+import logging
 from typing import Literal
 from urllib.parse import urlparse
 
 from pydantic_settings import BaseSettings
+
+_logger = logging.getLogger(__name__)
 
 _DEFAULT_JWT_SECRET = "CHANGE_ME_IN_PROD"
 _MIN_JWT_SECRET_LENGTH = 32
@@ -116,6 +119,12 @@ def validate_runtime_settings(cfg: Settings) -> None:
 
     if cfg.email_backend == "resend" and not cfg.resend_api_key:
         raise RuntimeError("TREADSTONE_RESEND_API_KEY must be set when TREADSTONE_EMAIL_BACKEND=resend.")
+
+    if not cfg.metering_enforcement_enabled:
+        _logger.warning(
+            "TREADSTONE_METERING_ENFORCEMENT_ENABLED is False — all quota checks are bypassed. "
+            "Set to True before production deployment."
+        )
 
     if cfg.sandbox_domain and not is_local_sandbox_domain(cfg.sandbox_domain):
         parsed = urlparse(cfg.app_base_url)

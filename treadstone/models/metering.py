@@ -54,6 +54,7 @@ class UserPlan(Base):
     period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     compute_units_monthly_used: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False, default=Decimal("0"))
+    compute_units_overage: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False, default=Decimal("0"))
 
     # Admin overrides
     overrides: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -123,7 +124,15 @@ class StorageQuotaGrant(Base):
 
 class ComputeSession(Base):
     __tablename__ = "compute_session"
-    __table_args__ = (Index("ix_compute_session_open", "ended_at", postgresql_where=text("ended_at IS NULL")),)
+    __table_args__ = (
+        Index("ix_compute_session_open", "ended_at", postgresql_where=text("ended_at IS NULL")),
+        Index(
+            "uq_compute_session_sandbox_active",
+            "sandbox_id",
+            unique=True,
+            postgresql_where=text("ended_at IS NULL"),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(24), primary_key=True, default=lambda: "cs" + random_id())
     sandbox_id: Mapped[str] = mapped_column(String(24), ForeignKey("sandbox.id"), nullable=False, index=True)

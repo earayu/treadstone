@@ -18,7 +18,7 @@ from treadstone.core.errors import (
     ValidationError,
 )
 from treadstone.models.sandbox import Sandbox, SandboxStatus
-from treadstone.models.user import User
+from treadstone.models.user import User, utc_now
 from treadstone.services.sandbox_proxy import (
     proxy_http_request,
     resolve_routing,
@@ -50,6 +50,10 @@ async def http_proxy(
 
     if sandbox.status != SandboxStatus.READY:
         raise SandboxNotReadyError(sandbox_id, sandbox.status)
+
+    sandbox.gmt_last_active = utc_now()
+    session.add(sandbox)
+    await session.commit()
 
     headers = dict(request.headers)
     try:

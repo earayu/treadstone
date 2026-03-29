@@ -209,7 +209,9 @@ class SandboxSubdomainMiddleware:
                     return Response("Invalid or expired sandbox web link.", status_code=401)
                 link.gmt_last_used = utc_now()
                 link.gmt_updated = utc_now()
+                sandbox.gmt_last_active = utc_now()
                 session.add(link)
+                session.add(sandbox)
                 await record_audit_event(
                     session,
                     action="sandbox.web_link.open",

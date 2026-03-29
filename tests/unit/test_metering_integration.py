@@ -342,7 +342,8 @@ class TestSandboxServiceStartWithMetering:
 
 
 class TestSandboxServiceDeleteWithMetering:
-    async def test_delete_persist_releases_storage(self):
+    async def test_delete_persist_does_not_release_storage_early(self):
+        """Storage release moved to K8s Watch/Reconcile — delete() must NOT call it."""
         from treadstone.services.sandbox_service import SandboxService
 
         sb = _make_sandbox(status=SandboxStatus.READY, persist=True, provision_mode="direct")
@@ -353,7 +354,7 @@ class TestSandboxServiceDeleteWithMetering:
 
         await service.delete(sandbox_id=sb.id, owner_id=sb.owner_id)
 
-        metering.record_storage_release.assert_awaited_once_with(session, sb.id)
+        metering.record_storage_release.assert_not_awaited()
 
     async def test_delete_non_persist_skips_storage_release(self):
         from treadstone.services.sandbox_service import SandboxService
