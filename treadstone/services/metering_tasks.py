@@ -25,6 +25,7 @@ from treadstone.models.metering import ComputeSession, StorageLedger, StorageSta
 from treadstone.models.sandbox import Sandbox, SandboxStatus
 from treadstone.models.user import utc_now
 from treadstone.services.audit import record_audit_event
+from treadstone.services.metering_helpers import calculate_credit_rate
 from treadstone.services.metering_service import MeteringService
 
 logger = logging.getLogger(__name__)
@@ -47,10 +48,14 @@ class _OptimisticLockConflict(Exception):
 
 
 async def tick_metering(session: AsyncSession) -> int:
-    """Accumulate raw resource-hours for all open ComputeSessions.
+    """Accumulate raw resource-hours for all open ComputeSessions and consume credits.
 
     Each session update runs inside a savepoint so that an optimistic-lock
     conflict rolls back only that single session, not the entire tick batch.
+
+    After accumulating raw hours, computes credit deltas per user using
+    ``calculate_credit_rate()`` and consumes them from the dual pool
+    (monthly first, then ComputeGrant FIFO).
 
     Returns the number of sessions successfully metered.
     """
@@ -60,6 +65,8 @@ async def tick_metering(session: AsyncSession) -> int:
     open_sessions = result.scalars().all()
 
     metered = 0
+    user_credit_deltas: dict[str, Decimal] = {}
+
     for cs in open_sessions:
         elapsed_seconds = (now - cs.last_metered_at).total_seconds()
         if elapsed_seconds <= 0:
@@ -94,7 +101,14 @@ async def tick_metering(session: AsyncSession) -> int:
             )
             continue
 
+        credit_rate = calculate_credit_rate(cs.template)
+        credit_delta = credit_rate * elapsed_hours
+        user_credit_deltas[cs.user_id] = user_credit_deltas.get(cs.user_id, Decimal("0")) + credit_delta
         metered += 1
+
+    for user_id, total_delta in user_credit_deltas.items():
+        if total_delta > Decimal("0"):
+            await _metering.consume_compute_credits(session, user_id, total_delta)
 
     if metered > 0:
         await session.commit()

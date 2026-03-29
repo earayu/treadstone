@@ -255,14 +255,15 @@ class TestCreateSandbox:
         assert resp.status_code == 422
         assert resp.json()["error"]["code"] == "validation_error"
 
-    async def test_create_with_unsupported_storage_tier_returns_422(self, auth_client):
+    async def test_create_with_unsupported_storage_tier_returns_400(self, auth_client):
         resp = await auth_client.post(
             "/v1/sandboxes",
             json={"template": "aio-sandbox-tiny", "name": "bad-storage-tier", "persist": True, "storage_size": "7Gi"},
         )
-        assert resp.status_code == 422
+        assert resp.status_code == 400
         data = resp.json()
-        assert data["error"]["code"] == "validation_error"
+        assert data["error"]["code"] == "bad_request"
+        assert "7Gi" in data["error"]["message"]
         assert "5Gi" in data["error"]["message"]
 
     async def test_create_with_invalid_auto_stop_interval_returns_422(self, auth_client):

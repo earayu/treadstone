@@ -202,10 +202,12 @@ def _make_tick_session(open_sessions, update_rowcount=1, capture_update_stmts: l
 
 
 class TestTickMetering:
+    @patch("treadstone.services.metering_tasks._metering")
     @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
-    async def test_meters_open_session_and_updates_resource_hours(self, mock_now):
+    async def test_meters_open_session_and_updates_resource_hours(self, mock_now, mock_metering):
         from treadstone.services.metering_tasks import tick_metering
 
+        mock_metering.consume_compute_credits = AsyncMock()
         cs = _make_open_session(last_metered_at=ONE_MINUTE_AGO, gmt_updated=ONE_MINUTE_AGO)
         captured: list = []
         session = _make_tick_session([cs], capture_update_stmts=captured)
@@ -223,10 +225,12 @@ class TestTickMetering:
             expected_delta_mem=cs.memory_gib_request * eh,
         )
 
+    @patch("treadstone.services.metering_tasks._metering")
     @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
-    async def test_skips_session_with_zero_elapsed(self, mock_now):
+    async def test_skips_session_with_zero_elapsed(self, mock_now, mock_metering):
         from treadstone.services.metering_tasks import tick_metering
 
+        mock_metering.consume_compute_credits = AsyncMock()
         cs = _make_open_session(last_metered_at=FIXED_NOW, gmt_updated=FIXED_NOW)
         session = _make_tick_session([cs])
 
@@ -234,11 +238,13 @@ class TestTickMetering:
 
         assert result == 0
 
+    @patch("treadstone.services.metering_tasks._metering")
     @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
-    async def test_handles_optimistic_lock_conflict_with_savepoint_rollback(self, mock_now):
+    async def test_handles_optimistic_lock_conflict_with_savepoint_rollback(self, mock_now, mock_metering):
         """Lock conflict rolls back the savepoint — that session is skipped without failing the tick."""
         from treadstone.services.metering_tasks import tick_metering
 
+        mock_metering.consume_compute_credits = AsyncMock()
         cs = _make_open_session()
         session = _make_tick_session([cs], update_rowcount=0)
 
@@ -246,10 +252,12 @@ class TestTickMetering:
 
         assert result == 0
 
+    @patch("treadstone.services.metering_tasks._metering")
     @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
-    async def test_no_open_sessions_is_noop(self, mock_now):
+    async def test_no_open_sessions_is_noop(self, mock_now, mock_metering):
         from treadstone.services.metering_tasks import tick_metering
 
+        mock_metering.consume_compute_credits = AsyncMock()
         session = _make_tick_session([])
 
         result = await tick_metering(session)
@@ -257,11 +265,13 @@ class TestTickMetering:
         assert result == 0
         session.commit.assert_not_awaited()
 
+    @patch("treadstone.services.metering_tasks._metering")
     @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
-    async def test_crash_recovery_compensates_gap(self, mock_now):
+    async def test_crash_recovery_compensates_gap(self, mock_now, mock_metering):
         """After a 5-minute leader crash, tick should compute the full gap."""
         from treadstone.services.metering_tasks import tick_metering
 
+        mock_metering.consume_compute_credits = AsyncMock()
         cs = _make_open_session(
             last_metered_at=FIVE_MINUTES_AGO,
             gmt_updated=FIVE_MINUTES_AGO,
@@ -282,6 +292,68 @@ class TestTickMetering:
             expected_delta_vcpu=expected_delta_vcpu,
             expected_delta_mem=expected_delta_mem,
         )
+
+    @patch("treadstone.services.metering_tasks._metering")
+    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    async def test_tick_consumes_credits_per_user(self, mock_now, mock_metering):
+        """tick_metering must call consume_compute_credits for each user with metered sessions."""
+        from treadstone.services.metering_tasks import tick_metering
+
+        mock_metering.consume_compute_credits = AsyncMock()
+        cs = _make_open_session(last_metered_at=ONE_MINUTE_AGO, gmt_updated=ONE_MINUTE_AGO)
+        session = _make_tick_session([cs])
+
+        await tick_metering(session)
+
+        mock_metering.consume_compute_credits.assert_awaited_once()
+        call_args = mock_metering.consume_compute_credits.call_args
+        assert call_args[0][0] is session
+        assert call_args[0][1] == cs.user_id
+        credit_amount = call_args[0][2]
+        assert credit_amount > Decimal("0")
+
+    @patch("treadstone.services.metering_tasks._metering")
+    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    async def test_tick_aggregates_credits_across_sessions_for_same_user(self, mock_now, mock_metering):
+        """Multiple sessions for the same user produce a single aggregated consume call."""
+        from treadstone.services.metering_tasks import tick_metering
+
+        mock_metering.consume_compute_credits = AsyncMock()
+        cs1 = _make_open_session(
+            session_id="cs_01",
+            sandbox_id="sb_01",
+            user_id="user_01",
+            last_metered_at=ONE_MINUTE_AGO,
+            gmt_updated=ONE_MINUTE_AGO,
+        )
+        cs2 = _make_open_session(
+            session_id="cs_02",
+            sandbox_id="sb_02",
+            user_id="user_01",
+            last_metered_at=ONE_MINUTE_AGO,
+            gmt_updated=ONE_MINUTE_AGO,
+        )
+        session = _make_tick_session([cs1, cs2])
+
+        await tick_metering(session)
+
+        mock_metering.consume_compute_credits.assert_awaited_once()
+        call_args = mock_metering.consume_compute_credits.call_args
+        assert call_args[0][1] == "user_01"
+
+    @patch("treadstone.services.metering_tasks._metering")
+    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    async def test_tick_does_not_consume_credits_on_lock_conflict(self, mock_now, mock_metering):
+        """If optimistic lock conflicts for all sessions, no credits should be consumed."""
+        from treadstone.services.metering_tasks import tick_metering
+
+        mock_metering.consume_compute_credits = AsyncMock()
+        cs = _make_open_session()
+        session = _make_tick_session([cs], update_rowcount=0)
+
+        await tick_metering(session)
+
+        mock_metering.consume_compute_credits.assert_not_awaited()
 
 
 # ═══════════════════════════════════════════════════════════

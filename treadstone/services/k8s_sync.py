@@ -24,6 +24,7 @@ from treadstone.models.audit_event import AuditActorType
 from treadstone.models.sandbox import Sandbox, SandboxStatus, is_valid_transition
 from treadstone.services.audit import record_audit_event
 from treadstone.services.k8s_client import K8sClientProtocol, WatchExpiredError
+from treadstone.services.metering_helpers import sync_template_specs_from_k8s, validate_template_specs
 from treadstone.services.metering_service import MeteringService
 
 logger = logging.getLogger(__name__)
@@ -268,6 +269,14 @@ async def reconcile(
         await reconcile_storage_metering(session_factory)
     except Exception:
         logger.exception("Storage metering reconciliation failed")
+
+    # ── Template spec sync + validation: populate runtime cache and detect drift ──
+    try:
+        k8s_templates = await k8s_client.list_sandbox_templates(namespace)
+        sync_template_specs_from_k8s(k8s_templates)
+        validate_template_specs(k8s_templates)
+    except Exception:
+        logger.exception("Template spec sync/validation failed")
 
     logger.info("Reconciliation complete. %d unmanaged CRs in K8s. list_rv=%s", len(cr_map), list_rv)
     return list_rv

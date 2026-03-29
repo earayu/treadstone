@@ -1302,6 +1302,37 @@ export interface components {
              * @example 25
              */
             memory_gib_hours: number;
+            /**
+             * Monthly Limit
+             * @example 100
+             */
+            monthly_limit: number;
+            /**
+             * Monthly Used
+             * @example 45.5
+             */
+            monthly_used: number;
+            /**
+             * Monthly Remaining
+             * @example 54.5
+             */
+            monthly_remaining: number;
+            /**
+             * Extra Remaining
+             * @example 50
+             */
+            extra_remaining: number;
+            /**
+             * Total Remaining
+             * @example 104.5
+             */
+            total_remaining: number;
+            /**
+             * Unit
+             * @default credits
+             * @example credits
+             */
+            unit: string;
         };
         /** ConfigResponse */
         ConfigResponse: {
@@ -2053,6 +2084,12 @@ export interface components {
              * @example 5
              */
             available_gib: number;
+            /**
+             * Unit
+             * @default GiB
+             * @example GiB
+             */
+            unit: string;
         };
         /** TierTemplateItem */
         TierTemplateItem: {

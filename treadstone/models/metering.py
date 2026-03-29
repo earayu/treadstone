@@ -151,6 +151,12 @@ class StorageLedger(Base):
     __table_args__ = (
         Index("ix_storage_ledger_user_state", "user_id", "storage_state"),
         Index("ix_storage_ledger_sandbox", "sandbox_id"),
+        Index(
+            "ix_storage_ledger_sandbox_active",
+            "sandbox_id",
+            unique=True,
+            postgresql_where=text("storage_state = 'active'"),
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(24), primary_key=True, default=lambda: "sl" + random_id())

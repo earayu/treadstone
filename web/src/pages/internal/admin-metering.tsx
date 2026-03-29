@@ -108,7 +108,7 @@ function EditTierDialog({ tier, onClose }: EditTierDialogProps) {
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-medium text-muted-foreground">
-                Compute Credits / Mo (vCPU-h)
+                Compute quota / month
               </label>
               <input
                 type="number"
@@ -119,7 +119,7 @@ function EditTierDialog({ tier, onClose }: EditTierDialogProps) {
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-medium text-muted-foreground">
-                Storage Credits / Mo (GiB)
+                Storage capacity (GiB)
               </label>
               <input
                 type="number"
@@ -411,7 +411,7 @@ function UserPlanSection() {
           USER PLAN MANAGEMENT
         </span>
         <span className="text-[11px] text-muted-foreground/50">
-          — lookup · change tier · apply overrides · issue credits
+          — lookup · change tier · apply overrides · issue grants
         </span>
       </div>
 

@@ -38,15 +38,17 @@ HTTP 200
 jsonpath "$.tier" == "free"
 jsonpath "$.billing_period.start" isString
 jsonpath "$.billing_period.end" isString
+jsonpath "$.compute.vcpu_hours" >= 0.0
+jsonpath "$.compute.memory_gib_hours" >= 0.0
 jsonpath "$.compute.monthly_limit" == 10.0
-jsonpath "$.compute.monthly_used" == 0.0
-jsonpath "$.compute.monthly_remaining" == 10.0
+jsonpath "$.compute.monthly_used" >= 0.0
+jsonpath "$.compute.monthly_remaining" >= 0.0
 jsonpath "$.compute.extra_remaining" == 50.0
-jsonpath "$.compute.total_remaining" == 60.0
-jsonpath "$.compute.unit" == "vCPU-hours"
-jsonpath "$.storage.monthly_limit" == 0
-jsonpath "$.storage.current_used" == 0
-jsonpath "$.storage.available" == 0
+jsonpath "$.compute.total_remaining" >= 0.0
+jsonpath "$.compute.unit" == "credits"
+jsonpath "$.storage.current_used_gib" == 0
+jsonpath "$.storage.total_quota_gib" == 0
+jsonpath "$.storage.available_gib" == 0
 jsonpath "$.storage.unit" == "GiB"
 jsonpath "$.limits.max_concurrent_running" == 1
 jsonpath "$.limits.max_sandbox_duration_seconds" == 1800
@@ -65,7 +67,7 @@ jsonpath "$.id" isString
 jsonpath "$.user_id" isString
 jsonpath "$.tier" == "free"
 jsonpath "$.compute_credits_monthly_limit" == 10.0
-jsonpath "$.compute_credits_monthly_used" == 0.0
+jsonpath "$.compute_credits_monthly_used" >= 0.0
 jsonpath "$.storage_capacity_limit_gib" == 0
 jsonpath "$.max_concurrent_running" == 1
 jsonpath "$.max_sandbox_duration_seconds" == 1800

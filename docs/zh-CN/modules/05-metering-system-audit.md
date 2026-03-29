@@ -1610,3 +1610,199 @@ Storage 配额计算是：
 - 系统已经具备 tier / plan / compute grant / storage grant 的后台运营能力。
 - Storage 容量配额框架已基本成型。
 - Compute credit 扣减与自动超额执行链路仍需补完，当前不应按“完整 billing/quota enforcement system”对外宣称。
+
+---
+
+## 17. 审计后修复记录
+
+**修复日期：** 2026-03-29
+**修复基线：** 基于第 16 节中列出的 6 个待修复项
+
+### 17.1 已完成的修复
+
+#### 修复 1：Compute credit 消费链路接回生产路径
+
+**修改文件：**
+
+- `treadstone/services/metering_tasks.py` — `tick_metering()`
+- `treadstone/services/metering_service.py` — `close_compute_session()`
+
+**变更内容：**
+
+1. `tick_metering()` 在累加原始资源小时后，按用户聚合 credit delta，调用 `consume_compute_credits()` 扣减双池。
+2. `close_compute_session()` 在结算最后一段原始小时后，调用 `consume_compute_credits()` 扣减最终 credit delta。
+
+**Credit 转换公式：** `credit_rate = max(vCPU_request, memory_GiB_request / 2)`，来自 `metering_helpers.calculate_credit_rate()`。
+
+**影响：**
+
+- `UserPlan.compute_credits_monthly_used` 现在会随真实 sandbox 运行增长。
+- `ComputeGrant.remaining_amount` 会在月度池耗尽后被 FIFO 扣减。
+- `get_total_compute_remaining()` 返回的是真正被消耗后的剩余额度。
+- `check_warning_thresholds()` 的 80%/100% 告警现在能自然触发。
+- `check_grace_periods()` 的宽限期启动和 `_enforce_stop()` 的超额自动停机现在能自然触发。
+
+#### 修复 2：Usage Summary 扩展 credit pool 字段
+
+**修改文件：**
+
+- `treadstone/services/metering_service.py` — `get_usage_summary()`
+- `treadstone/api/schemas.py` — `ComputeUsage`、`StorageUsage`
+
+**新增字段（`GET /v1/usage` compute 部分）：**
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `monthly_limit` | float | 月度额度上限 |
+| `monthly_used` | float | 月度已消耗额度 |
+| `monthly_remaining` | float | 月度剩余额度 |
+| `extra_remaining` | float | 额外 grant 剩余 |
+| `total_remaining` | float | 总剩余额度 |
+| `unit` | string | 固定值 `"credits"` |
+
+**新增字段（storage 部分）：** `unit`（固定值 `"GiB"`）。
+
+#### 修复 3：Template 资源规格漂移检测
+
+**修改文件：**
+
+- `treadstone/services/metering_helpers.py` — 新增 `validate_template_specs()`
+- `treadstone/services/k8s_sync.py` — `reconcile()` 末尾调用
+
+每次 K8s reconcile（约 300 秒）执行后，读取 K8s SandboxTemplate 列表，与 `TEMPLATE_SPECS` 静态映射对比 vCPU 和内存值。如果发现差异，写 warning 级日志。支持 K8s 资源格式解析。
+
+#### 修复 4：E2E 计量测试重写
+
+- `tests/e2e/07-metering-usage.hurl`、`tests/e2e/08-metering-admin.hurl` 完全重写。
+- Endpoint 改为 `/compute-grants`、`/storage-grants`，断言对齐当前 API 响应结构。
+
+#### 修复 5：前端命名修正
+
+- 页面标题：`Usage & Credits` -> `Usage & Quotas`
+- 新增月度额度池展示（monthly_used / monthly_limit credits）
+- Admin：`Compute Credits / Mo` -> `Compute quota / month`、`Storage Credits / Mo` -> `Storage capacity (GiB)`
+
+#### 修复 6：StorageLedger 模型索引补齐
+
+迁移 `c4d5e6f7a8b9` 创建的 `ix_storage_ledger_sandbox_active`（UNIQUE 部分索引）此前只存在于 Alembic 迁移中。已补齐到 `StorageLedger.__table_args__`。
+
+#### 修复 7：新增测试覆盖
+
+| 文件 | 测试内容 |
+| --- | --- |
+| `tests/unit/test_metering_tasks.py` | tick 调用 consume、多 session 聚合、锁冲突不消费 |
+| `tests/unit/test_metering_service.py` | close_compute_session 调用 consume 并传入正确金额 |
+| `tests/unit/test_metering_models.py` | validate_template_specs 匹配、漂移检测、缺失模板检测 |
+| `tests/api/test_usage_api.py` | Usage summary 包含 credit pool 字段 |
+
+### 17.2 修复后状态总表
+
+| 子系统 | 修复前 | 修复后 |
+| --- | --- | --- |
+| Compute 原始用量采集 | 可运行 | 可运行（无变化） |
+| Compute 额度消费 | 生产路径未调用 | **已闭环** |
+| Compute 配额拦截 | 部分有效 | **可用** |
+| Compute warning / grace / auto-stop | 无触发基础 | **可触发** |
+| Storage 体系 | 可运行 | 可运行（无变化） |
+| Usage API | 仅原始小时 | **新增 credit pool 视图** |
+| E2E 计量测试 | 已失效 | **已对齐当前 API** |
+| 前端命名 | 混杂 | **已修正** |
+| Template 规格一致性 | 无检测 | **reconcile 时自动检测** |
+| StorageLedger 模型索引 | 迁移有模型缺 | **已补齐** |
+
+### 17.3 数据采集与计量流程完整性审计
+
+#### Compute 数据流
+
+```
+POST /v1/sandboxes (create)
+  -> enforcement 检查 (template / quota / concurrent / duration)
+  -> 写 sandbox 行 (status=CREATING), 创建 K8s 资源
+  -> 【此时无 ComputeSession — 正确，等待 READY】
+
+K8s Watch 检测到 READY
+  -> open_compute_session() — 锁定 template/vcpu/memory 规格
+
+tick_metering() 每 60 秒
+  -> 累加 vcpu_hours / memory_gib_hours
+  -> credit_delta = credit_rate * elapsed_hours, 按用户聚合
+  -> consume_compute_credits() 扣减双池
+
+STOPPED / ERROR / DELETING (K8s Watch)
+  -> close_compute_session() — 最终结算 + credit 消费
+
+K8s Watch DELETED
+  -> _try_close_compute_session() — 兜底关闭
+
+reconcile_metering() 每 300 秒
+  -> READY 无 session -> 补开
+  -> 非 READY 有 session -> 补关（含 credit 消费）
+```
+
+#### Storage 数据流
+
+```
+POST /v1/sandboxes (persist=true)
+  -> check_storage_quota(), 创建 K8s 资源
+  -> record_storage_allocation() -> StorageLedger(ACTIVE)
+
+tick_storage_metering() 每 60 秒
+  -> gib_hours_consumed += size_gib * elapsed / 3600
+
+DELETE /v1/sandboxes/{id}
+  -> record_storage_release() -> ACTIVE -> DELETED
+  -> 删除 K8s 资源
+
+reconcile_storage_metering() 每 300 秒
+  -> persist sandbox 无 ACTIVE ledger -> 补建
+  -> 孤儿 ACTIVE ledger -> 补释放
+```
+
+#### 确认无遗漏的入口
+
+| 入口 | Compute | Storage |
+| --- | --- | --- |
+| POST /v1/sandboxes | enforcement 检查 | storage 配额 + allocation |
+| POST /v1/sandboxes/{id}/start | enforcement 检查 | 不需要（卷不变） |
+| POST /v1/sandboxes/{id}/stop | K8s Watch 关闭 session | 不需要（卷仍占用） |
+| DELETE /v1/sandboxes/{id} | K8s Watch 关闭 session | release ledger |
+| K8s Watch (READY) | open session | — |
+| K8s Watch (STOP/ERR/DEL) | close session + credits | — |
+| K8s Watch (DELETED) | close session | — |
+| K8s Reconcile | 补开/补关 | 补建/补释放 |
+| tick_metering (60s) | hours + credits | — |
+| tick_storage_metering (60s) | — | gib_hours |
+| warning/grace/auto-stop | 读额度 -> 告警/停机 | — |
+| monthly reset | session 拆分 + 清零 | — |
+
+#### 跨月边界分析
+
+`run_metering_tick` 步骤：tick_metering -> tick_storage -> warning -> grace -> reset_monthly。跨月时 tick_metering 已消费 credits 至 `now`（含跨入新月的少量时间），reset_monthly 将 `monthly_used` 清零。边界最多约 60 秒 credit 被计入旧月后清零，对用户微小有利偏差，可接受。
+
+### 17.4 Schema 设计审查
+
+#### `memory_gib_request` 命名：无需更改
+
+`vcpu_request` 中的 "v" 是行业标准术语 **vCPU**（virtual CPU）的一部分，不是前缀模式。内存没有 "vMemory" 概念。当前命名正确。
+
+#### UserPlan 与 welcome bonus 的懒加载设计
+
+**当前设计：** `ensure_user_plan()` 在首次访问计量系统时懒创建，而非注册时。
+
+**设计目的：**
+
+1. **模块解耦** — `auth.py` 对计量系统零依赖
+2. **避免浪费行** — 注册后从未使用的用户不产生计量数据库行
+3. **并发安全** — `begin_nested()` + `IntegrityError` 处理唯一约束冲突
+
+**结论：** 保持懒加载。如需改为注册时创建，只需在 `auth.py` 的 `on_after_register` 中调用 `ensure_user_plan()`，约 3 行代码。
+
+### 17.5 已知的后续待处理项
+
+| 项目 | 优先级 | 说明 |
+| --- | --- | --- |
+| `compute_session` FK `ondelete` | 中 | `sandbox_id` 和 `user_id` 无 ondelete，`_delete_sandbox_row()` 有 FK 约束失败风险。需迁移改为 SET NULL + nullable |
+| `Numeric(10,4)` 精度 | 低 | 累积误差约 0.8%（tiny），可迁移为 `Numeric(12,6)` |
+| `archived_at` / ARCHIVED | 低 | 预留字段，无业务逻辑使用 |
+| per-session credit 追踪 | 低 | 如需 per-session audit 需加 `credits_consumed` 列 |
+| 商业计费闭环 | 未排期 | 不在本次修复范围内 |

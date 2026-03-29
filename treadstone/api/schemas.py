@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
-from treadstone.config import SANDBOX_STORAGE_SIZE_VALUES, settings
+from treadstone.config import settings
 from treadstone.models.api_key import ApiKeyDataPlaneMode
 from treadstone.models.user import Role
 
@@ -25,8 +25,8 @@ SANDBOX_NAME_RULE = (
 SANDBOX_NAME_DESCRIPTION = (
     f"Optional custom sandbox name. {SANDBOX_NAME_RULE} Sandbox names only need to be unique for the current user."
 )
-STORAGE_SIZE_RULE = "storage_size must be one of the supported storage tiers: 5Gi, 10Gi, or 20Gi."
-StorageSize = Literal["5Gi", "10Gi", "20Gi"]
+STORAGE_SIZE_PATTERN = re.compile(r"^\d+(?:Gi|Ti)$")
+STORAGE_SIZE_RULE = "storage_size must match format '<number>Gi' or '<number>Ti' (e.g. 5Gi, 10Gi, 20Gi, 1Ti)."
 
 # ── Sandbox ──────────────────────────────────────────────────────────────────
 
@@ -44,10 +44,11 @@ class CreateSandboxRequest(BaseModel):
         description="Minutes after stop before the sandbox is automatically deleted. -1 disables auto-delete.",
     )
     persist: bool = Field(default=False, examples=[False])
-    storage_size: StorageSize | None = Field(
+    storage_size: str | None = Field(
         default=None,
         examples=["5Gi"],
-        description="Persistent volume size. Supported tiers: 5Gi, 10Gi, 20Gi.",
+        description="Persistent volume size (e.g. 5Gi, 10Gi, 20Gi). "
+        "Allowed values depend on the sandbox template's annotation.",
     )
 
     @field_validator("name")
@@ -75,10 +76,10 @@ class CreateSandboxRequest(BaseModel):
 
     @field_validator("storage_size")
     @classmethod
-    def validate_storage_size(cls, value: StorageSize | None) -> StorageSize | None:
+    def validate_storage_size(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        if value not in SANDBOX_STORAGE_SIZE_VALUES:
+        if not STORAGE_SIZE_PATTERN.fullmatch(value):
             raise ValueError(STORAGE_SIZE_RULE)
         return value
 
@@ -118,10 +119,10 @@ class SandboxResponse(BaseModel):
         ..., examples=[-1], description="Minutes after stop before auto-delete. -1 means disabled."
     )
     persist: bool = Field(default=False, examples=[False], description="Whether persistent storage is attached.")
-    storage_size: StorageSize | None = Field(
+    storage_size: str | None = Field(
         default=None,
         examples=["5Gi"],
-        description="Persistent volume size when persist=true. Supported tiers: 5Gi, 10Gi, 20Gi.",
+        description="Persistent volume size when persist=true.",
     )
     urls: SandboxUrls
     created_at: datetime = Field(..., examples=["2026-03-21T12:00:00+00:00"])
@@ -171,6 +172,7 @@ class SandboxTemplateResponse(BaseModel):
     description: str = Field(..., examples=["Lightweight sandbox for code execution and scripting"])
     image: str = Field(..., examples=["ghcr.io/agent-infra/sandbox:latest"])
     resource_spec: ResourceSpec
+    allowed_storage_sizes: list[str] = Field(default_factory=list, examples=[["5Gi", "10Gi", "20Gi"]])
 
 
 class SandboxTemplateListResponse(BaseModel):
@@ -407,6 +409,12 @@ class BillingPeriod(BaseModel):
 class ComputeUsage(BaseModel):
     vcpu_hours: float = Field(..., examples=[12.5])
     memory_gib_hours: float = Field(..., examples=[25.0])
+    monthly_limit: float = Field(..., examples=[100.0])
+    monthly_used: float = Field(..., examples=[45.5])
+    monthly_remaining: float = Field(..., examples=[54.5])
+    extra_remaining: float = Field(..., examples=[50.0])
+    total_remaining: float = Field(..., examples=[104.5])
+    unit: str = Field(default="credits", examples=["credits"])
 
 
 class StorageUsage(BaseModel):
@@ -414,6 +422,7 @@ class StorageUsage(BaseModel):
     current_used_gib: int = Field(..., examples=[5])
     total_quota_gib: int = Field(..., examples=[10])
     available_gib: int = Field(..., examples=[5])
+    unit: str = Field(default="GiB", examples=["GiB"])
 
 
 class UsageLimits(BaseModel):
