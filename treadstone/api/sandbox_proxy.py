@@ -41,7 +41,9 @@ async def http_proxy(
     user: User = Depends(get_current_data_plane_user),
     session: AsyncSession = Depends(get_session),
 ) -> StreamingResponse:
-    result = await session.execute(select(Sandbox).where(Sandbox.id == sandbox_id, Sandbox.owner_id == user.id))
+    result = await session.execute(
+        select(Sandbox).where(Sandbox.id == sandbox_id, Sandbox.owner_id == user.id, Sandbox.gmt_deleted.is_(None))
+    )
     sandbox = result.scalar_one_or_none()
     if sandbox is None:
         raise SandboxNotFoundError(sandbox_id)

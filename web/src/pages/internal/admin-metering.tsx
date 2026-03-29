@@ -5,13 +5,10 @@ import {
   useTierTemplates,
   useUpdateTierTemplate,
   useLookupUserByEmail,
-  useResolveEmails,
   useAdminUserUsage,
   useAdminUpdatePlan,
   useAdminCreateComputeGrant,
   useAdminCreateStorageGrant,
-  useAdminBatchComputeGrants,
-  useAdminBatchStorageGrants,
   type TierTemplate,
 } from "@/api/admin"
 
@@ -324,6 +321,9 @@ function TierRow({
   )
 }
 
+const GRANT_TYPES = ["admin_grant", "welcome_bonus", "campaign", "support"] as const
+type GrantType = (typeof GRANT_TYPES)[number]
+
 function UserPlanSection() {
   const [inputEmail, setInputEmail] = useState("")
   const [resolvedUserId, setResolvedUserId] = useState<string | null>(null)
@@ -331,11 +331,26 @@ function UserPlanSection() {
   const [lookupError, setLookupError] = useState<string | null>(null)
   const lookupByEmail = useLookupUserByEmail()
   const { data: usage, isLoading, error } = useAdminUserUsage(resolvedUserId)
+  const { data: tierTemplatesData } = useTierTemplates()
+  const availableTiers = tierTemplatesData?.items?.map((t) => t.tier) ?? []
   const updatePlan = useAdminUpdatePlan()
   const createComputeGrant = useAdminCreateComputeGrant()
   const createStorageGrant = useAdminCreateStorageGrant()
-  const [computeGrantAmount, setComputeGrantAmount] = useState("50")
-  const [storageGrantGib, setStorageGrantGib] = useState("10")
+  const [selectedTier, setSelectedTier] = useState("")
+
+  // Compute grant fields
+  const [computeAmount, setComputeAmount] = useState("50")
+  const [computeGrantType, setComputeGrantType] = useState<GrantType>("admin_grant")
+  const [computeReason, setComputeReason] = useState("")
+  const [computeCampaignId, setComputeCampaignId] = useState("")
+  const [computeExpiresAt, setComputeExpiresAt] = useState("")
+
+  // Storage grant fields
+  const [storageGib, setStorageGib] = useState("10")
+  const [storageGrantType, setStorageGrantType] = useState<GrantType>("admin_grant")
+  const [storageReason, setStorageReason] = useState("")
+  const [storageCampaignId, setStorageCampaignId] = useState("")
+  const [storageExpiresAt, setStorageExpiresAt] = useState("")
 
   const handleLookup = () => {
     const trimmed = inputEmail.trim()
@@ -350,6 +365,7 @@ function UserPlanSection() {
       onError: () => {
         setResolvedUserId(null)
         setResolvedEmail(null)
+        setSelectedTier("")
         setLookupError(`No user found for "${trimmed}"`)
       },
     })
@@ -368,15 +384,29 @@ function UserPlanSection() {
 
   const handleGrantCompute = () => {
     if (!resolvedUserId) return
-    const amt = parseFloat(computeGrantAmount)
+    const amt = parseFloat(computeAmount)
     if (isNaN(amt) || amt <= 0) {
       toast.error("Compute amount must be a positive number.")
       return
     }
     createComputeGrant.mutate(
-      { userId: resolvedUserId, body: { amount: amt, grant_type: "admin_grant" } },
       {
-        onSuccess: () => toast.success("Compute grant created"),
+        userId: resolvedUserId,
+        body: {
+          amount: amt,
+          grant_type: computeGrantType,
+          reason: computeReason.trim() || null,
+          campaign_id: computeGrantType === "campaign" ? computeCampaignId.trim() || null : null,
+          expires_at: computeExpiresAt ? new Date(computeExpiresAt).toISOString() : null,
+        },
+      },
+      {
+        onSuccess: () => {
+          toast.success("Compute grant created")
+          setComputeReason("")
+          setComputeCampaignId("")
+          setComputeExpiresAt("")
+        },
         onError: (e) => toast.error(e.message),
       },
     )
@@ -384,15 +414,29 @@ function UserPlanSection() {
 
   const handleGrantStorage = () => {
     if (!resolvedUserId) return
-    const gib = parseInt(storageGrantGib, 10)
+    const gib = parseInt(storageGib, 10)
     if (isNaN(gib) || gib <= 0) {
       toast.error("Storage size (GiB) must be a positive integer.")
       return
     }
     createStorageGrant.mutate(
-      { userId: resolvedUserId, body: { size_gib: gib, grant_type: "admin_grant" } },
       {
-        onSuccess: () => toast.success("Storage quota grant created"),
+        userId: resolvedUserId,
+        body: {
+          size_gib: gib,
+          grant_type: storageGrantType,
+          reason: storageReason.trim() || null,
+          campaign_id: storageGrantType === "campaign" ? storageCampaignId.trim() || null : null,
+          expires_at: storageExpiresAt ? new Date(storageExpiresAt).toISOString() : null,
+        },
+      },
+      {
+        onSuccess: () => {
+          toast.success("Storage quota grant created")
+          setStorageReason("")
+          setStorageCampaignId("")
+          setStorageExpiresAt("")
+        },
         onError: (e) => toast.error(e.message),
       },
     )
@@ -410,7 +454,7 @@ function UserPlanSection() {
           USER PLAN MANAGEMENT
         </span>
         <span className="text-[11px] text-muted-foreground/50">
-          — lookup · change tier · apply overrides · issue grants
+          — lookup · change tier · issue grants
         </span>
       </div>
 
@@ -440,103 +484,205 @@ function UserPlanSection() {
       )}
 
       {resolvedUserId && (
-        <div className="m-5 rounded-sm border border-border/20 bg-background p-5">
+        <div className="m-5 space-y-5">
           {isLoading ? (
             <p className="text-sm text-muted-foreground">Loading usage data…</p>
           ) : error ? (
             <p className="text-sm text-destructive">Failed to load usage data.</p>
           ) : (
             <>
-              <div className="mb-4 flex items-center gap-4 text-xs text-muted-foreground">
-                <span>
+              {/* User stats */}
+              <div className="rounded-sm border border-border/20 bg-background p-5">
+                <div className="mb-4 flex items-center gap-4 text-xs text-muted-foreground">
                   <span className="font-medium text-foreground">{resolvedEmail}</span>
-                </span>
-                <span className="text-muted-foreground/40">|</span>
-                <span className="font-mono text-[10px]">{resolvedUserId}</span>
-              </div>
-
-              <div className="grid grid-cols-4 gap-6">
-                <div>
-                  <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-                    CURRENT TIER
-                  </p>
-                  <p className="mt-1 text-base font-bold text-primary">{tier}</p>
+                  <span className="text-muted-foreground/40">|</span>
+                  <span className="font-mono text-[10px]">{resolvedUserId}</span>
                 </div>
-                <div>
-                  <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-                    TIER
-                  </p>
-                  <p className="mt-1 text-base font-semibold text-foreground">{tier}</p>
+                <div className="grid grid-cols-3 gap-6">
+                  <div>
+                    <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+                      CURRENT TIER
+                    </p>
+                    <p className="mt-1 text-base font-bold capitalize text-primary">{tier}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+                      CU-HOURS USED
+                    </p>
+                    <p className="mt-1 text-base font-semibold text-foreground">{cuHours.toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+                      RUNNING NOW
+                    </p>
+                    <p className="mt-1 text-base font-semibold text-foreground">
+                      {runningNow} / {maxConcurrent}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-                    CU-HOURS
-                  </p>
-                  <p className="mt-1 text-base font-semibold text-foreground">{cuHours.toFixed(2)}</p>
-                </div>
-                <div>
-                  <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-                    RUNNING NOW
-                  </p>
-                  <p className="mt-1 text-base font-semibold text-foreground">
-                    {runningNow} / {maxConcurrent}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-6 flex flex-col gap-4">
-                <div className="flex flex-wrap items-end gap-3">
-                  <button
-                    onClick={() => handleChangeTier("pro")}
-                    disabled={updatePlan.isPending}
-                    className="rounded-sm border border-border/40 px-4 py-1.5 text-[11px] font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
-                  >
-                    Change Tier to Pro
-                  </button>
-                  <button
-                    disabled
-                    className="rounded-sm border border-border/40 px-4 py-1.5 text-[11px] font-medium text-foreground opacity-50"
-                  >
-                    Apply Overrides
-                  </button>
-                </div>
-                <div className="flex flex-wrap items-end gap-4 border-t border-border/15 pt-4">
+                <div className="mt-5 flex flex-wrap items-end gap-3 border-t border-border/15 pt-4">
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-muted-foreground">
-                      Compute grant (CU-h)
-                    </label>
+                    <label className="text-[10px] font-medium text-muted-foreground">Change tier</label>
+                    <select
+                      value={selectedTier || tier}
+                      onChange={(e) => setSelectedTier(e.target.value)}
+                      className="h-[34px] w-[160px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    >
+                      {availableTiers.length > 0 ? (
+                        availableTiers.map((t) => (
+                          <option key={t} value={t}>{t}</option>
+                        ))
+                      ) : (
+                        <option value={tier}>{tier}</option>
+                      )}
+                    </select>
+                  </div>
+                  <button
+                    onClick={() => handleChangeTier(selectedTier || tier)}
+                    disabled={updatePlan.isPending || (selectedTier || tier) === tier}
+                    className="h-[34px] rounded-sm bg-primary px-5 text-[11px] font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"
+                  >
+                    {updatePlan.isPending ? "Saving…" : "Apply tier"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Compute grant */}
+              <div className="rounded-sm border border-border/20 bg-background p-5">
+                <p className="mb-4 text-[11px] font-medium uppercase tracking-wide text-primary">
+                  Compute grant
+                </p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-medium text-muted-foreground">Amount (CU-h)</label>
                     <input
                       type="text"
-                      value={computeGrantAmount}
-                      onChange={(e) => setComputeGrantAmount(e.target.value)}
-                      className="h-[34px] w-[100px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                      value={computeAmount}
+                      onChange={(e) => setComputeAmount(e.target.value)}
+                      className="h-[34px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                     />
                   </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-medium text-muted-foreground">Grant type</label>
+                    <select
+                      value={computeGrantType}
+                      onChange={(e) => setComputeGrantType(e.target.value as GrantType)}
+                      className="h-[34px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    >
+                      {GRANT_TYPES.map((gt) => (
+                        <option key={gt} value={gt}>{gt}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {computeGrantType === "campaign" && (
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-medium text-muted-foreground">Campaign ID</label>
+                      <input
+                        type="text"
+                        value={computeCampaignId}
+                        onChange={(e) => setComputeCampaignId(e.target.value)}
+                        placeholder="e.g. launch-2026"
+                        className="h-[34px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+                      />
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-medium text-muted-foreground">Expires at (optional)</label>
+                    <input
+                      type="date"
+                      value={computeExpiresAt}
+                      onChange={(e) => setComputeExpiresAt(e.target.value)}
+                      className="h-[34px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  </div>
+                  <div className="col-span-2 flex flex-col gap-1 sm:col-span-3 lg:col-span-4">
+                    <label className="text-[10px] font-medium text-muted-foreground">Reason (optional)</label>
+                    <input
+                      type="text"
+                      value={computeReason}
+                      onChange={(e) => setComputeReason(e.target.value)}
+                      placeholder="e.g. Support request #1234"
+                      className="h-[34px] w-full rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  </div>
+                </div>
+                <div className="mt-3 flex justify-end">
                   <button
                     onClick={handleGrantCompute}
                     disabled={createComputeGrant.isPending}
-                    className="h-[34px] rounded-sm border border-border/40 px-4 text-[11px] font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+                    className="h-[34px] rounded-sm bg-primary px-5 text-[11px] font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
                   >
-                    Grant compute
+                    {createComputeGrant.isPending ? "Granting…" : "Grant compute"}
                   </button>
-                  <div className="mx-1 hidden h-8 w-px bg-border/30 sm:block" aria-hidden />
+                </div>
+              </div>
+
+              {/* Storage grant */}
+              <div className="rounded-sm border border-border/20 bg-background p-5">
+                <p className="mb-4 text-[11px] font-medium uppercase tracking-wide text-primary">
+                  Storage quota grant
+                </p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-muted-foreground">
-                      Storage grant (GiB)
-                    </label>
+                    <label className="text-[10px] font-medium text-muted-foreground">Size (GiB)</label>
                     <input
                       type="text"
-                      value={storageGrantGib}
-                      onChange={(e) => setStorageGrantGib(e.target.value)}
-                      className="h-[34px] w-[100px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                      value={storageGib}
+                      onChange={(e) => setStorageGib(e.target.value)}
+                      className="h-[34px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                     />
                   </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-medium text-muted-foreground">Grant type</label>
+                    <select
+                      value={storageGrantType}
+                      onChange={(e) => setStorageGrantType(e.target.value as GrantType)}
+                      className="h-[34px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    >
+                      {GRANT_TYPES.map((gt) => (
+                        <option key={gt} value={gt}>{gt}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {storageGrantType === "campaign" && (
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-medium text-muted-foreground">Campaign ID</label>
+                      <input
+                        type="text"
+                        value={storageCampaignId}
+                        onChange={(e) => setStorageCampaignId(e.target.value)}
+                        placeholder="e.g. launch-2026"
+                        className="h-[34px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+                      />
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-medium text-muted-foreground">Expires at (optional)</label>
+                    <input
+                      type="date"
+                      value={storageExpiresAt}
+                      onChange={(e) => setStorageExpiresAt(e.target.value)}
+                      className="h-[34px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  </div>
+                  <div className="col-span-2 flex flex-col gap-1 sm:col-span-3 lg:col-span-4">
+                    <label className="text-[10px] font-medium text-muted-foreground">Reason (optional)</label>
+                    <input
+                      type="text"
+                      value={storageReason}
+                      onChange={(e) => setStorageReason(e.target.value)}
+                      placeholder="e.g. Storage addon for enterprise trial"
+                      className="h-[34px] w-full rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  </div>
+                </div>
+                <div className="mt-3 flex justify-end">
                   <button
                     onClick={handleGrantStorage}
                     disabled={createStorageGrant.isPending}
-                    className="h-[34px] rounded-sm border border-border/40 px-4 text-[11px] font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+                    className="h-[34px] rounded-sm bg-primary px-5 text-[11px] font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
                   >
-                    Grant storage quota
+                    {createStorageGrant.isPending ? "Granting…" : "Grant storage quota"}
                   </button>
                 </div>
               </div>
@@ -544,216 +690,6 @@ function UserPlanSection() {
           )}
         </div>
       )}
-    </div>
-  )
-}
-
-function parseEmailList(raw: string): string[] {
-  return raw
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean)
-}
-
-function BatchGrantsSection() {
-  const [computeEmails, setComputeEmails] = useState("")
-  const [computeAmount, setComputeAmount] = useState("50.0")
-  const [computeGrantType, setComputeGrantType] = useState("campaign")
-  const [storageEmails, setStorageEmails] = useState("")
-  const [storageGib, setStorageGib] = useState("10")
-  const [storageGrantType, setStorageGrantType] = useState("campaign")
-
-  const resolveComputeEmails = useResolveEmails()
-  const resolveStorageEmails = useResolveEmails()
-  const batchCompute = useAdminBatchComputeGrants()
-  const batchStorage = useAdminBatchStorageGrants()
-
-  const runBatchForEmails = (
-    emailsRaw: string,
-    resolveMutation: typeof resolveComputeEmails,
-    onResolved: (userIds: string[]) => void,
-  ) => {
-    const emailList = parseEmailList(emailsRaw)
-    if (emailList.length === 0) {
-      toast.error("Please provide at least one email.")
-      return
-    }
-    resolveMutation.mutate(emailList, {
-      onSuccess: (resolved) => {
-        const notFound = resolved.results.filter((r) => !r.user_id)
-        if (notFound.length > 0) {
-          toast.error(`Users not found: ${notFound.map((r) => r.email).join(", ")}`)
-          return
-        }
-        onResolved(resolved.results.map((r) => r.user_id!))
-      },
-      onError: (e) => toast.error(e.message),
-    })
-  }
-
-  const handleBatchCompute = () => {
-    const amt = parseFloat(computeAmount)
-    if (isNaN(amt) || amt <= 0) {
-      toast.error("Amount must be a positive number.")
-      return
-    }
-    runBatchForEmails(computeEmails, resolveComputeEmails, (userIds) => {
-      batchCompute.mutate(
-        { user_ids: userIds, amount: amt, grant_type: computeGrantType },
-        {
-          onSuccess: (res) =>
-            toast.success(
-              `Batch compute grants: ${res.succeeded}/${res.total_requested} succeeded`,
-            ),
-          onError: (e) => toast.error(e.message),
-        },
-      )
-    })
-  }
-
-  const handleBatchStorage = () => {
-    const gib = parseInt(storageGib, 10)
-    if (isNaN(gib) || gib <= 0) {
-      toast.error("Size (GiB) must be a positive integer.")
-      return
-    }
-    runBatchForEmails(storageEmails, resolveStorageEmails, (userIds) => {
-      batchStorage.mutate(
-        { user_ids: userIds, size_gib: gib, grant_type: storageGrantType },
-        {
-          onSuccess: (res) =>
-            toast.success(
-              `Batch storage grants: ${res.succeeded}/${res.total_requested} succeeded`,
-            ),
-          onError: (e) => toast.error(e.message),
-        },
-      )
-    })
-  }
-
-  const computePending =
-    resolveComputeEmails.isPending || batchCompute.isPending
-  const storagePending =
-    resolveStorageEmails.isPending || batchStorage.isPending
-
-  return (
-    <div className="border border-border/20 bg-black rounded">
-      <div className="flex items-center gap-4 border-b border-border/20 bg-card px-5 py-4">
-        <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-muted-foreground">
-          BATCH GRANTS
-        </span>
-        <span className="text-[11px] text-muted-foreground/50">
-          — Compute Unit or storage quota, separate workflows
-        </span>
-      </div>
-
-      <div className="flex flex-col gap-8 p-5">
-        <div>
-          <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-primary">
-            Batch compute grants
-          </p>
-          <div className="flex flex-wrap gap-4">
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-medium text-muted-foreground">
-                Emails (one per line)
-              </label>
-              <textarea
-                rows={3}
-                value={computeEmails}
-                onChange={(e) => setComputeEmails(e.target.value)}
-                placeholder={"alice@example.com\nbob@example.com\n..."}
-                className="h-[72px] w-[min(100%,340px)] resize-none rounded-sm border border-border/40 bg-card px-3 py-2 text-[11px] text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-medium text-muted-foreground">
-                Amount (CU-h)
-              </label>
-              <input
-                type="text"
-                value={computeAmount}
-                onChange={(e) => setComputeAmount(e.target.value)}
-                className="h-[34px] w-[100px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-medium text-muted-foreground">Grant type</label>
-              <select
-                value={computeGrantType}
-                onChange={(e) => setComputeGrantType(e.target.value)}
-                className="h-[34px] w-[130px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-              >
-                <option value="campaign">campaign</option>
-                <option value="admin_grant">admin_grant</option>
-                <option value="support">support</option>
-              </select>
-            </div>
-            <div className="flex flex-col justify-end">
-              <button
-                onClick={handleBatchCompute}
-                disabled={computePending}
-                className="h-[34px] rounded-sm bg-primary px-5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-              >
-                {computePending ? "Processing…" : "Run batch (compute)"}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="border-t border-border/15 pt-6">
-          <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-primary">
-            Batch storage quota grants
-          </p>
-          <div className="flex flex-wrap gap-4">
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-medium text-muted-foreground">
-                Emails (one per line)
-              </label>
-              <textarea
-                rows={3}
-                value={storageEmails}
-                onChange={(e) => setStorageEmails(e.target.value)}
-                placeholder={"alice@example.com\nbob@example.com\n..."}
-                className="h-[72px] w-[min(100%,340px)] resize-none rounded-sm border border-border/40 bg-card px-3 py-2 text-[11px] text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-medium text-muted-foreground">Size (GiB)</label>
-              <input
-                type="text"
-                value={storageGib}
-                onChange={(e) => setStorageGib(e.target.value)}
-                className="h-[34px] w-[100px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-medium text-muted-foreground">Grant type</label>
-              <select
-                value={storageGrantType}
-                onChange={(e) => setStorageGrantType(e.target.value)}
-                className="h-[34px] w-[130px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-              >
-                <option value="campaign">campaign</option>
-                <option value="admin_grant">admin_grant</option>
-                <option value="support">support</option>
-              </select>
-            </div>
-            <div className="flex flex-col justify-end">
-              <button
-                onClick={handleBatchStorage}
-                disabled={storagePending}
-                className="h-[34px] rounded-sm bg-primary px-5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-              >
-                {storagePending ? "Processing…" : "Run batch (storage)"}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <p className="text-[11px] text-warning">
-          ⚠ Grants apply to all listed users. Double-check before submitting.
-        </p>
-      </div>
     </div>
   )
 }
@@ -770,7 +706,6 @@ export function AdminMeteringPage() {
 
       <TierTemplatesSection />
       <UserPlanSection />
-      <BatchGrantsSection />
     </div>
   )
 }
