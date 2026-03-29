@@ -1,4 +1,4 @@
-"""Leader-aware wrapper around the K8s sync loop with metering tick integration."""
+"""Leader-aware wrapper around the K8s sync loop with metering and lifecycle tick integration."""
 
 import asyncio
 import contextlib
@@ -7,29 +7,81 @@ from collections.abc import Awaitable, Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from treadstone.models.sandbox import SandboxStatus
+from treadstone.models.user import utc_now
 from treadstone.services.leader_election import LeadershipState
 
 logger = logging.getLogger(__name__)
 
 
 async def _k8s_stop_sandbox(session, sandbox) -> None:
-    """Stop a sandbox via K8s scale-down (used as grace-period enforcement callback)."""
+    """Stop a sandbox via K8s scale-down (used as grace-period enforcement callback).
+
+    Exceptions propagate to the caller (_enforce_stop) so it can accurately
+    track which sandbox stops failed and preserve grace state accordingly.
+    """
     from treadstone.services.k8s_client import get_k8s_client
 
     k8s = get_k8s_client()
     k8s_name = sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.id
+    await k8s.scale_sandbox(name=k8s_name, namespace=sandbox.k8s_namespace, replicas=0)
+
+
+async def _k8s_delete_sandbox(session, sandbox) -> None:
+    """Delete a sandbox K8s resource (used as auto-delete callback).
+
+    Soft-deletes the SandboxWebLink, marks sandbox as DELETING in DB, then
+    calls the K8s API.  If K8s fails, rolls back the in-memory state and
+    re-raises so the outer handler does NOT commit a broken DELETING status.
+    The watch/reconcile loop transitions to DELETED once the CR is gone.
+    """
+    from sqlalchemy import select
+
+    from treadstone.models.sandbox_web_link import SandboxWebLink
+    from treadstone.services.k8s_client import get_k8s_client
+
+    link_result = await session.execute(
+        select(SandboxWebLink).where(
+            SandboxWebLink.sandbox_id == sandbox.id,
+            SandboxWebLink.gmt_deleted.is_(None),
+        )
+    )
+    link = link_result.scalar_one_or_none()
+    if link is not None:
+        link.gmt_deleted = utc_now()
+        link.gmt_updated = utc_now()
+        session.add(link)
+
+    sandbox.status = SandboxStatus.DELETING
+    sandbox.gmt_deleted = utc_now()
+    sandbox.version += 1
+    session.add(sandbox)
+
+    k8s = get_k8s_client()
     try:
-        await k8s.scale_sandbox(name=k8s_name, namespace=sandbox.k8s_namespace, replicas=0)
+        if sandbox.provision_mode == "direct":
+            name = sandbox.k8s_sandbox_name or sandbox.id
+            await k8s.delete_sandbox(name=name, namespace=sandbox.k8s_namespace)
+        else:
+            name = sandbox.k8s_sandbox_claim_name or sandbox.id
+            await k8s.delete_sandbox_claim(name=name, namespace=sandbox.k8s_namespace)
     except Exception:
-        logger.exception("Failed to scale sandbox %s to 0 via grace-period enforcement", sandbox.id)
+        sandbox.status = SandboxStatus.STOPPED
+        sandbox.gmt_deleted = None
+        sandbox.version -= 1
+        session.add(sandbox)
+        if link is not None:
+            link.gmt_deleted = None
+            link.gmt_updated = utc_now()
+            session.add(link)
+        raise
 
 
 class LeaderControlledSyncSupervisor:
     """Start the sync loop only while this replica holds leadership.
 
-    When a ``session_factory`` is provided, a metering tick loop runs
-    alongside the sync loop for compute/storage metering, grace-period
-    enforcement, and monthly resets — all bound to the leader lifecycle.
+    When a ``session_factory`` is provided, metering and lifecycle tick loops
+    run alongside the sync loop — all bound to the leader lifecycle.
     """
 
     def __init__(
@@ -47,12 +99,14 @@ class LeaderControlledSyncSupervisor:
         self._shutdown_lock = asyncio.Lock()
         self._sync_task: asyncio.Task | None = None
         self._metering_task: asyncio.Task | None = None
+        self._lifecycle_task: asyncio.Task | None = None
 
     async def run(self) -> None:
         try:
             while not self._stopping:
                 self._reap_sync_task()
                 self._reap_metering_task()
+                self._reap_lifecycle_task()
                 try:
                     state = await self._elector.try_acquire_or_renew()
                 except Exception:
@@ -67,6 +121,9 @@ class LeaderControlledSyncSupervisor:
                     if self._metering_task is None and self._session_factory is not None:
                         self._metering_task = asyncio.create_task(self._metering_tick_loop())
                         logger.info("Started metering tick loop")
+                    if self._lifecycle_task is None and self._session_factory is not None:
+                        self._lifecycle_task = asyncio.create_task(self._lifecycle_tick_loop())
+                        logger.info("Started lifecycle tick loop")
                     await asyncio.sleep(self._elector.renew_interval_seconds)
                 else:
                     await self._stop_all_tasks("leadership lost")
@@ -103,11 +160,28 @@ class LeaderControlledSyncSupervisor:
             except Exception:
                 logger.exception("Metering tick failed")
 
+    async def _lifecycle_tick_loop(self) -> None:
+        """Periodic lifecycle tick — idle auto-stop and auto-delete."""
+        from treadstone.services.sandbox_lifecycle_tasks import LIFECYCLE_TICK_INTERVAL, run_lifecycle_tick
+
+        while True:
+            await asyncio.sleep(LIFECYCLE_TICK_INTERVAL)
+            try:
+                await run_lifecycle_tick(
+                    self._session_factory,
+                    stop_sandbox_callback=_k8s_stop_sandbox,
+                    delete_sandbox_callback=_k8s_delete_sandbox,
+                )
+            except Exception:
+                logger.exception("Lifecycle tick failed")
+
     async def _stop_all_tasks(self, reason: str) -> None:
         await self._stop_task(self._sync_task, "sync loop", reason)
         self._sync_task = None
         await self._stop_task(self._metering_task, "metering tick", reason)
         self._metering_task = None
+        await self._stop_task(self._lifecycle_task, "lifecycle tick", reason)
+        self._lifecycle_task = None
 
     @staticmethod
     async def _stop_task(task: asyncio.Task | None, name: str, reason: str) -> None:
@@ -124,6 +198,9 @@ class LeaderControlledSyncSupervisor:
 
     def _reap_metering_task(self) -> None:
         self._metering_task = self._reap_task(self._metering_task, "metering tick loop")
+
+    def _reap_lifecycle_task(self) -> None:
+        self._lifecycle_task = self._reap_task(self._lifecycle_task, "lifecycle tick loop")
 
     @staticmethod
     def _reap_task(task: asyncio.Task | None, name: str) -> asyncio.Task | None:

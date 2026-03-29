@@ -275,6 +275,12 @@ class MeteringService:
             extra_needed -= deduct
 
         shortfall = max(Decimal("0"), extra_needed)
+
+        if shortfall > Decimal("0"):
+            plan.compute_units_overage = (plan.compute_units_overage or Decimal("0")) + shortfall
+            plan.gmt_updated = utc_now()
+            session.add(plan)
+
         return ConsumeResult(monthly=monthly_consumed, extra=extra_consumed, shortfall=shortfall)
 
     # ═══════════════════════════════════════════════════════
@@ -509,8 +515,11 @@ class MeteringService:
 
         Counts sandboxes in ``creating`` or ``ready`` status.
         Raises ConcurrentLimitError (429) when running >= max_concurrent_running.
+
+        Acquires a FOR UPDATE lock on UserPlan to serialize concurrent
+        create/start requests for the same user, preventing TOCTOU races.
         """
-        plan = await self.get_user_plan(session, user_id)
+        plan = await self._get_user_plan_for_update(session, user_id)
         running_count = await self._count_running_sandboxes(session, user_id)
         if running_count >= plan.max_concurrent_running:
             raise ConcurrentLimitError(running_count, plan.max_concurrent_running)
@@ -526,8 +535,13 @@ class MeteringService:
         total_quota = monthly_limit + extra_storage_grants
         available  = total_quota - current_used
         Raises StorageQuotaExceededError (402) when available < requested_gib.
+
+        Relies on the caller having already acquired a FOR UPDATE lock on
+        UserPlan (via check_concurrent_limit) to serialize concurrent requests.
         """
-        total_quota = await self.get_total_storage_quota(session, user_id)
+        plan = await self.get_user_plan(session, user_id)
+        extra_storage = await self.get_extra_storage_quota(session, user_id)
+        total_quota = plan.storage_capacity_limit_gib + extra_storage
         current_used = await self.get_current_storage_used(session, user_id)
         available = total_quota - current_used
         if available < requested_gib:
@@ -558,14 +572,15 @@ class MeteringService:
         session: AsyncSession,
         user_id: str,
     ) -> Decimal:
-        """Return total Compute Units remaining (monthly + extra).
+        """Return total Compute Units remaining (monthly + extra - overage).
 
-        May be negative in grace-period overage scenarios.
+        Returns negative values during grace-period overage scenarios,
+        reflecting the true debt accumulated after both pools are exhausted.
         """
         plan = await self.get_user_plan(session, user_id)
         monthly_remaining = plan.compute_units_monthly_limit - plan.compute_units_monthly_used
         extra_remaining = await self.get_extra_compute_remaining(session, user_id)
-        return monthly_remaining + extra_remaining
+        return monthly_remaining + extra_remaining - (plan.compute_units_overage or Decimal("0"))
 
     async def get_total_storage_quota(
         self,
@@ -728,6 +743,40 @@ class MeteringService:
         )
         return result.scalar_one()
 
+    async def get_storage_gib_hours_for_period(
+        self,
+        session: AsyncSession,
+        user_id: str,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> Decimal:
+        """Calculate GiB-hours for the given billing period with proper clipping.
+
+        For each StorageLedger entry overlapping the period, computes:
+            effective_start = max(allocated_at, period_start)
+            effective_end   = min(released_at or now, period_end)
+            gib_hours      += size_gib * (effective_end - effective_start) / 3600
+        """
+        result = await session.execute(
+            select(StorageLedger).where(
+                StorageLedger.user_id == user_id,
+                StorageLedger.allocated_at < period_end,
+                or_(StorageLedger.released_at.is_(None), StorageLedger.released_at > period_start),
+            )
+        )
+        ledgers = result.scalars().all()
+
+        now = utc_now()
+        total = Decimal("0")
+        for ledger in ledgers:
+            effective_start = max(ledger.allocated_at, period_start)
+            effective_end = min(ledger.released_at or now, period_end)
+            elapsed_seconds = (effective_end - effective_start).total_seconds()
+            if elapsed_seconds > 0:
+                total += Decimal(str(ledger.size_gib)) * Decimal(str(elapsed_seconds)) / Decimal("3600")
+
+        return total.quantize(Decimal("0.0001"))
+
     async def get_usage_summary(self, session: AsyncSession, user_id: str) -> dict:
         """Assemble the complete usage overview for GET /v1/usage."""
         plan = await self.get_user_plan(session, user_id)
@@ -744,14 +793,9 @@ class MeteringService:
         monthly_remaining = max(Decimal("0"), plan.compute_units_monthly_limit - plan.compute_units_monthly_used)
         total_compute_remaining = monthly_remaining + extra_compute_remaining
 
-        storage_result = await session.execute(
-            select(func.coalesce(func.sum(StorageLedger.gib_hours_consumed), Decimal("0"))).where(
-                StorageLedger.user_id == user_id,
-                StorageLedger.allocated_at < plan.period_end,
-                or_(StorageLedger.released_at.is_(None), StorageLedger.released_at > plan.period_start),
-            )
+        storage_gib_hours = await self.get_storage_gib_hours_for_period(
+            session, user_id, plan.period_start, plan.period_end
         )
-        storage_gib_hours = storage_result.scalar_one()
 
         grace_active = plan.grace_period_started_at is not None
         grace_expires_at = None
@@ -965,12 +1009,7 @@ class MeteringService:
 
         users_affected = 0
         if apply_to_existing:
-            result = await session.execute(
-                select(UserPlan).where(
-                    UserPlan.tier == tier_name,
-                    or_(UserPlan.overrides.is_(None), UserPlan.overrides == {}),
-                )
-            )
+            result = await session.execute(select(UserPlan).where(UserPlan.tier == tier_name))
             plans = result.scalars().all()
             field_map = {
                 "compute_units_monthly": "compute_units_monthly_limit",
@@ -980,12 +1019,19 @@ class MeteringService:
                 "allowed_templates": "allowed_templates",
                 "grace_period_seconds": "grace_period_seconds",
             }
+            updated_tmpl_fields = set(updates.keys()) & set(field_map.keys())
             for plan in plans:
-                for tmpl_field, plan_field in field_map.items():
-                    setattr(plan, plan_field, getattr(template, tmpl_field))
-                plan.gmt_updated = now
-                session.add(plan)
-            users_affected = len(plans)
+                user_overrides = plan.overrides or {}
+                changed = False
+                for tmpl_field in updated_tmpl_fields:
+                    plan_field = field_map[tmpl_field]
+                    if plan_field not in user_overrides:
+                        setattr(plan, plan_field, getattr(template, tmpl_field))
+                        changed = True
+                if changed:
+                    plan.gmt_updated = now
+                    session.add(plan)
+                    users_affected += 1
 
         await session.flush()
         return template, users_affected

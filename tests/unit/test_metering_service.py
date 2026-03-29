@@ -887,7 +887,7 @@ class TestCheckConcurrentLimit:
     async def test_under_limit_passes(self):
         plan = _make_plan("user01", max_concurrent_running=3)
         svc = MeteringService()
-        svc.get_user_plan = AsyncMock(return_value=plan)
+        svc._get_user_plan_for_update = AsyncMock(return_value=plan)
         svc._count_running_sandboxes = AsyncMock(return_value=1)
 
         await svc.check_concurrent_limit(AsyncMock(), "user01")
@@ -895,7 +895,7 @@ class TestCheckConcurrentLimit:
     async def test_zero_running_passes(self):
         plan = _make_plan("user01", max_concurrent_running=1)
         svc = MeteringService()
-        svc.get_user_plan = AsyncMock(return_value=plan)
+        svc._get_user_plan_for_update = AsyncMock(return_value=plan)
         svc._count_running_sandboxes = AsyncMock(return_value=0)
 
         await svc.check_concurrent_limit(AsyncMock(), "user01")
@@ -903,7 +903,7 @@ class TestCheckConcurrentLimit:
     async def test_at_limit_raises(self):
         plan = _make_plan("user01", max_concurrent_running=3)
         svc = MeteringService()
-        svc.get_user_plan = AsyncMock(return_value=plan)
+        svc._get_user_plan_for_update = AsyncMock(return_value=plan)
         svc._count_running_sandboxes = AsyncMock(return_value=3)
 
         with pytest.raises(ConcurrentLimitError) as exc_info:
@@ -914,7 +914,7 @@ class TestCheckConcurrentLimit:
     async def test_over_limit_raises(self):
         plan = _make_plan("user01", max_concurrent_running=3)
         svc = MeteringService()
-        svc.get_user_plan = AsyncMock(return_value=plan)
+        svc._get_user_plan_for_update = AsyncMock(return_value=plan)
         svc._count_running_sandboxes = AsyncMock(return_value=5)
 
         with pytest.raises(ConcurrentLimitError):
@@ -923,7 +923,7 @@ class TestCheckConcurrentLimit:
     async def test_single_slot_tier(self):
         plan = _make_plan("user01", max_concurrent_running=1)
         svc = MeteringService()
-        svc.get_user_plan = AsyncMock(return_value=plan)
+        svc._get_user_plan_for_update = AsyncMock(return_value=plan)
         svc._count_running_sandboxes = AsyncMock(return_value=1)
 
         with pytest.raises(ConcurrentLimitError) as exc_info:
@@ -954,22 +954,28 @@ class TestCountRunningSandboxes:
 
 class TestCheckStorageQuota:
     async def test_sufficient_quota_passes(self):
+        plan = _make_plan("user01", storage_capacity_limit_gib=10)
         svc = MeteringService()
-        svc.get_total_storage_quota = AsyncMock(return_value=10)
+        svc.get_user_plan = AsyncMock(return_value=plan)
+        svc.get_extra_storage_quota = AsyncMock(return_value=0)
         svc.get_current_storage_used = AsyncMock(return_value=3)
 
         await svc.check_storage_quota(AsyncMock(), "user01", requested_gib=5)
 
     async def test_exact_fit_passes(self):
+        plan = _make_plan("user01", storage_capacity_limit_gib=10)
         svc = MeteringService()
-        svc.get_total_storage_quota = AsyncMock(return_value=10)
+        svc.get_user_plan = AsyncMock(return_value=plan)
+        svc.get_extra_storage_quota = AsyncMock(return_value=0)
         svc.get_current_storage_used = AsyncMock(return_value=5)
 
         await svc.check_storage_quota(AsyncMock(), "user01", requested_gib=5)
 
     async def test_insufficient_quota_raises(self):
+        plan = _make_plan("user01", storage_capacity_limit_gib=10)
         svc = MeteringService()
-        svc.get_total_storage_quota = AsyncMock(return_value=10)
+        svc.get_user_plan = AsyncMock(return_value=plan)
+        svc.get_extra_storage_quota = AsyncMock(return_value=0)
         svc.get_current_storage_used = AsyncMock(return_value=8)
 
         with pytest.raises(StorageQuotaExceededError) as exc_info:
@@ -980,8 +986,10 @@ class TestCheckStorageQuota:
         assert "10 GiB" in exc_info.value.message
 
     async def test_zero_quota_raises(self):
+        plan = _make_plan("user01", storage_capacity_limit_gib=0)
         svc = MeteringService()
-        svc.get_total_storage_quota = AsyncMock(return_value=0)
+        svc.get_user_plan = AsyncMock(return_value=plan)
+        svc.get_extra_storage_quota = AsyncMock(return_value=0)
         svc.get_current_storage_used = AsyncMock(return_value=0)
 
         with pytest.raises(StorageQuotaExceededError):
@@ -989,8 +997,10 @@ class TestCheckStorageQuota:
 
     async def test_overcommitted_storage_raises(self):
         """Post-downgrade scenario: current_used > total_quota."""
+        plan = _make_plan("user01", storage_capacity_limit_gib=10)
         svc = MeteringService()
-        svc.get_total_storage_quota = AsyncMock(return_value=10)
+        svc.get_user_plan = AsyncMock(return_value=plan)
+        svc.get_extra_storage_quota = AsyncMock(return_value=0)
         svc.get_current_storage_used = AsyncMock(return_value=40)
 
         with pytest.raises(StorageQuotaExceededError):

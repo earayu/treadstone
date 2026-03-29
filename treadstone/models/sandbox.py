@@ -79,4 +79,5 @@ class Sandbox(Base):
     gmt_created: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     gmt_started: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     gmt_stopped: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    gmt_last_active: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     gmt_deleted: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

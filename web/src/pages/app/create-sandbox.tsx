@@ -340,7 +340,7 @@ export function CreateSandboxPage() {
                     aria-checked={persist}
                     onClick={() => setPersist((p) => !p)}
                     className={cn(
-                      "relative h-7 w-12 shrink-0 rounded-full border transition-colors",
+                      "relative h-7 w-12 shrink-0 overflow-hidden rounded-full border transition-colors",
                       persist
                         ? "border-primary bg-primary/30"
                         : "border-border/70 bg-muted/60",

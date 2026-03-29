@@ -10,6 +10,7 @@ start/stop use scale_sandbox on the Sandbox CR regardless of path.
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select
@@ -92,6 +93,7 @@ class SandboxService:
                 )
 
         # ── Metering: enforcement checks (gated by config) ──
+        max_duration: int | None = None
         if self._metering is not None and settings.metering_enforcement_enabled:
             await self._metering.check_template_allowed(self.session, owner_id, template)
             await self._metering.check_compute_quota(self.session, owner_id)
@@ -125,6 +127,7 @@ class SandboxService:
         sandbox.version = 1
         sandbox.endpoints = {}
         sandbox.gmt_created = utc_now()
+        sandbox.gmt_last_active = utc_now()
         sandbox.k8s_namespace = settings.sandbox_namespace
         sandbox.persist = persist
         sandbox.storage_size = effective_storage_size if persist else None
@@ -144,11 +147,15 @@ class SandboxService:
             raise SandboxNameConflictError(sandbox_name)
         await self.session.refresh(sandbox)
 
+        shutdown_time: datetime | None = None
+        if max_duration is not None:
+            shutdown_time = datetime.now(UTC) + timedelta(seconds=max_duration)
+
         try:
             if persist:
-                await self._create_direct(sandbox, template, effective_storage_size)
+                await self._create_direct(sandbox, template, effective_storage_size, shutdown_time=shutdown_time)
             else:
-                await self._create_via_claim(sandbox, template)
+                await self._create_via_claim(sandbox, template, shutdown_time=shutdown_time)
         except TemplateNotFoundError:
             await self.session.delete(sandbox)
             await self.session.commit()
@@ -179,7 +186,9 @@ class SandboxService:
             raise TemplateNotFoundError(template)
         return tmpl
 
-    async def _create_via_claim(self, sandbox: Sandbox, template: str) -> None:
+    async def _create_via_claim(
+        self, sandbox: Sandbox, template: str, *, shutdown_time: datetime | None = None
+    ) -> None:
         await self._resolve_template(sandbox.k8s_namespace, template)
 
         claim_name = sandbox.k8s_sandbox_claim_name or sandbox.id
@@ -188,6 +197,7 @@ class SandboxService:
             name=claim_name,
             template_ref=template,
             namespace=sandbox.k8s_namespace,
+            shutdown_time=shutdown_time,
         )
 
     async def _ensure_persistent_storage_backend_ready(self) -> None:
@@ -196,7 +206,9 @@ class SandboxService:
         if storage_class is None:
             raise StorageBackendNotReadyError(storage_class_name)
 
-    async def _create_direct(self, sandbox: Sandbox, template: str, storage_size: str) -> None:
+    async def _create_direct(
+        self, sandbox: Sandbox, template: str, storage_size: str, *, shutdown_time: datetime | None = None
+    ) -> None:
         tmpl = await self._resolve_template(sandbox.k8s_namespace, template)
 
         image = tmpl.get("image", "")
@@ -230,6 +242,7 @@ class SandboxService:
             container_port=settings.sandbox_port,
             resources=resources,
             volume_claim_templates=volume_claim_templates,
+            shutdown_time=shutdown_time,
         )
 
     async def get(self, sandbox_id: str, owner_id: str) -> Sandbox | None:
@@ -255,13 +268,6 @@ class SandboxService:
 
         if not is_valid_transition(sandbox.status, SandboxStatus.DELETING):
             raise InvalidTransitionError(sandbox_id, sandbox.status, "deleting")
-
-        # ── Metering: release storage before K8s deletion (best-effort) ──
-        if self._metering is not None and sandbox.persist:
-            try:
-                await self._metering.record_storage_release(self.session, sandbox.id)
-            except Exception:
-                logger.exception("Failed to release storage metering for sandbox %s", sandbox_id)
 
         sandbox.status = SandboxStatus.DELETING
         sandbox.version += 1
@@ -307,11 +313,18 @@ class SandboxService:
 
         # ── Metering: enforcement checks before resuming (gated by config) ──
         if self._metering is not None and settings.metering_enforcement_enabled:
+            await self._metering.check_template_allowed(self.session, owner_id, sandbox.template)
             await self._metering.check_compute_quota(self.session, owner_id)
             await self._metering.check_concurrent_limit(self.session, owner_id)
 
+            max_duration = await self._metering.check_sandbox_duration(self.session, owner_id)
+            if sandbox.auto_stop_interval > 0 and (sandbox.auto_stop_interval * 60) > max_duration:
+                plan = await self._metering.get_user_plan(self.session, owner_id)
+                raise SandboxDurationExceededError(plan.tier, max_duration)
+
         sandbox.status = SandboxStatus.CREATING
         sandbox.gmt_started = utc_now()
+        sandbox.gmt_last_active = utc_now()
         sandbox.version += 1
         self.session.add(sandbox)
         await self.session.commit()
@@ -357,3 +370,10 @@ class SandboxService:
             await self.session.commit()
 
         return sandbox
+
+    async def touch_activity(self, sandbox_id: str) -> None:
+        """Lightweight gmt_last_active bump — single UPDATE, no version bump."""
+        from sqlalchemy import update
+
+        await self.session.execute(update(Sandbox).where(Sandbox.id == sandbox_id).values(gmt_last_active=utc_now()))
+        await self.session.commit()
