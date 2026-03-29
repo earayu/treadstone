@@ -7,7 +7,7 @@ import { toast } from "sonner"
 import { useSandboxes, useStartSandbox, useStopSandbox, useDeleteSandbox, type Sandbox } from "@/api/sandboxes"
 import { cn } from "@/lib/utils"
 
-const PAGE_SIZE = 4
+const PAGE_SIZE = 8
 
 function formatRelativeTime(dateStr: string): string {
   const now = Date.now()
