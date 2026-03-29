@@ -81,7 +81,7 @@ jsonpath "$.tier" == "free"
 jsonpath "$.compute.monthly_limit" == 10.0
 jsonpath "$.compute.monthly_used" >= 0.0
 jsonpath "$.compute.extra_remaining" == 50.0
-jsonpath "$.compute.unit" == "credits"
+jsonpath "$.compute.unit" == "CU-hours"
 jsonpath "$.storage.total_quota_gib" == 0
 jsonpath "$.storage.unit" == "GiB"
 jsonpath "$.limits.max_concurrent_running" == 1
@@ -107,7 +107,7 @@ Content-Type: application/json
 HTTP 200
 [Asserts]
 jsonpath "$.tier" == "pro"
-jsonpath "$.compute_credits_monthly_limit" == 100.0
+jsonpath "$.compute_units_monthly_limit" == 100.0
 jsonpath "$.storage_capacity_limit_gib" == 10
 jsonpath "$.max_concurrent_running" == 3
 jsonpath "$.max_sandbox_duration_seconds" == 7200

@@ -50,7 +50,7 @@ function InlineMetrics() {
   const { data: usage } = useUsageOverview()
   const { data: grants } = useGrants()
 
-  const computeVcpuHours = usage ? usage.compute.vcpu_hours.toFixed(2) : "—"
+  const computeUnitHours = usage ? usage.compute.compute_unit_hours.toFixed(2) : "—"
   const tier = usage?.tier ?? "—"
 
   const welcomeBonus = useMemo(() => {
@@ -67,8 +67,8 @@ function InlineMetrics() {
           Compute Usage
         </p>
         <div className="mt-2 flex items-baseline gap-2">
-          <span className="text-2xl font-bold text-foreground">{computeVcpuHours}</span>
-          <span className="text-xs text-muted-foreground">vCPU-hours</span>
+          <span className="text-2xl font-bold text-foreground">{computeUnitHours}</span>
+          <span className="text-xs text-muted-foreground">CU-hours</span>
         </div>
       </div>
       <div className="border-r border-border/15 bg-card px-6 py-6">
@@ -90,7 +90,7 @@ function InlineMetrics() {
         </p>
         <div className="mt-2 flex items-baseline gap-2">
           <span className="text-2xl font-bold text-foreground">{welcomeBonus}</span>
-          <span className="text-xs text-muted-foreground">vCPU-hours remaining</span>
+          <span className="text-xs text-muted-foreground">CU-hours remaining</span>
         </div>
       </div>
     </div>

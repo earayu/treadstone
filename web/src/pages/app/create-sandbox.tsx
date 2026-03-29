@@ -410,9 +410,9 @@ export function CreateSandboxPage() {
                     Compute usage
                   </p>
                   <p className="mt-1 text-lg font-bold text-foreground">
-                    {usage.compute.vcpu_hours.toFixed(2)}{" "}
+                    {usage.compute.compute_unit_hours.toFixed(2)}{" "}
                     <span className="text-xs font-normal text-muted-foreground">
-                      vCPU-h
+                      CU-h
                     </span>
                   </p>
                 </li>

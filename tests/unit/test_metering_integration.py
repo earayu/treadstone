@@ -53,8 +53,8 @@ def _make_plan(tier: str = "pro", **kwargs) -> UserPlan:
     defaults = {
         "user_id": "user1234567890abcd",
         "tier": tier,
-        "compute_credits_monthly_limit": Decimal("100"),
-        "compute_credits_monthly_used": Decimal("0"),
+        "compute_units_monthly_limit": Decimal("100"),
+        "compute_units_monthly_used": Decimal("0"),
         "storage_capacity_limit_gib": 10,
         "max_concurrent_running": 3,
         "max_sandbox_duration_seconds": 7200,

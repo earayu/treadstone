@@ -22,7 +22,7 @@ class TierTemplate(Base):
 
     id: Mapped[str] = mapped_column(String(24), primary_key=True, default=lambda: "tt" + random_id())
     tier_name: Mapped[str] = mapped_column(String(16), unique=True, nullable=False)
-    compute_credits_monthly: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
+    compute_units_monthly: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
     storage_capacity_gib: Mapped[int] = mapped_column(Integer, nullable=False)
     max_concurrent_running: Mapped[int] = mapped_column(Integer, nullable=False)
     max_sandbox_duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -43,7 +43,7 @@ class UserPlan(Base):
     tier: Mapped[str] = mapped_column(String(16), nullable=False)
 
     # Entitlements (copied from TierTemplate, can be overridden)
-    compute_credits_monthly_limit: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
+    compute_units_monthly_limit: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
     storage_capacity_limit_gib: Mapped[int] = mapped_column(Integer, nullable=False)
     max_concurrent_running: Mapped[int] = mapped_column(Integer, nullable=False)
     max_sandbox_duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -53,7 +53,7 @@ class UserPlan(Base):
     # Current period state
     period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    compute_credits_monthly_used: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False, default=Decimal("0"))
+    compute_units_monthly_used: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False, default=Decimal("0"))
 
     # Admin overrides
     overrides: Mapped[dict | None] = mapped_column(JSON, nullable=True)

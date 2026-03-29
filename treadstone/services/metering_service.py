@@ -30,7 +30,7 @@ import logging
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,7 +55,7 @@ from treadstone.models.sandbox import Sandbox, SandboxStatus
 from treadstone.models.user import utc_now
 from treadstone.services.metering_helpers import (
     ConsumeResult,
-    calculate_credit_rate,
+    calculate_cu_rate,
     compute_period_bounds,
     get_template_resource_spec,
 )
@@ -69,7 +69,7 @@ WELCOME_BONUS_EXPIRY_DAYS = 90
 
 ALLOWED_PLAN_OVERRIDES = frozenset(
     {
-        "compute_credits_monthly_limit",
+        "compute_units_monthly_limit",
         "storage_capacity_limit_gib",
         "max_concurrent_running",
         "max_sandbox_duration_seconds",
@@ -110,7 +110,7 @@ class MeteringService:
         plan = UserPlan(
             user_id=user_id,
             tier=template.tier_name,
-            compute_credits_monthly_limit=template.compute_credits_monthly,
+            compute_units_monthly_limit=template.compute_units_monthly,
             storage_capacity_limit_gib=template.storage_capacity_gib,
             max_concurrent_running=template.max_concurrent_running,
             max_sandbox_duration_seconds=template.max_sandbox_duration_seconds,
@@ -165,7 +165,7 @@ class MeteringService:
         now = utc_now()
 
         plan.tier = template.tier_name
-        plan.compute_credits_monthly_limit = template.compute_credits_monthly
+        plan.compute_units_monthly_limit = template.compute_units_monthly
         plan.storage_capacity_limit_gib = template.storage_capacity_gib
         plan.max_concurrent_running = template.max_concurrent_running
         plan.max_sandbox_duration_seconds = template.max_sandbox_duration_seconds
@@ -214,13 +214,13 @@ class MeteringService:
         user_id: str,
         amount: Decimal,
     ) -> ConsumeResult:
-        """Consume compute credits using the dual-pool algorithm.
+        """Consume Compute Units using the dual-pool algorithm.
 
         Deduction order:
-          1. Monthly pool  (UserPlan.compute_credits_monthly_used)
-          2. Extra pool    (CreditGrant rows, FIFO by expires_at ASC NULLS LAST)
+          1. Monthly pool  (UserPlan.compute_units_monthly_used)
+          2. Extra pool    (ComputeGrant rows, FIFO by expires_at ASC NULLS LAST)
 
-        CreditGrant rows are locked with SELECT … FOR UPDATE to prevent
+        ComputeGrant rows are locked with SELECT ... FOR UPDATE to prevent
         concurrent over-deduction during leader-overlap or admin operations.
 
         A positive ``shortfall`` in the result means both pools are exhausted.
@@ -229,11 +229,11 @@ class MeteringService:
             return ConsumeResult(monthly=Decimal("0"), extra=Decimal("0"), shortfall=Decimal("0"))
 
         plan = await self._get_user_plan_for_update(session, user_id)
-        monthly_remaining = plan.compute_credits_monthly_limit - plan.compute_credits_monthly_used
+        monthly_remaining = plan.compute_units_monthly_limit - plan.compute_units_monthly_used
 
         # ── Phase 1: Monthly pool ──
         if monthly_remaining >= amount:
-            plan.compute_credits_monthly_used += amount
+            plan.compute_units_monthly_used += amount
             plan.gmt_updated = utc_now()
             session.add(plan)
             return ConsumeResult(monthly=amount, extra=Decimal("0"), shortfall=Decimal("0"))
@@ -242,7 +242,7 @@ class MeteringService:
         extra_needed = amount - monthly_consumed
 
         if monthly_consumed > Decimal("0"):
-            plan.compute_credits_monthly_used = plan.compute_credits_monthly_limit
+            plan.compute_units_monthly_used = plan.compute_units_monthly_limit
             plan.gmt_updated = utc_now()
             session.add(plan)
 
@@ -368,10 +368,10 @@ class MeteringService:
             cs.vcpu_hours += cs.vcpu_request * elapsed_hours
             cs.memory_gib_hours += cs.memory_gib_request * elapsed_hours
 
-            credit_rate = calculate_credit_rate(cs.template)
-            credit_delta = credit_rate * elapsed_hours
-            if credit_delta > Decimal("0"):
-                await self.consume_compute_credits(session, cs.user_id, credit_delta)
+            cu_rate = calculate_cu_rate(cs.template)
+            cu_delta = cu_rate * elapsed_hours
+            if cu_delta > Decimal("0"):
+                await self.consume_compute_credits(session, cs.user_id, cu_delta)
 
         cs.ended_at = now
         cs.last_metered_at = now
@@ -484,19 +484,19 @@ class MeteringService:
         session: AsyncSession,
         user_id: str,
     ) -> None:
-        """Verify that the user has remaining compute credits.
+        """Verify that the user has remaining Compute Units.
 
         Checks monthly remaining + extra ComputeGrants.
         Raises ComputeQuotaExceededError (402) when total_remaining <= 0.
         """
         plan = await self.get_user_plan(session, user_id)
-        monthly_remaining = plan.compute_credits_monthly_limit - plan.compute_credits_monthly_used
+        monthly_remaining = plan.compute_units_monthly_limit - plan.compute_units_monthly_used
         extra_remaining = await self.get_extra_compute_remaining(session, user_id)
         total_remaining = monthly_remaining + extra_remaining
         if total_remaining <= Decimal("0"):
             raise ComputeQuotaExceededError(
-                monthly_used=float(plan.compute_credits_monthly_used),
-                monthly_limit=float(plan.compute_credits_monthly_limit),
+                monthly_used=float(plan.compute_units_monthly_used),
+                monthly_limit=float(plan.compute_units_monthly_limit),
                 extra_remaining=float(extra_remaining),
             )
 
@@ -558,12 +558,12 @@ class MeteringService:
         session: AsyncSession,
         user_id: str,
     ) -> Decimal:
-        """Return total compute credits remaining (monthly + extra).
+        """Return total Compute Units remaining (monthly + extra).
 
         May be negative in grace-period overage scenarios.
         """
         plan = await self.get_user_plan(session, user_id)
-        monthly_remaining = plan.compute_credits_monthly_limit - plan.compute_credits_monthly_used
+        monthly_remaining = plan.compute_units_monthly_limit - plan.compute_units_monthly_used
         extra_remaining = await self.get_extra_compute_remaining(session, user_id)
         return monthly_remaining + extra_remaining
 
@@ -706,6 +706,28 @@ class MeteringService:
         row = result.one()
         return row[0], row[1]
 
+    async def get_compute_unit_hours_for_period(
+        self,
+        session: AsyncSession,
+        user_id: str,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> Decimal:
+        """Sum per-session Compute Unit hours: SUM(max(vcpu_hours, memory_gib_hours / 2))."""
+        mem_half = ComputeSession.memory_gib_hours / 2
+        cu_per_session = case(
+            (ComputeSession.vcpu_hours >= mem_half, ComputeSession.vcpu_hours),
+            else_=mem_half,
+        )
+        result = await session.execute(
+            select(func.coalesce(func.sum(cu_per_session), Decimal("0"))).where(
+                ComputeSession.user_id == user_id,
+                ComputeSession.started_at < period_end,
+                or_(ComputeSession.ended_at.is_(None), ComputeSession.ended_at > period_start),
+            )
+        )
+        return result.scalar_one()
+
     async def get_usage_summary(self, session: AsyncSession, user_id: str) -> dict:
         """Assemble the complete usage overview for GET /v1/usage."""
         plan = await self.get_user_plan(session, user_id)
@@ -714,15 +736,14 @@ class MeteringService:
         current_storage_used = await self.get_current_storage_used(session, user_id)
         running_count = await self._count_running_sandboxes(session, user_id)
 
-        vcpu_hours, memory_gib_hours = await self.get_compute_usage_for_period(
+        compute_unit_hours = await self.get_compute_unit_hours_for_period(
             session, user_id, plan.period_start, plan.period_end
         )
 
         extra_compute_remaining = await self.get_extra_compute_remaining(session, user_id)
-        monthly_remaining = max(Decimal("0"), plan.compute_credits_monthly_limit - plan.compute_credits_monthly_used)
+        monthly_remaining = max(Decimal("0"), plan.compute_units_monthly_limit - plan.compute_units_monthly_used)
         total_compute_remaining = monthly_remaining + extra_compute_remaining
 
-        # Storage gib-hours for the current period
         storage_result = await session.execute(
             select(func.coalesce(func.sum(StorageLedger.gib_hours_consumed), Decimal("0"))).where(
                 StorageLedger.user_id == user_id,
@@ -744,14 +765,13 @@ class MeteringService:
                 "end": plan.period_end.isoformat(),
             },
             "compute": {
-                "vcpu_hours": float(vcpu_hours),
-                "memory_gib_hours": float(memory_gib_hours),
-                "monthly_limit": float(plan.compute_credits_monthly_limit),
-                "monthly_used": float(plan.compute_credits_monthly_used),
+                "compute_unit_hours": float(compute_unit_hours),
+                "monthly_limit": float(plan.compute_units_monthly_limit),
+                "monthly_used": float(plan.compute_units_monthly_used),
                 "monthly_remaining": float(monthly_remaining),
                 "extra_remaining": float(extra_compute_remaining),
                 "total_remaining": float(total_compute_remaining),
-                "unit": "credits",
+                "unit": "CU-hours",
             },
             "storage": {
                 "gib_hours": float(storage_gib_hours),
@@ -910,7 +930,7 @@ class MeteringService:
         result = await session.execute(
             select(TierTemplate)
             .where(TierTemplate.is_active.is_(True))
-            .order_by(TierTemplate.compute_credits_monthly.asc())
+            .order_by(TierTemplate.compute_units_monthly.asc())
         )
         return list(result.scalars().all())
 
@@ -930,7 +950,7 @@ class MeteringService:
         now = utc_now()
 
         updatable_fields = {
-            "compute_credits_monthly",
+            "compute_units_monthly",
             "storage_capacity_gib",
             "max_concurrent_running",
             "max_sandbox_duration_seconds",
@@ -953,7 +973,7 @@ class MeteringService:
             )
             plans = result.scalars().all()
             field_map = {
-                "compute_credits_monthly": "compute_credits_monthly_limit",
+                "compute_units_monthly": "compute_units_monthly_limit",
                 "storage_capacity_gib": "storage_capacity_limit_gib",
                 "max_concurrent_running": "max_concurrent_running",
                 "max_sandbox_duration_seconds": "max_sandbox_duration_seconds",

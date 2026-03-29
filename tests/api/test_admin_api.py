@@ -25,7 +25,7 @@ async def _seed_tier_templates(session: AsyncSession) -> None:
     defaults = [
         TierTemplate(
             tier_name="free",
-            compute_credits_monthly=Decimal("10"),
+            compute_units_monthly=Decimal("10"),
             storage_capacity_gib=0,
             max_concurrent_running=1,
             max_sandbox_duration_seconds=1800,
@@ -34,7 +34,7 @@ async def _seed_tier_templates(session: AsyncSession) -> None:
         ),
         TierTemplate(
             tier_name="pro",
-            compute_credits_monthly=Decimal("100"),
+            compute_units_monthly=Decimal("100"),
             storage_capacity_gib=10,
             max_concurrent_running=3,
             max_sandbox_duration_seconds=7200,
@@ -43,7 +43,7 @@ async def _seed_tier_templates(session: AsyncSession) -> None:
         ),
         TierTemplate(
             tier_name="ultra",
-            compute_credits_monthly=Decimal("300"),
+            compute_units_monthly=Decimal("300"),
             storage_capacity_gib=20,
             max_concurrent_running=5,
             max_sandbox_duration_seconds=28800,
@@ -142,18 +142,18 @@ async def test_list_tier_templates_requires_admin(member_client):
 async def test_update_tier_template(admin_client):
     resp = await admin_client.patch(
         "/v1/admin/tier-templates/pro",
-        json={"compute_credits_monthly": 150, "apply_to_existing": False},
+        json={"compute_units_monthly": 150, "apply_to_existing": False},
     )
     assert resp.status_code == 200
     data = resp.json()
-    assert data["compute_credits_monthly"] == 150.0
+    assert data["compute_units_monthly"] == 150.0
     assert data["users_affected"] == 0
 
 
 async def test_update_tier_template_not_found(admin_client):
     resp = await admin_client.patch(
         "/v1/admin/tier-templates/nonexistent",
-        json={"compute_credits_monthly": 150},
+        json={"compute_units_monthly": 150},
     )
     assert resp.status_code == 404
 
@@ -165,15 +165,15 @@ async def test_update_tier_template_apply_to_existing(admin_client):
 
     resp = await admin_client.patch(
         "/v1/admin/tier-templates/pro",
-        json={"compute_credits_monthly": 200, "apply_to_existing": True},
+        json={"compute_units_monthly": 200, "apply_to_existing": True},
     )
     assert resp.status_code == 200
     data = resp.json()
-    assert data["compute_credits_monthly"] == 200.0
+    assert data["compute_units_monthly"] == 200.0
     assert data["users_affected"] >= 1
 
     plan_resp = await admin_client.get("/v1/usage/plan")
-    assert plan_resp.json()["compute_credits_monthly_limit"] == 200.0
+    assert plan_resp.json()["compute_units_monthly_limit"] == 200.0
 
 
 async def test_update_tier_template_apply_to_existing_skips_overridden(admin_client):
@@ -181,18 +181,18 @@ async def test_update_tier_template_apply_to_existing_skips_overridden(admin_cli
 
     await admin_client.patch(
         f"/v1/admin/users/{user_id}/plan",
-        json={"tier": "pro", "overrides": {"compute_credits_monthly_limit": 999}},
+        json={"tier": "pro", "overrides": {"compute_units_monthly_limit": 999}},
     )
 
     resp = await admin_client.patch(
         "/v1/admin/tier-templates/pro",
-        json={"compute_credits_monthly": 200, "apply_to_existing": True},
+        json={"compute_units_monthly": 200, "apply_to_existing": True},
     )
     assert resp.status_code == 200
     assert resp.json()["users_affected"] == 0
 
     plan_resp = await admin_client.get("/v1/usage/plan")
-    assert plan_resp.json()["compute_credits_monthly_limit"] == 999.0
+    assert plan_resp.json()["compute_units_monthly_limit"] == 999.0
 
 
 async def test_update_tier_template_requires_at_least_one_field(admin_client):
@@ -238,7 +238,7 @@ async def test_admin_update_user_plan_change_tier(admin_client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["tier"] == "pro"
-    assert data["compute_credits_monthly_limit"] == 100.0
+    assert data["compute_units_monthly_limit"] == 100.0
     assert data["max_concurrent_running"] == 3
 
 
@@ -246,13 +246,13 @@ async def test_admin_update_user_plan_with_overrides(admin_client):
     user_id = _get_user_id(admin_client)
     resp = await admin_client.patch(
         f"/v1/admin/users/{user_id}/plan",
-        json={"tier": "pro", "overrides": {"compute_credits_monthly_limit": 200}},
+        json={"tier": "pro", "overrides": {"compute_units_monthly_limit": 200}},
     )
     assert resp.status_code == 200
     data = resp.json()
     assert data["tier"] == "pro"
-    assert data["compute_credits_monthly_limit"] == 200.0
-    assert data["overrides"]["compute_credits_monthly_limit"] == 200
+    assert data["compute_units_monthly_limit"] == 200.0
+    assert data["overrides"]["compute_units_monthly_limit"] == 200
 
 
 async def test_admin_update_user_plan_overrides_only(admin_client):

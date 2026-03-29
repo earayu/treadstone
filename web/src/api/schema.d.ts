@@ -1255,6 +1255,11 @@ export interface components {
              */
             duration_seconds: number;
             /**
+             * Compute Unit Hours
+             * @example 1
+             */
+            compute_unit_hours: number;
+            /**
              * Vcpu Hours
              * @example 1
              */
@@ -1293,15 +1298,10 @@ export interface components {
         /** ComputeUsage */
         ComputeUsage: {
             /**
-             * Vcpu Hours
+             * Compute Unit Hours
              * @example 12.5
              */
-            vcpu_hours: number;
-            /**
-             * Memory Gib Hours
-             * @example 25
-             */
-            memory_gib_hours: number;
+            compute_unit_hours: number;
             /**
              * Monthly Limit
              * @example 100
@@ -1329,8 +1329,8 @@ export interface components {
             total_remaining: number;
             /**
              * Unit
-             * @default credits
-             * @example credits
+             * @default CU-hours
+             * @example CU-hours
              */
             unit: string;
         };
@@ -2099,10 +2099,10 @@ export interface components {
              */
             tier: string;
             /**
-             * Compute Credits Monthly
+             * Compute Units Monthly
              * @example 100
              */
-            compute_credits_monthly: number;
+            compute_units_monthly: number;
             /**
              * Storage Capacity Gib
              * @example 10
@@ -2190,7 +2190,7 @@ export interface components {
             /**
              * Overrides
              * @example {
-             *       "compute_credits_monthly_limit": 500
+             *       "compute_units_monthly_limit": 500
              *     }
              */
             overrides?: {
@@ -2200,10 +2200,10 @@ export interface components {
         /** UpdateTierTemplateRequest */
         UpdateTierTemplateRequest: {
             /**
-             * Compute Credits Monthly
+             * Compute Units Monthly
              * @example 150
              */
-            compute_credits_monthly?: number | null;
+            compute_units_monthly?: number | null;
             /**
              * Storage Capacity Gib
              * @example 15
@@ -2248,10 +2248,10 @@ export interface components {
              */
             tier: string;
             /**
-             * Compute Credits Monthly
+             * Compute Units Monthly
              * @example 100
              */
-            compute_credits_monthly: number;
+            compute_units_monthly: number;
             /**
              * Storage Capacity Gib
              * @example 10
@@ -2428,15 +2428,15 @@ export interface components {
              */
             tier: string;
             /**
-             * Compute Credits Monthly Limit
+             * Compute Units Monthly Limit
              * @example 100
              */
-            compute_credits_monthly_limit: number;
+            compute_units_monthly_limit: number;
             /**
-             * Compute Credits Monthly Used
+             * Compute Units Monthly Used
              * @example 45.5
              */
-            compute_credits_monthly_used: number;
+            compute_units_monthly_used: number;
             /**
              * Storage Capacity Limit Gib
              * @example 10

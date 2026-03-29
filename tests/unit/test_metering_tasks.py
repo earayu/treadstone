@@ -103,8 +103,8 @@ def _make_plan(
     return UserPlan(
         user_id=user_id,
         tier=tier,
-        compute_credits_monthly_limit=monthly_limit,
-        compute_credits_monthly_used=monthly_used,
+        compute_units_monthly_limit=monthly_limit,
+        compute_units_monthly_used=monthly_used,
         storage_capacity_limit_gib=10,
         max_concurrent_running=3,
         max_sandbox_duration_seconds=7200,
@@ -731,7 +731,7 @@ class TestHandlePeriodRollover:
             new_cs = await handle_period_rollover(session, cs, plan)
 
         assert cs.ended_at == period_end
-        assert plan.compute_credits_monthly_used == Decimal("0")
+        assert plan.compute_units_monthly_used == Decimal("0")
         assert plan.period_start == period_end
         assert plan.warning_80_notified_at is None
         assert plan.warning_100_notified_at is None
@@ -813,7 +813,7 @@ class TestResetMonthlyCredits:
             result = await reset_monthly_credits(session)
 
         assert result == 1
-        assert plan.compute_credits_monthly_used == Decimal("0")
+        assert plan.compute_units_monthly_used == Decimal("0")
         assert plan.warning_80_notified_at is None
         assert plan.warning_100_notified_at is None
         session.commit.assert_awaited_once()
