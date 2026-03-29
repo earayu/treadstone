@@ -148,7 +148,7 @@ class SandboxWebLinkResponse(BaseModel):
         ...,
         examples=["https://sandbox-sbabc123def456.treadstone-ai.dev/_treadstone/open?token=swlabc123"],
     )
-    expires_at: datetime = Field(..., examples=["2026-03-31T12:00:00+00:00"])
+    expires_at: datetime | None = Field(default=None, examples=["2026-03-31T12:00:00+00:00"])
 
 
 class SandboxWebLinkStatusResponse(BaseModel):
