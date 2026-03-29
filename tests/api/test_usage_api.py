@@ -106,11 +106,18 @@ async def test_get_usage_returns_summary(user_client):
 
     assert data["compute"]["vcpu_hours"] == 0.0
     assert data["compute"]["memory_gib_hours"] == 0.0
+    assert data["compute"]["monthly_limit"] == 10.0
+    assert data["compute"]["monthly_used"] == 0.0
+    assert data["compute"]["monthly_remaining"] == 10.0
+    assert data["compute"]["extra_remaining"] == 50.0
+    assert data["compute"]["total_remaining"] == 60.0
+    assert data["compute"]["unit"] == "credits"
 
     assert data["storage"]["gib_hours"] == 0.0
     assert data["storage"]["current_used_gib"] == 0
     assert data["storage"]["total_quota_gib"] == 0
     assert data["storage"]["available_gib"] == 0
+    assert data["storage"]["unit"] == "GiB"
 
     assert data["limits"]["max_concurrent_running"] == 1
     assert data["limits"]["allowed_templates"] == ["aio-sandbox-tiny", "aio-sandbox-small"]
@@ -119,13 +126,17 @@ async def test_get_usage_returns_summary(user_client):
     assert data["grace_period"]["grace_period_seconds"] == 600
 
 
-async def test_get_usage_includes_extra_credits(user_client):
-    """Welcome compute grant is listed under /v1/usage/grants; summary compute is raw usage only."""
+async def test_get_usage_includes_credit_pool_and_grants(user_client):
+    """Usage summary includes credit pool status; grants endpoint lists welcome bonus."""
     usage = await user_client.get("/v1/usage")
     assert usage.status_code == 200
     u = usage.json()
     assert u["compute"]["vcpu_hours"] == 0.0
     assert u["compute"]["memory_gib_hours"] == 0.0
+    assert u["compute"]["monthly_limit"] == 10.0
+    assert u["compute"]["monthly_used"] == 0.0
+    assert u["compute"]["extra_remaining"] == 50.0
+    assert u["compute"]["total_remaining"] == 60.0
 
     grants = await user_client.get("/v1/usage/grants")
     assert grants.status_code == 200

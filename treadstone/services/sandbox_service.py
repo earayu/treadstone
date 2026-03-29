@@ -16,8 +16,9 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from treadstone.config import settings
+from treadstone.config import SANDBOX_STORAGE_SIZE_VALUES, settings
 from treadstone.core.errors import (
+    BadRequestError,
     InvalidTransitionError,
     SandboxDurationExceededError,
     SandboxNameConflictError,
@@ -79,6 +80,16 @@ class SandboxService:
         storage_size: str | None = None,
     ) -> Sandbox:
         effective_storage_size = storage_size or settings.sandbox_default_storage_size
+
+        # ── Validate storage size against template annotation (if persistent) ──
+        if persist:
+            tmpl = await self._resolve_template(settings.sandbox_namespace, template)
+            allowed = tmpl.get("allowed_storage_sizes") or list(SANDBOX_STORAGE_SIZE_VALUES)
+            if effective_storage_size not in allowed:
+                raise BadRequestError(
+                    f"Storage size '{effective_storage_size}' is not allowed for template '{template}'. "
+                    f"Allowed sizes: {', '.join(allowed)}"
+                )
 
         # ── Metering: enforcement checks (gated by config) ──
         if self._metering is not None and settings.metering_enforcement_enabled:

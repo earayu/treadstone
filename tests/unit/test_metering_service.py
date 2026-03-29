@@ -536,7 +536,7 @@ class TestCloseComputeSession:
         assert result is None
 
     async def test_closes_session_and_accumulates_resource_hours(self, monkeypatch):
-        started = datetime(2026, 3, 15, 9, 0, 0, tzinfo=UTC)
+        last_tick = datetime(2026, 3, 15, 9, 59, 0, tzinfo=UTC)
         close_time = datetime(2026, 3, 15, 10, 0, 0, tzinfo=UTC)
         monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: close_time)
 
@@ -546,22 +546,52 @@ class TestCloseComputeSession:
             template="aio-sandbox-small",
             vcpu_request=Decimal("0.5"),
             memory_gib_request=Decimal("1"),
-            started_at=started,
-            last_metered_at=started,
+            started_at=datetime(2026, 3, 15, 9, 0, 0, tzinfo=UTC),
+            last_metered_at=last_tick,
             vcpu_hours=Decimal("0"),
             memory_gib_hours=Decimal("0"),
         )
         session = _mock_session(_MockResult(value=cs))
         svc = MeteringService()
+        svc.consume_compute_credits = AsyncMock(return_value=ConsumeResult(Decimal("0"), Decimal("0"), Decimal("0")))
 
         result = await svc.close_compute_session(session, "sb01")
 
         assert result is cs
         assert cs.ended_at == close_time
         assert cs.last_metered_at == close_time
-        # 1 hour elapsed: 0.5 vCPU-h, 1 GiB-h for aio-sandbox-small
-        assert cs.vcpu_hours == Decimal("0.5")
-        assert cs.memory_gib_hours == Decimal("1")
+        eh = Decimal("60") / Decimal("3600")
+        assert abs(cs.vcpu_hours - Decimal("0.5") * eh) < Decimal("0.0001")
+        assert abs(cs.memory_gib_hours - Decimal("1") * eh) < Decimal("0.0001")
+
+    async def test_close_consumes_credits_for_final_delta(self, monkeypatch):
+        """Closing a session with elapsed time must consume credits via dual-pool."""
+        last_tick = datetime(2026, 3, 15, 9, 59, 0, tzinfo=UTC)
+        close_time = datetime(2026, 3, 15, 10, 0, 0, tzinfo=UTC)
+        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: close_time)
+
+        cs = ComputeSession(
+            sandbox_id="sb01",
+            user_id="user01",
+            template="aio-sandbox-small",
+            vcpu_request=Decimal("0.5"),
+            memory_gib_request=Decimal("1"),
+            started_at=datetime(2026, 3, 15, 9, 0, 0, tzinfo=UTC),
+            last_metered_at=last_tick,
+            vcpu_hours=Decimal("0"),
+            memory_gib_hours=Decimal("0"),
+        )
+        session = _mock_session(_MockResult(value=cs))
+        svc = MeteringService()
+        svc.consume_compute_credits = AsyncMock(return_value=ConsumeResult(Decimal("0"), Decimal("0"), Decimal("0")))
+
+        await svc.close_compute_session(session, "sb01")
+
+        svc.consume_compute_credits.assert_awaited_once()
+        call_args = svc.consume_compute_credits.call_args
+        assert call_args[0][1] == "user01"
+        credit_amount = call_args[0][2]
+        assert credit_amount > Decimal("0")
 
     async def test_zero_elapsed_still_closes(self, monkeypatch):
         """If last_metered_at == now, no resource-hours are added but session still closes."""

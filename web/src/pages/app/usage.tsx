@@ -80,15 +80,18 @@ export function UsagePage() {
 
   const computeVcpuHours = usage?.compute.vcpu_hours ?? 0
   const computeMemGibHours = usage?.compute.memory_gib_hours ?? 0
+  const monthlyLimit = usage?.compute.monthly_limit ?? 0
+  const monthlyUsed = usage?.compute.monthly_used ?? 0
+  const totalRemaining = usage?.compute.total_remaining ?? 0
   const storageUsed = usage?.storage.current_used_gib
   const storageQuota = usage?.storage.total_quota_gib
 
   return (
     <div className="flex flex-col gap-10">
       <div>
-        <h1 className="text-4xl font-bold tracking-tight text-foreground">Usage &amp; Credits</h1>
+        <h1 className="text-4xl font-bold tracking-tight text-foreground">Usage &amp; Quotas</h1>
         <p className="mt-1 text-base text-muted-foreground">
-          Compute consumption, credit grants, and plan limits for your workspace.
+          Compute consumption, quota grants, and plan limits for your workspace.
         </p>
       </div>
 
@@ -112,6 +115,18 @@ export function UsagePage() {
                   {computeMemGibHours.toFixed(2)}
                 </span>
                 <span className="text-xs text-muted-foreground">GiB-hours</span>
+              </div>
+              <div className="mt-3 border-t border-border/15 pt-3">
+                <p className="text-sm text-foreground">
+                  <span className="tabular-nums">{monthlyUsed.toFixed(1)}</span>
+                  {" / "}
+                  <span className="tabular-nums">{monthlyLimit.toFixed(1)}</span>
+                  {" credits used"}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Total remaining:{" "}
+                  <span className="tabular-nums">{totalRemaining.toFixed(1)}</span> credits
+                </p>
               </div>
             </div>
           )}
@@ -280,7 +295,7 @@ export function UsagePage() {
             Compute grants
           </h3>
           <p className="mt-1 text-[11px] text-muted-foreground/80">
-            vCPU-hour credits (original / remaining).
+            Compute credit grants (original / remaining).
           </p>
         </div>
         <div className="overflow-x-auto">

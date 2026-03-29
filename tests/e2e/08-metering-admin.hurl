@@ -1,4 +1,4 @@
-# Metering Admin API: tier templates, user plan management, credit grants (single + batch)
+# Metering Admin API: tier templates, user plan management, compute/storage grants (single + batch)
 # Uses pre-registered admin user (admin_email) from e2e-test.sh setup.
 
 # ── Setup: Login as admin + API Key ──────────────────────────────────────────
@@ -79,9 +79,11 @@ HTTP 200
 [Asserts]
 jsonpath "$.tier" == "free"
 jsonpath "$.compute.monthly_limit" == 10.0
-jsonpath "$.compute.monthly_used" == 0.0
+jsonpath "$.compute.monthly_used" >= 0.0
 jsonpath "$.compute.extra_remaining" == 50.0
-jsonpath "$.storage.monthly_limit" == 0
+jsonpath "$.compute.unit" == "credits"
+jsonpath "$.storage.total_quota_gib" == 0
+jsonpath "$.storage.unit" == "GiB"
 jsonpath "$.limits.max_concurrent_running" == 1
 
 
@@ -119,17 +121,16 @@ HTTP 200
 [Asserts]
 jsonpath "$.tier" == "pro"
 jsonpath "$.compute.monthly_limit" == 100.0
-jsonpath "$.storage.monthly_limit" == 10
+jsonpath "$.storage.total_quota_gib" == 10
 jsonpath "$.limits.max_concurrent_running" == 3
 
 
-# ── POST /v1/admin/users/{id}/grants — issue compute credits ────────────────
+# ── POST /v1/admin/users/{id}/compute-grants — issue compute credits ────────
 
-POST {{base_url}}/v1/admin/users/{{target_user_id}}/grants
+POST {{base_url}}/v1/admin/users/{{target_user_id}}/compute-grants
 Authorization: Bearer {{admin_api_key}}
 Content-Type: application/json
 {
-    "credit_type": "compute",
     "amount": 100,
     "grant_type": "admin_grant",
     "reason": "E2E test grant"
@@ -140,7 +141,6 @@ grant_id: jsonpath "$.id"
 [Asserts]
 jsonpath "$.id" isString
 jsonpath "$.user_id" == "{{target_user_id}}"
-jsonpath "$.credit_type" == "compute"
 jsonpath "$.original_amount" == 100.0
 jsonpath "$.remaining_amount" == 100.0
 jsonpath "$.grant_type" == "admin_grant"
@@ -157,14 +157,13 @@ HTTP 200
 jsonpath "$.compute.extra_remaining" >= 100.0
 
 
-# ── POST /v1/admin/grants/batch — one valid + one invalid user ───────────────
+# ── POST /v1/admin/compute-grants/batch — one valid + one invalid user ──────
 
-POST {{base_url}}/v1/admin/grants/batch
+POST {{base_url}}/v1/admin/compute-grants/batch
 Authorization: Bearer {{admin_api_key}}
 Content-Type: application/json
 {
     "user_ids": ["{{target_user_id}}", "nonexistent-user-xxx"],
-    "credit_type": "compute",
     "amount": 50,
     "grant_type": "campaign",
     "reason": "E2E batch test"

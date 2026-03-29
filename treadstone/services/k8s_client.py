@@ -319,6 +319,9 @@ class Kr8sClient:
             return [_parse_sandbox_template(t) for t in items]
 
 
+ANNOTATION_ALLOWED_STORAGE_SIZES = "treadstone.io/allowed-storage-sizes"
+
+
 def _parse_sandbox_template(template: dict) -> dict:
     containers = template.get("spec", {}).get("podTemplate", {}).get("spec", {}).get("containers", [])
     image = ""
@@ -328,12 +331,16 @@ def _parse_sandbox_template(template: dict) -> dict:
         resources = containers[0].get("resources", {})
         requests = resources.get("requests", {})
         resource_spec = {"cpu": requests.get("cpu", ""), "memory": requests.get("memory", "")}
+    annotations = template.get("metadata", {}).get("annotations", {})
+    raw_sizes = annotations.get(ANNOTATION_ALLOWED_STORAGE_SIZES, "")
+    allowed_storage_sizes = [s.strip() for s in raw_sizes.split(",") if s.strip()] if raw_sizes else []
     return {
         "name": template["metadata"]["name"],
-        "display_name": template["metadata"].get("annotations", {}).get("display-name", template["metadata"]["name"]),
-        "description": template["metadata"].get("annotations", {}).get("description", ""),
+        "display_name": annotations.get("display-name", template["metadata"]["name"]),
+        "description": annotations.get("description", ""),
         "image": image,
         "resource_spec": resource_spec,
+        "allowed_storage_sizes": allowed_storage_sizes,
     }
 
 
@@ -358,6 +365,7 @@ class FakeK8sClient:
             "description": "Lightweight sandbox for code execution and scripting",
             "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "250m", "memory": "512Mi"},
+            "allowed_storage_sizes": ["5Gi", "10Gi", "20Gi"],
         },
         {
             "name": "aio-sandbox-small",
@@ -365,6 +373,7 @@ class FakeK8sClient:
             "description": "Small sandbox for simple development tasks",
             "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "500m", "memory": "1Gi"},
+            "allowed_storage_sizes": ["5Gi", "10Gi", "20Gi"],
         },
         {
             "name": "aio-sandbox-medium",
@@ -372,6 +381,7 @@ class FakeK8sClient:
             "description": "General-purpose development environment",
             "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "1", "memory": "2Gi"},
+            "allowed_storage_sizes": ["5Gi", "10Gi", "20Gi"],
         },
         {
             "name": "aio-sandbox-large",
@@ -379,6 +389,7 @@ class FakeK8sClient:
             "description": "Full-featured sandbox with browser automation",
             "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "2", "memory": "4Gi"},
+            "allowed_storage_sizes": ["5Gi", "10Gi", "20Gi"],
         },
         {
             "name": "aio-sandbox-xlarge",
@@ -386,6 +397,7 @@ class FakeK8sClient:
             "description": "Heavy workloads with maximum resources",
             "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "4", "memory": "8Gi"},
+            "allowed_storage_sizes": ["5Gi", "10Gi", "20Gi"],
         },
     )
 

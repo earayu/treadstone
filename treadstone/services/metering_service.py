@@ -55,9 +55,12 @@ from treadstone.models.sandbox import Sandbox, SandboxStatus
 from treadstone.models.user import utc_now
 from treadstone.services.metering_helpers import (
     ConsumeResult,
+    calculate_credit_rate,
     compute_period_bounds,
     get_template_resource_spec,
 )
+
+MAX_CLOSE_DELTA_SECONDS = 120
 
 logger = logging.getLogger(__name__)
 
@@ -331,7 +334,8 @@ class MeteringService:
         """Close the open ComputeSession for a sandbox.
 
         Accumulates final raw resource-hours from ``last_metered_at`` → now,
-        and sets ``ended_at``.
+        sets ``ended_at``, and consumes the corresponding credit delta from
+        the user's dual pool (monthly first, then ComputeGrant FIFO).
 
         Idempotent: returns ``None`` if no open session exists.
         """
@@ -350,10 +354,24 @@ class MeteringService:
         now = utc_now()
         elapsed_seconds = (now - cs.last_metered_at).total_seconds()
 
+        if elapsed_seconds > MAX_CLOSE_DELTA_SECONDS:
+            logger.warning(
+                "ComputeSession %s close delta %ds exceeds cap %ds (possible leader downtime), capping",
+                cs.id,
+                int(elapsed_seconds),
+                MAX_CLOSE_DELTA_SECONDS,
+            )
+            elapsed_seconds = MAX_CLOSE_DELTA_SECONDS
+
         if elapsed_seconds > 0:
             elapsed_hours = Decimal(str(elapsed_seconds)) / Decimal("3600")
             cs.vcpu_hours += cs.vcpu_request * elapsed_hours
             cs.memory_gib_hours += cs.memory_gib_request * elapsed_hours
+
+            credit_rate = calculate_credit_rate(cs.template)
+            credit_delta = credit_rate * elapsed_hours
+            if credit_delta > Decimal("0"):
+                await self.consume_compute_credits(session, cs.user_id, credit_delta)
 
         cs.ended_at = now
         cs.last_metered_at = now
@@ -700,6 +718,10 @@ class MeteringService:
             session, user_id, plan.period_start, plan.period_end
         )
 
+        extra_compute_remaining = await self.get_extra_compute_remaining(session, user_id)
+        monthly_remaining = max(Decimal("0"), plan.compute_credits_monthly_limit - plan.compute_credits_monthly_used)
+        total_compute_remaining = monthly_remaining + extra_compute_remaining
+
         # Storage gib-hours for the current period
         storage_result = await session.execute(
             select(func.coalesce(func.sum(StorageLedger.gib_hours_consumed), Decimal("0"))).where(
@@ -724,12 +746,19 @@ class MeteringService:
             "compute": {
                 "vcpu_hours": float(vcpu_hours),
                 "memory_gib_hours": float(memory_gib_hours),
+                "monthly_limit": float(plan.compute_credits_monthly_limit),
+                "monthly_used": float(plan.compute_credits_monthly_used),
+                "monthly_remaining": float(monthly_remaining),
+                "extra_remaining": float(extra_compute_remaining),
+                "total_remaining": float(total_compute_remaining),
+                "unit": "credits",
             },
             "storage": {
                 "gib_hours": float(storage_gib_hours),
                 "current_used_gib": current_storage_used,
                 "total_quota_gib": total_storage_quota,
                 "available_gib": total_storage_quota - current_storage_used,
+                "unit": "GiB",
             },
             "limits": {
                 "max_concurrent_running": plan.max_concurrent_running,
