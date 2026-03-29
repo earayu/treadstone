@@ -89,9 +89,9 @@ export function UsagePage() {
           </p>
           {(maxConcurrent != null || maxDurMin != null) && (
             <p className="text-xs text-muted-foreground">
-              {maxConcurrent != null && `Max ${maxConcurrent} concurrent`}
+              {maxConcurrent != null && `Max ${maxConcurrent} concurrent sandboxes`}
               {maxConcurrent != null && maxDurMin != null && " · "}
-              {maxDurMin != null && `${maxDurMin} min max`}
+              {maxDurMin != null && `Max ${maxDurMin} min per session`}
             </p>
           )}
           <p className="text-xs text-muted-foreground">Period: {periodLabel}</p>

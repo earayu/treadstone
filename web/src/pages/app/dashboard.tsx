@@ -317,7 +317,7 @@ function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
                         {sandbox.storage_size ? sandbox.storage_size.replace("i", "") : "PV"}
                       </span>
                     ) : (
-                      <span className="text-[10px] text-muted-foreground/40">没有持久化存储</span>
+                      <span className="text-[10px] text-muted-foreground/40">No persistent storage</span>
                     )}
                   </div>
                 </td>

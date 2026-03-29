@@ -319,7 +319,7 @@ class Kr8sClient:
             return [_parse_sandbox_template(t) for t in items]
 
 
-ANNOTATION_ALLOWED_STORAGE_SIZES = "treadstone.io/allowed-storage-sizes"
+ANNOTATION_ALLOWED_STORAGE_SIZES = "treadstone-ai.dev/allowed-storage-sizes"
 
 
 def _parse_sandbox_template(template: dict) -> dict:
