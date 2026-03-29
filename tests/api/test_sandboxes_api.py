@@ -386,6 +386,71 @@ class TestDeleteSandbox:
             assert sandbox is not None
             assert sandbox.status == "deleting"
 
+    async def test_soft_deleted_sandbox_not_in_list(self, auth_client):
+        """After soft-delete, the sandbox should not appear in the list API."""
+        from treadstone.models.sandbox import SandboxStatus
+        from treadstone.models.user import utc_now
+
+        create_resp = await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "ghost-sb"})
+        sandbox_id = create_resp.json()["id"]
+
+        async with _test_session_factory() as session:
+            sandbox = await session.get(Sandbox, sandbox_id)
+            sandbox.status = SandboxStatus.DELETED
+            sandbox.gmt_deleted = utc_now()
+            session.add(sandbox)
+            await session.commit()
+
+        list_resp = await auth_client.get("/v1/sandboxes")
+        assert list_resp.status_code == 200
+        ids = [item["id"] for item in list_resp.json()["items"]]
+        assert sandbox_id not in ids
+
+    async def test_soft_deleted_sandbox_not_found_by_get(self, auth_client):
+        """After soft-delete, GET by id should return 404."""
+        from treadstone.models.sandbox import SandboxStatus
+        from treadstone.models.user import utc_now
+
+        create_resp = await auth_client.post(
+            "/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "ghost-get-sb"}
+        )
+        sandbox_id = create_resp.json()["id"]
+
+        async with _test_session_factory() as session:
+            sandbox = await session.get(Sandbox, sandbox_id)
+            sandbox.status = SandboxStatus.DELETED
+            sandbox.gmt_deleted = utc_now()
+            session.add(sandbox)
+            await session.commit()
+
+        get_resp = await auth_client.get(f"/v1/sandboxes/{sandbox_id}")
+        assert get_resp.status_code == 404
+
+    async def test_recreate_sandbox_with_same_name_after_soft_delete(self, auth_client):
+        """Partial unique index allows re-creating a sandbox with the same name after deletion."""
+        from treadstone.models.sandbox import SandboxStatus
+        from treadstone.models.user import utc_now
+
+        first_resp = await auth_client.post(
+            "/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "reuse-name"}
+        )
+        assert first_resp.status_code == 202
+        first_id = first_resp.json()["id"]
+
+        async with _test_session_factory() as session:
+            sandbox = await session.get(Sandbox, first_id)
+            sandbox.status = SandboxStatus.DELETED
+            sandbox.gmt_deleted = utc_now()
+            session.add(sandbox)
+            await session.commit()
+
+        second_resp = await auth_client.post(
+            "/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "reuse-name"}
+        )
+        assert second_resp.status_code == 202
+        assert second_resp.json()["id"] != first_id
+        assert second_resp.json()["name"] == "reuse-name"
+
 
 class TestStartStopSandbox:
     async def test_start_from_creating_returns_409(self, auth_client):

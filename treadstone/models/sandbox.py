@@ -1,9 +1,10 @@
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql import text
 
 from treadstone.core.database import Base
 from treadstone.models.user import random_id, utc_now
@@ -15,6 +16,7 @@ class SandboxStatus(StrEnum):
     STOPPED = "stopped"
     ERROR = "error"
     DELETING = "deleting"
+    DELETED = "deleted"
 
 
 VALID_TRANSITIONS: dict[str, list[str]] = {
@@ -22,7 +24,7 @@ VALID_TRANSITIONS: dict[str, list[str]] = {
     SandboxStatus.READY: [SandboxStatus.STOPPED, SandboxStatus.ERROR, SandboxStatus.DELETING],
     SandboxStatus.STOPPED: [SandboxStatus.READY, SandboxStatus.DELETING],
     SandboxStatus.ERROR: [SandboxStatus.STOPPED, SandboxStatus.DELETING],
-    SandboxStatus.DELETING: [],
+    SandboxStatus.DELETING: [SandboxStatus.DELETED],
 }
 
 
@@ -32,7 +34,15 @@ def is_valid_transition(from_status: str, to_status: str) -> bool:
 
 class Sandbox(Base):
     __tablename__ = "sandbox"
-    __table_args__ = (UniqueConstraint("owner_id", "name", name="uq_sandbox_owner_name"),)
+    __table_args__ = (
+        Index(
+            "uq_sandbox_owner_name_active",
+            "owner_id",
+            "name",
+            unique=True,
+            postgresql_where=text("gmt_deleted IS NULL"),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(24), primary_key=True, default=lambda: "sb" + random_id())
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
@@ -69,3 +79,4 @@ class Sandbox(Base):
     gmt_created: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     gmt_started: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     gmt_stopped: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    gmt_deleted: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

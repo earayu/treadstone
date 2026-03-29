@@ -138,7 +138,9 @@ class SandboxSubdomainMiddleware:
 
     async def _load_sandbox(self, sandbox_id: str) -> Sandbox | None:
         async with async_session() as session:
-            result = await session.execute(select(Sandbox).where(Sandbox.id == sandbox_id))
+            result = await session.execute(
+                select(Sandbox).where(Sandbox.id == sandbox_id, Sandbox.gmt_deleted.is_(None))
+            )
             return result.scalar_one_or_none()
 
     def _build_return_to(self, scope: Scope, host: str) -> str:

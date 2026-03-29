@@ -234,12 +234,12 @@ class SandboxService:
 
     async def get(self, sandbox_id: str, owner_id: str) -> Sandbox | None:
         result = await self.session.execute(
-            select(Sandbox).where(Sandbox.id == sandbox_id, Sandbox.owner_id == owner_id)
+            select(Sandbox).where(Sandbox.id == sandbox_id, Sandbox.owner_id == owner_id, Sandbox.gmt_deleted.is_(None))
         )
         return result.scalar_one_or_none()
 
     async def list_by_owner(self, owner_id: str, labels: dict | None = None) -> list[Sandbox]:
-        stmt = select(Sandbox).where(Sandbox.owner_id == owner_id)
+        stmt = select(Sandbox).where(Sandbox.owner_id == owner_id, Sandbox.gmt_deleted.is_(None))
         result = await self.session.execute(stmt)
         sandboxes = list(result.scalars().all())
 

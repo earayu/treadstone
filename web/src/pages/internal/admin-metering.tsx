@@ -331,11 +331,14 @@ function UserPlanSection() {
   const [lookupError, setLookupError] = useState<string | null>(null)
   const lookupByEmail = useLookupUserByEmail()
   const { data: usage, isLoading, error } = useAdminUserUsage(resolvedUserId)
+  const { data: tierTemplatesData } = useTierTemplates()
+  const availableTiers = tierTemplatesData?.items?.map((t) => t.tier) ?? []
   const updatePlan = useAdminUpdatePlan()
   const createComputeGrant = useAdminCreateComputeGrant()
   const createStorageGrant = useAdminCreateStorageGrant()
   const [computeGrantAmount, setComputeGrantAmount] = useState("50")
   const [storageGrantGib, setStorageGrantGib] = useState("10")
+  const [selectedTier, setSelectedTier] = useState("")
 
   const handleLookup = () => {
     const trimmed = inputEmail.trim()
@@ -350,6 +353,7 @@ function UserPlanSection() {
       onError: () => {
         setResolvedUserId(null)
         setResolvedEmail(null)
+        setSelectedTier("")
         setLookupError(`No user found for "${trimmed}"`)
       },
     })
@@ -455,22 +459,16 @@ function UserPlanSection() {
                 <span className="font-mono text-[10px]">{resolvedUserId}</span>
               </div>
 
-              <div className="grid grid-cols-4 gap-6">
+              <div className="grid grid-cols-3 gap-6">
                 <div>
                   <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
                     CURRENT TIER
                   </p>
-                  <p className="mt-1 text-base font-bold text-primary">{tier}</p>
+                  <p className="mt-1 text-base font-bold capitalize text-primary">{tier}</p>
                 </div>
                 <div>
                   <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-                    TIER
-                  </p>
-                  <p className="mt-1 text-base font-semibold text-foreground">{tier}</p>
-                </div>
-                <div>
-                  <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-                    CU-HOURS
+                    CU-HOURS USED
                   </p>
                   <p className="mt-1 text-base font-semibold text-foreground">{cuHours.toFixed(2)}</p>
                 </div>
@@ -485,19 +483,33 @@ function UserPlanSection() {
               </div>
 
               <div className="mt-6 flex flex-col gap-4">
-                <div className="flex flex-wrap items-end gap-3">
+                <div className="flex flex-wrap items-end gap-3 border-b border-border/15 pb-4">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-medium text-muted-foreground">
+                      Change tier
+                    </label>
+                    <select
+                      value={selectedTier || tier}
+                      onChange={(e) => setSelectedTier(e.target.value)}
+                      className="h-[34px] w-[160px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    >
+                      {availableTiers.length > 0 ? (
+                        availableTiers.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))
+                      ) : (
+                        <option value={tier}>{tier}</option>
+                      )}
+                    </select>
+                  </div>
                   <button
-                    onClick={() => handleChangeTier("pro")}
-                    disabled={updatePlan.isPending}
-                    className="rounded-sm border border-border/40 px-4 py-1.5 text-[11px] font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+                    onClick={() => handleChangeTier(selectedTier || tier)}
+                    disabled={updatePlan.isPending || (selectedTier || tier) === tier}
+                    className="h-[34px] rounded-sm bg-primary px-5 text-[11px] font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"
                   >
-                    Change Tier to Pro
-                  </button>
-                  <button
-                    disabled
-                    className="rounded-sm border border-border/40 px-4 py-1.5 text-[11px] font-medium text-foreground opacity-50"
-                  >
-                    Apply Overrides
+                    {updatePlan.isPending ? "Saving…" : "Apply tier"}
                   </button>
                 </div>
                 <div className="flex flex-wrap items-end gap-4 border-t border-border/15 pt-4">
