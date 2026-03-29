@@ -1,21 +1,24 @@
-# 计量系统审计报告（当前代码实况）
+# 计量系统审计报告（第三轮，基于当前代码实况）
 
 **审计日期：** 2026-03-29
-**代码基线：** `main` 分支当前 `HEAD`（提交 `7bb2d6c`）
+**代码基线：** `main` 分支当前 `HEAD`，提交 `70258c9`
 **审计范围：**
 
 - Compute 资源计量
 - Storage 资源计量
 - 套餐模板、用户计划、Compute/Storage 授予体系
-- 配额执行、后台采集任务、K8s 同步链路、Usage/Admin 接口
-- 与上述能力直接相关的数据库结构、迁移脚本、测试覆盖、前端使用方式
+- 配额执行、后台采集任务、K8s Watch/Reconcile、Usage/Admin 接口
+- 与上述能力直接相关的数据库结构、迁移脚本、测试覆盖、前端展示与当前已知缺陷
 
 **判定原则：**
 
-1. 只以仓库中当前实际运行的代码为准。
-2. 历史文档和上一次审计报告只作为对比背景，不覆盖当前代码事实。
-3. 公开 API、后台任务、K8s Watch/Reconcile、数据库结构、测试用例之间如果存在冲突，以当前运行链路和当前代码路径为准。
-4. 对“是否适合上线”的判断，会同时从产品语义、功能闭环、代码一致性、测试可信度四个维度给出结论。
+1. 只以仓库当前代码为准，不以历史设计稿、过期文档或旧 PR 讨论为准。
+2. 如果文档、测试、接口、后台任务之间存在冲突，以当前生产路径和当前代码真实调用链为准。
+3. “适不适合上线”同时从四个维度判断：
+   - 产品语义是否清晰
+   - 功能闭环是否成立
+   - 数据准确性是否足够
+   - 代码与测试是否支持上述结论
 
 ---
 
@@ -26,17 +29,17 @@
 - `treadstone/models/metering.py`
 - `treadstone/services/metering_service.py`
 - `treadstone/services/metering_tasks.py`
+- `treadstone/services/metering_helpers.py`
 - `treadstone/services/k8s_sync.py`
 - `treadstone/services/sync_supervisor.py`
-- `treadstone/services/metering_helpers.py`
 - `treadstone/services/sandbox_service.py`
 - `treadstone/services/k8s_client.py`
 - `treadstone/api/sandboxes.py`
+- `treadstone/api/sandbox_templates.py`
 - `treadstone/api/usage.py`
 - `treadstone/api/admin.py`
 - `treadstone/api/metering_serializers.py`
 - `treadstone/api/schemas.py`
-- `treadstone/api/sandbox_templates.py`
 - `treadstone/api/auth.py`
 - `treadstone/main.py`
 - `treadstone/config.py`
@@ -48,6 +51,7 @@
 - `alembic/versions/bc37bfeef9ac_add_provision_mode_persist_storage_size_.py`
 - `alembic/versions/c4d5e6f7a8b9_metering_system_overhaul.py`
 - `alembic/versions/d7e8f9a0b1c2_split_credit_grant_into_compute_and_storage.py`
+- `alembic/versions/e1a2b3c4d5f6_rename_credits_to_compute_units.py`
 
 ### 1.3 本次重点核对的测试与前端文件
 
@@ -55,31 +59,30 @@
 - `tests/unit/test_metering_service.py`
 - `tests/unit/test_metering_tasks.py`
 - `tests/unit/test_metering_integration.py`
+- `tests/unit/test_k8s_sync.py`
 - `tests/api/test_usage_api.py`
 - `tests/api/test_admin_api.py`
+- `tests/api/test_sandboxes_api.py`
 - `tests/e2e/07-metering-usage.hurl`
 - `tests/e2e/08-metering-admin.hurl`
 - `web/src/pages/app/usage.tsx`
 - `web/src/pages/internal/admin-metering.tsx`
 
-### 1.4 与上一次审计相比，本次确认到的重大变化
+### 1.4 与第二轮审计相比，本次确认到的重大变化
 
-当前代码相较上一次审计，已经发生了几处结构性变化：
+相较第二轮审计，当前代码已经发生了几处关键变化：
 
-1. 公开 `sandboxes` 路由已经注入 `MeteringService`，不再是完全脱线状态。
-2. 新增 `metering_enforcement_enabled` 总开关，计量记录和配额拦截被拆开。
-3. Compute 的运行记账从“credits 累计”改成了“原始资源小时累计”：
-   - `vcpu_request`
-   - `memory_gib_request`
-   - `vcpu_hours`
-   - `memory_gib_hours`
-4. Storage 授予从旧的单表 `credit_grant` 拆成了：
-   - `compute_grant`
-   - `storage_quota_grant`
-5. 新增了 `reconcile_storage_metering()`，Storage 已经不再只有 best-effort 记账。
-6. `allowed_templates` 已通过单独迁移从 `tiny/small/...` 规范化为 `aio-sandbox-*`。
-
-这意味着：**当前系统已经不是上一次审计时那套半接线的形态了，但也出现了新的断裂点。**
+1. 术语层从 `credits` 统一迁移为 `compute_units`，数据库列名、Schema、前端和文档都做了更新。
+2. 第二轮最大的断裂点已经补上：
+   - `tick_metering()` 会在每轮 tick 后调用 `consume_compute_credits()`
+   - `close_compute_session()` 会在关闭 session 时消耗最后一段 Compute Unit
+3. `GET /v1/usage` 的 Compute 区块现在明确是“实际 Compute Unit 小时 + entitlement 池状态”的混合视图。
+4. E2E Hurl 的字段和接口已经基本跟上当前 API 形状，不再停留在旧 `credits` 版接口。
+5. K8s 模板资源规格现在会在 Reconcile 时同步进运行时缓存，Compute 计量不再只依赖硬编码模板规格。
+6. 但也暴露出新的更细粒度问题：
+   - ComputeSession 缺少“单个 sandbox 仅允许 1 个 open session”的数据库级约束
+   - Storage 的 `gib_hours` 仍然是生命周期累计值，不是严格按 billing period 切割后的值
+   - 删除 persistent sandbox 时，会在 K8s 删除成功前先释放 StorageLedger
 
 ---
 
@@ -87,358 +90,455 @@
 
 ### 2.1 一句话结论
 
-**当前系统已经具备“原始资源用量采集 + 套餐/授予管理 + Storage 容量配额”的主体框架，但还不适合被描述为“完整可上线的 Compute 计量计费闭环”。**
+**当前系统已经明显强于第二轮审计时的状态：Compute 与 Storage 都具备可运行的计量主链路，Compute 的“额度消费闭环”也已经接回；但它仍然不适合被定义为“严格账务级、无明显边界缺陷的上线计量计费系统”。**
 
 更准确地说：
 
-- Compute 原始用量记账链路已经存在，而且公共路径、Watch、Reconcile、Tick 都接上了。
-- Storage 容量与 GiB-hours 记账链路也已经存在，而且现在有 Reconcile 兜底。
-- 但是 Compute 的“额度消费”链路在当前生产代码里已经断开：系统会累计 `vcpu_hours` / `memory_gib_hours`，但不会把这些用量消耗到 `UserPlan.compute_credits_monthly_used` 或 `ComputeGrant.remaining_amount`。
-- 因此所有依赖“剩余额度”的能力，包括：
-  - `check_compute_quota()`
-  - 80% / 100% warning
-  - grace period
-  - 超额自动 stop
-  当前都无法随着真实运行时长自然触发。
+- Compute 已经具备：
+  - 原始资源小时采集
+  - Compute Unit 计算
+  - 月度池 + Grant 池双池消费
+  - warning / grace / auto-stop 主链路
+- Storage 已经具备：
+  - 容量配额
+  - 持久卷分配 / 释放记账
+  - GiB-hours 周期性累计
+  - Reconcile 修复
+- 但系统仍有若干会影响上线可信度的结构性问题：
+  - Compute open session 缺少数据库级唯一约束
+  - Storage 周期用量统计不是严格 period-accurate
+  - 删除路径会过早释放 Storage 配额
+  - grace 期间的“真实超额量”并未持久化，absolute overage cap 实际上无法工作
 
 ### 2.2 当前状态总表
 
 | 子系统 | 当前状态 | 审计结论 |
 | --- | --- | --- |
 | Compute 原始用量采集 | 已实现 | `可运行` |
-| Compute 额度消费 | 代码存在，但生产路径未调用 | `未闭环` |
-| Compute 配额拦截 | create/start 已接线，但受总开关控制，且依赖未消费的额度字段 | `部分有效` |
-| Storage 分配/释放记账 | 已实现 | `可运行` |
-| Storage 后台 GiB-hours 累计 | 已实现 | `可运行` |
-| Storage Reconcile | 已实现 | `比上次明显更完整` |
-| Storage 配额拦截 | create 已接线，但受总开关控制 | `基本成立` |
-| Usage API | 已实现，返回原始用量与配额视图 | `可用` |
-| Admin API | 已实现，支持 tier、plan、compute grant、storage grant | `可用` |
-| 前端 Usage/Admin 页面 | 基本跟随后端新模型 | `基本可用，但命名存在混淆` |
-| E2E Hurl 计量测试 | 仍停留在旧接口/旧字段 | `已失效` |
-| 商业计费闭环 | 未实现 | `不应按 billing system 对外宣称` |
+| Compute Unit 消费 | 已实现 | `已闭环` |
+| Compute 配额拦截 | 已实现，受总开关控制 | `可运行` |
+| Compute warning / grace / auto-stop | 已实现，但 overage 持久化不足 | `部分成立` |
+| Storage 容量分配/释放记账 | 已实现 | `可运行` |
+| Storage GiB-hours 累计 | 已实现 | `可运行，但 period 精度不足` |
+| Storage Reconcile | 已实现 | `可运行` |
+| Storage 配额拦截 | 已实现，受总开关控制 | `基本成立` |
+| Usage API | 已实现 | `可用` |
+| Admin API | 已实现 | `可用` |
+| 前端 Usage/Admin 页面 | 已跟上新模型 | `可用，但仍有命名混杂` |
+| E2E 计量 Hurl | 已跟上接口形状 | `有价值，但覆盖不深` |
+| 商业级 billing 闭环 | 未实现 | `不应按 Stripe/AWS 级 billing system 对外宣称` |
 
-### 2.3 本次最关键的 6 个审计发现
+### 2.3 本次最关键的 8 个审计发现
 
-#### 发现 A：公开请求路径已经接入 metering，但默认不会执行配额拦截
+#### 发现 A：Compute 额度消费闭环已经修复
 
-当前 `treadstone/api/sandboxes.py` 的 `create/start/delete/stop` 都已经用 `SandboxService(session=session, metering=_metering)` 实例化服务层，和上一次审计不同。
+第二轮审计时最关键的 blocker 是：系统会记 `vcpu_hours` / `memory_gib_hours`，但不会把真实运行消耗映射到 `UserPlan` 和 `ComputeGrant`。
 
-但在 `SandboxService.create()` / `start()` 中，所有配额检查都被挂在：
+当前代码中，这个问题已经被修复：
 
-- `self._metering is not None`
-- `settings.metering_enforcement_enabled`
+- `treadstone/services/metering_tasks.py:tick_metering()`
+  - 每 60 秒累积所有 open session 的原始资源小时
+  - 按用户聚合本轮 Compute Unit 增量
+  - 调用 `MeteringService.consume_compute_credits()`
+- `treadstone/services/metering_service.py:close_compute_session()`
+  - 在 session 关闭时补上最后一段未 tick 的 Compute Unit
+  - 同样调用 `consume_compute_credits()`
 
-这两个条件之后。
+因此：
 
-而 `treadstone/config.py` 中默认值是：
+- `UserPlan.compute_units_monthly_used` 会随真实运行增长
+- `ComputeGrant.remaining_amount` 会在月度池用完后被自然消耗
+- `check_compute_quota()`、warning、grace、auto-stop 不再是“空壳”
 
-- `metering_enforcement_enabled = False`
+#### 发现 B：系统的计量维度已经清晰拆成“实际使用量”与“entitlement 池”
+
+当前实现不是单一 ledger，而是两套叠加视图：
+
+1. **实际使用量**
+   - Compute：
+     - `ComputeSession.vcpu_hours`
+     - `ComputeSession.memory_gib_hours`
+     - `UsageSummary.compute.compute_unit_hours`
+   - Storage：
+     - `StorageLedger.gib_hours_consumed`
+     - `UsageSummary.storage.gib_hours`
+2. **entitlement / quota 池**
+   - `UserPlan.compute_units_monthly_limit`
+   - `UserPlan.compute_units_monthly_used`
+   - `ComputeGrant.remaining_amount`
+   - `UserPlan.storage_capacity_limit_gib`
+   - `StorageQuotaGrant.size_gib`
 
 这意味着：
 
-- 默认部署下，系统会记录数据，但不会在 create/start 时基于额度阻止用户。
-- 只有显式打开 `TREADSTONE_METERING_ENFORCEMENT_ENABLED=true`，这些配额检查才会进入真实执行路径。
+- Compute 区块同时回答两个问题：
+  - “这个周期实际跑了多少 CU-hours？”
+  - “当前月度池和额外池还剩多少？”
+- Storage 区块也同时回答两个问题：
+  - “当前持久存储占用了多少 GiB？”
+  - “累计了多少 GiB-hours？”
 
-#### 发现 B：Compute 现在记录的是原始资源小时，但“credit 扣减”生产链路已经断开
+这个模型比第二轮更完整，但也带来一个产品层面的副作用：**Usage 接口返回的是“usage + entitlement 混合视图”，不是单纯的 usage report。**
 
-当前 ComputeSession 记录的是：
+#### 发现 C：ComputeSession 的“幂等性”只做到代码层，没有做到数据库层
 
-- `vcpu_request`
-- `memory_gib_request`
-- `vcpu_hours`
-- `memory_gib_hours`
+`MeteringService.open_compute_session()` 的注释声称“幂等”，但它的实现方式是：
 
-后台 tick 和 close 逻辑也只会累加这两类原始资源小时。
+- 先 `SELECT ... FOR UPDATE` 查 open session
+- 没查到就插入新 `ComputeSession`
 
-但是当前生产代码中，`consume_compute_credits()` 已经没有任何生产调用者。它只在单元测试中被直接调用。
+问题在于：
+
+- `compute_session` 表只有 `ix_compute_session_open`，这是普通 partial index，不是唯一约束
+- 对“空结果”做 `FOR UPDATE` 并不能锁住“未来不存在的行”
+- 因此 Watch 与 Reconcile 如果并发进入“为同一 sandbox 打开 open session”这条路径，理论上仍然可能插入两个 open session
+
+这不是纯理论问题，因为当前确实存在并发来源：
+
+- `handle_watch_event()` 触发 `_apply_metering_on_transition()`
+- `reconcile_metering()` 也会修复缺失 session
+
+一旦真的出现两个 open session，会导致：
+
+- 计量重复
+- `close_compute_session()` 的 `scalar_one_or_none()` 抛 `MultipleResultsFound`
+- 后续 reconcile / close 逻辑进一步失效
+
+这是当前最需要优先修正的数据库级缺陷之一。
+
+#### 发现 D：Storage 的 GiB-hours 仍然不是严格的“按 billing period”数据
+
+当前 `StorageLedger.gib_hours_consumed` 是从 `allocated_at` 开始累计的生命周期总量。
+
+`GET /v1/usage` 在组装 Storage 区块时，只做了：
+
+- 过滤“与当前 billing period 有重叠”的 ledger
+- 然后直接 `SUM(StorageLedger.gib_hours_consumed)`
+
+但它**没有**把 ledger 在当前 period 之外的历史部分裁掉。
+
+因此，如果一个 persistent sandbox：
+
+- 上个月就已经创建
+- 这个月仍然存在
+
+那么当前 `storage.gib_hours` 会包含“上个月 + 这个月”的累计值，而不是“本月值”。
+
+结论：
+
+- `current_used_gib` 作为容量视图是可信的
+- `gib_hours` 作为“当前 billing period 的 Storage 用量”并不严格可信
+
+如果未来真的要把 Storage GiB-hours 用于账单、报表、导出或超额计费，这个问题必须先解决。
+
+#### 发现 E：删除 persistent sandbox 时，Storage 配额释放得过早
+
+当前 `SandboxService.delete()` 的顺序是：
+
+1. 如果 `persist=True`，先调用 `record_storage_release()`
+2. 把 sandbox 状态改成 `DELETING`
+3. 提交数据库
+4. 再调用 K8s 删除 Sandbox CR / SandboxClaim
+
+这意味着如果第 4 步失败：
+
+- 数据库里的 `StorageLedger` 已经从 `ACTIVE` 变成 `DELETED`
+- 用户的 `current_storage_used` 会立刻下降
+- 但实际 PVC / Sandbox 资源可能还留在集群里
+
+更关键的是，当前 `reconcile_storage_metering()` 只能：
+
+- 为缺失 ACTIVE ledger 的 persistent sandbox 补 ledger
+- 为 ACTIVE ledger 做 release
+
+它**不会**把一个已经释放掉的 ledger“恢复为 ACTIVE”。
+
+所以这个错误一旦发生，系统就会出现：
+
+- 真实集群还占着存储
+- 计量系统却认为这部分容量已经释放
+
+这会直接破坏 Storage quota 的可信度。
+
+#### 发现 F：grace period 能启动，但“absolute overage cap”实际上没有真实数据基础
+
+当前 `check_grace_periods()` 的设计里有两种强制 stop 条件：
+
+1. grace 时间到期
+2. 超额量超过 `ABSOLUTE_OVERAGE_CAP_RATIO = 20%`
+
+但当前 `consume_compute_credits()` 的行为是：
+
+- 月度池扣到上限为止
+- Grant 池扣到 0 为止
+- 如果还不够，就把差额记在返回值 `shortfall`
+- 但不会把 shortfall 持久化到任何表中
 
 结果就是：
 
-- `UserPlan.compute_credits_monthly_used` 不会随着真实 sandbox 运行而增长。
-- `ComputeGrant.remaining_amount` 不会随着真实 sandbox 运行而减少。
-- `get_total_compute_remaining()` 读到的是一个“理论额度池”，而不是“已被真实运行消耗后的额度池”。
+- 正常业务流下，`get_total_compute_remaining()` 最多只能到 `0`
+- 它不会自然变成负数
+- `_handle_exhausted()` 里的 `overage = abs(total_remaining)` 在大多数真实场景下只会得到 `0`
 
-这是当前系统最大的功能性断裂点。
+所以：
 
-#### 发现 C：Compute 的 warning / grace period / auto-stop 逻辑目前没有真实触发基础
+- grace period 会启动
+- grace 超时后会 stop
+- 但“超额 20% 立即 stop”这条规则在正常路径下几乎没有可用数据基础
 
-`check_warning_thresholds()`、`check_grace_periods()`、`_handle_exhausted()`、`_enforce_stop()` 都仍然依赖：
+换句话说，当前 grace 模型仍然更接近：
 
-- `plan.compute_credits_monthly_used`
-- `get_total_compute_remaining()`
+- `quota exhausted -> start timer -> timer expires -> stop`
 
-因为这些字段/结果不再被真实运行时长驱动，所以在默认业务流程里：
+而不是：
 
-- 80% warning 不会自然触发
-- 100% warning 不会自然触发
-- grace period 不会自然启动
-- auto-stop 不会因为真实 compute 使用超额而生效
+- `quota exhausted -> measure exact overage -> overage or timer triggers stop`
 
-除非：
+#### 发现 G：stop 回调失败时，grace 状态会被过早清空
 
-- 管理员手工修改 `compute_credits_monthly_used`
-- 或未来重新接回 `consume_compute_credits()`
+`_enforce_stop()` 当前的行为是：
 
-否则这些能力目前更像“保留的框架”，而不是可上线宣称的能力。
+- 逐个 sandbox 调 `stop_callback` 或 `_db_only_stop()`
+- 单个 sandbox stop 失败只记录日志
+- 循环结束后，无论成功与否，都会把 `plan.grace_period_started_at = None`
 
-#### 发现 D：Storage 体系现在比 Compute 体系更接近真正可用
+这会导致：
 
-Storage 当前具备以下闭环：
+- 如果 K8s scale-down 失败
+- 用户 sandbox 事实上还在运行
+- 但当前用户的 grace 状态已经被清掉
 
-1. `persist=True` 创建 sandbox 时可检查容量配额。
-2. 创建成功后会写 `StorageLedger(ACTIVE)`。
-3. 删除 persistent sandbox 时会释放 ledger。
-4. 每 60 秒累加 `gib_hours_consumed`。
-5. 每 300 秒 reconcile，会修复缺失 ledger 或孤儿 ACTIVE ledger。
-6. StorageGrant 是单独的 `storage_quota_grant`，语义上是“额外容量上限”，不再伪装成可消费 credits。
+下一轮 tick 时，系统不会延续“已经进入 enforcement 阶段”的状态，而是会重新把它当作“第一次耗尽”，重新开始 grace 计时。
 
-因此，Storage 这条线虽然仍受 enforcement 开关控制，但从“模型一致性”和“后台修复能力”来说，已经比 Compute 更完整。
+这会使 enforcement 变软，延长实际超额运行时间。
 
-#### 发现 E：前端和 API 已部分跟随新模型，但名称体系仍然混杂
+#### 发现 H：E2E 测试已经对齐接口，但仍不足以证明“整套计量链路上线级可靠”
 
-当前后端 `GET /v1/usage` 返回的是：
-
-- Compute：原始 `vcpu_hours` / `memory_gib_hours`
-- Storage：`gib_hours` + 当前容量使用
-
-但前端与接口命名里仍混用：
-
-- `Usage & Credits`
-- `Compute Credits / Mo (vCPU-h)`
-- `Storage Credits / Mo (GiB)`
-
-这会造成产品语义上的混乱：
-
-- Compute summary 已是原始资源小时，不再是完整的 credit ledger summary
-- Storage 本质上是容量 entitlement，不是“每月消费型 credits”
-
-也就是说，**底层模型已经拆开了，用户心智和部分命名还没完全拆开。**
-
-#### 发现 F：E2E 计量测试已经明显过时，不能作为当前上线审计依据
-
-当前：
-
-- `tests/api/test_usage_api.py`
-- `tests/api/test_admin_api.py`
-- `tests/unit/test_metering_*`
-
-已经基本对齐新模型。
-
-但：
+这是相较第二轮的积极变化：
 
 - `tests/e2e/07-metering-usage.hurl`
 - `tests/e2e/08-metering-admin.hurl`
 
-仍在断言旧字段和旧端点，例如：
+已经使用当前字段：
 
-- `$.compute.monthly_limit`
-- `$.compute.monthly_used`
-- `POST /v1/admin/users/{id}/grants`
-- `POST /v1/admin/grants/batch`
+- `compute.compute_unit_hours`
+- `compute.monthly_limit`
+- `compute.extra_remaining`
+- `/v1/admin/users/{id}/compute-grants`
+- `/v1/admin/storage-grants`
 
-而当前代码里这些接口/字段已经不存在或语义已经变更。
+所以它们已经不是“过期测试”了。
 
-因此，**当前 E2E 计量测试集事实上已经失效。**
+但仍然要注意：
 
-### 2.4 当前是否适合上线
+- 这些 E2E 主要覆盖的是 Usage/Admin 读写接口
+- 它们几乎没有真正覆盖：
+  - sandbox READY -> STOPPED 状态转移下的 session 开关
+  - 长时间 tick 后的消费累计
+  - grace period 自动 stop
+  - reconcile 修复丢失 session / ledger
+  - storage crossing period 的准确计量
 
-#### 适合上线的部分
+结论是：
 
-- Usage / Admin 读写接口
-- TierTemplate / UserPlan / ComputeGrant / StorageQuotaGrant 的管理能力
-- Compute 原始资源小时观测
-- Storage 容量与 GiB-hours 记账
-- Storage 配额框架
-
-#### 不适合直接对外承诺的部分
-
-- “Compute credits 会随实际运行自动扣减”
-- “Compute 用尽后系统会自动 warning / grace / stop”
-- “当前是完整的 compute + storage 计量计费系统”
-- “现有 E2E 已验证计量系统上线可靠性”
+- 当前 E2E 已能证明“接口形状大致正确”
+- 还不能证明“计量系统在真实长时运行下绝对可靠”
 
 ---
 
-## 3. 当前系统的整体架构
+## 3. 当前系统的定位与总体架构
 
-### 3.1 组件分层
+### 3.1 系统在产品上的真实定位
 
-当前计量系统可以拆成 6 层：
+如果只看代码事实，当前这套系统更准确的定位是：
 
-1. **套餐与授予层**
-   - `TierTemplate`
-   - `UserPlan`
-   - `ComputeGrant`
-   - `StorageQuotaGrant`
-2. **请求路径执行层**
-   - `SandboxService`
-   - `MeteringService` 的 quota checks / storage allocation hooks
-3. **K8s 状态同步层**
-   - `k8s_sync.handle_watch_event()`
-   - `k8s_sync.reconcile()`
-4. **周期任务层**
-   - `metering_tasks.tick_metering()`
-   - `metering_tasks.tick_storage_metering()`
-   - `check_warning_thresholds()`
-   - `check_grace_periods()`
-   - `reset_monthly_credits()`
-5. **读取与运营层**
-   - `/v1/usage/*`
-   - `/v1/admin/*`
-6. **前端消费层**
-   - `web/src/pages/app/usage.tsx`
-   - `web/src/pages/internal/admin-metering.tsx`
+- 一套**资源计量 + entitlement + 配额执行 + 管理员运营**基础设施
 
-### 3.2 架构图
+而不是：
+
+- 一套已经完整打通支付、账单、发票、钱包、订单的 billing 平台
+
+当前代码确实已经支持：
+
+- 资源采集
+- 配额与套餐
+- 管理员发放 Compute/Storage 授予
+- Usage/Admin 可观测视图
+- 配额耗尽后的 warning / grace / stop
+
+但仍然没有：
+
+- 支付入口
+- 账单结算
+- 发票
+- 钱包 / 充值
+- 金额维度的对账系统
+
+### 3.2 架构总览
 
 ```mermaid
 flowchart TD
-    A["Public API: /v1/sandboxes"] --> B["SandboxService"]
-    B --> C["MeteringService"]
+    A["FastAPI Routes"] --> B["SandboxService / MeteringService"]
+    B --> C["PostgreSQL"]
     B --> D["K8sClient"]
-    D --> E["K8s Sandbox / SandboxClaim / SandboxTemplate CRDs"]
-
-    E --> F["k8s_sync Watch + Reconcile"]
-    F --> G["ComputeSession"]
-    F --> H["StorageLedger"]
-
-    I["metering_tasks (60s tick)"] --> G
-    I --> H
-    I --> J["UserPlan"]
-    I --> K["AuditEvent"]
-
-    C --> L["TierTemplate"]
-    C --> J
-    C --> M["ComputeGrant"]
-    C --> N["StorageQuotaGrant"]
-    C --> H
-    C --> G
-
-    O["Usage API"] --> C
-    P["Admin API"] --> C
-    O --> Q["Usage UI"]
-    P --> R["Admin UI"]
+    D --> E["Sandbox / SandboxClaim / SandboxTemplate CRs"]
+    E --> F["Watch + Reconcile"]
+    F --> B
+    F --> C
+    G["LeaderControlledSyncSupervisor or main.lifespan"] --> H["run_metering_tick (60s)"]
+    G --> F
+    H --> B
+    H --> C
 ```
 
-### 3.3 运行模式
+### 3.3 主要组件职责
 
-系统有两种后台运行方式：
-
-#### 模式 A：启用 leader election
-
-- `LeaderControlledSyncSupervisor` 只允许 leader 副本运行：
-  - K8s sync loop
-  - metering tick loop
-- 适用于多副本部署
-
-#### 模式 B：关闭 leader election
-
-- `main.py` 中每个 API 进程都会直接启动：
-  - `start_sync_loop()`
-  - `_run_metering_loop()`
-
-这在单副本开发环境可接受，但在多副本环境会造成重复任务风险，因此生产多副本部署理论上必须启用 leader election。
-
----
-
-## 4. 计量维度：系统到底按什么维度计量
-
-## 4.1 总体原则
-
-当前系统不是按 Prometheus / cAdvisor / Kubelet 的真实实时利用率计量，而是按：
-
-- **模板资源规格**
-- **Sandbox 生命周期状态**
-- **逻辑分配的持久卷容量**
-- **时间长度**
-
-来做计量。
-
-因此它本质上是：
-
-- **规格型计量**
-- **状态事件驱动计量**
-- 不是底层容器实时资源利用率账单
-
-## 4.2 Compute 的计量维度
-
-当前 Compute 同时按以下维度计量：
-
-| 维度 | 当前实现 | 说明 |
-| --- | --- | --- |
-| 用户维度 | `user_id` | 所有 compute 使用最终归属到用户 |
-| sandbox 维度 | `sandbox_id` | 每个 sandbox 在 READY 生命周期内对应一条 open session |
-| 模板维度 | `template` | session 打开时锁定模板名 |
-| 资源规格维度 | `vcpu_request`、`memory_gib_request` | session 打开时从模板规格静态映射锁定 |
-| 时间维度 | `started_at`、`last_metered_at`、`ended_at` | 按 wall-clock 时间差累计 |
-| 账期维度 | `period_start`、`period_end` | 用于 usage summary 和月度 rollover |
-| 套餐维度 | `tier`、`UserPlan` | 决定理论 compute 月额度、并发、模板权限、时长限制 |
-| 授予维度 | `ComputeGrant` | 代表额外 compute entitlement |
-
-## 4.3 Storage 的计量维度
-
-当前 Storage 同时按以下维度计量：
-
-| 维度 | 当前实现 | 说明 |
-| --- | --- | --- |
-| 用户维度 | `user_id` | 所有存储使用与存储授予归属到用户 |
-| sandbox 维度 | `sandbox_id` | 一条 ledger 绑定一个 persistent sandbox |
-| 容量维度 | `size_gib` | 基于请求的 PVC 逻辑大小，不是实际已写字节 |
-| 生命周期维度 | `allocated_at`、`released_at`、`last_metered_at` | 用于累计 GiB-hours |
-| 状态维度 | `storage_state` | 当前真实使用的是 `active` / `deleted`，`archived` 仅预留 |
-| 套餐维度 | `storage_capacity_limit_gib` | UserPlan 的基础容量上限 |
-| 授予维度 | `StorageQuotaGrant.size_gib` | 额外容量上限，非消费型余额 |
-
-## 4.4 授予与限制的维度
-
-除实际 usage 外，当前系统还存在另一条“entitlement 维度”：
-
-| 维度 | 作用 |
+| 组件 | 责任 |
 | --- | --- |
-| `TierTemplate` | 定义系统默认套餐模板 |
-| `UserPlan` | 记录用户当前生效的 entitlement 快照 |
-| `ComputeGrant` | 理论上的可消费 compute 额外额度 |
-| `StorageQuotaGrant` | 理论上的附加存储容量 |
-| `allowed_templates` | 模板准入控制 |
-| `max_concurrent_running` | 并发限制 |
-| `max_sandbox_duration_seconds` | 单个 sandbox 最长时长限制 |
-| `grace_period_seconds` | compute 用尽后的缓冲时间 |
+| `SandboxService` | create/start/stop/delete 的业务编排，入口处执行 metering enforcement |
+| `MeteringService` | 套餐、授予、双池消费、用量汇总、配额查询 |
+| `metering_tasks.py` | 60 秒周期 tick、warning、grace、monthly reset |
+| `k8s_sync.py` | Watch 事件、Reconcile、模板规格同步、计量修复 |
+| `k8s_client.py` | 与 K8s API / SandboxTemplate CR 交互 |
+| `usage.py` | 用户自助查看 usage / plan / sessions / grants |
+| `admin.py` | 管理员查看 usage、改 plan、发 grants、改 tier templates |
+| `sync_supervisor.py` | 领导者副本控制下启动 K8s sync 与 metering tick |
+
+### 3.4 领导者模式与后台任务启动方式
+
+当前后台任务有两种启动模式：
+
+1. **单实例 / 未开启 leader election**
+   - `main.py` 在 `lifespan()` 中直接启动：
+     - `start_sync_loop()`
+     - `_run_metering_loop()`
+2. **多实例 / 开启 leader election**
+   - `LeaderControlledSyncSupervisor` 在拿到 lease 后才启动：
+     - K8s sync loop
+     - metering tick loop
+
+这意味着：
+
+- Watch / Reconcile / Metering Tick 都被设计成“单 leader 执行”
+- 当前实现已经考虑了多副本部署下的后台任务重复执行问题
 
 ---
 
-## 5. 计量模型：当前系统的数据模型是什么样的
+## 4. 计量维度：系统当前到底按什么维度计量
 
-## 5.1 模型总览
+### 4.1 Compute 的计量维度
 
-当前计量相关核心模型有 6 张表：
+Compute 当前不是按“请求次数”计量，而是按**运行时间 × 资源规格**计量。
 
-1. `tier_template`
-2. `user_plan`
-3. `compute_grant`
-4. `storage_quota_grant`
-5. `compute_session`
-6. `storage_ledger`
+核心维度包括：
 
-它们的关系可以概括为：
+- sandbox template
+- vCPU request
+- memory GiB request
+- session 开始 / 结束时间
+- session 生命周期内累计的：
+  - `vcpu_hours`
+  - `memory_gib_hours`
 
-```mermaid
-flowchart TD
-    TT["TierTemplate<br/>默认套餐模板"] --> UP["UserPlan<br/>用户当前快照"]
-    CG["ComputeGrant<br/>额外 compute entitlement"] --> UP
-    SQG["StorageQuotaGrant<br/>额外 storage 容量 entitlement"] --> UP
-    UP --> CS["ComputeSession<br/>原始 compute 用量"]
-    UP --> SL["StorageLedger<br/>持久存储用量"]
+在此基础上，再映射出用户看得见的 Compute Unit：
+
+**公式：**
+
+```text
+CU / hour = max(vCPU_request, memory_GiB_request / 2)
 ```
 
-## 5.2 `TierTemplate`
+换句话说，当前 Compute Unit 的语义是：
 
-定义系统级套餐模板。
+- 1 CU/h = `max(1 vCPU, 2 GiB memory)` 的 1 小时
 
-关键字段：
+### 4.2 当前模板与 CU 速率
+
+基于 `TEMPLATE_SPECS` 与 FakeK8sClient 的默认模板，当前内置模板速率如下：
+
+| Template | vCPU | Memory | CU/h |
+| --- | --- | --- | --- |
+| `aio-sandbox-tiny` | `0.25` | `0.5 GiB` | `0.25` |
+| `aio-sandbox-small` | `0.5` | `1 GiB` | `0.5` |
+| `aio-sandbox-medium` | `1` | `2 GiB` | `1` |
+| `aio-sandbox-large` | `2` | `4 GiB` | `2` |
+| `aio-sandbox-xlarge` | `4` | `8 GiB` | `4` |
+
+### 4.3 Compute 的两个不同口径
+
+当前系统内同时存在两个 Compute 口径：
+
+1. **实际资源使用**
+   - `ComputeSession.vcpu_hours`
+   - `ComputeSession.memory_gib_hours`
+   - `UsageSummary.compute.compute_unit_hours`
+2. **可消费 entitlement 池**
+   - `UserPlan.compute_units_monthly_limit`
+   - `UserPlan.compute_units_monthly_used`
+   - `ComputeGrant.remaining_amount`
+
+这两个口径相关但不相同：
+
+- `compute_unit_hours` 更接近“实际跑了多少”
+- `monthly_used` 更接近“月度池已经消耗了多少”
+- 如果用户开始消耗 `ComputeGrant`，`compute_unit_hours` 还会继续增长，但 `monthly_used` 会停在月度上限
+
+这是当前 API 设计中最容易让产品方和用户产生误解的一点。
+
+### 4.4 Storage 的计量维度
+
+Storage 当前分成两个维度：
+
+1. **容量占用**
+   - `size_gib`
+   - `current_used_gib`
+   - `total_quota_gib`
+2. **时间累计**
+   - `gib_hours_consumed`
+
+Storage 不是对所有 sandbox 计量，只对 `persist=True` 的 sandbox 计量。
+
+也就是说，Storage 计量的前提条件是：
+
+- 持久存储被请求
+- sandbox 走 direct Sandbox CR 路径
+- `StorageLedger` 被创建
+
+### 4.5 Storage 和 Compute 的产品语义差异
+
+当前代码已经隐含接受了一个更合理的设计：
+
+- Compute 是**消费型 entitlement**
+- Storage 是**容量型 entitlement**
+
+体现为：
+
+- Compute 使用 `UserPlan + ComputeGrant.remaining_amount` 进行持续扣减
+- Storage 使用 `storage_capacity_limit_gib + StorageQuotaGrant.size_gib` 表示配额上限
+
+这是比“两个完全对称的 credits 池”更合理的模型。
+
+---
+
+## 5. 计量模型：当前系统如何把资源用量映射成用户可见的额度系统
+
+### 5.1 关键概念总览
+
+| 概念 | 当前语义 |
+| --- | --- |
+| `TierTemplate` | 系统级套餐模板 |
+| `UserPlan` | 用户当前生效的套餐快照 |
+| `ComputeGrant` | 可消费的额外 Compute Unit 池 |
+| `StorageQuotaGrant` | 增加容量上限的存储授予 |
+| `ComputeSession` | 单个 sandbox 一段运行区间的 Compute 计量记录 |
+| `StorageLedger` | 单个 persistent sandbox 的存储分配生命周期记录 |
+
+### 5.2 TierTemplate：套餐模板
+
+`TierTemplate` 是所有默认 entitlement 的来源，字段包括：
 
 - `tier_name`
-- `compute_credits_monthly`
+- `compute_units_monthly`
 - `storage_capacity_gib`
 - `max_concurrent_running`
 - `max_sandbox_duration_seconds`
@@ -446,44 +546,26 @@ flowchart TD
 - `grace_period_seconds`
 - `is_active`
 
-语义：
+### 5.3 UserPlan：用户套餐快照
 
-- 这是系统默认模板，不是用户实时状态。
-- 管理员修改 tier template 后，可以选择是否同步到没有 overrides 的现有用户。
+`UserPlan` 并不是简单引用 `TierTemplate`，而是把模板值拷贝到用户侧形成快照。这样做的好处是：
 
-## 5.3 `UserPlan`
+- 管理员可以对单个用户做 override
+- 即使 TierTemplate 后续变化，旧用户 plan 也不一定跟着变
+- `apply_to_existing=True` 时可以只批量覆盖“没有 override 的 plan”
 
-定义用户当前真正生效的套餐快照。
+`UserPlan` 除 entitlement 外，还包含 period 与状态字段：
 
-关键字段：
-
-- `user_id`
-- `tier`
-- `compute_credits_monthly_limit`
-- `storage_capacity_limit_gib`
-- `max_concurrent_running`
-- `max_sandbox_duration_seconds`
-- `allowed_templates`
-- `grace_period_seconds`
 - `period_start`
 - `period_end`
-- `compute_credits_monthly_used`
-- `overrides`
+- `compute_units_monthly_used`
 - `grace_period_started_at`
 - `warning_80_notified_at`
 - `warning_100_notified_at`
 
-语义：
+### 5.4 ComputeGrant：额外 Compute Unit 池
 
-- 这张表既保存 entitlement，也保存当前周期状态。
-- 它不是只读引用 `TierTemplate`，而是复制模板值后再允许 override。
-- 计量系统当前仍然把 compute 剩余额度建立在 `compute_credits_monthly_limit - compute_credits_monthly_used` 上。
-
-## 5.4 `ComputeGrant`
-
-定义额外 compute 授予。
-
-关键字段：
+`ComputeGrant` 是一个真正会被消耗的池：
 
 - `original_amount`
 - `remaining_amount`
@@ -491,33 +573,731 @@ flowchart TD
 - `campaign_id`
 - `expires_at`
 
-语义：
+消费顺序是：
 
-- 这是**消费型** entitlement 模型。
-- 设计上它应该随着 compute 使用被逐渐扣减。
-- 当前生产代码里，真正会修改 `remaining_amount` 的只有 `consume_compute_credits()`。
-- 但这个函数没有任何生产调用链，因此当前 `ComputeGrant` 更像一个“静态余额对象”，而不是与真实运行实时联动的额度池。
+1. 月度池
+2. ComputeGrant 池，按 `expires_at ASC NULLS LAST` FIFO
 
-## 5.5 `StorageQuotaGrant`
+### 5.5 StorageQuotaGrant：额外容量上限
 
-定义额外 storage 容量授予。
+`StorageQuotaGrant` 不是消费型余额，而是“额外容量 entitlement”：
+
+- `size_gib`
+- `expires_at`
+
+它不会随着 `gib_hours_consumed` 递减。它只影响：
+
+- `get_total_storage_quota()`
+- `check_storage_quota()`
+- `UsageSummary.storage.total_quota_gib`
+
+### 5.6 Welcome Bonus 的当前真实行为
+
+free 用户的 welcome bonus 仍然存在，但触发点不是注册接口本身，而是：
+
+- 第一次调用 `ensure_user_plan()` 创建 free plan 时
+
+当前默认值：
+
+- 金额：`50` Compute Units
+- 有效期：`90` 天
+
+这意味着：
+
+- 注册用户但从未访问 usage / create sandbox / 进入需要 plan 的路径时，数据库里可能还没有 `UserPlan`
+- 第一次触发 metering 相关路径时，plan 和 welcome bonus 才会惰性创建
+
+### 5.7 当前内置 Tier
+
+根据迁移脚本当前 seed，系统内置 tier 如下：
+
+| Tier | Compute Units / 月 | Storage 容量 | 并发上限 | 最长时长 | 允许模板 | Grace |
+| --- | --- | --- | --- | --- | --- | --- |
+| `free` | `10` | `0 GiB` | `1` | `1800s` | `aio-sandbox-tiny`, `aio-sandbox-small` | `600s` |
+| `pro` | `100` | `10 GiB` | `3` | `7200s` | `aio-sandbox-tiny`, `aio-sandbox-small`, `aio-sandbox-medium` | `1800s` |
+| `ultra` | `300` | `20 GiB` | `5` | `28800s` | `aio-sandbox-tiny`, `aio-sandbox-small`, `aio-sandbox-medium`, `aio-sandbox-large` | `3600s` |
+| `enterprise` | `5000` | `500 GiB` | `50` | `86400s` | `aio-sandbox-tiny`, `aio-sandbox-small`, `aio-sandbox-medium`, `aio-sandbox-large`, `aio-sandbox-xlarge` | `7200s` |
+
+其中模板名在初始迁移中是短名，后续已由 `f7a1b3c5d9e2` 规范化为完整的 `aio-sandbox-*`。
+
+---
+
+## 6. 数据采集：系统如何收集、触发和累积数据
+
+### 6.1 采集链路总表
+
+| 采集类型 | 触发入口 | 关键函数 | 频率 |
+| --- | --- | --- | --- |
+| 用户创建 sandbox | `POST /v1/sandboxes` | `SandboxService.create()` | 请求触发 |
+| 用户启动 sandbox | `POST /v1/sandboxes/{id}/start` | `SandboxService.start()` | 请求触发 |
+| 用户删除 sandbox | `DELETE /v1/sandboxes/{id}` | `SandboxService.delete()` | 请求触发 |
+| K8s 状态变更 | Watch `ADDED/MODIFIED/DELETED` | `handle_watch_event()` | 近实时 |
+| 周期性 Compute tick | leader loop | `tick_metering()` | 每 60 秒 |
+| 周期性 Storage tick | leader loop | `tick_storage_metering()` | 每 60 秒 |
+| warning 检查 | leader loop | `check_warning_thresholds()` | 每 60 秒 |
+| grace 检查 | leader loop | `check_grace_periods()` | 每 60 秒 |
+| monthly reset | leader loop | `reset_monthly_credits()` | 每 60 秒检查 |
+| K8s / DB 漂移修复 | reconcile | `reconcile()` | 每 300 秒 |
+| Compute repair | reconcile 子流程 | `reconcile_metering()` | 每 300 秒 |
+| Storage repair | reconcile 子流程 | `reconcile_storage_metering()` | 每 300 秒 |
+| 模板资源规格同步 | reconcile 子流程 | `sync_template_specs_from_k8s()` | 每 300 秒 |
+
+### 6.2 请求路径采集
+
+#### 6.2.1 创建 sandbox
+
+入口：
+
+- `POST /v1/sandboxes`
+- `treadstone/api/sandboxes.py:create_sandbox()`
+- `SandboxService.create()`
+
+请求路径当前会做三类事情：
+
+1. **参数与模板校验**
+   - `CreateSandboxRequest` 校验 `name`、`persist`、`storage_size`
+   - `persist=True` 时，从 `SandboxTemplate` 注解读取允许的 storage size
+2. **可选的 metering enforcement**
+   - 只有 `settings.metering_enforcement_enabled == True` 才会执行
+   - 会检查：
+     - 模板是否允许
+     - Compute quota 是否已耗尽
+     - 并发限制
+     - Storage quota
+     - 最大运行时长
+3. **成功后做 Storage 分配记账**
+   - 仅 `persist=True` 时
+   - 写入 `StorageLedger(ACTIVE)`
+
+#### 6.2.2 启动 sandbox
+
+入口：
+
+- `POST /v1/sandboxes/{id}/start`
+- `SandboxService.start()`
+
+会执行：
+
+- `check_compute_quota()`
+- `check_concurrent_limit()`
+
+但同样受 `metering_enforcement_enabled` 控制。
+
+#### 6.2.3 删除 sandbox
+
+入口：
+
+- `DELETE /v1/sandboxes/{id}`
+- `SandboxService.delete()`
+
+当前行为：
+
+- 如果 `persist=True`，先 `record_storage_release()`
+- 再把 DB 状态改为 `DELETING`
+- 再请求 K8s 删除
+
+这是当前 Storage 主链路中的一个精度风险点，详见后文缺陷部分。
+
+### 6.3 K8s Watch 采集
+
+#### 6.3.1 Watch 入口
+
+入口：
+
+- `start_sync_loop()`
+- `watch_loop()`
+- `handle_watch_event()`
+
+Watch 负责消费真实 Sandbox CR 状态变化，并把它们反向同步回数据库。
+
+#### 6.3.2 状态映射规则
+
+`derive_status_from_sandbox_cr()` 的当前规则：
+
+- `Ready=True && replicas=1` -> `READY`
+- `Ready=True && replicas=0` -> `STOPPED`
+- `reason=SandboxExpired` -> `STOPPED`
+- `reason=ReconcilerError` -> `ERROR`
+- `reason=DependenciesNotReady` -> `CREATING`
+
+#### 6.3.3 Watch 事件触发的计量动作
+
+当状态发生转换时，`_apply_metering_on_transition()` 会：
+
+- `非 READY -> READY`
+  - `open_compute_session()`
+- `READY -> STOPPED/ERROR/DELETING`
+  - `close_compute_session()`
+
+这条链路负责让 ComputeSession 尽量贴近真实 sandbox 生命周期。
+
+### 6.4 Reconcile 采集与修复
+
+Reconcile 每 `300` 秒跑一次，同时在启动时与 Watch 重启前也会执行一次。
+
+其职责分成三层：
+
+1. **Sandbox 状态对账**
+   - CR 存在但 DB 状态落后 -> 更新 DB
+   - DB 存在但 CR 缺失 -> 标 error 或删除行
+2. **Metering repair**
+   - `reconcile_metering()`
+   - `reconcile_storage_metering()`
+3. **模板资源规格同步**
+   - `sync_template_specs_from_k8s()`
+   - `validate_template_specs()`
+
+#### 6.4.1 Compute repair
+
+`reconcile_metering()` 处理两类问题：
+
+1. `Sandbox.status == READY` 但没有 open `ComputeSession`
+2. 有 open `ComputeSession`，但 sandbox 不是 `READY` 或已不存在
+
+#### 6.4.2 Storage repair
+
+`reconcile_storage_metering()` 处理两类问题：
+
+1. persistent sandbox 没有 ACTIVE `StorageLedger`
+2. ACTIVE `StorageLedger` 对应的 sandbox 已删除或处于 `DELETING`
+
+#### 6.4.3 模板规格同步
+
+这条链路是本轮新系统里很重要的一点：
+
+- `SandboxService.create()` 的模板合法性来自 K8s 当前 `SandboxTemplate`
+- `MeteringService.open_compute_session()` 的资源规格来自 `metering_helpers` 的 runtime cache
+- cache 的同步点在 Reconcile
+
+所以系统现在至少具备：
+
+- “用 K8s 实际模板资源规格驱动计量”的能力
+
+但仍有短暂窗口期和 fallback 行为，详见缺陷部分。
+
+### 6.5 周期性 Compute 采集
+
+`tick_metering()` 每 `60` 秒执行一次。
+
+处理流程：
+
+1. 查所有 open `ComputeSession`
+2. 计算 `now - last_metered_at`
+3. 更新：
+   - `vcpu_hours += vcpu_request * elapsed_hours`
+   - `memory_gib_hours += memory_gib_request * elapsed_hours`
+4. 按用户聚合本轮 `cu_delta`
+5. 对每个用户调用一次 `consume_compute_credits()`
+
+这意味着当前 Compute 记账已经不再只依赖状态切换，而是依赖：
+
+- 周期性 tick 累积
+- 关闭 session 时补最后一段
+
+### 6.6 周期性 Storage 采集
+
+`tick_storage_metering()` 每 `60` 秒执行一次。
+
+处理对象：
+
+- `StorageLedger.storage_state == ACTIVE`
+
+计算方式：
+
+```text
+new_gib_hours = size_gib * elapsed_seconds / 3600
+```
+
+并把结果累加到 `gib_hours_consumed`。
+
+### 6.7 warning / grace / monthly reset
+
+`run_metering_tick()` 当前固定顺序：
+
+1. `tick_metering`
+2. `tick_storage_metering`
+3. `check_warning_thresholds`
+4. `check_grace_periods`
+5. `reset_monthly_credits`
+
+这条顺序非常重要：
+
+- 先累计和消费
+- 再判断 warning/grace
+- 最后处理 period rollover
+
+---
+
+## 7. Compute 计量系统详细拆解
+
+### 7.1 ComputeSession 的生命周期
+
+```mermaid
+flowchart TD
+    A["Sandbox enters READY"] --> B["open_compute_session()"]
+    B --> C["Session stores template/vCPU/memory snapshot"]
+    C --> D["tick_metering() every 60s"]
+    D --> E["Accumulate vcpu_hours/memory_gib_hours"]
+    E --> F["consume_compute_credits()"]
+    F --> G["Monthly pool first"]
+    G --> H["ComputeGrant FIFO second"]
+    H --> I["Sandbox leaves READY"]
+    I --> J["close_compute_session()"]
+    J --> K["Add final delta and consume final CU"]
+```
+
+### 7.2 打开 session：`open_compute_session()`
+
+打开 session 时会锁定两类数据：
+
+- `sandbox_id`
+- 打开时刻对应的模板资源规格
+
+被写入的关键字段：
+
+- `template`
+- `vcpu_request`
+- `memory_gib_request`
+- `started_at`
+- `last_metered_at`
+
+这意味着当前 session 是**资源规格快照模型**：
+
+- sandbox 运行期间即使模板资源规格未来变了
+- 已打开的 session 也不会 retroactively 改计量口径
+
+### 7.3 周期性累计：`tick_metering()`
+
+每个 open session 在每轮 tick 都会累加：
+
+- `delta_vcpu_hours`
+- `delta_memory_gib_hours`
+
+然后再按 template 速率换算出：
+
+- `cu_delta = calculate_cu_rate(template) * elapsed_hours`
+
+最后把多个 session 的 `cu_delta` 对同一用户做聚合，再统一消费额度池。
+
+这样做的好处是：
+
+- 一个用户同时运行多个 sandbox 时，本轮只需要对 plan / grants 做一次聚合消费
+- 避免对同一用户在单次 tick 中多次争用 plan / grant 行锁
+
+### 7.4 双池消费：`consume_compute_credits()`
+
+当前消费算法非常明确：
+
+#### Phase 1：月度池
+
+- 读取 `UserPlan.compute_units_monthly_limit`
+- 读取 `UserPlan.compute_units_monthly_used`
+- 优先从月度池扣
+
+#### Phase 2：Grant 池
+
+- 查所有未过期且 `remaining_amount > 0` 的 `ComputeGrant`
+- 按 `expires_at ASC NULLS LAST`
+- `SELECT ... FOR UPDATE`
+- FIFO 扣减
+
+#### 返回值
+
+返回 `ConsumeResult`：
+
+- `monthly`
+- `extra`
+- `shortfall`
+
+当前 `shortfall` 只存在于函数返回值中，没有持久化表字段承接。
+
+### 7.5 关闭 session：`close_compute_session()`
+
+关闭逻辑负责两件事：
+
+1. 从 `last_metered_at` 到 `now` 补最后一段原始资源小时
+2. 把这最后一段对应的 `cu_delta` 再消费掉
+
+这里有一个显式的准确性 tradeoff：
+
+- 如果 `elapsed_seconds > MAX_CLOSE_DELTA_SECONDS`
+- 会被 cap 到 `120` 秒
+
+意图是：
+
+- 避免 leader 停摆、Watch 延迟或异常状态导致一次 close 结算过长时间的费用
+
+副作用是：
+
+- 在极端延迟场景下，会故意低估最后一段使用量
+
+### 7.6 Usage Summary 中 Compute 区块的真实含义
+
+当前 `GET /v1/usage` 返回：
+
+- `compute_unit_hours`
+- `monthly_limit`
+- `monthly_used`
+- `monthly_remaining`
+- `extra_remaining`
+- `total_remaining`
+
+建议把它理解成两层：
+
+#### 实际 usage 指标
+
+- `compute_unit_hours`
+
+#### entitlement 池状态
+
+- `monthly_limit`
+- `monthly_used`
+- `monthly_remaining`
+- `extra_remaining`
+- `total_remaining`
+
+如果用户已经在使用 Grant 池：
+
+- `compute_unit_hours` 会继续增长
+- `monthly_used` 会卡在月度 limit
+
+这会造成“实际用量”和“月度池已用量”不一致。代码上没有错，但产品展示上要非常小心解释。
+
+### 7.7 Compute quota、warning、grace、auto-stop
+
+#### 7.7.1 create/start 前拦截
+
+只在 `metering_enforcement_enabled=True` 时启用。
+
+会检查：
+
+- 模板是否允许
+- Compute quota 是否耗尽
+- 并发限制
+- 最大时长
+
+#### 7.7.2 warning
+
+当前逻辑：
+
+- 100% warning：
+  - `total_remaining <= 0`
+- 80% warning：
+  - `monthly_used >= monthly_limit * 0.8`
+
+注意它是 dedupe 的：
+
+- 同一 period 只通知一次
+- period reset 时清空
+
+#### 7.7.3 grace
+
+当 `total_remaining <= 0` 且用户仍有 running sandboxes 时：
+
+- 第一次检测到：写 `grace_period_started_at`
+- 超过 `grace_period_seconds`：进入 stop 逻辑
+
+#### 7.7.4 auto-stop
+
+默认 stop 回调是：
+
+- `sync_supervisor._k8s_stop_sandbox()`
+- 实际做的是 K8s scale to 0
+
+如果没有提供 callback，则会走 `_db_only_stop()`，直接：
+
+- 改 DB 状态为 `STOPPED`
+- 关闭 ComputeSession
+
+### 7.8 当前 Compute 体系的优点
+
+- 第二轮的主链路断裂已经补齐
+- 双池模型明确
+- warning / grace / auto-stop 框架完整
+- 与 K8s Watch / Reconcile 已经打通
+
+### 7.9 当前 Compute 体系最重要的风险
+
+- open session 缺少数据库级唯一约束
+- shortfall 不持久化，absolute overage cap 无法真实工作
+- 如果 stop callback 失败，grace 状态会被提前清空
+
+---
+
+## 8. Storage 计量系统详细拆解
+
+### 8.1 Storage 只作用于 persistent sandbox
+
+Storage 计量不会覆盖所有 sandbox。
+
+前提是：
+
+- `persist=True`
+- 请求通过 `CreateSandboxRequest`
+- `SandboxService.create()` 走 direct Sandbox CR 路径
+
+非持久 sandbox：
+
+- 没有 `storage_size`
+- 不写 `StorageLedger`
+- 不进入 storage quota 计算
+
+### 8.2 存储规格来源
+
+当前存储规格验证由两个来源共同参与：
+
+1. `CreateSandboxRequest.storage_size`
+   - 正则只允许 `\d+(Gi|Ti)`
+2. `SandboxTemplate.allowed_storage_sizes`
+   - 由 K8s `SandboxTemplate` 注解 `treadstone.io/allowed-storage-sizes` 提供
+   - 若注解缺失，则 fallback 到全局 `SANDBOX_STORAGE_SIZE_VALUES`
+
+因此 persistent sandbox 的 storage size 不是完全自由输入，而是受模板能力约束。
+
+### 8.3 记录分配：`record_storage_allocation()`
+
+成功创建 persistent sandbox 后，系统会记录：
+
+- `user_id`
+- `sandbox_id`
+- `size_gib`
+- `storage_state=ACTIVE`
+- `allocated_at`
+- `last_metered_at`
+
+这一层比 Compute 更稳健的一点是：
+
+- `storage_ledger` 有 partial unique index：
+  - `ix_storage_ledger_sandbox_active`
+  - `sandbox_id` 在 `storage_state='active'` 条件下唯一
+
+所以 Storage ACTIVE ledger 的幂等性不仅靠代码，也靠数据库约束。
+
+### 8.4 周期性累计：`tick_storage_metering()`
+
+每轮 tick 对所有 ACTIVE ledger：
+
+- 算出从 `last_metered_at` 到 `now` 的增量
+- 把 `size_gib * elapsed_hours` 累加进 `gib_hours_consumed`
+
+这条链路本身是成立的。
+
+### 8.5 释放：`record_storage_release()`
+
+当 persistent sandbox 删除时：
+
+- 查 ACTIVE ledger
+- 计算最后一段 GiB-hours
+- 把状态切到 `DELETED`
+- 写 `released_at`
+
+逻辑本身也成立。
+
+### 8.6 Reconcile：`reconcile_storage_metering()`
+
+Storage repair 当前覆盖两类修复：
+
+1. persistent sandbox 没有 ACTIVE ledger -> 补建
+2. ACTIVE ledger 对应的 sandbox 已删除或 `DELETING` -> release
+
+这使 Storage 链路比第二轮时成熟得多。
+
+### 8.7 Usage Summary 中 Storage 区块的真实含义
+
+当前返回：
+
+- `gib_hours`
+- `current_used_gib`
+- `total_quota_gib`
+- `available_gib`
+
+#### 容量视图
+
+- `current_used_gib`
+- `total_quota_gib`
+- `available_gib`
+
+这组字段当前基本可信。
+
+#### 时间累计视图
+
+- `gib_hours`
+
+它当前更接近“与当前周期有重叠的 ledger 的生命周期累计 GiB-hours 总和”，并不是严格的“当前 billing period GiB-hours”。
+
+### 8.8 当前 Storage 体系的优点
+
+- 资源模型比第二轮更统一
+- ACTIVE ledger 有唯一约束
+- Reconcile 已接入
+- 请求路径和 K8s repair 路径都存在
+
+### 8.9 当前 Storage 体系最重要的风险
+
+- `gib_hours` 不是严格按 billing period 切割的
+- delete 路径会在 K8s 删除确认前先释放 ledger
+- expired `StorageQuotaGrant` 对已存在 persistent storage 不会做主动回收或 enforcement
+
+---
+
+## 9. 数据流程：从请求到数据库再到后台任务的完整流转
+
+### 9.1 Compute 数据流程
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant API as Sandboxes API
+    participant SS as SandboxService
+    participant K8s as K8s
+    participant Sync as Watch/Reconcile
+    participant MS as MeteringService
+    participant DB as PostgreSQL
+
+    User->>API: POST /v1/sandboxes
+    API->>SS: create()
+    SS->>MS: check_* (if enforcement enabled)
+    SS->>DB: insert Sandbox(status=CREATING)
+    SS->>K8s: create Sandbox / Claim
+    K8s-->>Sync: READY watch event
+    Sync->>MS: open_compute_session()
+    MS->>DB: insert ComputeSession(open)
+    loop every 60s
+      Sync->>MS: tick_metering()
+      MS->>DB: update vcpu_hours / memory_gib_hours
+      MS->>DB: consume_compute_credits()
+    end
+    K8s-->>Sync: STOPPED/ERROR/DELETING event
+    Sync->>MS: close_compute_session()
+    MS->>DB: finalize raw hours + final CU consume
+```
+
+### 9.2 Storage 数据流程
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant API as Sandboxes API
+    participant SS as SandboxService
+    participant MS as MeteringService
+    participant DB as PostgreSQL
+    participant K8s as K8s
+    participant Sync as Reconcile
+
+    User->>API: POST /v1/sandboxes (persist=true)
+    API->>SS: create()
+    SS->>MS: check_storage_quota() if enforcement enabled
+    SS->>DB: insert Sandbox(persist=true, storage_size)
+    SS->>K8s: create direct Sandbox CR + PVC template
+    SS->>MS: record_storage_allocation()
+    MS->>DB: insert StorageLedger(ACTIVE)
+    loop every 60s
+      Sync->>MS: tick_storage_metering()
+      MS->>DB: update gib_hours_consumed
+    end
+    loop every 300s
+      Sync->>MS: reconcile_storage_metering()
+      MS->>DB: create missing ACTIVE ledger or release orphan ACTIVE ledger
+    end
+    User->>API: DELETE /v1/sandboxes/{id}
+    API->>SS: delete()
+    SS->>MS: record_storage_release()
+    MS->>DB: mark ledger DELETED
+```
+
+### 9.3 当前系统里最重要的“最终一致性”点
+
+当前实现明确接受如下设计：
+
+- Sandbox 状态同步和 metering 不是单事务硬绑定
+- K8s Sync / Metering 之间允许短时间不一致
+- Reconcile 会在 5 分钟维度兜底修复
+
+这在工程上是合理的，但前提是：
+
+- repair 逻辑要正确
+- repair 不能丢关键状态
+
+当前 Compute repair 基本成立；Storage repair 存在“delete 先释放”的缺陷。
+
+---
+
+## 10. 数据库结构与关键表
+
+### 10.1 `tier_template`
+
+关键字段：
+
+- `tier_name`
+- `compute_units_monthly`
+- `storage_capacity_gib`
+- `max_concurrent_running`
+- `max_sandbox_duration_seconds`
+- `allowed_templates`
+- `grace_period_seconds`
+- `is_active`
+
+关键用途：
+
+- 系统默认套餐模板
+
+### 10.2 `user_plan`
+
+关键字段：
+
+- `user_id` 唯一
+- `tier`
+- `compute_units_monthly_limit`
+- `compute_units_monthly_used`
+- `storage_capacity_limit_gib`
+- `max_concurrent_running`
+- `max_sandbox_duration_seconds`
+- `allowed_templates`
+- `grace_period_seconds`
+- `period_start`
+- `period_end`
+- `overrides`
+- warning / grace 字段
+
+关键用途：
+
+- 用户 entitlement 快照
+- 月度池消费记录
+- warning / grace 状态机载体
+
+### 10.3 `compute_grant`
+
+关键字段：
+
+- `original_amount`
+- `remaining_amount`
+- `expires_at`
+
+关键索引：
+
+- `ix_compute_grant_user`
+- `ix_compute_grant_expires`，条件 `remaining_amount > 0`
+
+关键用途：
+
+- Compute 的额外可消费池
+
+### 10.4 `storage_quota_grant`
 
 关键字段：
 
 - `size_gib`
-- `grant_type`
-- `campaign_id`
 - `expires_at`
 
-语义：
+关键索引：
 
-- 这是**容量型 entitlement**，不是消费型余额。
-- 当前系统的解释是：只要 grant 没过期，就把 `size_gib` 加到总容量上限里。
-- 它不会像 compute grant 一样随着使用而减少。
+- `ix_storage_quota_grant_user`
 
-## 5.6 `ComputeSession`
+关键用途：
 
-定义 compute 的原始资源用量记录。
+- 扩容用户的 storage capacity 上限
+
+### 10.5 `compute_session`
 
 关键字段：
 
@@ -532,20 +1312,16 @@ flowchart TD
 - `vcpu_hours`
 - `memory_gib_hours`
 
-索引：
+关键索引：
 
-- `ix_compute_session_open`：`ended_at IS NULL`
-- `sandbox_id` 普通索引
-- `user_id` 普通索引
+- `ix_compute_session_open`，条件 `ended_at IS NULL`
 
-语义：
+当前关键问题：
 
-- 每个 sandbox 在 READY 运行区间对应一条 open session。
-- 当前系统不再把 session 本身当成 credits ledger，而是把它当成原始资源小时 ledger。
+- 这个索引不是唯一索引
+- 没有 `sandbox_id + ended_at is null` 的唯一约束
 
-## 5.7 `StorageLedger`
-
-定义 persistent sandbox 的存储分配生命周期。
+### 10.6 `storage_ledger`
 
 关键字段：
 
@@ -555,786 +1331,34 @@ flowchart TD
 - `storage_state`
 - `allocated_at`
 - `released_at`
-- `archived_at`
 - `gib_hours_consumed`
 - `last_metered_at`
 
-索引：
+关键索引：
 
 - `ix_storage_ledger_user_state`
 - `ix_storage_ledger_sandbox`
-- `ix_storage_ledger_sandbox_active`（partial unique，`storage_state='active'`）
+- `ix_storage_ledger_sandbox_active`，条件 `storage_state='active'` 且唯一
 
-语义：
-
-- 一条 ACTIVE ledger 表示用户当前占有一个 persistent volume。
-- 删除 sandbox 后 ledger 被标记为 `deleted`，并结算最后一段 GiB-hours。
-- `archived` 目前没有业务流使用。
+这是当前 Storage 链路强于 Compute 的重要原因之一。
 
 ---
 
-## 6. 数据采集：系统如何收集和采集数据
+## 11. 关键函数与接口
 
-## 6.1 采集入口总表
+### 11.1 核心服务函数
 
-| 入口 | 触发方式 | 频率 | 采集/写入内容 |
-| --- | --- | --- | --- |
-| `POST /v1/sandboxes` | 用户创建 sandbox | 按请求触发 | 持久存储配额校验、persistent storage allocation 记账 |
-| `POST /v1/sandboxes/{id}/start` | 用户启动 sandbox | 按请求触发 | 可做 compute 配额与并发校验 |
-| `DELETE /v1/sandboxes/{id}` | 用户删除 sandbox | 按请求触发 | persistent storage release 记账 |
-| K8s Watch | Sandbox CR 事件流 | 近实时 | READY/open session，STOPPED/ERROR/DELETING close session |
-| K8s Reconcile | 列表对账 | 启动时 + 每 300 秒 | 修复 session / storage ledger 漏记或孤儿状态 |
-| Metering Tick | 周期任务 | 每 60 秒 | 增量累计 compute raw hours、storage GiB-hours、warning、grace、月度 reset |
-| `GET /v1/usage*` | 用户读取 usage | 按请求触发 | 懒创建 `UserPlan` 和 welcome bonus |
-| `GET /v1/admin/users/{id}/usage` | 管理员读取 usage | 按请求触发 | 懒创建目标用户 `UserPlan` |
-
-## 6.2 请求路径中的采集/触发
-
-### (a) 如何收集和采集数据
-
-#### 创建 sandbox
-
-入口：
-
-- `POST /v1/sandboxes`
-
-路径：
-
-1. `api/sandboxes.py:create_sandbox()`
-2. `SandboxService.create()`
-3. 如果 `persist=True` 且 metering 对象存在：
-   - 可做 `check_storage_quota()`
-   - 创建成功后调用 `record_storage_allocation()`
-
-注意：
-
-- 创建 sandbox 本身不会直接打开 `ComputeSession`。
-- Compute session 的打开由 K8s 状态同步层在 sandbox 真正进入 READY 后触发。
-
-#### 启动 sandbox
-
-入口：
-
-- `POST /v1/sandboxes/{sandbox_id}/start`
-
-路径：
-
-1. `api/sandboxes.py:start_sandbox()`
-2. `SandboxService.start()`
-3. 若 enforcement 开启，则做：
-   - `check_compute_quota()`
-   - `check_concurrent_limit()`
-4. 真实 `ComputeSession` 仍由后续 READY 状态触发打开。
-
-#### 删除 sandbox
-
-入口：
-
-- `DELETE /v1/sandboxes/{sandbox_id}`
-
-路径：
-
-1. `api/sandboxes.py:delete_sandbox()`
-2. `SandboxService.delete()`
-3. 若 `persist=True` 且 metering 对象存在，先调用 `record_storage_release()`
-4. 然后再删 K8s 资源
-
-### (b) 调用哪些接口来触发和采集数据
-
-#### 公共 API
-
-- `POST /v1/sandboxes`
-- `POST /v1/sandboxes/{id}/start`
-- `POST /v1/sandboxes/{id}/stop`
-- `DELETE /v1/sandboxes/{id}`
-- `GET /v1/usage`
-- `GET /v1/usage/plan`
-- `GET /v1/usage/sessions`
-- `GET /v1/usage/storage-ledger`
-- `GET /v1/usage/grants`
-- `GET /v1/admin/users/{id}/usage`
-- `PATCH /v1/admin/users/{id}/plan`
-- `POST /v1/admin/users/{id}/compute-grants`
-- `POST /v1/admin/users/{id}/storage-grants`
-- `POST /v1/admin/compute-grants/batch`
-- `POST /v1/admin/storage-grants/batch`
-
-#### 内部函数入口
-
-- `MeteringService.open_compute_session()`
-- `MeteringService.close_compute_session()`
-- `MeteringService.record_storage_allocation()`
-- `MeteringService.record_storage_release()`
-- `tick_metering()`
-- `tick_storage_metering()`
-- `reconcile_metering()`
-- `reconcile_storage_metering()`
-
-### (c) 多久采集一次
-
-#### 近实时事件采集
-
-- K8s Watch：事件流驱动，近实时
-- Watch 连接超时：300 秒
-- Watch 异常重启 backoff：5 秒
-
-#### 周期型对账/累计
-
-- Reconcile：每 300 秒一次
-- Metering tick：每 60 秒一次
-
-#### 按需懒创建
-
-- `UserPlan` 与 welcome bonus 不在注册时创建
-- 它们会在以下时机懒创建：
-  - 读取 usage
-  - 管理员读取 usage
-  - 请求路径 quota check 调用 `get_user_plan()`
-  - warning/grace task 首次遇到 open session 用户
-
-### (d) Compute 数据具体如何被采集
-
-1. sandbox 创建或启动后，真正开始运行前没有 compute usage 数据。
-2. K8s Watch/Reconcile 观察到 sandbox 进入 READY。
-3. `_apply_metering_on_transition()` 调用 `open_compute_session()`。
-4. `open_compute_session()` 根据模板锁定：
-   - `vcpu_request`
-   - `memory_gib_request`
-5. 周期任务每 60 秒把 `(now - last_metered_at)` 转成小时，再累加：
-   - `vcpu_hours += vcpu_request * elapsed_hours`
-   - `memory_gib_hours += memory_gib_request * elapsed_hours`
-6. sandbox 从 READY 转到 STOPPED / ERROR / DELETING 时，`close_compute_session()` 做最后一段结算。
-
-### (e) Storage 数据具体如何被采集
-
-1. 用户创建 `persist=True` 的 sandbox。
-2. 创建成功后写一条 `StorageLedger(ACTIVE)`。
-3. 周期任务每 60 秒把 `(size_gib * elapsed_seconds / 3600)` 累加到 `gib_hours_consumed`。
-4. 删除 persistent sandbox 时，把 ACTIVE ledger 转为 DELETED，并写最终一段 GiB-hours。
-5. Reconcile 每 300 秒修复：
-   - 有 persistent sandbox 但没有 ACTIVE ledger
-   - 有 ACTIVE ledger 但 sandbox 已删/正在删
-
-### (f) 数据采集的幂等与修复策略
-
-#### Compute
-
-- `open_compute_session()`：
-  - 对 open session 做 `FOR UPDATE`
-  - 已存在就直接返回
-- `close_compute_session()`：
-  - 没有 open session 则返回 `None`
-- `tick_metering()`：
-  - 用 optimistic lock (`gmt_updated`) + savepoint，避免某条 session 冲突拖垮整批 tick
-- `reconcile_metering()`：
-  - READY 但没 open session -> 补开
-  - 非 READY 但仍有 open session -> 补关
-
-#### Storage
-
-- `record_storage_allocation()`：
-  - 对 ACTIVE ledger 做 `FOR UPDATE`
-  - 已存在则直接返回
-- `record_storage_release()`：
-  - 没有 ACTIVE ledger 则返回 `None`
-- `reconcile_storage_metering()`：
-  - persist sandbox 缺 ledger -> 补建
-  - 孤儿 ACTIVE ledger -> 补 release
-
----
-
-## 7. Compute 资源计量的当前工作方式
-
-## 7.1 Compute 的数据源是什么
-
-当前 Compute 计量的资源规格来源不是直接读取 K8s Template CR，而是来自 `metering_helpers.TEMPLATE_SPECS` 里的静态映射：
-
-- `aio-sandbox-tiny -> 0.25 vCPU / 0.5 GiB`
-- `aio-sandbox-small -> 0.5 vCPU / 1 GiB`
-- `aio-sandbox-medium -> 1 vCPU / 2 GiB`
-- `aio-sandbox-large -> 2 vCPU / 4 GiB`
-- `aio-sandbox-xlarge -> 4 vCPU / 8 GiB`
-
-这和 `sandbox_service._create_direct()` / `k8s_client.list_sandbox_templates()` 读取的模板 CR 资源规格是两套独立来源。
-
-**当前代码里的现实：**
-
-- 两套数值目前看起来是一致的
-- 但它们不是同一个 source of truth
-- 后续如果 K8s Template 被改了，metering 静态映射可能漂移
-
-## 7.2 ComputeSession 什么时候打开
-
-ComputeSession 不是在 API create/start 时打开，而是在 sandbox 真正 READY 时打开。
-
-触发链路：
-
-1. `k8s_sync.handle_watch_event()` 或 `reconcile()`
-2. 发现状态从非 READY -> READY
-3. `_apply_metering_on_transition()`
-4. `MeteringService.open_compute_session()`
-
-这意味着：
-
-- 计量开始点是“真实运行就绪”，不是“用户发起创建请求”
-- 对短暂失败、一直没 READY 的 sandbox，不会误记 compute hours
-
-## 7.3 ComputeSession 记录什么
-
-打开 session 时会锁定：
-
-- `template`
-- `vcpu_request`
-- `memory_gib_request`
-- `started_at`
-- `last_metered_at`
-
-随后每次 tick 或 close 时只累加：
-
-- `vcpu_hours`
-- `memory_gib_hours`
-
-所以当前 session 已经从“credits 会计分录”演化成“原始资源小时账本”。
-
-## 7.4 Compute 采集的周期逻辑
-
-`tick_metering()` 每 60 秒执行一次：
-
-1. 找到所有 `ended_at IS NULL` 的 open session
-2. 用 `now - last_metered_at` 计算 elapsed seconds
-3. 折算为 `elapsed_hours`
-4. 累加：
-   - `delta_vcpu_hours`
-   - `delta_memory_gib_hours`
-5. 更新 `last_metered_at` 与 `gmt_updated`
-
-特点：
-
-- 不是每次写一条事件，而是原地累加 aggregate
-- 有 optimistic lock 冲突保护
-- leader crash 后下次 tick 会补整段 gap，不按固定 60 秒片段强制切片
-
-## 7.5 Compute 结束与跨月处理
-
-### session 关闭
-
-触发条件：
-
-- READY -> STOPPED
-- READY -> ERROR
-- READY -> DELETING
-- K8s DELETED 事件 / reconcile 发现 sandbox 不再 READY
-
-关闭时会：
-
-- 结算最后一段 `vcpu_hours`
-- 结算最后一段 `memory_gib_hours`
-- 写 `ended_at`
-
-### 跨月 rollover
-
-`reset_monthly_credits()` 会对到期 plan 做月度 rollover。
-
-如果用户还有 open session：
-
-- `handle_period_rollover()` 会把老 session 切到 `period_end`
-- 然后创建一条新的 open session，从新账期开始继续累计原始资源小时
-
-这一点说明当前系统已经认真处理了“跨月运行中的 sandbox”这个问题。
-
-## 7.6 Compute 授予与配额现在是怎么工作的
-
-理论模型仍然是：
-
-1. 先用 `UserPlan.compute_credits_monthly_limit - compute_credits_monthly_used`
-2. 再用 `ComputeGrant.remaining_amount`
-
-`consume_compute_credits()` 也仍然保留了完整双池消费算法：
-
-- 月度池优先
-- extra grants 按 `expires_at` FIFO
-
-但是当前生产代码有一个关键事实：
-
-**真实 compute 运行不会调用 `consume_compute_credits()`。**
-
-所以当前“Compute 授予系统”的真实工作状态是：
-
-| 项 | 当前是否存在 | 当前是否被真实运行驱动 |
-| --- | --- | --- |
-| 月度 compute limit | 存在 | 否 |
-| ComputeGrant welcome bonus | 存在 | 否 |
-| Admin create compute grant | 存在 | 否 |
-| 消费扣减算法 | 存在 | 否 |
-| compute remaining 计算 | 存在 | 但读取的是未被真实运行消耗的池子 |
-
-## 7.7 如何限制用户达到 compute 限额后不能继续使用
-
-当前理论路径是：
-
-### 创建时
-
-- `check_compute_quota()`
-- `check_concurrent_limit()`
-- `check_template_allowed()`
-- `check_sandbox_duration()`
-
-### 启动时
-
-- `check_compute_quota()`
-- `check_concurrent_limit()`
-
-### 用尽后
-
-- `check_warning_thresholds()` 发 80% / 100% audit event
-- `check_grace_periods()` 启动 grace period
-- 到期后 `_enforce_stop()` 调用 stop callback 强制 scale to 0
-
-但是由于 compute remaining 不会随真实运行减少，所以当前真实效果是：
-
-- 结构上支持
-- 语义上不成立
-
-### 当前实际结论
-
-如果 `metering_enforcement_enabled=false`：
-
-- create/start 不会做 compute quota 拦截
-
-如果 `metering_enforcement_enabled=true`：
-
-- create/start 会做 compute quota 拦截
-- 但因为月度 used / grant remaining 不会随着真实运行更新，所以大多数用户在真实使用中不会自然达到 compute exhausted 状态
-
-**因此当前 Compute 限额阻断链路在架构上存在，在生产语义上未闭环。**
-
----
-
-## 8. Storage 资源计量的当前工作方式
-
-## 8.1 Storage 只对 persistent sandbox 生效
-
-Storage 记账只在以下条件下发生：
-
-- `persist=True`
-- `storage_size` 合法
-
-非 persistent sandbox：
-
-- 不做 `StorageLedger` 分配
-- 不参与 storage current used 统计
-
-## 8.2 Storage 创建时如何工作
-
-创建 persistent sandbox 时的流程：
-
-1. `SandboxService.create(... persist=True)`
-2. 检查 storage backend 是否就绪：
-   - `get_storage_class(settings.sandbox_storage_class)`
-3. 如果 enforcement 打开：
-   - `parse_storage_size_gib()`
-   - `check_storage_quota()`
-4. sandbox K8s 创建成功后：
-   - `record_storage_allocation()`
-   - 写入一条 `StorageLedger(ACTIVE)`
-
-### 当前支持的 storage size
-
-当前 schema 和配置约束只允许：
-
-- `5Gi`
-- `10Gi`
-- `20Gi`
-
-## 8.3 Storage 释放时如何工作
-
-删除 persistent sandbox 时：
-
-1. `SandboxService.delete()`
-2. 在删 K8s 资源之前，best-effort 调用 `record_storage_release()`
-3. 把 ACTIVE ledger 转成 DELETED
-4. 结算最后一段 GiB-hours
-
-### 如果 release 失败怎么办
-
-当前不会阻止 sandbox 删除。
-
-但和上一次不同的是，现在还有 `reconcile_storage_metering()` 会兜底：
-
-- ACTIVE ledger 指向的 sandbox 消失了
-- 或 sandbox 进入 `DELETING`
-
-后台会再次尝试 `record_storage_release()`
-
-## 8.4 Storage 的后台累计
-
-`tick_storage_metering()` 每 60 秒执行一次：
-
-- 遍历所有 ACTIVE ledger
-- 计算 `size_gib * elapsed_seconds / 3600`
-- 累加到 `gib_hours_consumed`
-
-这意味着当前系统同时保留了两种 storage 视图：
-
-1. **当前容量视图**
-   - `current_used_gib`
-   - `total_quota_gib`
-2. **累计时间视图**
-   - `gib_hours_consumed`
-
-## 8.5 Storage 配额与 StorageQuotaGrant 如何工作
-
-Storage 配额计算是：
-
-`total_storage_quota = UserPlan.storage_capacity_limit_gib + sum(active StorageQuotaGrant.size_gib)`
-
-然后：
-
-`available = total_storage_quota - current_storage_used`
-
-`check_storage_quota(requested_gib)` 会在 `available < requested_gib` 时抛出 `StorageQuotaExceededError(402)`。
-
-这里的关键点是：
-
-- `StorageQuotaGrant` 是容量上限 addon，不是消费型余额
-- 它不会因为用户分配了 5Gi 就剩 5Gi
-- 它只是把 ceiling 抬高
-
-## 8.6 StorageGrant 过期后的行为
-
-当前代码没有额外的“过期 grant 回收已分配卷”逻辑。
-
-这会导致一种明确的产品行为：
-
-1. 用户依赖某个 storage grant 拿到了更高容量上限
-2. grant 过期后，总 quota 下降
-3. 如果此时 `current_used_gib > total_quota_gib`
-4. 系统不会强制删除现有卷
-5. 但新的 persistent sandbox 分配会被阻止
-
-这是当前实现的自然结果，应被视为产品语义的一部分。
-
-## 8.7 当前 Storage 是否能阻止用户超过限额
-
-结论：
-
-- **如果 enforcement 关闭：不能**
-- **如果 enforcement 打开：基本可以**
-
-因为 Storage 这条线至少具备：
-
-- 当前使用量实时来源：ACTIVE ledger sum
-- 总配额来源：plan limit + active storage grants
-- 创建时检查：`check_storage_quota()`
-- 释放与 reconcile：已存在
-
-所以和 Compute 不同，Storage 限额执行在设计和实现上是对得上的。
-
----
-
-## 9. 授予系统：Compute / Storage grant 现在怎么工作
-
-## 9.1 用户注册时并不会立即创建 plan 或 grant
-
-`auth.register()` 当前只做：
-
-- 创建 `User`
-- 写 audit event
-- 发送验证邮件（非首个管理员用户）
-
-它不会：
-
-- 创建 `UserPlan`
-- 发 welcome bonus
-
-## 9.2 `UserPlan` 的真实创建时机
-
-`ensure_user_plan()` 是真正的入口。
-
-当以下路径首次遇到某个用户时，系统才会创建 free plan：
-
-- `/v1/usage`
-- `/v1/usage/plan`
-- `/v1/usage/sessions`
-- `/v1/usage/storage-ledger`
-- `/v1/usage/grants`
-- `/v1/admin/users/{id}/usage`
-- 任意 enforcement 检查里调用 `get_user_plan()`
-- warning/grace 任务遇到 open session 用户
-
-## 9.3 welcome bonus 的真实工作方式
-
-当前 welcome bonus 不是“注册即发放”，而是：
-
-- 首次创建 free `UserPlan` 时
-- 自动创建一条 `ComputeGrant`
-- 默认：
-  - `grant_type = welcome_bonus`
-  - `original_amount = 50`
-  - `remaining_amount = 50`
-  - 过期时间 = 90 天后
-
-这是一种 **lazy minting** 语义。
-
-## 9.4 管理员如何授予 compute 和 storage
-
-### 单用户
-
-- `POST /v1/admin/users/{user_id}/compute-grants`
-- `POST /v1/admin/users/{user_id}/storage-grants`
-
-### 批量
-
-- `POST /v1/admin/compute-grants/batch`
-- `POST /v1/admin/storage-grants/batch`
-
-当前批量接口的实现特点：
-
-- 按用户逐个处理
-- 每个用户在 nested transaction 中执行
-- 某个用户失败不会回滚整个 batch
-- 返回 per-user 成功/失败结果
-
-## 9.5 Tier 与 Plan 如何工作
-
-### TierTemplate 更新
-
-`PATCH /v1/admin/tier-templates/{tier_name}`
-
-可更新：
-
-- compute monthly
-- storage capacity
-- max concurrent
-- max duration
-- allowed templates
-- grace period
-
-若 `apply_to_existing=true`：
-
-- 只会更新没有 overrides 的同 tier 用户
-- 有 overrides 的用户会被跳过
-
-### 用户计划更新
-
-`PATCH /v1/admin/users/{user_id}/plan`
-
-有两种模式：
-
-1. 改 tier
-2. 只改 overrides
-
-其中：
-
-- 改 tier + overrides：会用新 tier 默认值覆盖，再套上新的 overrides
-- 只改 overrides：会 merge 到现有 overrides 中
-
----
-
-## 10. 如何限制用户在达到限额之后不能再使用资源
-
-## 10.1 当前所有限制点
-
-| 限制项 | 触发点 | 错误码 | 当前状态 |
-| --- | --- | --- | --- |
-| 模板权限限制 | create | 403 | 可工作 |
-| Compute quota | create/start | 402 | 结构存在，但依赖未被真实消耗的余额 |
-| 并发限制 | create/start | 429 | 可工作 |
-| Storage quota | create(persist) | 402 | 可工作 |
-| 单次运行最长时长 | create | 400 | 可工作 |
-| Grace period 超时自动停机 | 后台 tick | 系统自动动作 | 结构存在，但依赖 compute 余额变化 |
-
-## 10.2 限制是否真的在公开路径上生效
-
-### create / start
-
-只有在同时满足以下条件时才会执行：
-
-1. 路由传入了 `metering=_metering`
-2. `settings.metering_enforcement_enabled == True`
-
-当前第 1 点已经成立。
-当前第 2 点默认不成立。
-
-因此当前系统的真实上线语义是：
-
-- **记录链路默认开启**
-- **拦截链路默认关闭**
-
-## 10.3 哪些限制是现在真正可靠的
-
-### 真正可靠
-
-- `check_template_allowed()`
-- `check_concurrent_limit()`
-- `check_storage_quota()`
-- `check_sandbox_duration()`
-
-前提：`metering_enforcement_enabled=true`
-
-### 结构存在但不可靠
-
-- `check_compute_quota()`
-- warning threshold
-- grace period
-- auto-stop on compute exhaustion
-
-原因不是这些函数写错，而是**它们依赖的 compute 剩余额度没有被真实 usage 更新。**
-
----
-
-## 11. 数据流程：从请求到数据库再到后台任务
-
-## 11.1 创建 sandbox 的完整数据流
-
-### 非 persistent sandbox
-
-1. 用户调用 `POST /v1/sandboxes`
-2. `SandboxService.create()` 可做 template / compute / concurrent / duration 检查
-3. 写 `sandbox` 行，状态 `creating`
-4. 走 `SandboxClaim` 路径创建 K8s 资源
-5. K8s Watch/Reconcile 看到 READY
-6. 打开 `ComputeSession`
-7. 60 秒 tick 持续累加 `vcpu_hours` / `memory_gib_hours`
-8. stop/delete/error 时关闭 `ComputeSession`
-
-### persistent sandbox
-
-在上述流程基础上额外增加：
-
-1. 创建前检查 `StorageClass`
-2. enforcement 开启时检查 `StorageQuota`
-3. 创建成功后写 `StorageLedger(ACTIVE)`
-4. 60 秒 tick 累计 `gib_hours_consumed`
-5. 删除时 release ledger
-6. Reconcile 可修复漏建/漏释 ledger
-
-## 11.2 Usage 读取的数据流
-
-`GET /v1/usage`
-
-会读取：
-
-- `UserPlan`
-- `StorageQuotaGrant`
-- `StorageLedger`
-- `Sandbox`
-- `ComputeSession`
-
-返回组合后的聚合视图：
-
-- 当前 tier
-- 当前账期
-- Compute 原始用量
-- Storage 当前容量与累计 GiB-hours
-- 并发/模板/时长限制
-- grace period 状态
-
-注意：
-
-- `/v1/usage` 不再返回完整 compute 额度池摘要
-- 想看 plan quota 需要 `/v1/usage/plan`
-- 想看 grants 需要 `/v1/usage/grants`
-
-## 11.3 Admin 写入的数据流
-
-### 改 tier template
-
-`PATCH /v1/admin/tier-templates/{tier}`
-
-- 更新 `tier_template`
-- 可选同步 `user_plan`
-- 写 audit event
-
-### 改用户 plan
-
-`PATCH /v1/admin/users/{id}/plan`
-
-- 读 `user_plan`
-- 改 tier 或 merge overrides
-- 写 audit event
-
-### 发 grant
-
-- 写 `compute_grant` 或 `storage_quota_grant`
-- 写 audit event
-
----
-
-## 12. 数据库结构与迁移链
-
-## 12.1 关键迁移链
-
-和当前 metering 直接相关的演进顺序大致是：
-
-1. `9f3a6a152a5c`
-   - 首次引入 metering 基础表
-2. `f7a1b3c5d9e2`
-   - 把 `allowed_templates` 从短名规范化到 `aio-sandbox-*`
-3. `bc37bfeef9ac`
-   - sandbox 表增加 `provision_mode` / `persist` / `storage_size` 等与 Storage 计量直接相关字段
-4. `c4d5e6f7a8b9`
-   - metering overhaul：
-     - storage 列重命名为 capacity 语义
-     - compute_session 改成原始资源小时模型
-     - storage_ledger 增加 ACTIVE partial unique index
-5. `d7e8f9a0b1c2`
-   - 把旧 `credit_grant` 拆成：
-     - `compute_grant`
-     - `storage_quota_grant`
-
-## 12.2 当前表结构里的关键设计点
-
-### `tier_template` / `user_plan`
-
-- storage 字段现在统一改成 `*_capacity_gib`
-- 说明 storage 现在被定义为容量 entitlement，而不是 monthly credits
-
-### `compute_session`
-
-- `template` 已扩到 `String(255)`
-- 不再存：
-  - `credit_rate_per_hour`
-  - `credits_consumed`
-  - `credits_consumed_monthly`
-  - `credits_consumed_extra`
-- 改为存：
-  - `vcpu_request`
-  - `memory_gib_request`
-  - `vcpu_hours`
-  - `memory_gib_hours`
-
-这说明底层账本模型已经明确切到“原始资源计量”。
-
-### `storage_ledger`
-
-- `(sandbox_id) WHERE storage_state='active'` 的唯一索引非常关键
-- 它保证一个 sandbox 同时最多只有一条 ACTIVE ledger
-
-### `compute_grant` / `storage_quota_grant`
-
-- 表层面已经把两种完全不同的 entitlement 语义分开
-- 这是当前代码里最健康的一处设计变化
-
----
-
-## 13. 关键函数与接口清单
-
-## 13.1 `MeteringService`
-
-### Plan / Grant
+#### `MeteringService`
 
 - `ensure_user_plan()`
 - `get_user_plan()`
 - `update_user_tier()`
-- `create_compute_grant()`
-- `create_storage_quota_grant()`
-- `list_tier_templates()`
-- `update_tier_template()`
-- `apply_overrides()`
-
-### Quota / Entitlement
-
+- `_create_welcome_bonus()`
+- `consume_compute_credits()`
+- `open_compute_session()`
+- `close_compute_session()`
+- `record_storage_allocation()`
+- `record_storage_release()`
 - `check_template_allowed()`
 - `check_compute_quota()`
 - `check_concurrent_limit()`
@@ -1343,47 +1367,38 @@ Storage 配额计算是：
 - `get_total_compute_remaining()`
 - `get_total_storage_quota()`
 - `get_current_storage_used()`
-- `get_extra_compute_remaining()`
-- `get_extra_storage_quota()`
-
-### Usage Ledgers
-
-- `open_compute_session()`
-- `close_compute_session()`
-- `record_storage_allocation()`
-- `record_storage_release()`
-- `get_compute_usage_for_period()`
 - `get_usage_summary()`
-- `list_compute_sessions()`
-- `list_storage_ledger()`
-- `list_compute_grants()`
-- `list_storage_quota_grants()`
 
-### 目前保留但未接入真实生产消费链路
-
-- `consume_compute_credits()`
-
-## 13.2 `metering_tasks`
+#### `metering_tasks.py`
 
 - `tick_metering()`
 - `tick_storage_metering()`
 - `check_warning_thresholds()`
 - `check_grace_periods()`
-- `handle_period_rollover()`
 - `reset_monthly_credits()`
 - `run_metering_tick()`
 
-## 13.3 `k8s_sync`
+#### `k8s_sync.py`
 
+- `derive_status_from_sandbox_cr()`
 - `handle_watch_event()`
 - `reconcile()`
 - `_apply_metering_on_transition()`
 - `reconcile_metering()`
 - `reconcile_storage_metering()`
 
-## 13.4 公开 API
+#### `metering_helpers.py`
 
-### 用户
+- `calculate_cu_rate()`
+- `get_template_resource_spec()`
+- `parse_storage_size_gib()`
+- `compute_period_bounds()`
+- `sync_template_specs_from_k8s()`
+- `validate_template_specs()`
+
+### 11.2 当前用户接口
+
+#### Usage 读接口
 
 - `GET /v1/usage`
 - `GET /v1/usage/plan`
@@ -1391,7 +1406,34 @@ Storage 配额计算是：
 - `GET /v1/usage/storage-ledger`
 - `GET /v1/usage/grants`
 
-### 管理员
+这些接口有一个实现细节很重要：
+
+- 它们会在需要时惰性创建 `UserPlan`
+- 所以 GET 请求里会执行 `session.commit()`
+
+这是非常不典型但真实存在的副作用。
+
+#### Sandbox 相关接口
+
+- `POST /v1/sandboxes`
+- `POST /v1/sandboxes/{id}/start`
+- `POST /v1/sandboxes/{id}/stop`
+- `DELETE /v1/sandboxes/{id}`
+
+这些接口本身不是 metering API，但它们是最重要的 metering 触发入口。
+
+#### SandboxTemplate 接口
+
+- `GET /v1/sandbox-templates`
+
+返回：
+
+- `resource_spec`
+- `allowed_storage_sizes`
+
+它既是 UI 展示接口，也可以看作 storage size 与 template 关系的外部可观察面。
+
+### 11.3 当前管理员接口
 
 - `GET /v1/admin/tier-templates`
 - `PATCH /v1/admin/tier-templates/{tier_name}`
@@ -1404,405 +1446,352 @@ Storage 配额计算是：
 - `POST /v1/admin/compute-grants/batch`
 - `POST /v1/admin/storage-grants/batch`
 
----
+其中值得特别指出的行为：
 
-## 14. 测试覆盖与当前空洞
-
-## 14.1 当前覆盖到的部分
-
-### 模型/帮助函数
-
-- `tests/unit/test_metering_models.py`
-
-覆盖：
-
-- 模型字段
-- 索引
-- helper 函数
-- template spec / storage size parse
-
-### Service 层
-
-- `tests/unit/test_metering_service.py`
-
-覆盖：
-
-- plan 创建与 tier 更新
-- welcome bonus
-- dual-pool consume 逻辑
-- open/close session
-- storage allocation/release
-- quota checks
-
-### 后台任务
-
-- `tests/unit/test_metering_tasks.py`
-
-覆盖：
-
-- compute tick
-- storage tick
-- warnings
-- grace period
-- rollover
-
-### Service/K8s 集成
-
-- `tests/unit/test_metering_integration.py`
-
-覆盖：
-
-- `SandboxService` 与 metering 集成
-- `_apply_metering_on_transition()`
-- request-path quota checks
-
-### Usage/Admin API
-
-- `tests/api/test_usage_api.py`
-- `tests/api/test_admin_api.py`
-
-覆盖：
-
-- usage summary / plan / sessions / storage ledger / grants
-- tier template 管理
-- user plan 管理
-- compute/storage grants 管理
-
-## 14.2 当前没有覆盖好的部分
-
-### 缺口 A：没有 API 级别验证 enforcement 开关打开后的真实 create/start 拦截
-
-虽然 unit integration tests 模拟了 `SandboxService` 行为，但缺少完整 API route 级别用例去验证：
-
-- `metering_enforcement_enabled=true` 时
-- 公共 `/v1/sandboxes` create/start
-- 真的返回 402 / 403 / 429 / 400
-
-### 缺口 B：没有任何测试证明 compute raw usage 会驱动 compute credits 消费
-
-原因很简单：
-
-- 当前生产代码本来就没有这条链路
-- 单元测试只证明 `consume_compute_credits()` 本身可运行
-- 但没有测试能证明后台 tick 或 close session 会调用它
-
-### 缺口 C：E2E Hurl 已失效
-
-`tests/e2e/07-metering-usage.hurl` 和 `08-metering-admin.hurl` 仍然断言旧模型：
-
-- 旧 usage summary 字段
-- 旧 grant endpoint
-- 旧 admin batch endpoint
-
-因此：
-
-- 它们不能作为当前系统上线前审计证据
-- 当前计量系统等于失去了端到端可验证性
-
-### 缺口 D：前端文案没有完全和后端模型统一
-
-前端当前会展示：
-
-- 原始 compute usage
-- welcome bonus remaining
-- storage used/quota
-
-但命名仍有“credits / mo”残留，容易混淆：
-
-- 哪些是 raw usage
-- 哪些是 entitlement
-- 哪些会被消耗
-- 哪些只是容量上限
+- `update_tier_template(..., apply_to_existing=True)` 只影响没有 `overrides` 的用户 plan
+- `admin_update_user_plan()` 允许只改 `tier`、只改 `overrides`，或两者一起改
 
 ---
 
-## 15. 当前系统是否适合上线：产品、功能、代码三层判断
+## 12. 目前的计算资源和存储资源授予系统是如何工作的
 
-## 15.1 产品层
+### 12.1 Compute 授予系统
 
-### 适合上线
+Compute entitlement 由两部分组成：
 
-- 让用户看到：
-  - 当前 plan
-  - 当前允许模板
-  - 当前并发上限
-  - 当前 storage used/quota
-  - 当前 compute raw usage
-  - 当前 grants
+1. `UserPlan.compute_units_monthly_limit`
+2. `ComputeGrant.remaining_amount`
 
-### 不适合上线
+使用顺序：
 
-- 向用户承诺：
-  - compute credits 会按真实运行自动扣减
-  - compute 用尽会自动告警并停机
-  - usage summary 本身就完整表达了 credit pool 状态
+1. 月度池先用
+2. Grant 池后用
 
-## 15.2 功能层
+发放来源：
 
-### Compute
+- free tier 自动 `welcome_bonus`
+- 管理员单发
+- 管理员批量发
+- 未来也可以扩展 campaign / compensation / enterprise grant
 
-- 原始用量采集：成立
-- request-path 配额检查框架：成立
-- 额度消耗与超额执行闭环：不成立
+### 12.2 Storage 授予系统
 
-### Storage
+Storage entitlement 也有两层：
 
-- 分配/释放记账：成立
-- 当前容量统计：成立
-- GiB-hours 累计：成立
-- Reconcile 修复：成立
-- 配额执行：在 enforcement 打开时基本成立
+1. `UserPlan.storage_capacity_limit_gib`
+2. `StorageQuotaGrant.size_gib`
 
-## 15.3 代码层
+但它不是消费型模型，而是相加模型：
 
-### 优点
+```text
+总 Storage 配额 = plan.storage_capacity_limit_gib + active StorageQuotaGrant.size_gib 之和
+```
 
-- 模型比上次更干净
-- grants 语义拆分正确
-- storage reconcile 已补齐
-- compute tick 有 optimistic lock
-- request-path / watch / reconcile / tick 分层清楚
+### 12.3 授予系统当前的优势
 
-### 当前 blockers
+- Compute 和 Storage 终于在数据模型上彻底分表
+- Compute 使用 consumable pool
+- Storage 使用 capacity entitlement
 
-1. `consume_compute_credits()` 没有生产调用链
-2. compute warning / grace / auto-stop 依赖未消费的额度字段
-3. `metering_enforcement_enabled` 默认关闭，默认部署不会阻断
-4. E2E 测试失效
-5. template 资源规格仍有“双 source of truth”风险
-6. 前端和部分命名仍混合 raw usage / credits / capacity 三套语义
+这比早期混在 `credit_grant` 单表里合理得多。
+
+### 12.4 授予系统当前的限制
+
+- Compute 的超额 shortfall 没有独立 ledger
+- Storage grant 过期后不会主动处理已经存在的超配 volume
+- 用户视图同时展示 usage 与 grant 池，理解门槛仍然偏高
 
 ---
 
-## 16. 审计结论与上线前建议
+## 13. 达到限额后，系统现在如何限制用户继续使用资源
 
-### 16.1 当前结论
+### 13.1 总开关
 
-**如果把目标定义成“资源计量观测 + 套餐运营后台”，当前系统已经相当接近可上线。**
+所有请求路径上的 metering enforcement 都受：
 
-**如果把目标定义成“Compute/Storage 两套都能严格限额、自动告警、自动超额控制的完整计量计费系统”，当前系统还不能上线。**
+- `TREADSTONE_METERING_ENFORCEMENT_ENABLED`
 
-### 16.2 上线前最优先要补的 5 件事
+控制。
 
-1. 把真实 compute usage 和 `consume_compute_credits()` 接回去，明确：
-   - 是按 `vcpu_hours` 消耗 monthly credits
-   - 还是按某个 credit conversion 消耗
-2. 明确 compute summary 对外要展示什么：
-   - 原始资源小时
-   - 额度池剩余
-   - 还是两者都展示
-3. 打开 enforcement 前先补 API 级与 E2E 级测试，验证：
-   - create/start 阻断
-   - warning / grace / auto-stop
-4. 统一 template resource spec 的 source of truth，避免静态 helper 与 K8s Template 漂移
-5. 更新前端和文案，明确区分：
-   - raw usage
-   - monthly entitlement
-   - bonus / grant
-   - storage capacity
+当前默认值：
 
-### 16.3 适合对外的准确表述
+- `False`
 
-当前更准确的对外表述应该是：
+也就是说：
 
-- 系统已经具备 compute 原始资源使用观测能力。
-- 系统已经具备 persistent storage 容量与 GiB-hours 记账能力。
-- 系统已经具备 tier / plan / compute grant / storage grant 的后台运营能力。
-- Storage 容量配额框架已基本成型。
-- Compute credit 扣减与自动超额执行链路仍需补完，当前不应按“完整 billing/quota enforcement system”对外宣称。
+- 默认部署下，系统会记录用量，但不会在 create/start 时真正拦截用户
+- 只有显式打开后，配额系统才会成为“硬门禁”
+
+### 13.2 create / start 的前置限制
+
+当 enforcement 开启时：
+
+#### create
+
+- 模板是否允许
+- Compute 是否还有剩余
+- 并发是否超上限
+- Storage 配额是否够
+- auto_stop_interval 是否超过最大时长
+
+#### start
+
+- Compute 是否还有剩余
+- 并发是否超上限
+
+### 13.3 运行中的后置限制
+
+用户在 create / start 时通过检查后，运行中仍然可能超额。
+
+此时系统靠后台 tick 处理：
+
+1. 计算并消耗本轮 Compute Unit
+2. warning 80 / 100
+3. 进入 grace
+4. grace 超时后 stop
+
+### 13.4 当前限制模型的真实强度
+
+#### Compute
+
+- 前置阻断：有
+- 运行中阻断：有
+- overage 精确量化：不足
+
+#### Storage
+
+- 前置阻断：有
+- 运行中持续再检查：没有
+- 删除失败场景下的配额一致性：不足
 
 ---
 
-## 17. 审计后修复记录
+## 14. 当前测试覆盖情况
 
-**修复日期：** 2026-03-29
-**修复基线：** 基于第 16 节中列出的 6 个待修复项
+### 14.1 已覆盖的部分
 
-### 17.1 已完成的修复
+#### 单元测试
 
-#### 修复 1：Compute credit 消费链路接回生产路径
+- `MeteringService`
+  - plan 创建 / tier 更新
+  - welcome bonus
+  - dual-pool consume
+  - close session 最后一段消费
+  - storage allocation / release
+- `metering_tasks`
+  - tick_metering 会调用 `consume_compute_credits()`
+  - warning / grace / monthly reset
+- `metering_integration`
+  - SandboxService enforcement 接线
+  - create/delete 对 storage 的接线
+- `k8s_sync`
+  - 状态映射
+  - Watch / Reconcile 基本流程
 
-**修改文件：**
+#### API 测试
 
-- `treadstone/services/metering_tasks.py` — `tick_metering()`
-- `treadstone/services/metering_service.py` — `close_compute_session()`
+- `GET /v1/usage*`
+- `GET/PATCH /v1/admin/*`
+- `POST /v1/sandboxes` 参数校验、persistent storage size 校验
 
-**变更内容：**
+#### E2E Hurl
 
-1. `tick_metering()` 在累加原始资源小时后，按用户聚合 credit delta，调用 `consume_compute_credits()` 扣减双池。
-2. `close_compute_session()` 在结算最后一段原始小时后，调用 `consume_compute_credits()` 扣减最终 credit delta。
+- Usage API 基本读路径
+- Admin API 基本写路径
 
-**Credit 转换公式：** `credit_rate = max(vCPU_request, memory_GiB_request / 2)`，来自 `metering_helpers.calculate_credit_rate()`。
+### 14.2 仍然不足的部分
 
-**影响：**
+当前测试体系对以下链路覆盖仍然不够：
 
-- `UserPlan.compute_credits_monthly_used` 现在会随真实 sandbox 运行增长。
-- `ComputeGrant.remaining_amount` 会在月度池耗尽后被 FIFO 扣减。
-- `get_total_compute_remaining()` 返回的是真正被消耗后的剩余额度。
-- `check_warning_thresholds()` 的 80%/100% 告警现在能自然触发。
-- `check_grace_periods()` 的宽限期启动和 `_enforce_stop()` 的超额自动停机现在能自然触发。
+- 真正的长时间 tick 后 `compute_unit_hours` 与 `monthly_used` 的持续一致性
+- Watch 与 Reconcile 并发打开 session 的竞争条件
+- duplicate open `ComputeSession` 的故障表现
+- Storage crossing billing period 的 `gib_hours` 精确性
+- delete 失败后 StorageLedger 与真实 PVC 的不一致
+- grace stop callback 失败后的恢复行为
 
-#### 修复 2：Usage Summary 扩展 credit pool 字段
+---
 
-**修改文件：**
+## 15. 当前系统的关键缺陷与改进建议
 
-- `treadstone/services/metering_service.py` — `get_usage_summary()`
-- `treadstone/api/schemas.py` — `ComputeUsage`、`StorageUsage`
+### 15.1 高优先级缺陷
 
-**新增字段（`GET /v1/usage` compute 部分）：**
+#### 1. `compute_session` 缺少 active 唯一约束
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `monthly_limit` | float | 月度额度上限 |
-| `monthly_used` | float | 月度已消耗额度 |
-| `monthly_remaining` | float | 月度剩余额度 |
-| `extra_remaining` | float | 额外 grant 剩余 |
-| `total_remaining` | float | 总剩余额度 |
-| `unit` | string | 固定值 `"credits"` |
+问题：
 
-**新增字段（storage 部分）：** `unit`（固定值 `"GiB"`）。
+- 同一 sandbox 可能出现多个 open session
 
-#### 修复 3：Template 资源规格漂移检测
+后果：
 
-**修改文件：**
+- 双重计量
+- close/reconcile 失败
 
-- `treadstone/services/metering_helpers.py` — 新增 `validate_template_specs()`
-- `treadstone/services/k8s_sync.py` — `reconcile()` 末尾调用
+建议：
 
-每次 K8s reconcile（约 300 秒）执行后，读取 K8s SandboxTemplate 列表，与 `TEMPLATE_SPECS` 静态映射对比 vCPU 和内存值。如果发现差异，写 warning 级日志。支持 K8s 资源格式解析。
+- 增加 partial unique index：
+  - `(sandbox_id) WHERE ended_at IS NULL`
+- 保留应用层幂等逻辑，但以数据库约束为最终兜底
 
-#### 修复 4：E2E 计量测试重写
+#### 2. Storage `gib_hours` 不是 period-accurate
 
-- `tests/e2e/07-metering-usage.hurl`、`tests/e2e/08-metering-admin.hurl` 完全重写。
-- Endpoint 改为 `/compute-grants`、`/storage-grants`，断言对齐当前 API 响应结构。
+问题：
 
-#### 修复 5：前端命名修正
+- 当前返回的是生命周期累计值，而非当前 billing period 值
 
-- 页面标题：`Usage & Credits` -> `Usage & Quotas`
-- 新增月度额度池展示（monthly_used / monthly_limit credits）
-- Admin：`Compute Credits / Mo` -> `Compute quota / month`、`Storage Credits / Mo` -> `Storage capacity (GiB)`
+后果：
 
-#### 修复 6：StorageLedger 模型索引补齐
+- 报表和未来账单会高估跨月 persistent volume 的当期用量
 
-迁移 `c4d5e6f7a8b9` 创建的 `ix_storage_ledger_sandbox_active`（UNIQUE 部分索引）此前只存在于 Alembic 迁移中。已补齐到 `StorageLedger.__table_args__`。
+建议：
 
-#### 修复 7：新增测试覆盖
+- 方案 A：给 `StorageLedger` 增加 period 切分机制，月度 rollover 时拆 ledger
+- 方案 B：保留生命周期累计字段，但 usage summary 时按 `allocated_at/released_at/last_metered_at` 做 period clipping 计算
 
-| 文件 | 测试内容 |
-| --- | --- |
-| `tests/unit/test_metering_tasks.py` | tick 调用 consume、多 session 聚合、锁冲突不消费 |
-| `tests/unit/test_metering_service.py` | close_compute_session 调用 consume 并传入正确金额 |
-| `tests/unit/test_metering_models.py` | validate_template_specs 匹配、漂移检测、缺失模板检测 |
-| `tests/api/test_usage_api.py` | Usage summary 包含 credit pool 字段 |
+#### 3. delete 路径过早释放 StorageLedger
 
-### 17.2 修复后状态总表
+问题：
 
-| 子系统 | 修复前 | 修复后 |
-| --- | --- | --- |
-| Compute 原始用量采集 | 可运行 | 可运行（无变化） |
-| Compute 额度消费 | 生产路径未调用 | **已闭环** |
-| Compute 配额拦截 | 部分有效 | **可用** |
-| Compute warning / grace / auto-stop | 无触发基础 | **可触发** |
-| Storage 体系 | 可运行 | 可运行（无变化） |
-| Usage API | 仅原始小时 | **新增 credit pool 视图** |
-| E2E 计量测试 | 已失效 | **已对齐当前 API** |
-| 前端命名 | 混杂 | **已修正** |
-| Template 规格一致性 | 无检测 | **reconcile 时自动检测** |
-| StorageLedger 模型索引 | 迁移有模型缺 | **已补齐** |
+- K8s 删除尚未确认成功，ledger 就先被标记为 `DELETED`
 
-### 17.3 数据采集与计量流程完整性审计
+后果：
 
-#### Compute 数据流
+- quota 被过早释放
+- 真实资源与 DB 视图不一致
 
-```
-POST /v1/sandboxes (create)
-  -> enforcement 检查 (template / quota / concurrent / duration)
-  -> 写 sandbox 行 (status=CREATING), 创建 K8s 资源
-  -> 【此时无 ComputeSession — 正确，等待 READY】
+建议：
 
-K8s Watch 检测到 READY
-  -> open_compute_session() — 锁定 template/vcpu/memory 规格
+- 不要在 `SandboxService.delete()` 里直接 release
+- 改为：
+  - 仅标记 sandbox `DELETING`
+  - 等 Watch `DELETED` 或 Reconcile 确认资源消失后，再 release ledger
 
-tick_metering() 每 60 秒
-  -> 累加 vcpu_hours / memory_gib_hours
-  -> credit_delta = credit_rate * elapsed_hours, 按用户聚合
-  -> consume_compute_credits() 扣减双池
+### 15.2 中优先级缺陷
 
-STOPPED / ERROR / DELETING (K8s Watch)
-  -> close_compute_session() — 最终结算 + credit 消费
+#### 4. overage 没有持久化，absolute cap 规则实际上不可用
 
-K8s Watch DELETED
-  -> _try_close_compute_session() — 兜底关闭
+问题：
 
-reconcile_metering() 每 300 秒
-  -> READY 无 session -> 补开
-  -> 非 READY 有 session -> 补关（含 credit 消费）
-```
+- `shortfall` 只存在函数返回值，不进入 DB
 
-#### Storage 数据流
+后果：
 
-```
-POST /v1/sandboxes (persist=true)
-  -> check_storage_quota(), 创建 K8s 资源
-  -> record_storage_allocation() -> StorageLedger(ACTIVE)
+- 不能真实计算超额量
+- 20% absolute cap 基本形同虚设
 
-tick_storage_metering() 每 60 秒
-  -> gib_hours_consumed += size_gib * elapsed / 3600
+建议：
 
-DELETE /v1/sandboxes/{id}
-  -> record_storage_release() -> ACTIVE -> DELETED
-  -> 删除 K8s 资源
+- 给 `UserPlan` 或单独 ledger 增加 `compute_units_overage` 字段
+- 明确 grace 期间是否允许累计负债
 
-reconcile_storage_metering() 每 300 秒
-  -> persist sandbox 无 ACTIVE ledger -> 补建
-  -> 孤儿 ACTIVE ledger -> 补释放
-```
+#### 5. stop callback 失败仍然清空 grace 状态
 
-#### 确认无遗漏的入口
+问题：
 
-| 入口 | Compute | Storage |
-| --- | --- | --- |
-| POST /v1/sandboxes | enforcement 检查 | storage 配额 + allocation |
-| POST /v1/sandboxes/{id}/start | enforcement 检查 | 不需要（卷不变） |
-| POST /v1/sandboxes/{id}/stop | K8s Watch 关闭 session | 不需要（卷仍占用） |
-| DELETE /v1/sandboxes/{id} | K8s Watch 关闭 session | release ledger |
-| K8s Watch (READY) | open session | — |
-| K8s Watch (STOP/ERR/DEL) | close session + credits | — |
-| K8s Watch (DELETED) | close session | — |
-| K8s Reconcile | 补开/补关 | 补建/补释放 |
-| tick_metering (60s) | hours + credits | — |
-| tick_storage_metering (60s) | — | gib_hours |
-| warning/grace/auto-stop | 读额度 -> 告警/停机 | — |
-| monthly reset | session 拆分 + 清零 | — |
+- 实际 stop 失败，但 plan 上的 grace 状态被清掉
 
-#### 跨月边界分析
+后果：
 
-`run_metering_tick` 步骤：tick_metering -> tick_storage -> warning -> grace -> reset_monthly。跨月时 tick_metering 已消费 credits 至 `now`（含跨入新月的少量时间），reset_monthly 将 `monthly_used` 清零。边界最多约 60 秒 credit 被计入旧月后清零，对用户微小有利偏差，可接受。
+- 下一轮会重新开始 grace，而不是立即继续 enforcement
 
-### 17.4 Schema 设计审查
+建议：
 
-#### `memory_gib_request` 命名：无需更改
+- 只有全部 sandbox stop 成功时才清空 grace
+- 或者至少把失败的用户维持在 grace/enforcement 状态
 
-`vcpu_request` 中的 "v" 是行业标准术语 **vCPU**（virtual CPU）的一部分，不是前缀模式。内存没有 "vMemory" 概念。当前命名正确。
+#### 6. Usage Summary 是 usage + entitlement 混合视图，容易误读
 
-#### UserPlan 与 welcome bonus 的懒加载设计
+问题：
 
-**当前设计：** `ensure_user_plan()` 在首次访问计量系统时懒创建，而非注册时。
+- `compute_unit_hours` 与 `monthly_used` 不代表同一概念
 
-**设计目的：**
+后果：
 
-1. **模块解耦** — `auth.py` 对计量系统零依赖
-2. **避免浪费行** — 注册后从未使用的用户不产生计量数据库行
-3. **并发安全** — `begin_nested()` + `IntegrityError` 处理唯一约束冲突
+- 前端和产品文案容易误导用户
 
-**结论：** 保持懒加载。如需改为注册时创建，只需在 `auth.py` 的 `on_after_register` 中调用 `ensure_user_plan()`，约 3 行代码。
+建议：
 
-### 17.5 已知的后续待处理项
+- 前端把这两类值拆成“实际用量”和“额度池状态”两个卡片
+- API 字段层面可以增加说明文档，或重命名为：
+  - `actual_compute_unit_hours`
+  - `monthly_pool_used`
 
-| 项目 | 优先级 | 说明 |
-| --- | --- | --- |
-| `compute_session` FK `ondelete` | 中 | `sandbox_id` 和 `user_id` 无 ondelete，`_delete_sandbox_row()` 有 FK 约束失败风险。需迁移改为 SET NULL + nullable |
-| `Numeric(10,4)` 精度 | 低 | 累积误差约 0.8%（tiny），可迁移为 `Numeric(12,6)` |
-| `archived_at` / ARCHIVED | 低 | 预留字段，无业务逻辑使用 |
-| per-session credit 追踪 | 低 | 如需 per-session audit 需加 `credits_consumed` 列 |
-| 商业计费闭环 | 未排期 | 不在本次修复范围内 |
+### 15.3 低优先级问题
+
+#### 7. `credits` 与 `compute units` 命名仍然混杂
+
+当前仍能看到：
+
+- 旧注释
+- 旧 docstring
+- 部分 UI 文案中 “/ MO” 或 “bonus remaining” 之类的表述
+
+建议：
+
+- 后端注释统一改成 `Compute Units`
+- 前端把 “Storage / MO” 改成 “Storage Capacity”
+
+#### 8. 模板规格仍有静态 fallback，严格意义上的单一真相源还不够彻底
+
+问题：
+
+- metering_helpers 仍保留静态 `TEMPLATE_SPECS`
+
+建议：
+
+- 若 K8s 模板是唯一真相源，长期应考虑把静态表降级成测试 fallback，而不是生产 fallback
+
+---
+
+## 16. 上线判断与建议
+
+### 16.1 当前已经适合上线的部分
+
+- Usage / Admin 基础接口
+- Compute 基本计量和 entitlement 消费
+- Storage 容量配额
+- persistent storage 分配 / 释放 / reconcile
+- TierTemplate / UserPlan / Grant 运营体系
+
+### 16.2 当前不适合直接对外承诺为“强账务级能力”的部分
+
+- “Storage GiB-hours 是严格按账期计算的”
+- “grace 期间的超额量可以精确计费/封顶”
+- “Compute open session 绝不会重复创建”
+- “Storage delete 失败时 quota 仍然完全可信”
+
+### 16.3 如果目标是近期内上线一个可运营的 Beta 版本
+
+当前我会给出这样的判断：
+
+- **可以上线**
+  - 作为“可观测 usage + 可执行 quota + 管理员运营”系统
+- **不建议对外承诺**
+  - 严格账务级结算
+  - storage billing-grade usage
+
+### 16.4 上线前最建议优先完成的 4 项修复
+
+1. 给 `compute_session` 加 active 唯一约束
+2. 把 StorageLedger 的 release 改到“确认删除成功之后”
+3. 修正 Storage `gib_hours` 的账期统计逻辑
+4. 给 grace / overage 加一条真实可持久化的 overage ledger
+
+### 16.5 最终结论
+
+**第三轮审计的结论比第二轮更积极：Compute 主链路已经真正闭环，Storage 也已具备基本可运行的配额与记账体系。**
+
+但如果标准是“上线后可被产品、运营、财务共同依赖，并可作为将来商业计费基础”的话，当前系统仍有几处不能忽视的结构性缺陷，尤其是：
+
+- Compute open session 的唯一性
+- Storage 删除一致性
+- Storage 账期精度
+- grace overage 的持久化
+
+因此，当前版本最适合的定位是：
+
+- **上线级 metering & quota foundation**
+
+而不是：
+
+- **最终形态的 billing-grade metering platform**
