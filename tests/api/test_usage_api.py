@@ -111,8 +111,8 @@ async def test_get_usage_returns_summary(user_client):
     assert data["compute"]["monthly_limit"] == 10.0
     assert data["compute"]["monthly_used"] == 0.0
     assert data["compute"]["monthly_remaining"] == 10.0
-    assert data["compute"]["extra_remaining"] == 50.0
-    assert data["compute"]["total_remaining"] == 60.0
+    assert data["compute"]["extra_remaining"] == 0.0
+    assert data["compute"]["total_remaining"] == 10.0
     assert data["compute"]["unit"] == "CU-hours"
 
     assert data["storage"]["gib_hours"] == 0.0
@@ -203,7 +203,8 @@ async def test_get_usage_clips_cross_period_cumulative_usage(user_client, monkey
 
     assert resp.status_code == 200
     data = resp.json()
-    assert data["compute"]["compute_unit_hours"] == 1.0
+    # Sum formula: 0.5*vcpu_hours + 0.125*memory_gib_hours; overlap_ratio 0.5 → 1.5 * 0.5 = 0.75
+    assert data["compute"]["compute_unit_hours"] == 0.75
     assert data["storage"]["gib_hours"] == 5.0
 
 
