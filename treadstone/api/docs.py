@@ -1,13 +1,4 @@
-"""
-Documentation content-negotiation endpoint.
-
-When a client sends `Accept: text/markdown`, returns raw Markdown for the requested
-doc slug. Otherwise, redirects to the frontend SPA at `/docs?page={slug}`.
-
-This enables AI agents and crawlers to fetch clean Markdown without any HTML noise:
-
-    curl https://api.treadstone-ai.dev/docs/getting-started -H "Accept: text/markdown"
-"""
+"""Documentation content-negotiation endpoints backed by the public docs manifest."""
 
 import logging
 import os
@@ -16,23 +7,13 @@ from pathlib import Path
 from fastapi import APIRouter, Request
 from fastapi.responses import PlainTextResponse, RedirectResponse
 
+from treadstone.docs_manifest import DOCS_DIR, get_doc_slugs
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["docs"])
 
-# Docs directory: configurable via env var, falls back to web/public/docs
-# relative to the working directory (repo root when running make dev-api).
-_DEFAULT_DOCS_DIR = Path("web/public/docs")
-_DOCS_DIR = Path(os.environ.get("TREADSTONE_DOCS_DIR", _DEFAULT_DOCS_DIR))
-
-_KNOWN_SLUGS = {
-    "getting-started",
-    "cli-reference",
-    "sdk-reference",
-    "api-reference",
-    "self-hosting",
-    "sitemap",
-}
+_DOCS_DIR = Path(os.environ.get("TREADSTONE_DOCS_DIR", DOCS_DIR))
 
 _FRONTEND_DOCS_BASE = "/docs"
 
@@ -72,7 +53,7 @@ async def docs_page(slug: str, request: Request):
     - `Accept: text/markdown` → returns raw Markdown (200)
     - Other clients → redirects to the SPA docs page (302)
     """
-    if slug not in _KNOWN_SLUGS:
+    if slug not in get_doc_slugs():
         if _accepts_markdown(request):
             return PlainTextResponse(
                 f"# Not Found\n\nDocument `{slug}` does not exist.",

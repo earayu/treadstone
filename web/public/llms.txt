@@ -1,17 +1,36 @@
 # Treadstone
 
-> Agent-native sandbox platform for AI agents. Run code, build projects, deploy environments, and hand off browser sessions via CLI, SDK, or REST API. Open source and self-hostable.
+> Agent-native sandbox platform for AI agents. Run code, control sandbox lifecycle, expose a data plane, and hand browser sessions to humans when the workflow demands it.
 
-## Documentation
+## Primary Docs
 
-- [Overview & Quickstart](/docs/getting-started.md): Installation, first sandbox, human and agent workflows, built-in templates
-- [CLI Reference](/docs/cli-reference.md): Full CLI command reference, configuration, global flags, JSON output
-- [SDK Reference](/docs/sdk-reference.md): Python SDK installation, sync/async usage, authentication, agent patterns
-- [API Reference](/docs/api-reference.md): REST API endpoints, authentication, error format, pagination
-- [Self-Hosting](/docs/self-hosting.md): Kubernetes deployment, local Kind cluster, Helm charts, environment configuration
+- [Start Here](/docs/index.md): What Treadstone is, who it is for, and the shortest path to a working sandbox.
+- [Quickstart for Agents (CLI)](/docs/quickstart-agent-cli.md): The shortest non-interactive CLI path for agents: auth, create, capture sandbox_id, and issue an open_link.
+- [Browser Handoff](/docs/guide-browser-handoff.md): Create, inspect, and revoke browser hand-off links without guessing URLs or inventing tokens.
+- [Data Plane Access](/docs/guide-data-plane-access.md): Use proxy access safely with API keys, selected sandbox grants, and the control-plane/data-plane auth split.
+- [AI Index](/docs/ai-index.md): Task routing for agents: which page answers create, proxy, browser hand-off, usage, admin, and self-hosting questions.
+- [AI Invariants](/docs/ai-invariants.md): Hard rules for agents that must not guess IDs, URLs, auth mode, pagination model, or error semantics.
+- [Why Treadstone](/docs/why-treadstone.md): Why a raw container is not enough for autonomous agents, and what Treadstone adds on top.
+- [Core Concepts](/docs/core-concepts.md): The core nouns and boundaries: control plane, data plane, sandbox, template, web link, plan, and grants.
+- [Quickstart for REST API](/docs/quickstart-rest-api.md): Use the control-plane REST API directly to create sandboxes and hand browser sessions to humans.
+- [Quickstart for Humans](/docs/quickstart-human.md): Register, sign in, create a sandbox, and open a browser hand-off URL from the CLI.
+- [Create and Manage Sandboxes](/docs/guide-sandboxes.md): Choose templates, name sandboxes correctly, use labels, and control start, stop, and delete flows.
+- [API Reference](/docs/api-reference.md): Control-plane routes, proxy contract, auth model, pagination semantics, and the uniform error envelope.
+- [Quickstart for Python SDK](/docs/quickstart-python-sdk.md): Use the generated Python SDK with AuthenticatedClient and typed models to create sandboxes and issue web links.
+- [CLI Reference](/docs/cli-reference.md): Real command groups, auth precedence, config resolution, JSON mode, and the built-in skills workflow.
+- [Usage and Quotas](/docs/guide-usage-and-quotas.md): Read plan limits, usage summaries, compute sessions, storage ledger entries, and active grants.
+- [Admin Operations](/docs/guide-admin-operations.md): Operate tier templates, user plans, grants, waitlist state, and verification tooling as an admin.
+- [Python SDK Reference](/docs/sdk-python-reference.md): Package layout, generated modules, sync and async call shapes, and the most useful endpoint modules.
+
+## Task Map
+
+- Create a sandbox: [/docs/quickstart-agent-cli.md](/docs/quickstart-agent-cli.md), [/docs/quickstart-rest-api.md](/docs/quickstart-rest-api.md), [/docs/guide-sandboxes.md](/docs/guide-sandboxes.md)
+- Hand a browser to a human: [/docs/guide-browser-handoff.md](/docs/guide-browser-handoff.md), [/docs/ai-invariants.md](/docs/ai-invariants.md)
+- Use the proxy / data plane: [/docs/guide-data-plane-access.md](/docs/guide-data-plane-access.md), [/docs/api-reference.md](/docs/api-reference.md)
+- Understand auth and scope boundaries: [/docs/core-concepts.md](/docs/core-concepts.md), [/docs/api-reference.md](/docs/api-reference.md), [/docs/error-reference.md](/docs/error-reference.md)
 
 ## Optional
 
-- [GitHub](https://github.com/earayu/treadstone): Source code, issues, and releases
-- [Documentation Sitemap](/docs/sitemap.md): Full hierarchical documentation index
-- [OpenAPI Spec](/openapi.json): Machine-readable API spec (available on running server)
+- [Documentation Sitemap](/docs/sitemap.md): Full hierarchical index
+- [GitHub](https://github.com/earayu/treadstone): Source, releases, and issues
+- [OpenAPI Spec](/openapi.json): Machine-readable control-plane API schema
