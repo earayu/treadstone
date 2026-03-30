@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
+
+from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
     from ..models.resource_spec import ResourceSpec
@@ -22,6 +24,7 @@ class SandboxTemplateResponse:
         description (str):
         image (str):
         resource_spec (ResourceSpec):
+        allowed_storage_sizes (list[str] | Unset):
     """
 
     name: str
@@ -29,6 +32,7 @@ class SandboxTemplateResponse:
     description: str
     image: str
     resource_spec: ResourceSpec
+    allowed_storage_sizes: list[str] | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -42,6 +46,10 @@ class SandboxTemplateResponse:
 
         resource_spec = self.resource_spec.to_dict()
 
+        allowed_storage_sizes: list[str] | Unset = UNSET
+        if not isinstance(self.allowed_storage_sizes, Unset):
+            allowed_storage_sizes = self.allowed_storage_sizes
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -53,6 +61,8 @@ class SandboxTemplateResponse:
                 "resource_spec": resource_spec,
             }
         )
+        if allowed_storage_sizes is not UNSET:
+            field_dict["allowed_storage_sizes"] = allowed_storage_sizes
 
         return field_dict
 
@@ -71,12 +81,15 @@ class SandboxTemplateResponse:
 
         resource_spec = ResourceSpec.from_dict(d.pop("resource_spec"))
 
+        allowed_storage_sizes = cast(list[str], d.pop("allowed_storage_sizes", UNSET))
+
         sandbox_template_response = cls(
             name=name,
             display_name=display_name,
             description=description,
             image=image,
             resource_spec=resource_spec,
+            allowed_storage_sizes=allowed_storage_sizes,
         )
 
         sandbox_template_response.additional_properties = d

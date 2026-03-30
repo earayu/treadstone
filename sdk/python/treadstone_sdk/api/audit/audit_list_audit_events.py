@@ -17,6 +17,7 @@ def _get_kwargs(
     target_type: None | str | Unset = UNSET,
     target_id: None | str | Unset = UNSET,
     actor_user_id: None | str | Unset = UNSET,
+    actor_email: None | str | Unset = UNSET,
     request_id: None | str | Unset = UNSET,
     result: None | str | Unset = UNSET,
     since: datetime.datetime | None | Unset = UNSET,
@@ -53,6 +54,13 @@ def _get_kwargs(
     else:
         json_actor_user_id = actor_user_id
     params["actor_user_id"] = json_actor_user_id
+
+    json_actor_email: None | str | Unset
+    if isinstance(actor_email, Unset):
+        json_actor_email = UNSET
+    else:
+        json_actor_email = actor_email
+    params["actor_email"] = json_actor_email
 
     json_request_id: None | str | Unset
     if isinstance(request_id, Unset):
@@ -138,6 +146,7 @@ def sync_detailed(
     target_type: None | str | Unset = UNSET,
     target_id: None | str | Unset = UNSET,
     actor_user_id: None | str | Unset = UNSET,
+    actor_email: None | str | Unset = UNSET,
     request_id: None | str | Unset = UNSET,
     result: None | str | Unset = UNSET,
     since: datetime.datetime | None | Unset = UNSET,
@@ -152,6 +161,7 @@ def sync_detailed(
         target_type (None | str | Unset):
         target_id (None | str | Unset):
         actor_user_id (None | str | Unset):
+        actor_email (None | str | Unset):
         request_id (None | str | Unset):
         result (None | str | Unset):
         since (datetime.datetime | None | Unset):
@@ -172,6 +182,7 @@ def sync_detailed(
         target_type=target_type,
         target_id=target_id,
         actor_user_id=actor_user_id,
+        actor_email=actor_email,
         request_id=request_id,
         result=result,
         since=since,
@@ -194,6 +205,7 @@ def sync(
     target_type: None | str | Unset = UNSET,
     target_id: None | str | Unset = UNSET,
     actor_user_id: None | str | Unset = UNSET,
+    actor_email: None | str | Unset = UNSET,
     request_id: None | str | Unset = UNSET,
     result: None | str | Unset = UNSET,
     since: datetime.datetime | None | Unset = UNSET,
@@ -208,6 +220,7 @@ def sync(
         target_type (None | str | Unset):
         target_id (None | str | Unset):
         actor_user_id (None | str | Unset):
+        actor_email (None | str | Unset):
         request_id (None | str | Unset):
         result (None | str | Unset):
         since (datetime.datetime | None | Unset):
@@ -229,6 +242,7 @@ def sync(
         target_type=target_type,
         target_id=target_id,
         actor_user_id=actor_user_id,
+        actor_email=actor_email,
         request_id=request_id,
         result=result,
         since=since,
@@ -245,6 +259,7 @@ async def asyncio_detailed(
     target_type: None | str | Unset = UNSET,
     target_id: None | str | Unset = UNSET,
     actor_user_id: None | str | Unset = UNSET,
+    actor_email: None | str | Unset = UNSET,
     request_id: None | str | Unset = UNSET,
     result: None | str | Unset = UNSET,
     since: datetime.datetime | None | Unset = UNSET,
@@ -259,6 +274,7 @@ async def asyncio_detailed(
         target_type (None | str | Unset):
         target_id (None | str | Unset):
         actor_user_id (None | str | Unset):
+        actor_email (None | str | Unset):
         request_id (None | str | Unset):
         result (None | str | Unset):
         since (datetime.datetime | None | Unset):
@@ -279,6 +295,7 @@ async def asyncio_detailed(
         target_type=target_type,
         target_id=target_id,
         actor_user_id=actor_user_id,
+        actor_email=actor_email,
         request_id=request_id,
         result=result,
         since=since,
@@ -299,6 +316,7 @@ async def asyncio(
     target_type: None | str | Unset = UNSET,
     target_id: None | str | Unset = UNSET,
     actor_user_id: None | str | Unset = UNSET,
+    actor_email: None | str | Unset = UNSET,
     request_id: None | str | Unset = UNSET,
     result: None | str | Unset = UNSET,
     since: datetime.datetime | None | Unset = UNSET,
@@ -313,6 +331,7 @@ async def asyncio(
         target_type (None | str | Unset):
         target_id (None | str | Unset):
         actor_user_id (None | str | Unset):
+        actor_email (None | str | Unset):
         request_id (None | str | Unset):
         result (None | str | Unset):
         since (datetime.datetime | None | Unset):
@@ -335,6 +354,7 @@ async def asyncio(
             target_type=target_type,
             target_id=target_id,
             actor_user_id=actor_user_id,
+            actor_email=actor_email,
             request_id=request_id,
             result=result,
             since=since,

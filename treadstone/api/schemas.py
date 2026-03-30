@@ -787,6 +787,43 @@ class WaitlistApplicationListResponse(BaseModel):
     total: int = Field(..., examples=[42])
 
 
+# ── Support feedback ───────────────────────────────────────────────────────────
+
+
+class CreateFeedbackRequest(BaseModel):
+    body: str = Field(
+        ...,
+        max_length=10_000,
+        examples=["The usage chart does not load on Safari."],
+        description="Feedback or support message from the user.",
+    )
+
+    @field_validator("body")
+    @classmethod
+    def strip_and_require_body(cls, v: str) -> str:
+        s = v.strip()
+        if not s:
+            raise ValueError("body must not be empty")
+        return s
+
+
+class CreateFeedbackResponse(BaseModel):
+    id: str = Field(..., examples=["fbabc123def456"])
+
+
+class FeedbackItemResponse(BaseModel):
+    id: str = Field(..., examples=["fbabc123def456"])
+    user_id: str = Field(..., examples=["userabc123"])
+    email: str = Field(..., examples=["alice@example.com"])
+    body: str = Field(..., examples=["The usage chart does not load on Safari."])
+    gmt_created: datetime = Field(..., examples=["2026-03-31T00:00:00Z"])
+
+
+class FeedbackListResponse(BaseModel):
+    items: list[FeedbackItemResponse]
+    total: int = Field(..., examples=[42])
+
+
 class UpdateWaitlistApplicationRequest(BaseModel):
     status: str = Field(
         ...,

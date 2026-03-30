@@ -20,12 +20,14 @@ class UpdateApiKeyRequest:
     """
     Attributes:
         name (None | str | Unset):
+        is_enabled (bool | None | Unset): Enable or disable the API key.
         expires_in (int | None | Unset): Reset the key lifetime from now in seconds.
         clear_expiration (bool | Unset):  Default: False.
         scope (ApiKeyScope | None | Unset):
     """
 
     name: None | str | Unset = UNSET
+    is_enabled: bool | None | Unset = UNSET
     expires_in: int | None | Unset = UNSET
     clear_expiration: bool | Unset = False
     scope: ApiKeyScope | None | Unset = UNSET
@@ -39,6 +41,12 @@ class UpdateApiKeyRequest:
             name = UNSET
         else:
             name = self.name
+
+        is_enabled: bool | None | Unset
+        if isinstance(self.is_enabled, Unset):
+            is_enabled = UNSET
+        else:
+            is_enabled = self.is_enabled
 
         expires_in: int | None | Unset
         if isinstance(self.expires_in, Unset):
@@ -61,6 +69,8 @@ class UpdateApiKeyRequest:
         field_dict.update({})
         if name is not UNSET:
             field_dict["name"] = name
+        if is_enabled is not UNSET:
+            field_dict["is_enabled"] = is_enabled
         if expires_in is not UNSET:
             field_dict["expires_in"] = expires_in
         if clear_expiration is not UNSET:
@@ -84,6 +94,15 @@ class UpdateApiKeyRequest:
             return cast(None | str | Unset, data)
 
         name = _parse_name(d.pop("name", UNSET))
+
+        def _parse_is_enabled(data: object) -> bool | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(bool | None | Unset, data)
+
+        is_enabled = _parse_is_enabled(d.pop("is_enabled", UNSET))
 
         def _parse_expires_in(data: object) -> int | None | Unset:
             if data is None:
@@ -115,6 +134,7 @@ class UpdateApiKeyRequest:
 
         update_api_key_request = cls(
             name=name,
+            is_enabled=is_enabled,
             expires_in=expires_in,
             clear_expiration=clear_expiration,
             scope=scope,

@@ -12,6 +12,7 @@ Endpoints:
   POST   /v1/admin/users/{user_id}/storage-grants  — issue storage quota grant
   POST   /v1/admin/compute-grants/batch           — batch-issue compute grants
   POST   /v1/admin/storage-grants/batch           — batch-issue storage quota grants
+  GET    /v1/admin/support/feedback               — list user-submitted support feedback
 """
 
 from __future__ import annotations
@@ -39,6 +40,8 @@ from treadstone.api.schemas import (
     CreateComputeGrantResponse,
     CreateStorageQuotaGrantRequest,
     CreateStorageQuotaGrantResponse,
+    FeedbackItemResponse,
+    FeedbackListResponse,
     PlatformStatsResponse,
     ResolveEmailsRequest,
     ResolveEmailsResponse,
@@ -64,6 +67,7 @@ from treadstone.models.email_verification_log import EmailVerificationLog
 from treadstone.models.metering import ComputeGrant, StorageLedger, StorageQuotaGrant, UserPlan
 from treadstone.models.sandbox import Sandbox
 from treadstone.models.user import User
+from treadstone.models.user_feedback import UserFeedback
 from treadstone.models.waitlist import ApplicationStatus, WaitlistApplication
 from treadstone.services.audit import record_audit_event
 from treadstone.services.metering_service import MeteringService
@@ -622,6 +626,38 @@ async def list_waitlist_applications(
     )
 
     return {"items": [_serialize_waitlist_application(r) for r in rows], "total": total}
+
+
+@router.get("/support/feedback", response_model=FeedbackListResponse)
+async def list_user_feedback(
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    _admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_session),
+) -> FeedbackListResponse:
+    """List user-submitted support feedback (newest first)."""
+    count_query = select(func.count()).select_from(UserFeedback)
+    total = (await session.execute(count_query)).scalar_one()
+    rows = (
+        (
+            await session.execute(
+                select(UserFeedback).order_by(UserFeedback.gmt_created.desc()).limit(limit).offset(offset)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    items = [
+        FeedbackItemResponse(
+            id=r.id,
+            user_id=r.user_id,
+            email=r.email,
+            body=r.body,
+            gmt_created=r.gmt_created,
+        )
+        for r in rows
+    ]
+    return FeedbackListResponse(items=items, total=total)
 
 
 @router.patch("/waitlist/{application_id}", response_model=WaitlistApplicationResponse)

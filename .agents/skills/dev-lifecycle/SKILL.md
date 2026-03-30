@@ -82,6 +82,15 @@ EOF
 
 Use HEREDOC for the body to avoid quote escaping issues.
 
+### Large OpenAPI / SDK diffs
+
+When `make gen-sdk-python` or `make gen-web-types` produces a big diff, help reviewers:
+
+1. **Preferred:** Land **two commits** — first the feature (`treadstone/`, `tests/`, `web/` sources, migrations); second `chore: regenerate Python SDK from OpenAPI` with **`sdk/python/`** only (and optionally a third for `web/src/api/schema.d.ts` if you want web types separate).
+2. **If one commit:** Fill the PR template’s **Generated / mechanical** section so reviewers know `sdk/python/**` and `web/src/api/schema.d.ts` are tooling output, not hand-edited logic.
+
+See `AGENTS.md` → OpenAPI / SDK Generation.
+
 ## Step 5: Monitor CI
 
 ```bash

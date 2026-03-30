@@ -6,6 +6,7 @@ import { APP_VERSION } from "@/lib/app-version"
 
 const ADMIN_ROUTE_LABELS: Record<string, string> = {
   "/internal/admin/metering": "METERING",
+  "/internal/admin/feedback": "FEEDBACK",
   "/internal/audit": "AUDIT EVENTS",
 }
 

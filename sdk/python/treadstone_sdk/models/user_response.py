@@ -18,11 +18,13 @@ class UserResponse:
         id (str):
         email (str):
         role (Role):
+        is_active (bool):
     """
 
     id: str
     email: str
     role: Role
+    is_active: bool
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -32,6 +34,8 @@ class UserResponse:
 
         role = self.role.value
 
+        is_active = self.is_active
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -39,6 +43,7 @@ class UserResponse:
                 "id": id,
                 "email": email,
                 "role": role,
+                "is_active": is_active,
             }
         )
 
@@ -53,10 +58,13 @@ class UserResponse:
 
         role = Role(d.pop("role"))
 
+        is_active = d.pop("is_active")
+
         user_response = cls(
             id=id,
             email=email,
             role=role,
+            is_active=is_active,
         )
 
         user_response.additional_properties = d

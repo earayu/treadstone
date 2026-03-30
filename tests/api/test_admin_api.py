@@ -17,6 +17,7 @@ from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
 from treadstone.models.metering import TierTemplate
 from treadstone.models.user import OAuthAccount, User
+from treadstone.models.user_feedback import UserFeedback  # noqa: F401 — register model for SQLite metadata
 from treadstone.models.waitlist import WaitlistApplication  # noqa: F401 — register model for SQLite metadata
 
 _test_session_factory: async_sessionmaker | None = None
@@ -565,4 +566,43 @@ async def test_patch_waitlist_only_from_pending(admin_client, anon_client):
 async def test_list_waitlist_requires_admin(member_client, anon_client):
     await anon_client.post("/v1/waitlist", json=_WAITLIST_BODY)
     resp = await member_client.get("/v1/admin/waitlist")
+    assert resp.status_code == 403
+
+
+# ── Support feedback (POST /v1/support/feedback, GET /v1/admin/support/feedback) ─
+
+
+async def test_create_feedback_requires_auth(anon_client):
+    resp = await anon_client.post("/v1/support/feedback", json={"body": "hello"})
+    assert resp.status_code == 401
+
+
+async def test_create_feedback_member(member_client):
+    resp = await member_client.post("/v1/support/feedback", json={"body": "  My issue  "})
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["id"].startswith("fb")
+
+
+async def test_create_feedback_empty_body(member_client):
+    resp = await member_client.post("/v1/support/feedback", json={"body": "   "})
+    assert resp.status_code == 422
+
+
+async def test_create_feedback_body_too_long(member_client):
+    resp = await member_client.post("/v1/support/feedback", json={"body": "x" * 10_001})
+    assert resp.status_code == 422
+
+
+async def test_list_feedback_admin(admin_client):
+    await admin_client.post("/v1/support/feedback", json={"body": "from admin user feedback"})
+    resp = await admin_client.get("/v1/admin/support/feedback")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] >= 1
+    assert any("from admin user feedback" in item["body"] for item in data["items"])
+
+
+async def test_list_feedback_forbidden_member(member_client):
+    resp = await member_client.get("/v1/admin/support/feedback")
     assert resp.status_code == 403

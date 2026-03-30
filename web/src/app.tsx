@@ -23,6 +23,7 @@ import { SettingsPage } from "@/pages/app/settings"
 import { AdminMeteringPage } from "@/pages/internal/admin-metering"
 import { AdminOverviewPage } from "@/pages/internal/admin-overview"
 import { AdminUsersPage } from "@/pages/internal/admin-users"
+import { AdminFeedbackPage } from "@/pages/internal/admin-feedback"
 import { AuditEventsPage } from "@/pages/internal/audit-events"
 
 function NotFoundPage() {
@@ -82,6 +83,7 @@ const router = createBrowserRouter([
       { path: "admin/overview", element: <AdminOverviewPage /> },
       { path: "admin/users", element: <AdminUsersPage /> },
       { path: "admin/metering", element: <AdminMeteringPage /> },
+      { path: "admin/feedback", element: <AdminFeedbackPage /> },
       { path: "audit", element: <AuditEventsPage /> },
     ],
   },
