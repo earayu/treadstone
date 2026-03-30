@@ -125,6 +125,9 @@ Rules:
 - Code-first: OpenAPI spec is auto-generated from FastAPI code. No static YAML to maintain.
 - `make gen-openapi` exports `openapi.json` (build artifact, gitignored).
 - All API routers must set `tags=["xxx"]` — SDK method names depend on tag + function name.
+- **Reviewability:** API-facing changes often regenerate large, mechanical diffs. Prefer either:
+  - **Two commits on the same branch:** (1) hand-written work — `treadstone/`, `tests/`, `web/` app code, `alembic/`, plus `web/src/api/schema.d.ts` from `make gen-web-types` when the web app needs new types; (2) `chore: regenerate Python SDK from OpenAPI` touching **`sdk/python/`** only via `make gen-sdk-python`. Or:
+  - **One commit** if splitting is impractical — then state in the PR body that **`sdk/python/**` and `web/src/api/schema.d.ts` are generated only** (no manual edits in those paths), so reviewers can skim them.
 
 ## Git Workflow
 
