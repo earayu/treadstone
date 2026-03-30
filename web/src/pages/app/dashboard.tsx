@@ -47,11 +47,11 @@ function StatusDot({ status }: { status: string }) {
 
 
 const TABLE_COLUMNS = [
-  { key: "id", label: "Sandbox", className: "w-[22%]" },
-  { key: "status", label: "Status", className: "w-[10%]" },
+  { key: "id", label: "Sandbox", className: "w-[16%]" },
+  { key: "status", label: "Status", className: "w-[8%]" },
   { key: "template", label: "Template", className: "w-[15%]" },
   { key: "created_at", label: "Created At", className: "w-[12%]" },
-  { key: "lifecycle", label: "Lifecycle", className: "w-[10%]" },
+  { key: "lifecycle", label: "Lifecycle", className: "w-[18%]" },
   { key: "web_url", label: "Web URL", className: "w-[23%]" },
   { key: "actions", label: "", className: "w-[8%]" },
 ] as const
@@ -296,7 +296,7 @@ function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
                   <div className="flex flex-col gap-0.5">
                     <Link
                       to={`/app/sandboxes/${sandbox.id}`}
-                      className="font-mono text-xs font-medium text-foreground hover:text-primary"
+                      className="font-mono text-xs font-medium text-primary"
                     >
                       {sandbox.name || sandbox.id}
                     </Link>

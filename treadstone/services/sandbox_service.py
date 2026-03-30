@@ -340,6 +340,34 @@ class SandboxService:
             sandbox.version += 1
             self.session.add(sandbox)
             await self.session.commit()
+            return sandbox
+
+        # The sandbox may already be READY in K8s (e.g. it auto-recovered from ERROR
+        # while the DB still showed ERROR, or a no-op scale was issued).  In that case
+        # K8s will not fire a new Watch MODIFIED event, so we do a single GET and apply
+        # the status immediately rather than waiting for the Watch loop or next reconcile.
+        try:
+            cr = await self.k8s.get_sandbox(name=k8s_name, namespace=sandbox.k8s_namespace)
+            if cr is not None:
+                from treadstone.services.k8s_sync import derive_status_from_sandbox_cr
+
+                actual_status, msg = derive_status_from_sandbox_cr(cr)
+                if actual_status == SandboxStatus.READY:
+                    cr_rv = cr.get("metadata", {}).get("resourceVersion")
+                    refreshed = await self.get(sandbox_id, owner_id)
+                    if refreshed is not None and is_valid_transition(refreshed.status, SandboxStatus.READY):
+                        logger.info("Sandbox %s already READY in K8s after start, updating DB immediately", sandbox_id)
+                        refreshed.status = SandboxStatus.READY
+                        refreshed.status_message = msg
+                        refreshed.version += 1
+                        refreshed.gmt_started = utc_now()
+                        refreshed.k8s_resource_version = cr_rv
+                        self.session.add(refreshed)
+                        await self.session.commit()
+                        await self.session.refresh(refreshed)
+                        return refreshed
+        except Exception:
+            logger.debug("Post-start K8s status check failed for %s; Watch/reconcile will sync later", sandbox_id)
 
         return sandbox
 
