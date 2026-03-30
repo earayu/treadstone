@@ -18,6 +18,10 @@
 5. [计量、套餐与管理员运营](./modules/05-metering-and-admin-ops.md)
 6. [控制面运行时、审计与部署](./modules/06-control-plane-runtime-and-deployment.md)
 
+### 补充设计文档
+
+- [CU 加权公式与 Sandbox 模板资源方案 C](./modules/07-compute-unit-template-resources-plan-c.md) — 计费公式（加权累加）与五档模板 request/limit 的设计与实施对齐说明
+
 ## 这次重组覆盖了什么
 
 旧文档里的这些主题，已经被折叠进上面的 6 个模块：
