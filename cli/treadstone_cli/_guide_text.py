@@ -172,10 +172,10 @@ These are the most frequent situations where an agent gets stuck and the shortes
 
 | Situation | Action |
 |-----------|--------|
-| Have a sandbox name but no ID | `treadstone --json sandboxes list` → read `id` from the matching entry |
-| Need to create a sandbox but don't know a valid template name | `treadstone --json templates list` → pick a `name` value |
-| Browser hand-off URL is expired or missing | `treadstone sandboxes web disable SANDBOX_ID` then `treadstone --json sandboxes web enable SANDBOX_ID` |
-| Command says "not authenticated" | `treadstone auth login --email … --password …` or set `TREADSTONE_API_KEY` |
+| Have a sandbox name but no ID | `treadstone --json sandboxes list`, then read `id` for that row |
+| Need a valid template name | `treadstone --json templates list`, then pick a template `name` |
+| Hand-off URL expired or missing | `sandboxes web disable ID` then `treadstone --json sandboxes web enable ID` |
+| Command says "not authenticated" | `auth login --email … --password …` or env `TREADSTONE_API_KEY` |
 | `sandboxes create` returns a name conflict | Omit `--name` and let the server generate a unique name |
 | Output is hard to parse | Re-run the same command with `--json` prepended |
 | Don't know the current base URL or API key status | `treadstone config get` |

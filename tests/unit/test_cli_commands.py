@@ -143,7 +143,7 @@ def test_root_help_surfaces_common_nested_commands(runner: CliRunner) -> None:
     result = runner.invoke(cli, ["--help"])
 
     assert result.exit_code == 0
-    assert "Command tree:" in result.output
+    assert "Command Reference:" in result.output
     assert "auth login" in result.output
     assert "config get" in result.output
     assert "sandboxes create" in result.output
