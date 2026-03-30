@@ -10,12 +10,10 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 SECTION_ORDER = (
-    "Start Here",
-    "Quickstarts",
-    "Guides",
+    "Get Started",
+    "Core Workflows",
+    "Integrate",
     "Reference",
-    "Operations",
-    "AI Docs",
 )
 LLMS_MIN_PRIORITY = 80
 
@@ -34,6 +32,7 @@ class DocManifestEntry(BaseModel):
     summary: str
     default: bool
     llm_priority: int = Field(ge=0)
+    aliases: list[str] = Field(default_factory=list)
 
 
 def _missing_markdown_file(slug: str, docs_dir: Path) -> ValueError:
@@ -50,6 +49,7 @@ def validate_manifest_entries(
         raise ValueError("Docs manifest must contain at least one page.")
 
     seen_slugs: set[str] = set()
+    seen_aliases: set[str] = set()
     seen_orders: dict[str, set[int]] = defaultdict(set)
     default_count = 0
 
@@ -59,6 +59,19 @@ def validate_manifest_entries(
         if entry.slug in seen_slugs:
             raise ValueError(f"Duplicate doc slug '{entry.slug}' in docs manifest.")
         seen_slugs.add(entry.slug)
+
+        alias_set: set[str] = set()
+        for alias in entry.aliases:
+            if not _SLUG_PATTERN.fullmatch(alias):
+                raise ValueError(f"Invalid doc alias '{alias}' for slug '{entry.slug}'.")
+            if alias == entry.slug:
+                raise ValueError(f"Doc alias '{alias}' must not match its canonical slug.")
+            if alias in alias_set:
+                raise ValueError(f"Duplicate alias '{alias}' for slug '{entry.slug}'.")
+            if alias in seen_slugs or alias in seen_aliases:
+                raise ValueError(f"Duplicate doc alias '{alias}' in docs manifest.")
+            alias_set.add(alias)
+            seen_aliases.add(alias)
 
         if entry.section not in SECTION_ORDER:
             raise ValueError(
@@ -124,6 +137,17 @@ def get_doc_slugs(entries: Iterable[DocManifestEntry] | None = None) -> set[str]
     return {entry.slug for entry in manifest}
 
 
+def resolve_doc_entry(
+    slug: str,
+    entries: Iterable[DocManifestEntry] | None = None,
+) -> DocManifestEntry | None:
+    manifest = tuple(entries) if entries is not None else get_docs_manifest()
+    for entry in manifest:
+        if entry.slug == slug or slug in entry.aliases:
+            return entry
+    return None
+
+
 def group_manifest_by_section(entries: Iterable[DocManifestEntry]) -> list[tuple[str, list[DocManifestEntry]]]:
     grouped: list[tuple[str, list[DocManifestEntry]]] = []
     manifest = list(entries)
@@ -141,7 +165,6 @@ def render_sitemap_markdown(entries: Iterable[DocManifestEntry]) -> str:
         "",
         "This file is generated from `/docs/_manifest.json`.",
         "Read [`/docs/index.md`](/docs/index.md) first if you are new.",
-        "Read [`/docs/ai-index.md`](/docs/ai-index.md) first if you are an agent.",
         "",
     ]
 
@@ -174,8 +197,8 @@ def render_llms_txt(entries: Iterable[DocManifestEntry]) -> str:
     lines = [
         "# Treadstone",
         "",
-        "> Agent-native sandbox platform for AI agents. Run code, control sandbox lifecycle, "
-        "expose a data plane, and hand browser sessions to humans when the workflow demands it.",
+        "> Hosted sandbox platform for AI teams. Create sandboxes, control lifecycle, expose a data plane, "
+        "and hand browser sessions to humans when the workflow demands it.",
         "",
         "## Primary Docs",
         "",
@@ -189,21 +212,23 @@ def render_llms_txt(entries: Iterable[DocManifestEntry]) -> str:
             "",
             "## Task Map",
             "",
-            "- Create a sandbox: [/docs/quickstart-agent-cli.md](/docs/quickstart-agent-cli.md), "
-            "[/docs/quickstart-rest-api.md](/docs/quickstart-rest-api.md), "
-            "[/docs/guide-sandboxes.md](/docs/guide-sandboxes.md)",
-            "- Hand a browser to a human: [/docs/guide-browser-handoff.md](/docs/guide-browser-handoff.md), "
-            "[/docs/ai-invariants.md](/docs/ai-invariants.md)",
-            "- Use the proxy / data plane: [/docs/guide-data-plane-access.md](/docs/guide-data-plane-access.md), "
+            "- Start fast: [/docs/quickstart.md](/docs/quickstart.md), "
+            "[/docs/cli-guide.md](/docs/cli-guide.md), "
+            "[/docs/rest-api-guide.md](/docs/rest-api-guide.md)",
+            "- Create a sandbox: [/docs/create-sandbox.md](/docs/create-sandbox.md), "
+            "[/docs/quickstart.md](/docs/quickstart.md)",
+            "- Hand a browser to a human: [/docs/browser-handoff.md](/docs/browser-handoff.md), "
             "[/docs/api-reference.md](/docs/api-reference.md)",
-            "- Understand auth and scope boundaries: [/docs/core-concepts.md](/docs/core-concepts.md), "
+            "- Understand auth and scope boundaries: [/docs/api-keys-auth.md](/docs/api-keys-auth.md), "
+            "[/docs/cli-guide.md](/docs/cli-guide.md), "
             "[/docs/api-reference.md](/docs/api-reference.md), "
+            "[/docs/error-reference.md](/docs/error-reference.md)",
+            "- Understand usage and plan limits: [/docs/usage-limits.md](/docs/usage-limits.md), "
             "[/docs/error-reference.md](/docs/error-reference.md)",
             "",
             "## Optional",
             "",
             "- [Documentation Sitemap](/docs/sitemap.md): Full hierarchical index",
-            "- [GitHub](https://github.com/earayu/treadstone): Source, releases, and issues",
             "- [OpenAPI Spec](/openapi.json): Machine-readable control-plane API schema",
             "",
         ]

@@ -1,12 +1,10 @@
 import { z } from "zod"
 
 export const DOCS_SECTION_ORDER = [
-  "Start Here",
-  "Quickstarts",
-  "Guides",
+  "Get Started",
+  "Core Workflows",
+  "Integrate",
   "Reference",
-  "Operations",
-  "AI Docs",
 ] as const
 
 const docsManifestEntrySchema = z.object({
@@ -17,6 +15,7 @@ const docsManifestEntrySchema = z.object({
   summary: z.string().min(1),
   default: z.boolean(),
   llm_priority: z.number().int().nonnegative(),
+  aliases: z.array(z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)).default([]),
 })
 
 const docsManifestSchema = z.array(docsManifestEntrySchema)
@@ -31,6 +30,7 @@ export interface DocsSection {
 export function validateDocsManifest(data: unknown): DocsManifestEntry[] {
   const manifest = docsManifestSchema.parse(data)
   const seenSlugs = new Set<string>()
+  const seenAliases = new Set<string>()
   const seenOrders = new Map<string, Set<number>>()
   let defaultCount = 0
 
@@ -39,6 +39,16 @@ export function validateDocsManifest(data: unknown): DocsManifestEntry[] {
       throw new Error(`Duplicate doc slug '${entry.slug}' in manifest.`)
     }
     seenSlugs.add(entry.slug)
+
+    for (const alias of entry.aliases) {
+      if (alias === entry.slug) {
+        throw new Error(`Doc alias '${alias}' must not match its canonical slug.`)
+      }
+      if (seenSlugs.has(alias) || seenAliases.has(alias)) {
+        throw new Error(`Duplicate doc alias '${alias}' in manifest.`)
+      }
+      seenAliases.add(alias)
+    }
 
     const sectionOrders = seenOrders.get(entry.section) ?? new Set<number>()
     if (sectionOrders.has(entry.order)) {
@@ -92,7 +102,16 @@ export function getDefaultDoc(entries: DocsManifestEntry[]): DocsManifestEntry {
 }
 
 export function resolveCurrentDoc(entries: DocsManifestEntry[], pageParam: string | null): DocsManifestEntry {
-  return entries.find((entry) => entry.slug === pageParam) ?? getDefaultDoc(entries)
+  return entries.find((entry) => entry.slug === pageParam || entry.aliases.includes(pageParam ?? "")) ?? getDefaultDoc(entries)
+}
+
+export function getCanonicalDocSlug(entries: DocsManifestEntry[], pageParam: string | null): string | null {
+  if (!pageParam) {
+    return null
+  }
+
+  const entry = entries.find((candidate) => candidate.slug === pageParam || candidate.aliases.includes(pageParam))
+  return entry?.slug ?? null
 }
 
 export function getAdjacentDocs(

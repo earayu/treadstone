@@ -1,18 +1,24 @@
 import { useEffect, useState } from "react"
-import { Link, useSearchParams } from "react-router"
+import { useSearchParams } from "react-router"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
-import { ChevronLeft, ChevronRight, Menu, X } from "lucide-react"
+import { ChevronRight, Menu, X } from "lucide-react"
 import "highlight.js/styles/github-dark.css"
 
 import {
   type DocsManifestEntry,
   fetchDocsManifest,
-  getAdjacentDocs,
+  getCanonicalDocSlug,
   groupDocsBySection,
   resolveCurrentDoc,
 } from "@/lib/docs"
+
+interface DocHeading {
+  depth: 2 | 3
+  id: string
+  title: string
+}
 
 function Sidebar({
   currentSlug,
@@ -24,7 +30,7 @@ function Sidebar({
   onNavigate: (slug: string) => void
 }) {
   return (
-    <nav className="flex flex-col gap-6 py-8">
+    <nav aria-label="Documentation sections" className="flex flex-col gap-6 py-8">
       {sections.map((section) => (
         <div key={section.title}>
           <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
@@ -56,36 +62,13 @@ function Sidebar({
           </ul>
         </div>
       ))}
-
-      <div className="mt-2 border-t border-border/20 pt-4">
-        <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          Resources
-        </p>
-        <ul className="flex flex-col gap-0.5">
-          {[
-            { href: "https://github.com/earayu/treadstone", label: "GitHub", external: true },
-            { href: "/llms.txt", label: "llms.txt", external: false },
-            { href: "/docs/sitemap.md", label: "Documentation Sitemap", external: false },
-          ].map((item) => (
-            <li key={item.label}>
-              <a
-                href={item.href}
-                target={item.external ? "_blank" : undefined}
-                rel={item.external ? "noreferrer" : undefined}
-                className="flex w-full items-center gap-2 rounded px-3 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
-              >
-                <span className="size-3 shrink-0" />
-                {item.label}
-              </a>
-            </li>
-          ))}
-        </ul>
-      </div>
     </nav>
   )
 }
 
 function MarkdownContent({ content }: { content: string }) {
+  const renderedContent = stripLeadingMarkdownTitle(content)
+
   return (
     <div className="docs-prose">
       <ReactMarkdown
@@ -96,7 +79,7 @@ function MarkdownContent({ content }: { content: string }) {
             <h1 className="mb-6 text-3xl font-bold tracking-tight text-foreground">{children}</h1>
           ),
           h2: ({ children, ...props }) => {
-            const id = String(children).toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")
+            const id = slugifyHeading(String(children))
             return (
               <h2
                 id={id}
@@ -108,7 +91,7 @@ function MarkdownContent({ content }: { content: string }) {
             )
           },
           h3: ({ children, ...props }) => {
-            const id = String(children).toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")
+            const id = slugifyHeading(String(children))
             return (
               <h3 id={id} className="mb-3 mt-7 text-base font-semibold text-foreground" {...props}>
                 {children}
@@ -173,52 +156,75 @@ function MarkdownContent({ content }: { content: string }) {
           strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
         }}
       >
-        {content}
+        {renderedContent}
       </ReactMarkdown>
     </div>
   )
 }
 
-function PrevNextNav({
-  previous,
-  next,
-}: {
-  previous: DocsManifestEntry | null
-  next: DocsManifestEntry | null
-}) {
-  if (!previous && !next) {
+function stripLeadingMarkdownTitle(content: string): string {
+  return content.replace(/^\uFEFF?(?:\r?\n)*#\s+[^\r\n]+(?:\r?\n)+(?:\r?\n)*/, "")
+}
+
+function slugifyHeading(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")
+}
+
+function extractDocHeadings(content: string): DocHeading[] {
+  const headings: DocHeading[] = []
+  const renderedContent = stripLeadingMarkdownTitle(content)
+  const lines = renderedContent.split(/\r?\n/)
+  let inCodeBlock = false
+
+  for (const line of lines) {
+    if (line.trimStart().startsWith("```")) {
+      inCodeBlock = !inCodeBlock
+      continue
+    }
+
+    if (inCodeBlock) {
+      continue
+    }
+
+    const match = line.match(/^(##|###)\s+(.+?)\s*#*$/)
+    if (!match) {
+      continue
+    }
+
+    const depth = match[1].length as 2 | 3
+    const title = match[2].trim()
+    headings.push({
+      depth,
+      id: slugifyHeading(title),
+      title,
+    })
+  }
+
+  return headings
+}
+
+function OnThisPage({ headings }: { headings: DocHeading[] }) {
+  if (headings.length === 0) {
     return null
   }
 
   return (
-    <nav className="mt-12 grid gap-3 border-t border-border/20 pt-6 sm:grid-cols-2">
-      {previous ? (
-        <Link
-          to={`/docs?page=${previous.slug}`}
-          className="rounded border border-border/20 p-4 transition-colors hover:bg-accent/40"
-        >
-          <span className="mb-1 flex items-center gap-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            <ChevronLeft className="size-3" />
-            Previous
-          </span>
-          <p className="text-sm font-medium text-foreground">{previous.title}</p>
-        </Link>
-      ) : (
-        <div />
-      )}
-
-      {next ? (
-        <Link
-          to={`/docs?page=${next.slug}`}
-          className="rounded border border-border/20 p-4 text-right transition-colors hover:bg-accent/40"
-        >
-          <span className="mb-1 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Next
-            <ChevronRight className="size-3" />
-          </span>
-          <p className="text-sm font-medium text-foreground">{next.title}</p>
-        </Link>
-      ) : null}
+    <nav aria-label="On this page" className="rounded border border-border/20 bg-card/40 p-4">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">On this page</p>
+      <ul className="space-y-1.5">
+        {headings.map((heading) => (
+          <li key={`${heading.depth}-${heading.id}`}>
+            <a
+              href={`#${heading.id}`}
+              className={`block rounded px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground ${
+                heading.depth === 3 ? "ml-3 text-[13px]" : ""
+              }`}
+            >
+              {heading.title}
+            </a>
+          </li>
+        ))}
+      </ul>
     </nav>
   )
 }
@@ -261,9 +267,19 @@ export function DocsPage() {
     }
   }, [])
 
-  const currentEntry = manifest.length > 0 ? resolveCurrentDoc(manifest, searchParams.get("page")) : null
+  const pageParam = searchParams.get("page")
+  const currentEntry = manifest.length > 0 ? resolveCurrentDoc(manifest, pageParam) : null
+  const canonicalSlug = manifest.length > 0 ? getCanonicalDocSlug(manifest, pageParam) : null
   const sections = groupDocsBySection(manifest)
-  const adjacent = currentEntry ? getAdjacentDocs(manifest, currentEntry.slug) : { previous: null, next: null }
+  const headings = extractDocHeadings(content)
+
+  useEffect(() => {
+    if (!pageParam || !canonicalSlug || pageParam === canonicalSlug) {
+      return
+    }
+
+    setSearchParams({ page: canonicalSlug }, { replace: true })
+  }, [canonicalSlug, pageParam, setSearchParams])
 
   useEffect(() => {
     if (!currentEntry) {
@@ -365,25 +381,31 @@ export function DocsPage() {
             </div>
           ) : currentEntry ? (
             <>
-              <div className="mb-8 border-b border-border/20 pb-5">
-                <div className="mb-3 flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
-                  <Link to="/docs" className="hover:text-foreground">
-                    Start Here
-                  </Link>
-                  <span>/</span>
-                  <span>{currentEntry.section}</span>
-                </div>
+              <div className="mb-10">
+                {!currentEntry.default ? (
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                    {currentEntry.section}
+                  </p>
+                ) : null}
                 <h1 className="text-3xl font-bold tracking-tight text-foreground">{currentEntry.title}</h1>
-                <p className="mt-3 max-w-3xl text-base leading-7 text-muted-foreground">{currentEntry.summary}</p>
               </div>
 
               {loadingContent ? (
                 <p className="text-sm text-muted-foreground">Loading page…</p>
               ) : (
-                <>
-                  <MarkdownContent content={content} />
-                  <PrevNextNav previous={adjacent.previous} next={adjacent.next} />
-                </>
+                <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_15rem] xl:gap-10">
+                  {headings.length > 0 ? (
+                    <aside className="order-first mb-8 xl:order-last xl:mb-0 xl:self-start">
+                      <div className="xl:sticky xl:top-24">
+                        <OnThisPage headings={headings} />
+                      </div>
+                    </aside>
+                  ) : null}
+
+                  <div className="min-w-0">
+                    <MarkdownContent content={content} />
+                  </div>
+                </div>
               )}
             </>
           ) : (

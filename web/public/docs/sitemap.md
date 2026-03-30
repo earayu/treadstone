@@ -2,49 +2,31 @@
 
 This file is generated from `/docs/_manifest.json`.
 Read [`/docs/index.md`](/docs/index.md) first if you are new.
-Read [`/docs/ai-index.md`](/docs/ai-index.md) first if you are an agent.
 
-## Start Here
+## Get Started
 
-- [Start Here](/docs/index.md): What Treadstone is, who it is for, and the shortest path to a working sandbox.
-- [Why Treadstone](/docs/why-treadstone.md): Why a raw container is not enough for autonomous agents, and what Treadstone adds on top.
-- [Core Concepts](/docs/core-concepts.md): The core nouns and boundaries: control plane, data plane, sandbox, template, web link, plan, and grants.
+- [Overview](/docs/index.md): What Treadstone is, who it is for, and how to choose between the Console, CLI, REST API, and Python SDK.
+- [Quickstart](/docs/quickstart.md): The fastest hosted path from account creation to a running sandbox and a shareable browser handoff URL.
 
-## Quickstarts
+## Core Workflows
 
-- [Quickstart for Humans](/docs/quickstart-human.md): Register, sign in, create a sandbox, and open a browser hand-off URL from the CLI.
-- [Quickstart for Agents (CLI)](/docs/quickstart-agent-cli.md): The shortest non-interactive CLI path for agents: auth, create, capture sandbox_id, and issue an open_link.
-- [Quickstart for Python SDK](/docs/quickstart-python-sdk.md): Use the generated Python SDK with AuthenticatedClient and typed models to create sandboxes and issue web links.
-- [Quickstart for REST API](/docs/quickstart-rest-api.md): Use the control-plane REST API directly to create sandboxes and hand browser sessions to humans.
+- [Create a Sandbox](/docs/create-sandbox.md): Choose a template, set lifecycle controls, attach storage when needed, and capture the fields you will use next.
+- [Browser Handoff](/docs/browser-handoff.md): Generate, inspect, and revoke browser handoff URLs without inventing tokens or guessing subdomain URLs.
+- [API Keys & Auth](/docs/api-keys-auth.md): Understand session login, API keys, control-plane access, data-plane access, and selected sandbox grants.
+- [Usage & Limits](/docs/usage-limits.md): Read plan limits, compute remaining, storage quota, allowed templates, concurrency limits, and billing-period status.
 
-## Guides
+## Integrate
 
-- [Create and Manage Sandboxes](/docs/guide-sandboxes.md): Choose templates, name sandboxes correctly, use labels, and control start, stop, and delete flows.
-- [Browser Handoff](/docs/guide-browser-handoff.md): Create, inspect, and revoke browser hand-off links without guessing URLs or inventing tokens.
-- [Data Plane Access](/docs/guide-data-plane-access.md): Use proxy access safely with API keys, selected sandbox grants, and the control-plane/data-plane auth split.
-- [Usage and Quotas](/docs/guide-usage-and-quotas.md): Read plan limits, usage summaries, compute sessions, storage ledger entries, and active grants.
-- [Admin Operations](/docs/guide-admin-operations.md): Operate tier templates, user plans, grants, waitlist state, and verification tooling as an admin.
+- [CLI Guide](/docs/cli-guide.md): Use the hosted CLI for login, sandbox lifecycle, browser handoff, and API key management with machine-safe JSON output.
+- [REST API Guide](/docs/rest-api-guide.md): Call the hosted control plane directly with API keys to create sandboxes, issue browser handoff links, and inspect usage.
+- [Python SDK Guide](/docs/python-sdk-guide.md): Use the generated Python SDK with AuthenticatedClient and typed request models for the hosted API.
 
 ## Reference
 
-- [CLI Reference](/docs/cli-reference.md): Real command groups, auth precedence, config resolution, JSON mode, and the built-in skills workflow.
-- [API Reference](/docs/api-reference.md): Control-plane routes, proxy contract, auth model, pagination semantics, and the uniform error envelope.
-- [Python SDK Reference](/docs/sdk-python-reference.md): Package layout, generated modules, sync and async call shapes, and the most useful endpoint modules.
-- [Config Reference](/docs/config-reference.md): CLI config keys, environment variables, auth configuration, and sandbox subdomain settings.
-- [Error Reference](/docs/error-reference.md): The JSON error envelope, common error codes, and the recovery path that maps to each failure.
-
-## Operations
-
-- [Self-Hosting](/docs/self-hosting.md): The deployment model, the five Helm layers, and the minimum prerequisites for self-hosting.
-- [Local Development](/docs/local-development.md): Run the API and web locally, create a local cluster, and verify the stack with repo-native commands.
-- [Production Deployment](/docs/production-deployment.md): Promote Treadstone beyond local Kind: leader election, OAuth callbacks, public origins, ingress, and quotas.
-- [Troubleshooting](/docs/troubleshooting.md): Recover from the most common auth, quota, proxy, browser hand-off, and storage backend failures.
-
-## AI Docs
-
-- [AI Index](/docs/ai-index.md): Task routing for agents: which page answers create, proxy, browser hand-off, usage, admin, and self-hosting questions.
-- [AI Invariants](/docs/ai-invariants.md): Hard rules for agents that must not guess IDs, URLs, auth mode, pagination model, or error semantics.
-- [Documentation Sitemap](/docs/sitemap.md): The generated hierarchical index of all public docs pages and public machine-oriented endpoints.
+- [API Reference](/docs/api-reference.md): The user-facing control-plane contract: auth, sandboxes, browser handoff, proxy, usage endpoints, pagination, and error shape.
+- [CLI Reference](/docs/cli-reference.md): Root options, command groups, auth precedence, JSON mode, config keys, and the exact hosted CLI surface.
+- [Python SDK Reference](/docs/python-sdk-reference.md): Real import paths, generated endpoint modules, request and response models, and sync or async call shapes.
+- [Error Reference](/docs/error-reference.md): The stable JSON error envelope, common public error codes, and the recovery step that matches each failure.
 
 ## Public Endpoints
 

@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi import APIRouter, Request
 from fastapi.responses import PlainTextResponse, RedirectResponse
 
-from treadstone.docs_manifest import DOCS_DIR, get_doc_slugs
+from treadstone.docs_manifest import DOCS_DIR, resolve_doc_entry
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,8 @@ async def docs_page(slug: str, request: Request):
     - `Accept: text/markdown` → returns raw Markdown (200)
     - Other clients → redirects to the SPA docs page (302)
     """
-    if slug not in get_doc_slugs():
+    entry = resolve_doc_entry(slug)
+    if entry is None:
         if _accepts_markdown(request):
             return PlainTextResponse(
                 f"# Not Found\n\nDocument `{slug}` does not exist.",
@@ -62,12 +63,14 @@ async def docs_page(slug: str, request: Request):
             )
         return RedirectResponse(url=_FRONTEND_DOCS_BASE, status_code=302)
 
+    canonical_slug = entry.slug
+
     if _accepts_markdown(request):
-        content = _read_doc(slug)
+        content = _read_doc(canonical_slug)
         if content is None:
-            logger.warning("Doc file missing for slug=%s (docs_dir=%s)", slug, _DOCS_DIR)
+            logger.warning("Doc file missing for slug=%s (docs_dir=%s)", canonical_slug, _DOCS_DIR)
             return PlainTextResponse(
-                f"# Not Found\n\nDocument `{slug}` is not available.",
+                f"# Not Found\n\nDocument `{canonical_slug}` is not available.",
                 status_code=404,
                 media_type="text/markdown; charset=utf-8",
             )
@@ -77,10 +80,11 @@ async def docs_page(slug: str, request: Request):
             headers={
                 "Vary": "Accept",
                 "Cache-Control": "public, max-age=300",
+                "Content-Location": f"/docs/{canonical_slug}",
             },
         )
 
     return RedirectResponse(
-        url=f"{_FRONTEND_DOCS_BASE}?page={slug}",
+        url=f"{_FRONTEND_DOCS_BASE}?page={canonical_slug}",
         status_code=302,
     )

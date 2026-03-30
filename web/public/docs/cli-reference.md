@@ -1,33 +1,5 @@
 # CLI Reference
 
-## What this page is for
-
-Document the real command tree that exists today.
-
-## Use this when
-
-- You need exact command names, not approximations.
-- You need auth precedence or config precedence.
-- You need to know where `skills` lives.
-
-## Shortest path
-
-```bash
-treadstone --help
-treadstone system health
-treadstone auth login
-treadstone --json sandboxes create --name demo
-treadstone skills
-treadstone skills install
-```
-
-## Hard rules
-
-- There is no top-level `health` command. Use `treadstone system health`.
-- There is no `guide` command. The built-in agent guide lives under `skills`.
-- Protected commands prefer API key over saved session.
-- CLI config priority is flag, then env var, then config file.
-
 ## Root Options
 
 - `--json`
@@ -46,22 +18,22 @@ treadstone skills install
 
 ## Auth Precedence
 
-Protected commands use:
+Protected commands use credentials in this order:
 
 1. `--api-key`
 2. `TREADSTONE_API_KEY`
 3. saved config `api_key`
 4. saved login session
 
-If both API key and session exist, API key wins.
+If both an API key and a session exist, the API key wins.
 
-## Command Reference
+## Core Commands
 
-### `system`
+### System
 
 - `treadstone system health`
 
-### `auth`
+### Auth
 
 - `treadstone auth register`
 - `treadstone auth login`
@@ -72,14 +44,14 @@ If both API key and session exist, API key wins.
 - `treadstone auth users`
 - `treadstone auth delete-user`
 
-### `api-keys`
+### API keys
 
 - `treadstone api-keys create`
 - `treadstone api-keys list`
 - `treadstone api-keys update`
 - `treadstone api-keys delete`
 
-### `sandboxes`
+### Sandboxes
 
 - `treadstone sandboxes create`
 - `treadstone sandboxes list`
@@ -88,38 +60,27 @@ If both API key and session exist, API key wins.
 - `treadstone sandboxes stop`
 - `treadstone sandboxes delete`
 
-Browser hand-off subgroup:
+Browser handoff subgroup:
 
 - `treadstone sandboxes web enable`
 - `treadstone sandboxes web status`
 - `treadstone sandboxes web disable`
 
-### `templates`
+### Templates
 
 - `treadstone templates list`
 
-### `config`
+### Config
 
 - `treadstone config set`
 - `treadstone config get`
 - `treadstone config unset`
 - `treadstone config path`
 
-### `skills`
+### Skills
 
 - `treadstone skills`
 - `treadstone skills install`
-
-## JSON Mode
-
-Use `--json` when you need:
-
-- `sandbox_id`
-- `urls.proxy`
-- `urls.web`
-- `web_url`
-- `open_link`
-- structured API-key scope details
 
 ## Configuration Keys
 
@@ -127,7 +88,11 @@ Use `--json` when you need:
 - `api_key`
 - `default_template`
 
-## For Agents
+## CLI Facts
 
-- Treat CLI help and `--json` output as the source of truth for the CLI surface.
-- When a workflow needs stable fields, prefer `--json` even if a human would accept table output.
+- `treadstone sandboxes` without a subcommand is the same as `treadstone sandboxes list`.
+- `treadstone system health` is the connectivity check. There is no top-level `health` command.
+- `--json` is the stable mode for parsing `id`, `urls.proxy`, `urls.web`, `web_url`, and `open_link`.
+- `skills` is a real command group. There is no `guide` command.
+
+> For automation: prefer `--json` whenever another tool, agent, or script will consume the result.

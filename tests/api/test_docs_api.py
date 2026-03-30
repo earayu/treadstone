@@ -34,3 +34,14 @@ async def test_unknown_slug_returns_markdown_404_and_spa_redirect(client):
     assert "not-a-real-page" in markdown_response.text
     assert browser_response.status_code == 302
     assert browser_response.headers["location"] == "/docs"
+
+
+async def test_alias_slug_serves_canonical_content_and_redirect(client):
+    markdown_response = await client.get("/docs/quickstart-human", headers={"Accept": "text/markdown"})
+    browser_response = await client.get("/docs/quickstart-human", follow_redirects=False)
+
+    assert markdown_response.status_code == 200
+    assert markdown_response.headers["content-location"] == "/docs/quickstart"
+    assert "# Quickstart" in markdown_response.text
+    assert browser_response.status_code == 302
+    assert browser_response.headers["location"] == "/docs?page=quickstart"

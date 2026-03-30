@@ -19,12 +19,13 @@ from treadstone.docs_manifest import (
 def _entry(**overrides: object) -> DocManifestEntry:
     payload = {
         "slug": "index",
-        "title": "Start Here",
-        "section": "Start Here",
+        "title": "Overview",
+        "section": "Get Started",
         "order": 10,
-        "summary": "Shortest path into Treadstone.",
+        "summary": "What Treadstone is and how to get started.",
         "default": True,
         "llm_priority": 100,
+        "aliases": [],
     }
     payload.update(overrides)
     return DocManifestEntry(**payload)
@@ -71,12 +72,36 @@ def test_validate_manifest_rejects_multiple_defaults(tmp_path: Path) -> None:
         _entry(
             slug="core-concepts",
             title="Core Concepts",
-            order=20,
+            section="Reference",
+            order=10,
             summary="Control plane, data plane, and hand-off.",
         ),
     ]
 
     with pytest.raises(ValueError, match="Exactly one doc entry must set default=true"):
+        validate_manifest_entries(entries, docs_dir=docs_dir)
+
+
+def test_validate_manifest_rejects_alias_collisions(tmp_path: Path) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "index.md").write_text("# Overview\n", encoding="utf-8")
+    (docs_dir / "quickstart.md").write_text("# Quickstart\n", encoding="utf-8")
+
+    entries = [
+        _entry(aliases=["old-overview"]),
+        _entry(
+            slug="quickstart",
+            title="Quickstart",
+            section="Get Started",
+            order=20,
+            summary="Fastest path into the product.",
+            default=False,
+            aliases=["old-overview"],
+        ),
+    ]
+
+    with pytest.raises(ValueError, match="Duplicate doc alias"):
         validate_manifest_entries(entries, docs_dir=docs_dir)
 
 

@@ -1,94 +1,52 @@
-# Start Here
+# Overview
 
-## What this page is for
+Treadstone is the hosted control plane for agent sandboxes. You create a sandbox, route work into it, and hand the browser to a human only when the workflow actually needs a human.
 
-Define Treadstone in one page. If you only read one public document before touching the CLI or API, read this one.
+It is for teams building agents that need a real runtime: files, tools, long-running state, and a browser that can be shared without improvising auth, URLs, or lifecycle rules.
 
-## Use this when
+## Choose Your Interface
 
-- You need the shortest explanation of what the platform does.
-- You need to decide whether you are in the human path or the agent path.
-- You need the first command, route, or page to open next.
+### Console
 
-## Shortest path
-
-```bash
-treadstone system health
-treadstone auth login --email you@example.com --password 'StrongPass123!'
-treadstone --json templates list
-treadstone --json sandboxes create --name demo
-treadstone --json sandboxes web enable SANDBOX_ID
-```
-
-## Hard rules
-
-- Sandbox names are for humans. Follow-up operations use `sandbox_id`.
-- Control-plane actions accept a saved session or an API key.
-- Data-plane access requires an API key.
-- Browser URLs come from API or CLI output. Do not construct them yourself.
-
-Treadstone is an agent-native sandbox platform. It gives you a control plane for creating and governing sandboxes, a data plane for routing work into them, and a browser hand-off model for the moment a human has to step in.
-
-A raw container is not an agent platform. If the runtime still needs a human to babysit auth, lifecycle, routing, quotas, and browser review, the agent is not autonomous. Treadstone closes that gap.
-
-## Pick Your Path
-
-### Human developer
-
-Read:
-
-- [`quickstart-human.md`](/docs/quickstart-human.md)
-- [`guide-sandboxes.md`](/docs/guide-sandboxes.md)
-- [`guide-browser-handoff.md`](/docs/guide-browser-handoff.md)
-
-### AI agent
-
-Read:
-
-- [`ai-index.md`](/docs/ai-index.md)
-- [`quickstart-agent-cli.md`](/docs/quickstart-agent-cli.md)
-- [`ai-invariants.md`](/docs/ai-invariants.md)
-
-### API or SDK integrator
-
-Read:
-
-- [`quickstart-rest-api.md`](/docs/quickstart-rest-api.md)
-- [`quickstart-python-sdk.md`](/docs/quickstart-python-sdk.md)
-- [`api-reference.md`](/docs/api-reference.md)
-
-## The Three Surfaces
+Best when you are getting started by hand, checking plan limits, or managing a hosted account.
 
 ### CLI
 
-Best for humans and local automation. The CLI already knows auth precedence, config resolution, JSON mode, and the built-in `skills` workflow.
+Best when you want the shortest path, repeatable commands, and machine-safe JSON output.
 
 ### REST API
 
-Best when you want full control over the control plane. This is the stable contract for auth, sandbox lifecycle, web links, usage, and admin actions.
+Best when another service needs direct control-plane access.
 
 ### Python SDK
 
-Best when you want generated typed models and sync or async `httpx` clients instead of hand-written requests.
+Best when you already live in Python and want generated request and response models.
+
+## Get Started
+
+1. Create an account at [/auth/sign-up](/auth/sign-up).
+2. Read [Quickstart](/docs/quickstart.md).
+3. Then continue with [CLI Guide](/docs/cli-guide.md), [REST API Guide](/docs/rest-api-guide.md), or [Python SDK Guide](/docs/python-sdk-guide.md).
 
 ## What You Actually Get
 
-- Sandbox lifecycle: create, list, inspect, start, stop, delete.
+- Sandbox lifecycle: create, inspect, start, stop, and delete.
 - Template discovery: read the runtime shapes the platform will actually accept.
-- Browser hand-off: issue an `open_link` when a human needs to review or decide.
-- Auth and scope control: sessions, API keys, control-plane scope, selected sandbox grants.
-- Metering and quotas: plans, grants, storage quotas, and admin overrides.
-- Self-hosting: Kubernetes, Helm, runtime templates, API, and web.
+- Browser handoff: issue an `open_link` when a human needs to review or decide.
+- Auth and scope control: sessions, API keys, control-plane access, data-plane access, and selected sandbox grants.
+- Usage and limits: remaining compute, storage quota, template access, concurrency, and max runtime duration.
 
-## Next Reads
+## Why This Exists
 
-- [`why-treadstone.md`](/docs/why-treadstone.md): the product argument.
-- [`core-concepts.md`](/docs/core-concepts.md): the nouns and boundaries.
-- [`sitemap.md`](/docs/sitemap.md): the full index.
+Treadstone is not just a runtime rental API. The runtime matters, but the control plane around the runtime matters just as much: identity, lifecycle, scope, browser review, and plan limits.
 
-## For Agents
+If a human still has to babysit auth, sandbox state, routing, and browser access, the agent is not really autonomous. Treadstone closes that gap.
 
-- Read [`ai-index.md`](/docs/ai-index.md) before guessing a workflow.
-- Prefer the CLI quickstart when you need a short happy path.
-- Prefer the API reference when you need route truth, field truth, or error truth.
-- If you need a browser hand-off URL, call the platform and read `open_link` from output.
+> For automation: use `sandbox_id`, not `name`. Read `urls.proxy`, `web_url`, and `open_link` from platform output. Do not construct them yourself.
+
+## Read Next
+
+- [Quickstart](/docs/quickstart.md)
+- [Create a Sandbox](/docs/create-sandbox.md)
+- [Browser Handoff](/docs/browser-handoff.md)
+- [Usage & Limits](/docs/usage-limits.md)
