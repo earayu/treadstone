@@ -65,7 +65,8 @@ def _mock_k8s_client():
             {
                 "name": "aio-sandbox-tiny",
                 "image": "ghcr.io/agent-infra/sandbox:latest",
-                "resource_spec": {"cpu": "250m", "memory": "512Mi"},
+                "resource_spec": {"cpu": "250m", "memory": "1Gi"},
+                "resource_limits": {"cpu": "250m", "memory": "1Gi"},
             },
         ]
     )

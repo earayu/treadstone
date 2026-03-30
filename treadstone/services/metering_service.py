@@ -54,7 +54,8 @@ from treadstone.models.metering import (
 from treadstone.models.sandbox import Sandbox, SandboxStatus
 from treadstone.models.user import utc_now
 from treadstone.services.metering_helpers import (
-    CU_MEMORY_GIB_DIVISOR,
+    CU_MEMORY_WEIGHT,
+    CU_VCPU_WEIGHT,
     ConsumeResult,
     calculate_cu_rate,
     compute_period_bounds,
@@ -65,7 +66,7 @@ MAX_CLOSE_DELTA_SECONDS = 120
 
 logger = logging.getLogger(__name__)
 
-WELCOME_BONUS_AMOUNT = Decimal("50")
+WELCOME_BONUS_AMOUNT = Decimal("0")
 WELCOME_BONUS_EXPIRY_DAYS = 90
 
 ALLOWED_PLAN_OVERRIDES = frozenset(
@@ -159,7 +160,7 @@ class MeteringService:
         try:
             async with session.begin_nested():
                 session.add(plan)
-                if tier == "free":
+                if tier == "free" and WELCOME_BONUS_AMOUNT > 0:
                     self._create_welcome_bonus(session, user_id, now)
                 await session.flush()
         except IntegrityError:
@@ -796,9 +797,8 @@ class MeteringService:
                 period_start=period_start,
                 period_end=period_end,
             )
-            session_compute_unit_hours = max(
-                compute_session.vcpu_hours,
-                compute_session.memory_gib_hours / CU_MEMORY_GIB_DIVISOR,
+            session_compute_unit_hours = (
+                CU_VCPU_WEIGHT * compute_session.vcpu_hours + CU_MEMORY_WEIGHT * compute_session.memory_gib_hours
             )
             total_compute_unit_hours += session_compute_unit_hours * overlap_ratio
 

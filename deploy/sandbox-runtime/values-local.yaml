@@ -7,39 +7,39 @@ sandboxTemplates:
   - name: aio-sandbox-tiny
     displayName: "AIO Sandbox Tiny"
     description: "Lightweight sandbox for code execution and scripting"
-    cpu: { requests: "250m", limits: "500m" }
-    memory: { requests: "512Mi", limits: "512Mi" }
+    cpu: { requests: "250m", limits: "250m" }
+    memory: { requests: "1Gi", limits: "1Gi" }
     warmPool: { enabled: true, replicas: 1 }
     allowedStorageSizes: ["5Gi", "10Gi", "20Gi"]
 
   - name: aio-sandbox-small
     displayName: "AIO Sandbox Small"
     description: "Small sandbox for simple development tasks"
-    cpu: { requests: "500m", limits: "900m" }
-    memory: { requests: "1Gi", limits: "1Gi" }
+    cpu: { requests: "500m", limits: "500m" }
+    memory: { requests: "2Gi", limits: "2Gi" }
     warmPool: { enabled: false, replicas: 1 }
     allowedStorageSizes: ["5Gi", "10Gi", "20Gi"]
 
   - name: aio-sandbox-medium
     displayName: "AIO Sandbox Medium"
     description: "General-purpose development environment"
-    cpu: { requests: "1", limits: "1.5" }
-    memory: { requests: "2Gi", limits: "2Gi" }
+    cpu: { requests: "1", limits: "1" }
+    memory: { requests: "4Gi", limits: "4Gi" }
     warmPool: { enabled: false, replicas: 1 }
     allowedStorageSizes: ["5Gi", "10Gi", "20Gi"]
 
   - name: aio-sandbox-large
     displayName: "AIO Sandbox Large"
     description: "Full-featured sandbox with browser automation"
-    cpu: { requests: "2", limits: "2.5" }
-    memory: { requests: "4Gi", limits: "4Gi" }
+    cpu: { requests: "2", limits: "2" }
+    memory: { requests: "8Gi", limits: "8Gi" }
     warmPool: { enabled: false, replicas: 1 }
     allowedStorageSizes: ["5Gi", "10Gi", "20Gi"]
 
   - name: aio-sandbox-xlarge
     displayName: "AIO Sandbox XLarge"
     description: "Heavy workloads with maximum resources"
-    cpu: { requests: "4", limits: "5" }
-    memory: { requests: "8Gi", limits: "8Gi" }
+    cpu: { requests: "4", limits: "4" }
+    memory: { requests: "16Gi", limits: "16Gi" }
     warmPool: { enabled: false, replicas: 1 }
     allowedStorageSizes: ["5Gi", "10Gi", "20Gi"]

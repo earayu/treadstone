@@ -47,24 +47,15 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_RESOURCE_LIMITS_MULTIPLIER = 2
 
-
-def _build_resource_limits(requests: dict[str, str]) -> dict[str, str]:
-    """Derive resource limits from requests (2x multiplier for CPU, same ratio for memory)."""
-    limits: dict[str, str] = {}
-    cpu = requests.get("cpu", "")
-    if cpu.endswith("m"):
-        limits["cpu"] = f"{int(cpu[:-1]) * _RESOURCE_LIMITS_MULTIPLIER}m"
-    elif cpu:
-        limits["cpu"] = str(int(cpu) * _RESOURCE_LIMITS_MULTIPLIER)
-    mem = requests.get("memory", "")
-    if mem.endswith("Mi"):
-        val = int(mem[:-2]) * _RESOURCE_LIMITS_MULTIPLIER
-        limits["memory"] = f"{val}Mi" if val < 1024 else f"{val // 1024}Gi"
-    elif mem.endswith("Gi"):
-        limits["memory"] = f"{int(mem[:-2]) * _RESOURCE_LIMITS_MULTIPLIER}Gi"
-    return limits
+def _effective_resource_limits(requests: dict[str, str], limits: dict[str, str] | None) -> dict[str, str]:
+    """Use template limits when both CPU and memory are set; otherwise fall back to requests."""
+    if not limits:
+        return requests
+    cpu, mem = limits.get("cpu", "").strip(), limits.get("memory", "").strip()
+    if cpu and mem:
+        return {"cpu": cpu, "memory": mem}
+    return requests
 
 
 class SandboxService:
@@ -240,9 +231,10 @@ class SandboxService:
             raise TemplateNotFoundError(template)
 
         resource_requests = tmpl["resource_spec"]
+        resource_limits = _effective_resource_limits(resource_requests, tmpl.get("resource_limits"))
         resources = {
             "requests": resource_requests,
-            "limits": _build_resource_limits(resource_requests),
+            "limits": resource_limits,
         }
         volume_claim_templates = [
             {

@@ -10,17 +10,19 @@ from treadstone.core.errors import BadRequestError
 logger = logging.getLogger(__name__)
 
 TEMPLATE_SPECS: dict[str, dict[str, Decimal]] = {
-    "aio-sandbox-tiny": {"vcpu": Decimal("0.25"), "memory_gib": Decimal("0.5")},
-    "aio-sandbox-small": {"vcpu": Decimal("0.5"), "memory_gib": Decimal("1")},
-    "aio-sandbox-medium": {"vcpu": Decimal("1"), "memory_gib": Decimal("2")},
-    "aio-sandbox-large": {"vcpu": Decimal("2"), "memory_gib": Decimal("4")},
-    "aio-sandbox-xlarge": {"vcpu": Decimal("4"), "memory_gib": Decimal("8")},
+    "aio-sandbox-tiny": {"vcpu": Decimal("0.25"), "memory_gib": Decimal("1")},
+    "aio-sandbox-small": {"vcpu": Decimal("0.5"), "memory_gib": Decimal("2")},
+    "aio-sandbox-medium": {"vcpu": Decimal("1"), "memory_gib": Decimal("4")},
+    "aio-sandbox-large": {"vcpu": Decimal("2"), "memory_gib": Decimal("8")},
+    "aio-sandbox-xlarge": {"vcpu": Decimal("4"), "memory_gib": Decimal("16")},
 }
 
-# Divisor applied to memory (GiB) in the Compute Unit formula:
-#   CU/hour = max(vCPU_request, memory_GiB_request / CU_MEMORY_GIB_DIVISOR)
-# Equivalently: one vCPU is billed like CU_MEMORY_GIB_DIVISOR GiB of RAM.
-CU_MEMORY_GIB_DIVISOR: Decimal = Decimal("2")
+# Weights for the additive Compute Unit formula:
+#   CU/hour = CU_VCPU_WEIGHT * vCPU + CU_MEMORY_WEIGHT * memory_GiB
+# Reference: 1 CU/hour = 1 vCPU + 4 GiB  →  weights = (0.5, 0.125).
+# All public templates use a strict 1:4 (vCPU:GiB) ratio so CU/h = vCPU.
+CU_VCPU_WEIGHT: Decimal = Decimal("0.5")
+CU_MEMORY_WEIGHT: Decimal = Decimal("0.125")
 
 _template_specs_cache: dict[str, dict[str, Decimal]] = {}
 
@@ -45,13 +47,13 @@ def get_template_resource_spec(template: str) -> tuple[Decimal, Decimal]:
 def calculate_cu_rate(template: str) -> Decimal:
     """Return the Compute Unit rate (CU/hour) for the given sandbox template.
 
-    Formula: CU = max(vCPU_request, memory_GiB_request / CU_MEMORY_GIB_DIVISOR)
+    Formula: CU = CU_VCPU_WEIGHT * vCPU + CU_MEMORY_WEIGHT * memory_GiB
     Checks the K8s-synced runtime cache first, falls back to static TEMPLATE_SPECS.
     """
     spec = _resolve_spec(template)
     if spec is None:
         raise BadRequestError(f"Unknown sandbox template: {template}")
-    return max(spec["vcpu"], spec["memory_gib"] / CU_MEMORY_GIB_DIVISOR)
+    return CU_VCPU_WEIGHT * spec["vcpu"] + CU_MEMORY_WEIGHT * spec["memory_gib"]
 
 
 def parse_storage_size_gib(size_str: str) -> int:
