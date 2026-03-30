@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Treadstone — Sandboxes for AI Agents</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link href="https://cdn.jsdelivr.net/npm/@fontsource/geist-mono@5.0.3/400.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/@fontsource/geist-mono@5.0.3/600.css" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:     #07080a;
+  --bg2:    #0d1014;
+  --bg3:    #141820;
+  --bg4:    #1b2028;
+  --border: rgba(255,255,255,0.07);
+  --border2:rgba(255,255,255,0.12);
+  --acc:    #1dff8a;
+  --acc-d:  rgba(29,255,138,0.10);
+  --acc-b:  rgba(29,255,138,0.18);
+  --acc-txt:#03231a;
+  --text:   #edeae3;
+  --text2:  #8a8f99;
+  --text3:  #4a4f58;
+  --blue:   #7dd3fc;
+  --purple: #c084fc;
+  --amber:  #fbbf24;
+  --r:      8px;
+  --rl:     12px;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+code, pre, .mono {
+  font-family: 'Geist Mono', 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* ─── NAV ─────────────────────────────────────────── */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+  height: 58px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 36px;
+  background: rgba(7,8,10,0.80);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+}
+.nav-logo {
+  display: flex; align-items: center; gap: 10px;
+  text-decoration: none; color: var(--text);
+  font-family: 'Geist Mono', monospace;
+  font-size: 14px; font-weight: 600; letter-spacing: -0.01em;
+}
+.logo-mark {
+  width: 26px; height: 26px;
+  background: var(--acc);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: var(--acc-txt);
+}
+.nav-links { display: flex; gap: 28px; list-style: none; }
+.nav-links a {
+  color: var(--text2); text-decoration: none;
+  font-size: 13.5px; transition: color .15s;
+}
+.nav-links a:hover { color: var(--text); }
+.nav-right { display: flex; align-items: center; gap: 10px; }
+
+/* ─── BUTTONS ──────────────────────────────────────── */
+.btn {
+  padding: 7px 16px; border-radius: var(--r);
+  font-size: 13px; font-weight: 500; cursor: pointer; border: none;
+  text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+  transition: all .15s; font-family: inherit; letter-spacing: -0.01em;
+}
+.btn-sm { padding: 5px 12px; font-size: 12px; }
+.btn-lg { padding: 11px 22px; font-size: 14px; border-radius: 10px; }
+.btn-xl { padding: 14px 28px; font-size: 15px; border-radius: 10px; }
+.btn-ghost {
+  background: transparent; color: var(--text2);
+  border: 1px solid var(--border2);
+}
+.btn-ghost:hover { color: var(--text); border-color: rgba(255,255,255,.22); background: rgba(255,255,255,.04); }
+.btn-primary { background: var(--acc); color: var(--acc-txt); font-weight: 600; }
+.btn-primary:hover { background: #2bffaa; }
+.btn-outline {
+  background: transparent; color: var(--acc);
+  border: 1px solid rgba(29,255,138,.35);
+}
+.btn-outline:hover { background: var(--acc-d); }
+.btn-full { width: 100%; justify-content: center; }
+
+/* ─── HERO ─────────────────────────────────────────── */
+.hero {
+  min-height: 100vh;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 100px 40px 80px;
+  text-align: center;
+  position: relative;
+}
+.hero-glow {
+  position: absolute; top: -100px; left: 50%; transform: translateX(-50%);
+  width: 800px; height: 700px;
+  background: radial-gradient(ellipse, rgba(29,255,138,.055) 0%, transparent 65%);
+  pointer-events: none; z-index: 0;
+}
+.hero > * { position: relative; z-index: 1; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--acc-d); border: 1px solid rgba(29,255,138,.22);
+  color: var(--acc); padding: 5px 14px; border-radius: 99px;
+  font-family: 'Geist Mono', monospace;
+  font-size: 11.5px; font-weight: 500; letter-spacing: .04em;
+  margin-bottom: 28px;
+}
+.badge-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--acc);
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+.hero h1 {
+  font-family: 'Geist Mono', monospace;
+  font-size: clamp(48px, 6.5vw, 84px);
+  font-weight: 600; letter-spacing: -0.05em; line-height: 1.0;
+  margin-bottom: 22px;
+}
+.hero h1 em { font-style: normal; color: var(--acc); }
+.hero-sub {
+  font-size: 17px; color: var(--text2); max-width: 500px;
+  margin: 0 auto 36px; line-height: 1.65;
+}
+.hero-actions { display: flex; align-items: center; gap: 10px; margin-bottom: 60px; }
+
+/* ─── TERMINAL ──────────────────────────────────────── */
+.terminal {
+  width: 100%; max-width: 740px;
+  background: var(--bg2); border: 1px solid var(--border2);
+  border-radius: var(--rl); overflow: hidden; text-align: left;
+}
+.term-bar {
+  padding: 11px 16px; background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 7px;
+}
+.dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+.dot-r { background: #ff5f56; } .dot-y { background: #ffbd2e; } .dot-g { background: #27c93f; }
+.term-label {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px; color: var(--text3); margin-left: 6px;
+}
+.term-body {
+  padding: 20px 22px 24px;
+  font-family: 'Geist Mono', monospace;
+  font-size: 13px; line-height: 1.75; min-height: 260px;
+}
+.tl { margin-bottom: 0; }
+.t-cmt { color: var(--text3); }
+.t-prompt { color: var(--text3); }
+.t-cmd { color: var(--text); }
+.t-ok  { color: var(--acc); }
+.t-json { color: var(--blue); }
+.t-sp { height: 10px; }
+.t-cur {
+  display: inline-block; width: 7px; height: 14px;
+  background: var(--acc); vertical-align: text-bottom;
+  animation: blink 1s step-end infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+/* ─── STATS ────────────────────────────────────────── */
+.stats {
+  display: flex; justify-content: center;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.stat {
+  flex: 1; max-width: 240px; padding: 44px 0; text-align: center;
+}
+.stat + .stat { border-left: 1px solid var(--border); }
+.stat-n {
+  font-family: 'Geist Mono', monospace;
+  font-size: 38px; font-weight: 600; letter-spacing: -0.05em;
+  line-height: 1; margin-bottom: 6px; color: var(--text);
+}
+.stat-n span { color: var(--acc); }
+.stat-l { font-size: 13px; color: var(--text2); }
+
+/* ─── SECTION ──────────────────────────────────────── */
+.sec { padding: 96px 40px; max-width: 1080px; margin: 0 auto; }
+.sec-tag {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11.5px; color: var(--acc); letter-spacing: .08em;
+  display: block; margin-bottom: 14px;
+}
+.sec-h {
+  font-family: 'Geist Mono', monospace;
+  font-size: clamp(28px, 3.5vw, 44px);
+  font-weight: 600; letter-spacing: -0.04em; line-height: 1.1;
+  margin-bottom: 14px;
+}
+.sec-sub {
+  font-size: 16px; color: var(--text2);
+  max-width: 480px; line-height: 1.65; margin-bottom: 52px;
+}
+
+/* ─── FEATURES GRID ────────────────────────────────── */
+.feat-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 1px; background: var(--border);
+  border: 1px solid var(--border); border-radius: var(--rl); overflow: hidden;
+}
+.feat-card {
+  background: var(--bg); padding: 32px 28px;
+  transition: background .2s;
+}
+.feat-card:hover { background: var(--bg2); }
+.feat-icon {
+  font-family: 'Geist Mono', monospace;
+  font-size: 12px; font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px;
+  background: var(--acc-d); border: 1px solid rgba(29,255,138,.2);
+  border-radius: 8px; color: var(--acc); margin-bottom: 18px;
+}
+.feat-title { font-size: 14.5px; font-weight: 600; margin-bottom: 8px; letter-spacing: -.01em; }
+.feat-desc { font-size: 13px; color: var(--text2); line-height: 1.6; }
+.feat-desc code {
+  font-size: 12px; color: var(--acc);
+  background: var(--acc-d); padding: 1px 5px; border-radius: 4px;
+}
+
+/* ─── CODE TABS ────────────────────────────────────── */
+.code-sec {
+  background: var(--bg2);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 96px 40px;
+}
+.code-sec-inner { max-width: 1080px; margin: 0 auto; }
+
+.tabs {
+  display: flex; gap: 0; width: fit-content;
+  border: 1px solid var(--border2); border-radius: var(--r); overflow: hidden;
+  margin-bottom: 24px;
+}
+.tab {
+  padding: 9px 22px; font-size: 12.5px; font-weight: 500;
+  cursor: pointer; border: none; background: transparent;
+  color: var(--text2); font-family: 'Geist Mono', monospace;
+  transition: all .15s; border-right: 1px solid var(--border2);
+  display: flex; align-items: center; gap: 8px;
+}
+.tab:last-child { border-right: none; }
+.tab.active { background: var(--bg3); color: var(--text); }
+.tab:hover:not(.active) { background: rgba(255,255,255,.03); }
+.tdot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+.panel { display: none; }
+.panel.active { display: block; }
+
+.codeblock {
+  background: var(--bg); border: 1px solid var(--border2);
+  border-radius: var(--rl); overflow: hidden;
+}
+.cb-bar {
+  padding: 10px 18px; background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.cb-lang { font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--text3); }
+.cb-copy {
+  font-size: 11px; color: var(--text3); cursor: pointer;
+  background: none; border: none; font-family: 'Geist Mono', monospace;
+  transition: color .15s; padding: 0;
+}
+.cb-copy:hover { color: var(--text2); }
+
+pre {
+  padding: 22px 24px; font-family: 'Geist Mono', monospace;
+  font-size: 13px; line-height: 1.75; overflow-x: auto;
+}
+.kw { color: var(--purple); }
+.str { color: #86efac; }
+.fn  { color: var(--blue); }
+.cm  { color: var(--text3); }
+.pr  { color: var(--acc); }
+.nm  { color: var(--amber); }
+.vr  { color: var(--blue); opacity:.85; }
+
+/* ─── HOW IT WORKS ──────────────────────────────────── */
+.how-grid {
+  display: grid; grid-template-columns: repeat(4,1fr);
+  gap: 1px; background: var(--border);
+  border: 1px solid var(--border); border-radius: var(--rl); overflow: hidden;
+}
+.how-step { background: var(--bg); padding: 28px 24px; }
+.how-n {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px; color: var(--text3); letter-spacing: .1em;
+  display: block; margin-bottom: 14px;
+}
+.how-t { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.how-d { font-size: 12.5px; color: var(--text2); line-height: 1.6; }
+.how-cmd {
+  margin-top: 14px; padding: 7px 11px;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 6px; font-family: 'Geist Mono', monospace;
+  font-size: 11.5px; color: var(--acc);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ─── INSTALL ───────────────────────────────────────── */
+.install-grid {
+  display: grid; grid-template-columns: repeat(3,1fr);
+  gap: 1px; background: var(--border);
+  border: 1px solid var(--border); border-radius: var(--rl); overflow: hidden;
+  margin-bottom: 32px;
+}
+.install-card { background: var(--bg2); padding: 28px 26px; }
+.install-os {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px; color: var(--text3);
+  letter-spacing: .1em; display: block; margin-bottom: 14px;
+}
+.install-cmd {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 7px; padding: 12px 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.install-cmd code {
+  font-family: 'Geist Mono', monospace;
+  font-size: 12px; color: var(--text); word-break: break-all;
+}
+.copy-btn {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10.5px; color: var(--text3); cursor: pointer;
+  background: none; border: none; flex-shrink: 0; transition: color .15s; padding: 0;
+}
+.copy-btn:hover { color: var(--text2); }
+.install-also { font-size: 12.5px; color: var(--text3); }
+.install-also a { color: var(--text2); text-decoration: none; }
+.install-also a:hover { color: var(--text); }
+.install-links { display: flex; gap: 20px; margin-top: 16px; }
+.install-link {
+  font-size: 13px; color: var(--text2); text-decoration: none;
+  display: flex; align-items: center; gap: 5px; transition: color .15s;
+}
+.install-link:hover { color: var(--acc); }
+
+/* ─── PLANS ─────────────────────────────────────────── */
+.plans-grid {
+  display: grid; grid-template-columns: repeat(4,1fr);
+  gap: 14px;
+}
+.plan {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--rl); padding: 26px 22px;
+  display: flex; flex-direction: column;
+  transition: border-color .2s;
+}
+.plan:hover { border-color: var(--border2); }
+.plan.featured { border-color: rgba(29,255,138,.28); }
+.plan.featured:hover { border-color: rgba(29,255,138,.45); }
+.plan-name { font-size: 15px; font-weight: 600; margin-bottom: 6px; letter-spacing: -.01em; }
+.plan-badge {
+  display: inline-block; font-family: 'Geist Mono', monospace;
+  font-size: 9.5px; font-weight: 600; letter-spacing: .08em;
+  padding: 2px 8px; border-radius: 4px;
+  background: rgba(255,255,255,.07); color: var(--text2);
+  margin-bottom: 18px;
+}
+.plan-badge.soon { background: var(--acc-d); color: var(--acc); }
+.plan-price {
+  font-family: 'Geist Mono', monospace;
+  font-size: 34px; font-weight: 600; letter-spacing: -0.05em;
+  line-height: 1; margin-bottom: 4px;
+}
+.plan-price-note { font-size: 12px; color: var(--text2); margin-bottom: 22px; }
+.plan-div { border: none; border-top: 1px solid var(--border); margin: 0 0 18px; }
+.plan-feats { flex: 1; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.plan-feats li {
+  font-size: 12.5px; color: var(--text2); padding: 4px 0;
+  display: flex; align-items: flex-start; gap: 8px; line-height: 1.45;
+}
+.plan-feats li::before { content: '·'; color: var(--acc); font-weight: 700; flex-shrink: 0; }
+.plan-cta { margin-top: 22px; }
+
+/* ─── FOOTER ────────────────────────────────────────── */
+.footer-wrap {
+  border-top: 1px solid var(--border);
+  padding: 52px 40px 32px;
+  max-width: 1080px; margin: 0 auto;
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 48px;
+}
+.footer-brand-logo {
+  display: flex; align-items: center; gap: 9px;
+  font-family: 'Geist Mono', monospace;
+  font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 12px;
+}
+.footer-tagline { font-size: 12.5px; color: var(--text3); line-height: 1.6; max-width: 220px; }
+.footer-cols { display: flex; gap: 56px; flex-shrink: 0; }
+.fcol-title {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px; color: var(--text3); letter-spacing: .1em;
+  margin-bottom: 14px; display: block;
+}
+.fcol-links { list-style: none; display: flex; flex-direction: column; gap: 9px; }
+.fcol-links a {
+  font-size: 13px; color: var(--text2); text-decoration: none; transition: color .15s;
+}
+.fcol-links a:hover { color: var(--text); }
+.footer-bottom {
+  border-top: 1px solid var(--border);
+  padding: 20px 40px; max-width: 1080px; margin: 0 auto;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.footer-copy { font-size: 11.5px; color: var(--text3); }
+</style>
+</head>
+<body>
+
+<!-- ═══ NAV ═══════════════════════════════════════════ -->
+<nav>
+  <a href="#" class="nav-logo">
+    <span class="logo-mark">T</span>
+    treadstone
+  </a>
+  <ul class="nav-links">
+    <li><a href="#features">Features</a></li>
+    <li><a href="#integrate">Docs</a></li>
+    <li><a href="#pricing">Pricing</a></li>
+    <li><a href="https://github.com/earayu/treadstone">GitHub</a></li>
+  </ul>
+  <div class="nav-right">
+    <a href="#install" class="btn btn-ghost btn-sm">Install CLI</a>
+    <a href="#" class="btn btn-primary btn-sm">Get Started</a>
+  </div>
+</nav>
+
+<!-- ═══ HERO ══════════════════════════════════════════ -->
+<div class="hero">
+  <div class="hero-glow"></div>
+
+  <div class="badge">
+    <span class="badge-dot"></span>
+    Agent-native sandbox platform
+  </div>
+
+  <h1>Sandboxes for<br><em>AI Agents.</em></h1>
+
+  <p class="hero-sub">
+    Isolated, ephemeral environments for running agent tasks.
+    Create, manage, and hand off sandboxes via CLI, Python SDK, or REST API.
+  </p>
+
+  <div class="hero-actions">
+    <a href="#" class="btn btn-primary btn-xl">Get Started Free</a>
+    <a href="#integrate" class="btn btn-ghost btn-xl">See Quickstart →</a>
+  </div>
+
+  <div class="terminal">
+    <div class="term-bar">
+      <span class="dot dot-r"></span>
+      <span class="dot dot-y"></span>
+      <span class="dot dot-g"></span>
+      <span class="term-label">bash — treadstone quickstart</span>
+    </div>
+    <div class="term-body" id="term"><span class="t-cur" id="cur"></span></div>
+  </div>
+</div>
+
+<!-- ═══ STATS ══════════════════════════════════════════ -->
+<div class="stats">
+  <div class="stat">
+    <div class="stat-n"><span>&lt;</span>2s</div>
+    <div class="stat-l">sandbox cold start</div>
+  </div>
+  <div class="stat">
+    <div class="stat-n">3</div>
+    <div class="stat-l">integration surfaces</div>
+  </div>
+  <div class="stat">
+    <div class="stat-n">100<span>%</span></div>
+    <div class="stat-l">isolated per user</div>
+  </div>
+  <div class="stat">
+    <div class="stat-n"><span>#</span>JSON</div>
+    <div class="stat-l">machine-readable output</div>
+  </div>
+</div>
+
+<!-- ═══ FEATURES ══════════════════════════════════════ -->
+<section class="sec" id="features">
+  <span class="sec-tag">// features</span>
+  <h2 class="sec-h">Everything an agent needs.<br>Nothing it doesn't.</h2>
+  <p class="sec-sub">Built for the specific workflow of AI agents — create on demand, run in isolation, hand off to a human when needed.</p>
+
+  <div class="feat-grid">
+    <div class="feat-card">
+      <div class="feat-icon mono">[ ]</div>
+      <div class="feat-title">Isolated by default</div>
+      <p class="feat-desc">Each sandbox runs in its own container. No bleed between agents, users, or tasks. Safe to run untrusted code.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon mono">↗</div>
+      <div class="feat-title">Browser hand-off</div>
+      <p class="feat-desc">Pass a live browser session to a human in one command. Generates a secure, time-limited URL with a ready-to-share <code>open_link</code>.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon mono">{}</div>
+      <div class="feat-title">JSON-first output</div>
+      <p class="feat-desc">Every command supports <code>--json</code>. Parse IDs, URLs, and state directly into your agent's logic. No screen-scraping required.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon mono">⟳</div>
+      <div class="feat-title">Lifecycle control</div>
+      <p class="feat-desc">Create, start, stop, and delete sandboxes programmatically. Auto-stop intervals prevent runaway compute costs.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon mono">⚿</div>
+      <div class="feat-title">API key auth</div>
+      <p class="feat-desc">Create scoped API keys for automation. No interactive login required in CI pipelines or multi-agent systems.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon mono">≡</div>
+      <div class="feat-title">Template system</div>
+      <p class="feat-desc">Choose sandbox templates by size — from <code>aio-sandbox-tiny</code> to <code>xlarge</code>. Match compute to the task.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ CODE TABS ══════════════════════════════════════ -->
+<div class="code-sec" id="integrate">
+  <div class="code-sec-inner">
+    <span class="sec-tag">// integrate</span>
+    <h2 class="sec-h">Three ways in.</h2>
+    <p class="sec-sub">CLI for exploration, Python SDK for automation, REST API for integration. All returning the same consistent JSON.</p>
+
+    <div class="tabs">
+      <button class="tab active" data-panel="cli">
+        <span class="tdot" style="background:var(--acc)"></span>CLI
+      </button>
+      <button class="tab" data-panel="sdk">
+        <span class="tdot" style="background:var(--blue)"></span>Python SDK
+      </button>
+      <button class="tab" data-panel="rest">
+        <span class="tdot" style="background:var(--purple)"></span>REST API
+      </button>
+    </div>
+
+    <!-- CLI -->
+    <div class="panel active" id="panel-cli">
+      <div class="codeblock">
+        <div class="cb-bar">
+          <span class="cb-lang">bash</span>
+          <button class="cb-copy">copy</button>
+        </div>
+<pre><span class="cm"># 1. Authenticate (or set TREADSTONE_API_KEY in env)</span>
+<span class="pr">$</span> treadstone auth login --email agent@example.com --password ••••••••
+<span class="str">✓ Logged in as agent@example.com</span>
+
+<span class="cm"># 2. See available templates</span>
+<span class="pr">$</span> treadstone --json templates list
+<span class="vr">{"items": [{"name": "aio-sandbox-tiny", "cpu": "0.25", "memory": "512Mi"}, ...]}</span>
+
+<span class="cm"># 3. Create a sandbox — read the ID from JSON output</span>
+<span class="pr">$</span> treadstone --json sandboxes create --name agent-demo
+<span class="vr">{"id": "sb_3kx9m2p", "status": "running", "urls": {"proxy": "https://sb_3kx9m2p.proxy.treadstone-ai.dev"}}</span>
+
+<span class="cm"># 4. Hand the browser off to a human</span>
+<span class="pr">$</span> treadstone --json sandboxes web enable sb_3kx9m2p
+<span class="vr">{"open_link": "https://sb_3kx9m2p.web.treadstone-ai.dev?token=...", "expires_at": "2026-03-30T18:00:00Z"}</span></pre>
+      </div>
+    </div>
+
+    <!-- SDK -->
+    <div class="panel" id="panel-sdk">
+      <div class="codeblock">
+        <div class="cb-bar">
+          <span class="cb-lang">python — pip install treadstone-sdk</span>
+          <button class="cb-copy">copy</button>
+        </div>
+<pre><span class="kw">from</span> treadstone_sdk <span class="kw">import</span> Treadstone
+
+client = Treadstone(api_key=<span class="str">"ts_live_xxxx"</span>)
+
+<span class="cm"># List available templates</span>
+templates = client.templates.<span class="fn">list</span>()
+<span class="fn">print</span>(templates[<span class="nm">0</span>].name)      <span class="cm"># "aio-sandbox-tiny"</span>
+
+<span class="cm"># Create a sandbox</span>
+sandbox = client.sandboxes.<span class="fn">create</span>(
+    name=<span class="str">"agent-demo"</span>,
+    template=<span class="str">"aio-sandbox-tiny"</span>,
+)
+<span class="fn">print</span>(sandbox.id)            <span class="cm"># "sb_3kx9m2p"</span>
+<span class="fn">print</span>(sandbox.urls.proxy)    <span class="cm"># "https://sb_3kx9m2p.proxy.treadstone-ai.dev"</span>
+
+<span class="cm"># Generate a browser hand-off URL for a human</span>
+session = sandbox.web.<span class="fn">enable</span>()
+<span class="fn">print</span>(session.open_link)     <span class="cm"># "https://sb_3kx9m2p.web.treadstone-ai.dev?token=..."</span>
+<span class="fn">print</span>(session.expires_at)   <span class="cm"># "2026-03-30T18:00:00Z"</span>
+
+<span class="cm"># Lifecycle management</span>
+sandbox.<span class="fn">stop</span>()
+sandbox.<span class="fn">start</span>()
+sandbox.<span class="fn">delete</span>()</pre>
+      </div>
+    </div>
+
+    <!-- REST -->
+    <div class="panel" id="panel-rest">
+      <div class="codeblock">
+        <div class="cb-bar">
+          <span class="cb-lang">bash — REST API</span>
+          <button class="cb-copy">copy</button>
+        </div>
+<pre><span class="cm"># Create a sandbox</span>
+<span class="pr">$</span> curl -X POST https://api.treadstone-ai.dev/v1/sandboxes \
+    -H <span class="str">"Authorization: Bearer $TREADSTONE_API_KEY"</span> \
+    -H <span class="str">"Content-Type: application/json"</span> \
+    -d <span class="str">'{"name": "agent-demo", "template": "aio-sandbox-tiny"}'</span>
+
+<span class="vr">{
+  "id": "sb_3kx9m2p",
+  "name": "agent-demo",
+  "status": "running",
+  "urls": { "proxy": "https://sb_3kx9m2p.proxy.treadstone-ai.dev" }
+}</span>
+
+<span class="cm"># Enable browser hand-off for a human</span>
+<span class="pr">$</span> curl -X POST https://api.treadstone-ai.dev/v1/sandboxes/sb_3kx9m2p/web/enable \
+    -H <span class="str">"Authorization: Bearer $TREADSTONE_API_KEY"</span>
+
+<span class="vr">{
+  "open_link": "https://sb_3kx9m2p.web.treadstone-ai.dev?token=...",
+  "expires_at": "2026-03-30T18:00:00Z"
+}</span></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ HOW IT WORKS ═══════════════════════════════════ -->
+<section class="sec">
+  <span class="sec-tag">// workflow</span>
+  <h2 class="sec-h">Designed for agent workflows.</h2>
+  <p class="sec-sub">Four steps from task to hand-off. Every step is a single command — or a single API call.</p>
+
+  <div class="how-grid">
+    <div class="how-step">
+      <span class="how-n">01 — AUTH</span>
+      <div class="how-t">Authenticate once</div>
+      <p class="how-d">Set an API key in your environment. All subsequent commands are fully non-interactive.</p>
+      <div class="how-cmd">export TREADSTONE_API_KEY=ts_...</div>
+    </div>
+    <div class="how-step">
+      <span class="how-n">02 — CREATE</span>
+      <div class="how-t">Create a sandbox</div>
+      <p class="how-d">Pick a template by size. Receive a sandbox ID and proxy URL immediately in JSON.</p>
+      <div class="how-cmd">sandboxes create --name task</div>
+    </div>
+    <div class="how-step">
+      <span class="how-n">03 — RUN</span>
+      <div class="how-t">Execute your task</div>
+      <p class="how-d">Run code, browse the web, or use tools inside the isolated container via the proxy URL.</p>
+      <div class="how-cmd">sb_xxx.proxy.treadstone-ai.dev</div>
+    </div>
+    <div class="how-step">
+      <span class="how-n">04 — HAND OFF</span>
+      <div class="how-t">Give a human the wheel</div>
+      <p class="how-d">Generate a secure, time-limited browser session URL and share it. One command.</p>
+      <div class="how-cmd">sandboxes web enable sb_xxx</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ INSTALL ════════════════════════════════════════ -->
+<div class="code-sec" id="install">
+  <div class="code-sec-inner">
+    <span class="sec-tag">// install</span>
+    <h2 class="sec-h">Up in seconds.</h2>
+    <p class="sec-sub">Install the CLI on any platform. The SDK and REST API need nothing beyond an API key.</p>
+
+    <div class="install-grid">
+      <div class="install-card">
+        <span class="install-os">MACOS / LINUX</span>
+        <div class="install-cmd">
+          <code>curl -fsSL https://github.com/earayu/treadstone/releases/latest/download/install.sh | sh</code>
+          <button class="copy-btn" data-copy="curl -fsSL https://github.com/earayu/treadstone/releases/latest/download/install.sh | sh">copy</button>
+        </div>
+      </div>
+      <div class="install-card">
+        <span class="install-os">WINDOWS POWERSHELL</span>
+        <div class="install-cmd">
+          <code>irm https://github.com/earayu/treadstone/releases/latest/download/install.ps1 | iex</code>
+          <button class="copy-btn" data-copy="irm https://github.com/earayu/treadstone/releases/latest/download/install.ps1 | iex">copy</button>
+        </div>
+      </div>
+      <div class="install-card">
+        <span class="install-os">PIP</span>
+        <div class="install-cmd">
+          <code>pip install treadstone-cli</code>
+          <button class="copy-btn" data-copy="pip install treadstone-cli">copy</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+      <div class="install-links">
+        <a href="https://github.com/earayu/treadstone" class="install-link">GitHub →</a>
+        <a href="https://github.com/earayu/treadstone/releases" class="install-link">Releases →</a>
+        <a href="https://pypi.org/project/treadstone-cli" class="install-link">PyPI →</a>
+      </div>
+      <span class="install-also">
+        Also available: <a href="#">pip install treadstone-sdk</a>
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PLANS ══════════════════════════════════════════ -->
+<section class="sec" id="pricing">
+  <span class="sec-tag">// pricing</span>
+  <h2 class="sec-h">Start free.<br>Scale when you need to.</h2>
+  <p class="sec-sub">All plans include the CLI, Python SDK, and REST API. Compute is measured in CU-hours.</p>
+
+  <div class="plans-grid">
+
+    <div class="plan">
+      <div class="plan-name">Free</div>
+      <span class="plan-badge">ALWAYS FREE</span>
+      <div class="plan-price">$0</div>
+      <div class="plan-price-note">forever</div>
+      <hr class="plan-div">
+      <ul class="plan-feats">
+        <li>20 CU-h compute / month</li>
+        <li>3 concurrent sandboxes</li>
+        <li>aio-sandbox-tiny template</li>
+        <li>2 hr auto-stop interval</li>
+        <li>CLI, SDK &amp; REST API</li>
+        <li>Browser hand-off sessions</li>
+        <li>Community support</li>
+      </ul>
+      <div class="plan-cta">
+        <a href="#" class="btn btn-ghost btn-full">Get Started Free</a>
+      </div>
+    </div>
+
+    <div class="plan featured">
+      <div class="plan-name">Pro</div>
+      <span class="plan-badge soon">COMING SOON</span>
+      <div class="plan-price" style="font-size:22px;color:var(--acc);letter-spacing:-0.02em">Usage-based</div>
+      <div class="plan-price-note">pay per CU-hour used</div>
+      <hr class="plan-div">
+      <ul class="plan-feats">
+        <li>120 CU-h compute / month</li>
+        <li>8 concurrent sandboxes</li>
+        <li>Templates up to medium</li>
+        <li>15 GiB persistent storage</li>
+        <li>24 hr auto-stop interval</li>
+        <li>Usage analytics &amp; reporting</li>
+        <li>Priority support</li>
+      </ul>
+      <div class="plan-cta">
+        <a href="#" class="btn btn-primary btn-full">Apply for Early Access</a>
+      </div>
+    </div>
+
+    <div class="plan">
+      <div class="plan-name">Ultra</div>
+      <span class="plan-badge soon">COMING SOON</span>
+      <div class="plan-price" style="font-size:22px;color:var(--text2);letter-spacing:-0.02em">Usage-based</div>
+      <div class="plan-price-note">pay per CU-hour used</div>
+      <hr class="plan-div">
+      <ul class="plan-feats">
+        <li>400 CU-h compute / month</li>
+        <li>20 concurrent sandboxes</li>
+        <li>Templates up to xlarge</li>
+        <li>50 GiB persistent storage</li>
+        <li>72 hr auto-stop interval</li>
+        <li>Dedicated SLA &amp; integrations</li>
+      </ul>
+      <div class="plan-cta">
+        <a href="#" class="btn btn-ghost btn-full">Apply for Early Access</a>
+      </div>
+    </div>
+
+    <div class="plan">
+      <div class="plan-name">Custom</div>
+      <span class="plan-badge">ENTERPRISE</span>
+      <div class="plan-price" style="font-size:22px;color:var(--text2);letter-spacing:-0.02em">Custom</div>
+      <div class="plan-price-note">negotiated limits &amp; terms</div>
+      <hr class="plan-div">
+      <ul class="plan-feats">
+        <li>1,000+ CU-h compute / month</li>
+        <li>50 concurrent sandboxes</li>
+        <li>100 GiB persistent storage</li>
+        <li>7 day auto-stop interval</li>
+        <li>All sandbox templates</li>
+        <li>24 hr grace period</li>
+        <li>Custom SLA &amp; contract</li>
+      </ul>
+      <div class="plan-cta">
+        <a href="mailto:support@treadstone-ai.dev" class="btn btn-ghost btn-full">Contact Us</a>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═══ FOOTER ═════════════════════════════════════════ -->
+<div class="footer-wrap">
+  <div>
+    <div class="footer-brand-logo">
+      <span style="width:22px;height:22px;background:var(--acc);border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--acc-txt)">T</span>
+      treadstone
+    </div>
+    <p class="footer-tagline">Agent-native sandbox platform. Run code, build software, and hand off browser sessions from isolated environments.</p>
+  </div>
+  <div class="footer-cols">
+    <div>
+      <span class="fcol-title">RESOURCES</span>
+      <ul class="fcol-links">
+        <li><a href="#install">Install CLI</a></li>
+        <li><a href="https://github.com/earayu/treadstone/releases">GitHub Releases</a></li>
+        <li><a href="#">Python SDK Docs</a></li>
+        <li><a href="#">REST API Reference</a></li>
+      </ul>
+    </div>
+    <div>
+      <span class="fcol-title">COMMUNITY</span>
+      <ul class="fcol-links">
+        <li><a href="https://github.com/earayu/treadstone">GitHub</a></li>
+        <li><a href="https://github.com/earayu/treadstone">Star on GitHub ★</a></li>
+      </ul>
+    </div>
+    <div>
+      <span class="fcol-title">SUPPORT</span>
+      <ul class="fcol-links">
+        <li><a href="mailto:support@treadstone-ai.dev">support@treadstone-ai.dev</a></li>
+      </ul>
+    </div>
+  </div>
+</div>
+<div class="footer-bottom">
+  <span class="footer-copy">© 2026 Treadstone. Apache 2.0 license.</span>
+  <span class="footer-copy">Agent-native sandbox platform.</span>
+</div>
+
+<!-- ═══ SCRIPTS ════════════════════════════════════════ -->
+<script>
+// ── Tab switcher ──
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const name = tab.dataset.panel;
+    tab.closest('.code-sec-inner, .code-sec').querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.closest('.code-sec-inner, .code-sec').querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + name).classList.add('active');
+  });
+});
+
+// ── Copy buttons ──
+document.querySelectorAll('.cb-copy').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const pre = btn.closest('.codeblock').querySelector('pre');
+    navigator.clipboard.writeText(pre.innerText).catch(() => {});
+    btn.textContent = 'copied!';
+    setTimeout(() => btn.textContent = 'copy', 1600);
+  });
+});
+document.querySelectorAll('.copy-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(btn.dataset.copy || btn.previousElementSibling.textContent).catch(() => {});
+    btn.textContent = 'copied!';
+    setTimeout(() => btn.textContent = 'copy', 1600);
+  });
+});
+
+// ── Terminal animation ──
+const STEPS = [
+  { type: 'cmt',  text: '# 1. Authenticate' },
+  { type: 'cmd',  text: 'treadstone auth login --email agent@example.com --password ••••••••', speed: 38 },
+  { type: 'out',  text: '✓ Logged in as agent@example.com', cls: 't-ok', pause: 180 },
+  { type: 'sp' },
+  { type: 'cmt',  text: '# 2. Create a sandbox' },
+  { type: 'cmd',  text: 'treadstone --json sandboxes create --name agent-demo', speed: 42 },
+  { type: 'out',  text: '{"id":"sb_3kx9m2p","status":"running","urls":{"proxy":"https://sb_3kx9m2p.proxy.treadstone-ai.dev"}}', cls: 't-json', pause: 320 },
+  { type: 'sp' },
+  { type: 'cmt',  text: '# 3. Hand the browser off to a human' },
+  { type: 'cmd',  text: 'treadstone --json sandboxes web enable sb_3kx9m2p', speed: 42 },
+  { type: 'out',  text: '{"open_link":"https://sb_3kx9m2p.web.treadstone-ai.dev?token=...","expires_at":"2026-03-30T18:00:00Z"}', cls: 't-json', pause: 280 },
+];
+
+const termEl = document.getElementById('term');
+const curEl  = document.getElementById('cur');
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function runTerm() {
+  await sleep(700);
+  for (const s of STEPS) {
+    if (s.type === 'sp') {
+      const d = document.createElement('div'); d.className = 't-sp';
+      termEl.insertBefore(d, curEl); continue;
+    }
+    if (s.type === 'cmt') {
+      const d = document.createElement('div'); d.className = 'tl';
+      const span = document.createElement('span'); span.className = 't-cmt';
+      span.textContent = s.text; d.appendChild(span);
+      termEl.insertBefore(d, curEl); await sleep(120); continue;
+    }
+    if (s.type === 'cmd') {
+      const d = document.createElement('div'); d.className = 'tl';
+      const p = document.createElement('span'); p.className = 't-prompt'; p.textContent = '$ ';
+      const t = document.createElement('span'); t.className = 't-cmd';
+      d.appendChild(p); d.appendChild(t); termEl.insertBefore(d, curEl);
+      await sleep(160);
+      for (const ch of s.text) {
+        t.textContent += ch;
+        await sleep(s.speed + Math.random() * s.speed * 0.4);
+      }
+      await sleep(180); continue;
+    }
+    if (s.type === 'out') {
+      await sleep(s.pause || 200);
+      const d = document.createElement('div'); d.className = 'tl';
+      const t = document.createElement('span'); t.className = s.cls || 't-out';
+      t.textContent = s.text; d.appendChild(t);
+      termEl.insertBefore(d, curEl); await sleep(80);
+    }
+  }
+}
+
+runTerm();
+</script>
+</body>
+</html>

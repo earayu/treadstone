@@ -34,7 +34,8 @@ Use this skill to drive the Treadstone control plane through the CLI without inv
 | Create a sandbox and capture its ID | `treadstone --json sandboxes create --name NAME` |
 | Get a browser hand-off URL for a human | `treadstone --json sandboxes web enable SANDBOX_ID` |
 | Check current config / auth status | `treadstone config get` |
-| Print this agent skill | `treadstone --skills` |
+| Print this agent skill | `treadstone skills` |
+| Install this skill to agent runner | `treadstone skills install` |
 
 ## Working Rules
 
@@ -90,8 +91,8 @@ treadstone config get
 treadstone config unset
 treadstone config path
 
-treadstone guide agent
-treadstone --skills
+treadstone skills
+treadstone skills install
 ```
 
 ## Default Workflows

@@ -136,7 +136,7 @@ wheels = [
 
 [[package]]
 name = "treadstone-cli"
-version = "0.6.19"
+version = "0.7.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },

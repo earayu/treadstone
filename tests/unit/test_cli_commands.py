@@ -150,19 +150,78 @@ def test_root_help_surfaces_common_nested_commands(runner: CliRunner) -> None:
     assert "sandboxes web enable" in result.output
 
 
-def test_guide_agent_matches_skills_flag(runner: CliRunner) -> None:
-    guide_result = runner.invoke(cli, ["guide", "agent"])
-    skills_result = runner.invoke(cli, ["--skills"])
+def test_skills_prints_agent_guide(runner: CliRunner) -> None:
+    result = runner.invoke(cli, ["skills"])
 
-    assert guide_result.exit_code == 0
-    assert skills_result.exit_code == 0
-    assert guide_result.output == skills_result.output
-    assert guide_result.output.startswith("---\nname: treadstone-cli\n")
-    assert "description:" in guide_result.output
-    assert "# Treadstone CLI" in guide_result.output
-    assert "SANDBOX_ID arguments always require the sandbox ID" in guide_result.output
-    assert "Sandbox names only need to be unique for the current user." in guide_result.output
-    assert "Never construct browser URLs from sandbox names." in guide_result.output
+    assert result.exit_code == 0
+    assert result.output.startswith("---\nname: treadstone-cli\n")
+    assert "description:" in result.output
+    assert "# Treadstone CLI" in result.output
+    assert "SANDBOX_ID arguments always require the sandbox ID" in result.output
+    assert "Sandbox names only need to be unique for the current user." in result.output
+    assert "Never construct browser URLs from sandbox names." in result.output
+
+
+def test_skills_install_default_target(runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    agents_skills_dir = tmp_path / ".agents" / "skills"
+    monkeypatch.setattr(
+        "treadstone_cli.skills_cmd._TARGETS",
+        {
+            "agents": agents_skills_dir,
+            "cursor": tmp_path / ".cursor" / "skills",
+            "codex": tmp_path / ".codex" / "skills",
+            "project": tmp_path / ".agents" / "skills",
+        },
+    )
+
+    result = runner.invoke(cli, ["skills", "install"])
+
+    assert result.exit_code == 0
+    dest = agents_skills_dir / "treadstone-cli" / "SKILL.md"
+    assert dest.exists()
+    content = dest.read_text(encoding="utf-8")
+    assert content.startswith("---\nname: treadstone-cli\n")
+    assert "Installed:" in result.output
+
+
+def test_skills_install_cursor_target(runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    cursor_skills_dir = tmp_path / ".cursor" / "skills"
+    monkeypatch.setattr(
+        "treadstone_cli.skills_cmd._TARGETS",
+        {
+            "agents": tmp_path / ".agents" / "skills",
+            "cursor": cursor_skills_dir,
+            "codex": tmp_path / ".codex" / "skills",
+            "project": tmp_path / ".agents" / "skills",
+        },
+    )
+
+    result = runner.invoke(cli, ["skills", "install", "--target", "cursor"])
+
+    assert result.exit_code == 0
+    dest = cursor_skills_dir / "treadstone-cli" / "SKILL.md"
+    assert dest.exists()
+
+
+def test_skills_install_custom_dir(runner: CliRunner, tmp_path: Path) -> None:
+    custom_dir = tmp_path / "my-skills"
+
+    result = runner.invoke(cli, ["skills", "install", "--dir", str(custom_dir)])
+
+    assert result.exit_code == 0
+    dest = custom_dir / "treadstone-cli" / "SKILL.md"
+    assert dest.exists()
+    content = dest.read_text(encoding="utf-8")
+    assert "# Treadstone CLI" in content
+
+
+def test_skills_install_creates_missing_dirs(runner: CliRunner, tmp_path: Path) -> None:
+    nested_dir = tmp_path / "a" / "b" / "c"
+
+    result = runner.invoke(cli, ["skills", "install", "--dir", str(nested_dir)])
+
+    assert result.exit_code == 0
+    assert (nested_dir / "treadstone-cli" / "SKILL.md").exists()
 
 
 def test_login_saves_session_and_whoami_uses_it(

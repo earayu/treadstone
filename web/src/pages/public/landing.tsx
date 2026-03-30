@@ -1,10 +1,12 @@
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Link } from "react-router"
 import { useCurrentUser } from "@/hooks/use-auth"
-import { TreadstoneSymbol } from "@/components/brand/logo"
 import { useSubmitWaitlistApplication } from "@/api/admin"
+import { TreadstoneSymbol } from "@/components/brand/logo"
 
 const GITHUB_URL = "https://github.com/earayu/treadstone"
+/** Sign-in then return to repo root (for Star CTA). */
+const GITHUB_STAR_LOGIN_URL = `https://github.com/login?return_to=${encodeURIComponent(GITHUB_URL)}`
 const RELEASES_URL = "https://github.com/earayu/treadstone/releases"
 const PYPI_CLI_URL = "https://pypi.org/project/treadstone-cli/"
 const SUPPORT_EMAIL = "support@treadstone-ai.dev"
@@ -13,35 +15,67 @@ const INSTALL_SH = "curl -fsSL https://github.com/earayu/treadstone/releases/lat
 const INSTALL_PS = "irm https://github.com/earayu/treadstone/releases/latest/download/install.ps1 | iex"
 const INSTALL_PIP = "pip install treadstone-cli"
 
-type TerminalLine =
-  | { kind: "comment"; text: string }
-  | { kind: "cmd"; text: string }
-  | { kind: "output"; text: string }
-  | { kind: "gap" }
+// ── Terminal animation data ──────────────────────────────────────────────────
 
-const SCENARIO: TerminalLine[] = [
-  { kind: "comment", text: "# 1. Authenticate" },
-  { kind: "cmd", text: "treadstone auth login --email agent@example.com --password ••••••••" },
-  { kind: "output", text: "✓ Logged in as agent@example.com" },
-  { kind: "gap" },
-  { kind: "comment", text: "# 2. Pick a template" },
-  { kind: "cmd", text: "treadstone --json templates list" },
-  { kind: "output", text: '{ "items": [{ "name": "aio-sandbox-tiny", "cpu": "0.25", "memory": "512Mi" }, ...] }' },
-  { kind: "gap" },
-  { kind: "comment", text: "# 3. Create a sandbox — capture its ID" },
-  { kind: "cmd", text: "treadstone --json sandboxes create --name agent-demo" },
-  { kind: "output", text: '{ "id": "sb_3kx9m2p", "status": "running", "urls": { "proxy": "https://sb_3kx9m2p.proxy.treadstone-ai.dev" } }' },
-  { kind: "gap" },
-  { kind: "comment", text: "# 4. Hand the browser off to a human" },
-  { kind: "cmd", text: "treadstone --json sandboxes web enable sb_3kx9m2p" },
-  { kind: "output", text: '{ "open_link": "https://sb_3kx9m2p.web.treadstone-ai.dev?token=...", "expires_at": "2026-03-30T18:00:00Z" }' },
+type TermStep =
+  | { type: "cmt"; text: string }
+  | { type: "cmd"; text: string; speed?: number }
+  | { type: "out"; text: string; pause?: number }
+  | { type: "sp" }
+
+// cmd `speed`: ms between keystrokes — lower is faster (not WPM).
+const TERM_STEPS: TermStep[] = [
+  { type: "cmt", text: "# 1. Authenticate" },
+  { type: "cmd", text: "treadstone auth login --email agent@example.com --password ••••••••", speed: 18 },
+  { type: "out", text: "✓ Logged in as agent@example.com", pause: 140 },
+  { type: "sp" },
+  { type: "cmt", text: "# 2. Install the agent skill (Cursor, Codex, …)" },
+  { type: "cmd", text: "treadstone skills install", speed: 18 },
+  { type: "out", text: "Installed: ~/.agents/skills/treadstone-cli/SKILL.md", pause: 160 },
+  { type: "sp" },
+  { type: "cmt", text: "# 3. Create a sandbox — read the ID from JSON output" },
+  { type: "cmd", text: "treadstone --json sandboxes create --name agent-demo", speed: 20 },
+  { type: "out", text: '{"id":"sb_3kx9m2p","status":"running","urls":{"proxy":"https://sb_3kx9m2p.proxy.treadstone-ai.dev"}}', pause: 250 },
+  { type: "sp" },
+  { type: "cmt", text: "# 4. Hand the browser off to a human" },
+  { type: "cmd", text: "treadstone --json sandboxes web enable sb_3kx9m2p", speed: 20 },
+  { type: "out", text: '{"open_link":"https://sb_3kx9m2p.web.treadstone-ai.dev?token=...","expires_at":"2026-03-30T18:00:00Z"}', pause: 230 },
 ]
+
+// ── How It Works data ────────────────────────────────────────────────────────
+
+const HOW_STEPS = [
+  {
+    n: "01 — ORCHESTRATE",
+    title: "Agents control the workflow",
+    desc: "Plan tasks, call Treadstone directly, and decide when to create, reuse, or stop a sandbox.",
+  },
+  {
+    n: "02 — PROVISION",
+    title: "Spin up a real environment",
+    desc: "Each sandbox gives agents isolated runtime, files, tools, and browser access—not just a stateless function call.",
+  },
+  {
+    n: "03 — EXECUTE",
+    title: "Run code, browse, and use tools",
+    desc: "Agents work inside the sandbox directly: write code, open pages, inspect files, and keep long-running tasks moving.",
+  },
+  {
+    n: "04 — HAND OFF",
+    title: "Bring in a human only when needed",
+    desc: "Generate a secure browser session when an agent needs review, input, or a final decision.",
+  },
+]
+
+// ── Plans data ───────────────────────────────────────────────────────────────
 
 const PLANS = [
   {
     name: "Free",
     price: "$0",
     period: "/month",
+    badge: "ALWAYS FREE",
+    badgeSoon: false,
     desc: "Get started with lightweight sandboxes.",
     features: [
       "20\u00a0CU-h compute / month",
@@ -52,7 +86,7 @@ const PLANS = [
       "Browser hand-off sessions",
       "Community support",
     ],
-    cta: "Get Started",
+    cta: "Get Started Free",
     ctaHref: "/auth/sign-up",
     highlighted: false,
     waitlistTier: null as string | null,
@@ -61,7 +95,8 @@ const PLANS = [
     name: "Pro",
     price: "Usage-based",
     period: "",
-    tag: "COMING SOON",
+    badge: "COMING SOON",
+    badgeSoon: true,
     desc: "More compute, more concurrency, priority support.",
     features: [
       "120\u00a0CU-h compute / month",
@@ -72,7 +107,7 @@ const PLANS = [
       "Usage analytics & reporting",
       "Priority support",
     ],
-    cta: "Apply for Free Access",
+    cta: "Apply for Early Access",
     ctaHref: null,
     highlighted: true,
     waitlistTier: "pro",
@@ -81,7 +116,8 @@ const PLANS = [
     name: "Ultra",
     price: "Usage-based",
     period: "",
-    tag: "COMING SOON",
+    badge: "COMING SOON",
+    badgeSoon: true,
     desc: "Maximum compute and concurrency for heavy workloads.",
     features: [
       "400\u00a0CU-h compute / month",
@@ -91,15 +127,17 @@ const PLANS = [
       "72\u00a0hr max auto-stop interval",
       "Dedicated SLA & integrations",
     ],
-    cta: "Apply for Free Access",
+    cta: "Apply for Early Access",
     ctaHref: null,
     highlighted: false,
     waitlistTier: "ultra",
   },
   {
-    name: "Custom Plan",
+    name: "Custom",
     price: "Custom",
     period: "",
+    badge: "ENTERPRISE",
+    badgeSoon: false,
     desc: "Negotiated limits for teams and long-running workloads.",
     features: [
       "1,000\u00a0CU-h compute / month",
@@ -116,6 +154,122 @@ const PLANS = [
     waitlistTier: null as string | null,
   },
 ]
+
+// ── Code tab content (syntax-highlighted via spans) ──────────────────────────
+
+type CodeLine = { cls: string; text: string }[]
+
+function CodeLines({ lines }: { lines: CodeLine[] }) {
+  return (
+    <pre className="overflow-x-auto px-6 py-5 font-mono text-[12.5px] leading-[1.75]">
+      {lines.map((segments, i) => (
+        <div key={i}>
+          {segments.map((seg, j) => (
+            <span key={j} className={seg.cls}>
+              {seg.text}
+            </span>
+          ))}
+        </div>
+      ))}
+    </pre>
+  )
+}
+
+const cm = "text-muted-foreground/50"
+const pr = "text-primary"
+const fg = "text-foreground"
+const ok = "text-emerald-400"
+const js = "text-sky-300"
+const kw = "text-purple-400"
+const fn = "text-sky-300"
+const nm = "text-amber-400"
+
+const CLI_LINES: CodeLine[] = [
+  [{ cls: cm, text: "# 1. Authenticate (or set TREADSTONE_API_KEY in env)" }],
+  [{ cls: pr, text: "$ " }, { cls: fg, text: "treadstone auth login --email agent@example.com --password ••••••••" }],
+  [{ cls: ok, text: "✓ Logged in as agent@example.com" }],
+  [],
+  [{ cls: cm, text: "# 2. Install the agent skill (Cursor, Codex, …)" }],
+  [{ cls: pr, text: "$ " }, { cls: fg, text: "treadstone skills install" }],
+  [{ cls: ok, text: "Installed: ~/.agents/skills/treadstone-cli/SKILL.md" }],
+  [],
+  [{ cls: cm, text: "# 3. See available templates" }],
+  [{ cls: pr, text: "$ " }, { cls: fg, text: "treadstone --json templates list" }],
+  [{ cls: js, text: '{"items": [{"name": "aio-sandbox-tiny", "cpu": "0.25", "memory": "512Mi"}, ...]}' }],
+  [],
+  [{ cls: cm, text: "# 4. Create a sandbox — read the ID from JSON output" }],
+  [{ cls: pr, text: "$ " }, { cls: fg, text: "treadstone --json sandboxes create --name agent-demo" }],
+  [{ cls: js, text: '{"id": "sb_3kx9m2p", "status": "running", "urls": {"proxy": "https://sb_3kx9m2p.proxy.treadstone-ai.dev"}}' }],
+  [],
+  [{ cls: cm, text: "# 5. Hand the browser off to a human" }],
+  [{ cls: pr, text: "$ " }, { cls: fg, text: "treadstone --json sandboxes web enable sb_3kx9m2p" }],
+  [{ cls: js, text: '{"open_link": "https://sb_3kx9m2p.web.treadstone-ai.dev?token=...", "expires_at": "2026-03-30T18:00:00Z"}' }],
+]
+
+const SDK_LINES: CodeLine[] = [
+  [{ cls: kw, text: "from " }, { cls: fg, text: "treadstone_sdk " }, { cls: kw, text: "import " }, { cls: fg, text: "Treadstone" }],
+  [],
+  [{ cls: fg, text: 'client = Treadstone(api_key=' }, { cls: ok, text: '"ts_live_xxxx"' }, { cls: fg, text: ")" }],
+  [],
+  [{ cls: cm, text: "# List available templates" }],
+  [{ cls: fg, text: "templates = client.templates." }, { cls: fn, text: "list" }, { cls: fg, text: "()" }],
+  [{ cls: fn, text: "print" }, { cls: fg, text: "(templates[" }, { cls: nm, text: "0" }, { cls: fg, text: "].name)      " }, { cls: cm, text: '# "aio-sandbox-tiny"' }],
+  [],
+  [{ cls: cm, text: "# Create a sandbox" }],
+  [{ cls: fg, text: "sandbox = client.sandboxes." }, { cls: fn, text: "create" }, { cls: fg, text: "(" }],
+  [{ cls: fg, text: '    name=' }, { cls: ok, text: '"agent-demo"' }, { cls: fg, text: "," }],
+  [{ cls: fg, text: '    template=' }, { cls: ok, text: '"aio-sandbox-tiny"' }, { cls: fg, text: "," }],
+  [{ cls: fg, text: ")" }],
+  [{ cls: fn, text: "print" }, { cls: fg, text: "(sandbox.id)            " }, { cls: cm, text: '# "sb_3kx9m2p"' }],
+  [{ cls: fn, text: "print" }, { cls: fg, text: "(sandbox.urls.proxy)    " }, { cls: cm, text: '# "https://sb_3kx9m2p.proxy.treadstone-ai.dev"' }],
+  [],
+  [{ cls: cm, text: "# Generate a browser hand-off URL for a human" }],
+  [{ cls: fg, text: "session = sandbox.web." }, { cls: fn, text: "enable" }, { cls: fg, text: "()" }],
+  [{ cls: fn, text: "print" }, { cls: fg, text: "(session.open_link)     " }, { cls: cm, text: '# "https://sb_3kx9m2p.web.treadstone-ai.dev?token=..."' }],
+  [],
+  [{ cls: cm, text: "# Lifecycle management" }],
+  [{ cls: fg, text: "sandbox." }, { cls: fn, text: "stop" }, { cls: fg, text: "()" }],
+  [{ cls: fg, text: "sandbox." }, { cls: fn, text: "start" }, { cls: fg, text: "()" }],
+  [{ cls: fg, text: "sandbox." }, { cls: fn, text: "delete" }, { cls: fg, text: "()" }],
+]
+
+const REST_LINES: CodeLine[] = [
+  [{ cls: cm, text: "# Create a sandbox" }],
+  [{ cls: pr, text: "$ " }, { cls: fg, text: "curl -X POST https://api.treadstone-ai.dev/v1/sandboxes \\" }],
+  [{ cls: fg, text: "    -H " }, { cls: ok, text: '"Authorization: Bearer $TREADSTONE_API_KEY"' }, { cls: fg, text: " \\" }],
+  [{ cls: fg, text: "    -H " }, { cls: ok, text: '"Content-Type: application/json"' }, { cls: fg, text: " \\" }],
+  [{ cls: fg, text: "    -d " }, { cls: ok, text: `'{"name": "agent-demo", "template": "aio-sandbox-tiny"}'` }],
+  [],
+  [{ cls: js, text: "{" }],
+  [{ cls: js, text: '  "id": "sb_3kx9m2p",' }],
+  [{ cls: js, text: '  "name": "agent-demo",' }],
+  [{ cls: js, text: '  "status": "running",' }],
+  [{ cls: js, text: '  "urls": { "proxy": "https://sb_3kx9m2p.proxy.treadstone-ai.dev" }' }],
+  [{ cls: js, text: "}" }],
+  [],
+  [{ cls: cm, text: "# Enable browser hand-off for a human" }],
+  [{ cls: pr, text: "$ " }, { cls: fg, text: "curl -X POST https://api.treadstone-ai.dev/v1/sandboxes/sb_3kx9m2p/web/enable \\" }],
+  [{ cls: fg, text: "    -H " }, { cls: ok, text: '"Authorization: Bearer $TREADSTONE_API_KEY"' }],
+  [],
+  [{ cls: js, text: "{" }],
+  [{ cls: js, text: '  "open_link": "https://sb_3kx9m2p.web.treadstone-ai.dev?token=...",' }],
+  [{ cls: js, text: '  "expires_at": "2026-03-30T18:00:00Z"' }],
+  [{ cls: js, text: "}" }],
+]
+
+function CliCode() {
+  return <CodeLines lines={CLI_LINES} />
+}
+
+function SdkCode() {
+  return <CodeLines lines={SDK_LINES} />
+}
+
+function RestCode() {
+  return <CodeLines lines={REST_LINES} />
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
 
 interface WaitlistDialogProps {
   tier: string
@@ -140,7 +294,7 @@ function WaitlistDialog({ tier, onClose }: WaitlistDialogProps) {
         name,
         target_tier: tier,
         company: company || undefined,
-        use_case: useCase || undefined,
+        use_case: useCase || undefined,  // empty string becomes undefined for non-required tiers
       },
       {
         onSuccess: () => setSubmitted(true),
@@ -150,6 +304,7 @@ function WaitlistDialog({ tier, onClose }: WaitlistDialogProps) {
   }
 
   const tierLabel = tier === "pro" ? "Pro" : "Ultra"
+  const useCaseRequired = tier === "ultra"
 
   return (
     <div
@@ -157,7 +312,6 @@ function WaitlistDialog({ tier, onClose }: WaitlistDialogProps) {
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="w-full max-w-md rounded-md border border-border/30 bg-card shadow-2xl">
-        {/* Header */}
         <div className="flex items-center justify-between border-b border-border/20 px-5 py-4">
           <div>
             <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-muted-foreground">
@@ -165,10 +319,7 @@ function WaitlistDialog({ tier, onClose }: WaitlistDialogProps) {
             </span>
             <span className="text-[11px] font-bold uppercase tracking-[1.5px] text-primary">{tierLabel}</span>
           </div>
-          <button
-            onClick={onClose}
-            className="text-muted-foreground transition-colors hover:text-foreground"
-          >
+          <button onClick={onClose} className="text-muted-foreground transition-colors hover:text-foreground">
             ✕
           </button>
         </div>
@@ -177,8 +328,8 @@ function WaitlistDialog({ tier, onClose }: WaitlistDialogProps) {
           <div className="px-5 py-10 text-center">
             <p className="text-lg font-semibold text-primary">Application submitted!</p>
             <p className="mt-2 text-sm text-muted-foreground">
-              We'll review your application and upgrade your account to the {tierLabel} plan shortly.
-              Make sure you've signed up at{" "}
+              We'll review your application and upgrade your account to the {tierLabel} plan shortly. Make sure you've
+              signed up at{" "}
               <Link to="/auth/sign-up" className="text-primary underline" onClick={onClose}>
                 treadstone-ai.dev
               </Link>{" "}
@@ -194,8 +345,8 @@ function WaitlistDialog({ tier, onClose }: WaitlistDialogProps) {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 p-5">
             <p className="text-sm text-muted-foreground">
-              We're granting free {tierLabel} access during our early launch. Fill in your details and we'll
-              upgrade your account.
+              We're granting free {tierLabel} access during our early launch. Fill in your details and we'll upgrade
+              your account.
             </p>
 
             <div className="flex flex-col gap-1">
@@ -239,21 +390,25 @@ function WaitlistDialog({ tier, onClose }: WaitlistDialogProps) {
 
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-medium text-muted-foreground">
-                How do you plan to use it? (optional)
+                How do you plan to use it?{" "}
+                {useCaseRequired ? (
+                  <span className="text-destructive">*</span>
+                ) : (
+                  <span className="text-muted-foreground/50">(optional)</span>
+                )}
               </label>
               <textarea
+                required={useCaseRequired}
                 value={useCase}
                 onChange={(e) => setUseCase(e.target.value)}
                 placeholder="e.g. Building AI coding agents that need isolated execution environments"
                 rows={3}
                 maxLength={1000}
-                className="rounded-sm border border-border/40 bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+                className="resize-none rounded-sm border border-border/40 bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
               />
             </div>
 
-            {error && (
-              <p className="text-sm text-destructive">{error}</p>
-            )}
+            {error && <p className="text-sm text-destructive">{error}</p>}
 
             <div className="flex items-center justify-end gap-3 pt-1">
               <button
@@ -278,239 +433,482 @@ function WaitlistDialog({ tier, onClose }: WaitlistDialogProps) {
   )
 }
 
-function CodeBlock({ label, code }: { label: string; code: string }) {
+function CopyButton({
+  text,
+  copied,
+  onCopy,
+  className,
+}: {
+  text?: string
+  copied?: boolean
+  onCopy?: () => void
+  className?: string
+}) {
+  const [internalCopied, setInternalCopied] = useState(false)
+  const isControlled = copied !== undefined && onCopy !== undefined
+  const active = isControlled ? copied : internalCopied
+
+  const handleClick = () => {
+    if (isControlled) {
+      onCopy!()
+    } else {
+      navigator.clipboard.writeText(text ?? "").catch(() => {})
+      setInternalCopied(true)
+      setTimeout(() => setInternalCopied(false), 1600)
+    }
+  }
+
   return (
-    <div>
-      <p className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/60">
-        {label}
-      </p>
-      <pre className="overflow-x-auto rounded border border-border/20 bg-black/40 px-4 py-3 font-mono text-[12px] leading-relaxed text-foreground">
-        <code>{code}</code>
-      </pre>
-    </div>
+    <button
+      onClick={handleClick}
+      className={
+        className ??
+        "inline-flex w-[52px] shrink-0 items-center justify-center rounded border border-border/25 bg-white/[0.04] py-1 font-mono text-[10px] font-medium tracking-wide text-muted-foreground/60 transition-all hover:border-border/50 hover:bg-white/[0.08] hover:text-muted-foreground"
+      }
+    >
+      {active ? "✓ done" : "copy"}
+    </button>
   )
 }
 
-function TerminalScenario({ lines }: { lines: TerminalLine[] }) {
+function InstallCard({ os, hint, cmd, first }: { os: string; hint: string; cmd: string; first: boolean }) {
+  const [copied, setCopied] = useState(false)
+
+  const triggerCopy = () => {
+    navigator.clipboard.writeText(cmd).catch(() => {})
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1600)
+  }
+
   return (
-    <div className="overflow-hidden rounded border border-border/20 bg-black/40">
-      {/* window chrome */}
-      <div className="flex items-center gap-1.5 border-b border-border/20 px-4 py-2.5">
-        <span className="size-2.5 rounded-full bg-border/40" />
-        <span className="size-2.5 rounded-full bg-border/40" />
-        <span className="size-2.5 rounded-full bg-border/40" />
-        <span className="ml-3 font-mono text-[10px] text-muted-foreground/40">bash</span>
+    <div
+      className={[
+        "flex flex-col gap-4 rounded-xl border border-border/20 bg-white/[0.02] p-6 transition-colors hover:bg-white/[0.035]",
+        !first ? "mt-3 md:mt-0 md:ml-3" : "",
+      ].join(" ")}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <span className="text-[13.5px] font-semibold text-foreground">{os}</span>
+          <span className="ml-2 font-mono text-[10.5px] text-muted-foreground/40">{hint}</span>
+        </div>
+        <CopyButton copied={copied} onCopy={triggerCopy} />
       </div>
-      <pre className="overflow-x-auto px-5 py-5 font-mono text-[12px] leading-[1.85]">
-        <code>
-          {lines.map((line, i) => {
-            if (line.kind === "gap") return <span key={i}>{"\n"}</span>
-            if (line.kind === "comment")
-              return (
-                <span key={i} className="text-muted-foreground/40">
-                  {line.text}
-                  {"\n"}
-                </span>
-              )
-            if (line.kind === "cmd")
-              return (
-                <span key={i}>
-                  <span className="text-primary">$&nbsp;</span>
-                  <span className="text-foreground">{line.text}</span>
-                  {"\n"}
-                </span>
-              )
-            return (
-              <span key={i} className="text-emerald-400/70">
-                {line.text}
-                {"\n"}
-              </span>
-            )
-          })}
-        </code>
-      </pre>
+
+      {/* Command block — click anywhere to copy */}
+      <div
+        role="button"
+        tabIndex={0}
+        title="Click to copy"
+        onClick={triggerCopy}
+        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && triggerCopy()}
+        className={[
+          "flex-1 cursor-pointer select-none rounded-lg border px-4 py-3.5 transition-all",
+          copied
+            ? "border-primary/30 bg-primary/[0.06]"
+            : "border-border/[0.15] bg-black/30 hover:border-border/30 hover:bg-black/40",
+        ].join(" ")}
+      >
+        <code className="block break-all font-mono text-[12px] leading-[1.7] text-foreground/80">{cmd}</code>
+      </div>
     </div>
   )
 }
 
-function Dot() {
-  return <span className="mt-[5px] inline-block size-[5px] shrink-0 rounded-full bg-primary" aria-hidden="true" />
+// ── Animated terminal ─────────────────────────────────────────────────────────
+
+type RenderedLine =
+  | { kind: "cmt"; text: string }
+  | { kind: "cmd"; prompt: string; text: string }
+  | { kind: "out"; text: string }
+  | { kind: "sp" }
+
+function AnimatedTerminal() {
+  const [lines, setLines] = useState<RenderedLine[]>([])
+  const [cursor, setCursor] = useState(true)
+  const animating = useRef(false)
+
+  useEffect(() => {
+    if (animating.current) return
+    animating.current = true
+
+    const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+
+    async function run() {
+      await sleep(700)
+      for (const step of TERM_STEPS) {
+        if (step.type === "sp") {
+          setLines((prev) => [...prev, { kind: "sp" }])
+          continue
+        }
+        if (step.type === "cmt") {
+          setLines((prev) => [...prev, { kind: "cmt", text: step.text }])
+          await sleep(95)
+          continue
+        }
+        if (step.type === "cmd") {
+          const speed = step.speed ?? 40
+          setLines((prev) => [...prev, { kind: "cmd", prompt: "$ ", text: "" }])
+          await sleep(95)
+          for (const ch of step.text) {
+            setLines((prev) => {
+              const next = [...prev]
+              const last = next[next.length - 1]
+              if (last.kind === "cmd") {
+                next[next.length - 1] = { ...last, text: last.text + ch }
+              }
+              return next
+            })
+            await sleep(speed + Math.random() * speed * 0.25)
+          }
+          await sleep(115)
+          continue
+        }
+        if (step.type === "out") {
+          await sleep(step.pause ?? 200)
+          setLines((prev) => [...prev, { kind: "out", text: step.text }])
+          await sleep(80)
+        }
+      }
+      setCursor(false)
+    }
+
+    run()
+  }, [])
+
+  return (
+    <div className="w-[740px] max-w-full overflow-hidden rounded-xl border border-border/20 bg-black/40 text-left">
+      {/* Window chrome */}
+      <div className="flex items-center gap-1.5 border-b border-border/20 bg-white/[0.03] px-4 py-3">
+        <span className="size-3 rounded-full bg-[#ff5f56]" />
+        <span className="size-3 rounded-full bg-[#ffbd2e]" />
+        <span className="size-3 rounded-full bg-[#27c93f]" />
+        <span className="ml-2 font-mono text-[10.5px] text-muted-foreground/30">bash — treadstone quickstart</span>
+      </div>
+      {/* Body */}
+      <div className="min-h-[260px] px-5 py-5 font-mono text-[12.5px] leading-[1.75]">
+        {lines.map((line, i) => {
+          if (line.kind === "sp") return <div key={i} className="h-[10px]" />
+          if (line.kind === "cmt")
+            return (
+              <div key={i} className="text-muted-foreground/40">
+                {line.text}
+              </div>
+            )
+          if (line.kind === "cmd")
+            return (
+              <div key={i}>
+                <span className="text-primary">{line.prompt}</span>
+                <span className="text-foreground">{line.text}</span>
+              </div>
+            )
+          return (
+            <div key={i} className="text-sky-300/80">
+              {line.text}
+            </div>
+          )
+        })}
+        {cursor && (
+          <span className="inline-block h-[14px] w-[7px] animate-[blink_1s_step-end_infinite] bg-primary align-text-bottom" />
+        )}
+      </div>
+    </div>
+  )
 }
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 
 export function LandingPage() {
   const { data: user, isLoading } = useCurrentUser()
   const isLoggedIn = !isLoading && !!user
   const [waitlistTier, setWaitlistTier] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<"cli" | "sdk" | "rest">("cli")
+
+  const cliCode =
+    "# 1. Authenticate\n$ treadstone auth login --email agent@example.com --password ••••••••\n✓ Logged in as agent@example.com\n\n# 2. Install the agent skill (Cursor, Codex, …)\n$ treadstone skills install\nInstalled: ~/.agents/skills/treadstone-cli/SKILL.md\n\n# 3. Create a sandbox\n$ treadstone --json sandboxes create --name agent-demo\n{\"id\":\"sb_3kx9m2p\",\"status\":\"running\"}\n\n# 4. Hand the browser off\n$ treadstone --json sandboxes web enable sb_3kx9m2p\n{\"open_link\":\"https://sb_3kx9m2p.web.treadstone-ai.dev?token=...\"}"
+  const sdkCode =
+    "from treadstone_sdk import Treadstone\nclient = Treadstone(api_key=\"ts_live_xxxx\")\nsandbox = client.sandboxes.create(name=\"agent-demo\", template=\"aio-sandbox-tiny\")\nsession = sandbox.web.enable()\nprint(session.open_link)"
+  const restCode =
+    "curl -X POST https://api.treadstone-ai.dev/v1/sandboxes \\\n  -H \"Authorization: Bearer $TREADSTONE_API_KEY\" \\\n  -d '{\"name\": \"agent-demo\", \"template\": \"aio-sandbox-tiny\"}'"
+
+  const tabCopyText = { cli: cliCode, sdk: sdkCode, rest: restCode }
 
   return (
     <div>
-      {waitlistTier && (
-        <WaitlistDialog tier={waitlistTier} onClose={() => setWaitlistTier(null)} />
-      )}
+      {waitlistTier && <WaitlistDialog tier={waitlistTier} onClose={() => setWaitlistTier(null)} />}
 
-      {/* ── Hero ──────────────────────────────────────────── */}
-      <section className="flex flex-col items-center px-16 pb-24 pt-20 text-center">
-        <h1 className="text-balance text-[clamp(3rem,8vw,5.5rem)] font-bold leading-[1.05] tracking-tight text-foreground">
-          Sandbox
-          <br />
-          <span className="text-primary">for AI Agents</span>
-        </h1>
+      {/* ── Hero ──────────────────────────────────────────────── */}
+      <section className="relative flex min-h-[calc(100vh-56px)] flex-col items-center justify-center overflow-hidden px-8 pb-20 pt-24 text-center">
+        {/* Glow */}
+        <div
+          className="pointer-events-none absolute left-1/2 top-0 -z-0 h-[600px] w-[700px] -translate-x-1/2 -translate-y-1/4"
+          style={{ background: "radial-gradient(ellipse, rgba(29,255,138,0.06) 0%, transparent 65%)" }}
+        />
 
-        <p className="mt-6 max-w-lg text-balance text-base leading-relaxed text-muted-foreground">
-          Run code, build software, and hand off browser sessions
-          from isolated, agent-native environments.
+        <div className="relative z-10 flex w-full flex-col items-center">
+          {/* Badge */}
+          <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/[0.08] px-4 py-1.5">
+            <span className="size-[6px] animate-pulse rounded-full bg-primary" />
+            <span className="font-mono text-[11px] font-medium tracking-[0.04em] text-primary">
+              Agent-native sandbox infrastructure
+            </span>
+          </div>
+
+          <h1 className="text-balance font-mono text-[clamp(2.25rem,4.8vw,3.75rem)] font-semibold leading-[1.08] tracking-[-0.04em]">
+            Sandboxes for agents
+            <br />
+            <span className="text-primary">that don't wait for humans.</span>
+          </h1>
+
+          <div className="mt-5 mx-auto w-full max-w-[min(36rem,100%)] space-y-3 text-center">
+            <p className="text-[17px] leading-[1.65] text-muted-foreground">
+              Isolated sandboxes for coding, browsing, 
+              <br />
+              testing, and long-running tasks.
+            </p>
+            <p className="text-[17px] leading-[1.65] text-muted-foreground">
+              Built so agents can use Treadstone directly—
+              <br />
+              launching and managing sandboxes on their own.
+            </p>
+          </div>
+
+          <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
+            {isLoggedIn ? (
+              <Link
+                to="/app"
+                className="rounded-[10px] bg-primary px-7 py-3.5 text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Open Dashboard
+              </Link>
+            ) : (
+              <Link
+                to="/auth/sign-up"
+                className="rounded-[10px] bg-primary px-7 py-3.5 text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Get Started Free
+              </Link>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setWaitlistTier("pro")
+                document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth", block: "start" })
+                window.history.replaceState(null, "", "#pricing")
+              }}
+              className="rounded-[10px] border border-border/30 px-7 py-3.5 text-[15px] font-semibold text-muted-foreground transition-colors hover:border-border/50 hover:bg-white/[0.04] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Apply for Early Access
+            </button>
+          </div>
+
+          <div className="mt-14 w-full max-w-[740px]">
+            <AnimatedTerminal />
+          </div>
+        </div>
+      </section>
+
+      {/* ── How It Works ──────────────────────────────────────── */}
+      <section className="mx-auto max-w-[1080px] px-10 py-24">
+        <span className="font-mono text-[11.5px] tracking-[0.08em] text-primary">// execution model</span>
+        <h2 className="mt-3 font-mono text-[clamp(1.75rem,3.5vw,2.75rem)] font-semibold leading-[1.1] tracking-[-0.04em]">
+          Built for autonomous agent workflows.
+        </h2>
+        <p className="mt-3 mb-12 max-w-[480px] text-base leading-[1.65] text-muted-foreground">
+          Agents can create sandboxes, run code, use browsers and tools, and hand work off to humans when needed—through the same control plane.
         </p>
 
-        <div className="mt-10 flex flex-wrap justify-center gap-3">
-          {isLoggedIn ? (
-            <Link
-              to="/app"
-              className="rounded bg-primary px-7 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        <div className="grid grid-cols-1 overflow-hidden rounded-xl border border-border/20 sm:grid-cols-2 lg:grid-cols-4">
+          {HOW_STEPS.map((step, i) => (
+            <div
+              key={step.n}
+              className={[
+                "bg-background p-7",
+                i < HOW_STEPS.length - 1 ? "border-b lg:border-b-0 lg:border-r" : "",
+                "border-border/20",
+              ].join(" ")}
             >
-              Open Dashboard
-            </Link>
-          ) : (
-            <Link
-              to="/auth/sign-up"
-              className="rounded bg-primary px-7 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              Get Started
-            </Link>
-          )}
-          <a
-            href="#install-cli"
-            className="rounded border border-border px-7 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            Install CLI
-          </a>
+              <span className="font-mono text-[10px] tracking-[0.1em] text-muted-foreground/40">{step.n}</span>
+              <div className="mt-3.5 text-[14px] font-semibold">{step.title}</div>
+              <p className="mt-2 text-[12.5px] leading-[1.6] text-muted-foreground">{step.desc}</p>
+            </div>
+          ))}
         </div>
       </section>
 
-      <hr className="border-border/20" />
-
-      {/* ── Command Line ──────────────────────────────────── */}
-      <section id="install-cli" className="mx-auto grid max-w-[1280px] gap-16 px-16 py-20 md:grid-cols-[480px_1fr]">
-        {/* Left: Install */}
-        <div className="flex flex-col gap-7">
-          <div>
-            <h2 className="text-xl font-bold text-foreground">Install</h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              Install the CLI and start managing sandboxes in seconds. Works on macOS, Linux, and Windows.
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-4">
-            <CodeBlock label="macOS / Linux" code={INSTALL_SH} />
-            <CodeBlock label="Windows PowerShell" code={INSTALL_PS} />
-            <CodeBlock label="pip" code={INSTALL_PIP} />
-          </div>
-
-          <div className="flex flex-wrap gap-5 text-sm text-muted-foreground">
-            <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-              GitHub&nbsp;→
-            </a>
-            <a href={RELEASES_URL} target="_blank" rel="noreferrer" className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-              Releases&nbsp;→
-            </a>
-            <a href={PYPI_CLI_URL} target="_blank" rel="noreferrer" className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-              PyPI&nbsp;→
-            </a>
-          </div>
-
-          <p className="text-xs text-muted-foreground/60">
-            Also available: <code className="font-mono">pip install treadstone-sdk</code>
+      {/* ── Code Tabs ─────────────────────────────────────────── */}
+      <div id="integrate" className="border-y border-border/20 bg-white/[0.015] px-10 py-24">
+        <div className="mx-auto max-w-[1080px]">
+          <span className="font-mono text-[11.5px] tracking-[0.08em] text-primary">// integrate</span>
+          <h2 className="mt-3 font-mono text-[clamp(1.75rem,3.5vw,2.75rem)] font-semibold leading-[1.1] tracking-[-0.04em]">
+            Three ways in.
+          </h2>
+          <p className="mt-3 mb-6 max-w-[480px] text-base leading-[1.65] text-muted-foreground">
+            CLI for exploration, Python SDK for automation, REST API for integration. All returning the same consistent
+            JSON.
           </p>
-        </div>
 
-        {/* Right: Usage */}
-        <div className="flex flex-col gap-5">
-          <div>
-            <h2 className="text-xl font-bold text-foreground">Quickstart</h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              A complete agent workflow in four commands — authenticate, discover, create, and hand off.
-            </p>
-          </div>
-
-          <TerminalScenario lines={SCENARIO} />
-
-          <div className="flex flex-wrap gap-3">
-            {["CLI", "Python SDK", "REST API"].map((label) => (
-              <span
-                key={label}
-                className="flex items-center gap-2 rounded border border-border/20 bg-card px-3.5 py-2 text-xs font-medium text-foreground"
-              >
-                <span className="inline-block size-[5px] rounded-full bg-primary" aria-hidden="true" />
-                {label}
-              </span>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <hr className="border-border/20" />
-
-      {/* ── Plans ─────────────────────────────────────────── */}
-      <section id="plans" className="bg-card/30 px-16 py-20">
-        <div className="mx-auto max-w-[1280px]">
-          <div className="mb-12 text-center">
-            <h2 className="text-balance text-2xl font-bold text-foreground">Plans</h2>
-            <p className="mt-2 text-sm text-muted-foreground">Start free. Scale when you need to.</p>
-          </div>
-
-          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-            {PLANS.map((plan) => (
-              <div
-                key={plan.name}
+          {/* Tab bar */}
+          <div className="mb-6 flex w-fit overflow-hidden rounded-lg border border-border/20">
+            {(
+              [
+                { id: "cli", label: "CLI", color: "bg-primary" },
+                { id: "sdk", label: "Python SDK", color: "bg-sky-400" },
+                { id: "rest", label: "REST API", color: "bg-purple-400" },
+              ] as const
+            ).map((tab, i, arr) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
                 className={[
-                  "flex flex-col rounded-md border p-8 transition-shadow",
-                  plan.highlighted
-                    ? "border-primary bg-primary/5 shadow-[0_0_0_1px_hsl(var(--primary)/0.3)]"
-                    : "border-border/20 bg-card",
+                  "flex items-center gap-2 px-5 py-2.5 font-mono text-[12.5px] font-medium transition-colors",
+                  i < arr.length - 1 ? "border-r border-border/20" : "",
+                  activeTab === tab.id
+                    ? "bg-white/[0.06] text-foreground"
+                    : "text-muted-foreground hover:bg-white/[0.03]",
                 ].join(" ")}
               >
-                {/* Name + tag */}
-                <div className="flex items-center gap-2.5">
-                  <span className="text-lg font-bold text-foreground">{plan.name}</span>
-                  {plan.tag && (
-                    <span className="rounded bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
-                      {plan.tag}
-                    </span>
-                  )}
-                </div>
+                <span className={`size-[7px] rounded-full ${tab.color}`} />
+                {tab.label}
+              </button>
+            ))}
+          </div>
 
-                {/* Price */}
-                <div className="mt-3 flex items-baseline gap-1">
-                  <span className={["font-bold", plan.price.length <= 3 ? "text-4xl" : "text-2xl", plan.highlighted ? "text-primary" : "text-foreground"].join(" ")}>
-                    {plan.price}
-                  </span>
-                  {plan.period && (
-                    <span className="text-sm text-muted-foreground">{plan.period}</span>
-                  )}
-                </div>
+          {/* Code block */}
+          <div className="overflow-hidden rounded-xl border border-border/20 bg-background">
+            <div className="flex items-center justify-between border-b border-border/20 bg-white/[0.03] px-5 py-2.5">
+              <span className="font-mono text-[11px] text-muted-foreground/50">
+                {activeTab === "cli" && "bash"}
+                {activeTab === "sdk" && "python — pip install treadstone-sdk"}
+                {activeTab === "rest" && "bash — REST API"}
+              </span>
+              <CopyButton text={tabCopyText[activeTab]} />
+            </div>
+            {activeTab === "cli" && <CliCode />}
+            {activeTab === "sdk" && <SdkCode />}
+            {activeTab === "rest" && <RestCode />}
+          </div>
+        </div>
+      </div>
 
-                <p className="mt-2 text-sm text-muted-foreground">{plan.desc}</p>
+      {/* ── Install ───────────────────────────────────────────── */}
+      <div id="install" className="border-y border-border/20 bg-white/[0.015] px-10 py-24">
+        <div className="mx-auto max-w-[1080px]">
+          <span className="font-mono text-[11.5px] tracking-[0.08em] text-primary">// install</span>
+          <h2 className="mt-3 font-mono text-[clamp(1.75rem,3.5vw,2.75rem)] font-semibold leading-[1.1] tracking-[-0.04em]">
+            Up in seconds.
+          </h2>
+          <p className="mt-3 mb-12 max-w-[480px] text-base leading-[1.65] text-muted-foreground">
+            Install the CLI on any platform. The SDK and REST API need nothing beyond an API key.
+          </p>
 
-                <hr className="my-6 border-border/20" />
+          <div className="mb-8 grid grid-cols-1 md:grid-cols-3 md:items-stretch">
+            {[
+              { os: "macOS / Linux", hint: "curl installer", cmd: INSTALL_SH },
+              { os: "Windows", hint: "PowerShell", cmd: INSTALL_PS },
+              { os: "pip", hint: "Python package", cmd: INSTALL_PIP },
+            ].map((card, i) => (
+              <InstallCard key={card.os} os={card.os} hint={card.hint} cmd={card.cmd} first={i === 0} />
+            ))}
+          </div>
 
-                {/* Features */}
-                <ul className="flex flex-1 flex-col gap-3">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2.5 text-sm text-foreground">
-                      <Dot />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex gap-5">
+              {[
+                { label: "GitHub →", href: GITHUB_URL, external: true },
+                { label: "Releases →", href: RELEASES_URL, external: true },
+                { label: "PyPI →", href: PYPI_CLI_URL, external: true },
+              ].map((link) => (
+                <a
+                  key={link.label}
+                  href={link.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[13px] text-muted-foreground transition-colors hover:text-primary"
+                >
+                  {link.label}
+                </a>
+              ))}
+            </div>
+            <span className="text-[12.5px] text-muted-foreground/50">
+              Also available:{" "}
+              <a href={PYPI_CLI_URL} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground">
+                pip install treadstone-sdk
+              </a>
+            </span>
+          </div>
+        </div>
+      </div>
 
-                {/* CTA */}
+      {/* ── Plans ─────────────────────────────────────────────── */}
+      <section id="pricing" className="mx-auto max-w-[1080px] scroll-mt-20 px-10 py-24">
+        <span className="font-mono text-[11.5px] tracking-[0.08em] text-primary">// pricing</span>
+        <h2 className="mt-3 font-mono text-[clamp(1.75rem,3.5vw,2.75rem)] font-semibold leading-[1.1] tracking-[-0.04em]">
+          Start free.
+          <br />
+          Scale when you need to.
+        </h2>
+        <p className="mt-3 mb-12 max-w-[480px] text-base leading-[1.65] text-muted-foreground">
+          All plans include the CLI, Python SDK, and REST API. Compute is measured in CU-hours.
+        </p>
+
+        <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+          {PLANS.map((plan) => (
+            <div
+              key={plan.name}
+              className={[
+                "flex flex-col rounded-xl border p-6 transition-colors",
+                plan.highlighted
+                  ? "border-primary/30 bg-primary/[0.04] hover:border-primary/50"
+                  : "border-border/20 bg-white/[0.02] hover:border-border/40",
+              ].join(" ")}
+            >
+              <div className="text-[15px] font-semibold tracking-[-0.01em]">{plan.name}</div>
+              <span
+                className={[
+                  "mt-1.5 w-fit rounded px-2 py-0.5 font-mono text-[9.5px] font-semibold tracking-[0.08em]",
+                  plan.badgeSoon
+                    ? "bg-primary/[0.08] text-primary"
+                    : "bg-white/[0.07] text-muted-foreground",
+                ].join(" ")}
+              >
+                {plan.badge}
+              </span>
+
+              <div
+                className={[
+                  "mt-4 font-mono font-semibold leading-none tracking-[-0.05em]",
+                  plan.price.length <= 3 ? "text-[34px]" : "text-[22px]",
+                  plan.highlighted ? "text-primary" : "text-foreground",
+                ].join(" ")}
+              >
+                {plan.price}
+              </div>
+              <div className="mt-1 text-[12px] text-muted-foreground">
+                {plan.period || "pay per CU-hour used"}
+              </div>
+
+              <hr className="my-5 border-border/20" />
+
+              <ul className="flex flex-1 flex-col gap-1.5">
+                {plan.features.map((f) => (
+                  <li key={f} className="flex items-start gap-2 text-[12.5px] leading-[1.45] text-muted-foreground">
+                    <span className="mt-[3px] shrink-0 font-bold text-primary">·</span>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+
+              <div className="mt-5">
                 {plan.waitlistTier ? (
                   <button
                     onClick={() => setWaitlistTier(plan.waitlistTier)}
                     className={[
-                      "mt-8 block w-full rounded py-3 text-center text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      "block w-full rounded-lg py-2.5 text-center text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                       plan.highlighted
                         ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                        : "border border-border text-foreground hover:bg-accent",
+                        : "border border-border/30 text-foreground hover:bg-white/[0.04]",
                     ].join(" ")}
                   >
                     {plan.cta}
@@ -519,73 +917,98 @@ export function LandingPage() {
                   <a
                     href={plan.ctaHref!}
                     className={[
-                      "mt-8 block rounded py-3 text-center text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      "block rounded-lg py-2.5 text-center text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                       plan.highlighted
                         ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                        : "border border-border text-foreground hover:bg-accent",
+                        : "border border-border/30 text-foreground hover:bg-white/[0.04]",
                     ].join(" ")}
                   >
                     {plan.cta}
                   </a>
                 )}
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
       </section>
 
       <hr className="border-border/20" />
 
-      {/* ── Footer ────────────────────────────────────────── */}
-      <footer className="px-16 py-12">
-        <div className="mx-auto grid max-w-[1280px] gap-10 md:grid-cols-[1fr_auto_auto_auto]">
-          {/* Brand */}
+      {/* ── Footer ────────────────────────────────────────────── */}
+      <footer className="px-10 pb-8 pt-12">
+        <div className="mx-auto flex max-w-[1080px] flex-wrap items-start justify-between gap-12">
           <div>
-            <div className="flex items-center gap-2 text-primary">
-              <TreadstoneSymbol className="size-5" />
-              <p className="text-sm font-semibold tracking-wide">Treadstone</p>
+            <div className="flex items-center gap-2.5 font-mono text-[14px] font-semibold text-foreground">
+              <TreadstoneSymbol className="size-[22px] shrink-0 text-primary" />
+              treadstone
             </div>
-            <p className="mt-1.5 text-xs text-muted-foreground/70">Agent-native sandbox platform.</p>
-            <p className="mt-1 text-xs text-muted-foreground/40">&copy; 2026 Treadstone. Apache-2.0 License.</p>
+            <p className="mt-3 max-w-[220px] text-[12.5px] leading-[1.6] text-muted-foreground/50">
+              Agent-native sandbox platform. Run code, build software, and hand off browser sessions from isolated
+              environments.
+            </p>
           </div>
 
-          {/* Resources */}
-          <div>
-            <h3 className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-              Resources
-            </h3>
-            <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-              <li><a href="#install-cli" className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">Install CLI</a></li>
-              <li><a href={RELEASES_URL} target="_blank" rel="noreferrer" className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">GitHub Releases</a></li>
-              <li><a href={PYPI_CLI_URL} target="_blank" rel="noreferrer" className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">Python SDK</a></li>
-              <li><Link to="/auth/sign-in" className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">Sign In</Link></li>
-            </ul>
-          </div>
+          <div className="flex gap-14 flex-shrink-0">
+            <div>
+              <span className="font-mono text-[10px] tracking-[0.1em] text-muted-foreground/40">RESOURCES</span>
+              <ul className="mt-3.5 flex flex-col gap-2.5">
+                {[
+                  { label: "Install CLI", href: "#install" },
+                  { label: "GitHub Releases", href: RELEASES_URL, external: true },
+                  { label: "Python SDK Docs", href: PYPI_CLI_URL, external: true },
+                  { label: "REST API Reference", href: "#" },
+                ].map((l) => (
+                  <li key={l.label}>
+                    <a
+                      href={l.href}
+                      target={l.external ? "_blank" : undefined}
+                      rel={l.external ? "noreferrer" : undefined}
+                      className="text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      {l.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
 
-          {/* Community */}
-          <div>
-            <h3 className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-              Community
-            </h3>
-            <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-              <li><a href={GITHUB_URL} target="_blank" rel="noreferrer" className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">GitHub</a></li>
-              <li><a href={`${GITHUB_URL}/stargazers`} target="_blank" rel="noreferrer" className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">Star on GitHub</a></li>
-            </ul>
-          </div>
+            <div>
+              <span className="font-mono text-[10px] tracking-[0.1em] text-muted-foreground/40">COMMUNITY</span>
+              <ul className="mt-3.5 flex flex-col gap-2.5">
+                {[{ label: "Star on GitHub ★", href: GITHUB_STAR_LOGIN_URL }].map((l) => (
+                  <li key={l.label}>
+                    <a
+                      href={l.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      {l.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
 
-          {/* Support */}
-          <div>
-            <h3 className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-              Support
-            </h3>
-            <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-              <li>
-                <a href={`mailto:${SUPPORT_EMAIL}`} className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-                  {SUPPORT_EMAIL}
-                </a>
-              </li>
-            </ul>
+            <div>
+              <span className="font-mono text-[10px] tracking-[0.1em] text-muted-foreground/40">SUPPORT</span>
+              <ul className="mt-3.5 flex flex-col gap-2.5">
+                <li>
+                  <a
+                    href={`mailto:${SUPPORT_EMAIL}`}
+                    className="text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    {SUPPORT_EMAIL}
+                  </a>
+                </li>
+              </ul>
+            </div>
           </div>
+        </div>
+
+        <div className="mx-auto mt-10 flex max-w-[1080px] items-center justify-between border-t border-border/20 pt-5">
+          <span className="text-[11.5px] text-muted-foreground/40">© 2026 Treadstone. Apache-2.0 License.</span>
+          <span className="text-[11.5px] text-muted-foreground/40">Agent-native sandbox platform.</span>
         </div>
       </footer>
     </div>
