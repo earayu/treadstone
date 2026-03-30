@@ -73,7 +73,7 @@ export function PublicLayout() {
               to="/app"
               className="rounded bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              Dashboard
+              Console
             </Link>
           ) : (
             <Link

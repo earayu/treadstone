@@ -14,12 +14,20 @@ def _get_kwargs(
     *,
     limit: int | Unset = 100,
     offset: int | Unset = 0,
+    email: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
     params: dict[str, Any] = {}
 
     params["limit"] = limit
 
     params["offset"] = offset
+
+    json_email: None | str | Unset
+    if isinstance(email, Unset):
+        json_email = UNSET
+    else:
+        json_email = email
+    params["email"] = json_email
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -67,12 +75,14 @@ def sync_detailed(
     client: AuthenticatedClient,
     limit: int | Unset = 100,
     offset: int | Unset = 0,
+    email: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | UserListResponse]:
     """List Users
 
     Args:
         limit (int | Unset): Maximum number of items to return. Default: 100.
         offset (int | Unset): Number of items to skip. Default: 0.
+        email (None | str | Unset): Optional case-insensitive substring filter on user email.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -85,6 +95,7 @@ def sync_detailed(
     kwargs = _get_kwargs(
         limit=limit,
         offset=offset,
+        email=email,
     )
 
     response = client.get_httpx_client().request(
@@ -99,12 +110,14 @@ def sync(
     client: AuthenticatedClient,
     limit: int | Unset = 100,
     offset: int | Unset = 0,
+    email: None | str | Unset = UNSET,
 ) -> HTTPValidationError | UserListResponse | None:
     """List Users
 
     Args:
         limit (int | Unset): Maximum number of items to return. Default: 100.
         offset (int | Unset): Number of items to skip. Default: 0.
+        email (None | str | Unset): Optional case-insensitive substring filter on user email.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -118,6 +131,7 @@ def sync(
         client=client,
         limit=limit,
         offset=offset,
+        email=email,
     ).parsed
 
 
@@ -126,12 +140,14 @@ async def asyncio_detailed(
     client: AuthenticatedClient,
     limit: int | Unset = 100,
     offset: int | Unset = 0,
+    email: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | UserListResponse]:
     """List Users
 
     Args:
         limit (int | Unset): Maximum number of items to return. Default: 100.
         offset (int | Unset): Number of items to skip. Default: 0.
+        email (None | str | Unset): Optional case-insensitive substring filter on user email.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -144,6 +160,7 @@ async def asyncio_detailed(
     kwargs = _get_kwargs(
         limit=limit,
         offset=offset,
+        email=email,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -156,12 +173,14 @@ async def asyncio(
     client: AuthenticatedClient,
     limit: int | Unset = 100,
     offset: int | Unset = 0,
+    email: None | str | Unset = UNSET,
 ) -> HTTPValidationError | UserListResponse | None:
     """List Users
 
     Args:
         limit (int | Unset): Maximum number of items to return. Default: 100.
         offset (int | Unset): Number of items to skip. Default: 0.
+        email (None | str | Unset): Optional case-insensitive substring filter on user email.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -176,5 +195,6 @@ async def asyncio(
             client=client,
             limit=limit,
             offset=offset,
+            email=email,
         )
     ).parsed

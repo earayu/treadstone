@@ -23,6 +23,8 @@ GET  /v1/usage
 GET  /v1/admin/stats
 ```
 
+Obtain an API key via the web console or CLI:
+
 ## Hard rules
 
 - Health is `/health`, not `/v1/system/health`.

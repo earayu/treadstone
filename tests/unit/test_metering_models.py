@@ -16,7 +16,8 @@ from treadstone.models.metering import (
     UserPlan,
 )
 from treadstone.services.metering_helpers import (
-    CU_MEMORY_GIB_DIVISOR,
+    CU_MEMORY_WEIGHT,
+    CU_VCPU_WEIGHT,
     TEMPLATE_SPECS,
     ConsumeResult,
     calculate_cu_rate,
@@ -292,11 +293,14 @@ class TestTemplateSpecs:
         }
         assert set(TEMPLATE_SPECS.keys()) == expected
 
-    def test_ratio_is_1_to_2(self):
+    def test_ratio_is_1_to_4(self):
         for name, spec in TEMPLATE_SPECS.items():
-            assert spec["memory_gib"] == spec["vcpu"] * CU_MEMORY_GIB_DIVISOR, (
-                f"{name}: memory_gib should equal vcpu * CU_MEMORY_GIB_DIVISOR"
-            )
+            assert spec["memory_gib"] == spec["vcpu"] * 4, f"{name}: memory_gib should equal vcpu * 4 (1:4 ratio)"
+
+    def test_cu_rate_equals_vcpu_for_1_to_4(self):
+        for name, spec in TEMPLATE_SPECS.items():
+            cu = CU_VCPU_WEIGHT * spec["vcpu"] + CU_MEMORY_WEIGHT * spec["memory_gib"]
+            assert cu == spec["vcpu"], f"{name}: CU/h should equal vCPU for 1:4 ratio templates"
 
 
 class TestParseStorageSizeGib:
@@ -356,25 +360,25 @@ class TestComputePeriodBounds:
 class TestValidateTemplateSpecs:
     def test_matching_specs_returns_no_warnings(self):
         k8s_templates = [
-            {"name": "aio-sandbox-tiny", "resource_spec": {"cpu": "250m", "memory": "512Mi"}},
-            {"name": "aio-sandbox-small", "resource_spec": {"cpu": "500m", "memory": "1Gi"}},
-            {"name": "aio-sandbox-medium", "resource_spec": {"cpu": "1", "memory": "2Gi"}},
-            {"name": "aio-sandbox-large", "resource_spec": {"cpu": "2", "memory": "4Gi"}},
-            {"name": "aio-sandbox-xlarge", "resource_spec": {"cpu": "4", "memory": "8Gi"}},
+            {"name": "aio-sandbox-tiny", "resource_spec": {"cpu": "250m", "memory": "1Gi"}},
+            {"name": "aio-sandbox-small", "resource_spec": {"cpu": "500m", "memory": "2Gi"}},
+            {"name": "aio-sandbox-medium", "resource_spec": {"cpu": "1", "memory": "4Gi"}},
+            {"name": "aio-sandbox-large", "resource_spec": {"cpu": "2", "memory": "8Gi"}},
+            {"name": "aio-sandbox-xlarge", "resource_spec": {"cpu": "4", "memory": "16Gi"}},
         ]
         warnings = validate_template_specs(k8s_templates)
         assert warnings == []
 
     def test_cpu_drift_detected(self):
         k8s_templates = [
-            {"name": "aio-sandbox-tiny", "resource_spec": {"cpu": "500m", "memory": "512Mi"}},
+            {"name": "aio-sandbox-tiny", "resource_spec": {"cpu": "500m", "memory": "1Gi"}},
         ]
         warnings = validate_template_specs(k8s_templates)
         assert any("vCPU drift" in w and "aio-sandbox-tiny" in w for w in warnings)
 
     def test_memory_drift_detected(self):
         k8s_templates = [
-            {"name": "aio-sandbox-small", "resource_spec": {"cpu": "500m", "memory": "2Gi"}},
+            {"name": "aio-sandbox-small", "resource_spec": {"cpu": "500m", "memory": "4Gi"}},
         ]
         warnings = validate_template_specs(k8s_templates)
         assert any("memory drift" in w and "aio-sandbox-small" in w for w in warnings)
@@ -385,12 +389,12 @@ class TestValidateTemplateSpecs:
 
     def test_extra_k8s_template_detected(self):
         k8s_templates = [
-            {"name": "aio-sandbox-tiny", "resource_spec": {"cpu": "250m", "memory": "512Mi"}},
-            {"name": "aio-sandbox-small", "resource_spec": {"cpu": "500m", "memory": "1Gi"}},
-            {"name": "aio-sandbox-medium", "resource_spec": {"cpu": "1", "memory": "2Gi"}},
-            {"name": "aio-sandbox-large", "resource_spec": {"cpu": "2", "memory": "4Gi"}},
-            {"name": "aio-sandbox-xlarge", "resource_spec": {"cpu": "4", "memory": "8Gi"}},
-            {"name": "aio-sandbox-custom", "resource_spec": {"cpu": "8", "memory": "16Gi"}},
+            {"name": "aio-sandbox-tiny", "resource_spec": {"cpu": "250m", "memory": "1Gi"}},
+            {"name": "aio-sandbox-small", "resource_spec": {"cpu": "500m", "memory": "2Gi"}},
+            {"name": "aio-sandbox-medium", "resource_spec": {"cpu": "1", "memory": "4Gi"}},
+            {"name": "aio-sandbox-large", "resource_spec": {"cpu": "2", "memory": "8Gi"}},
+            {"name": "aio-sandbox-xlarge", "resource_spec": {"cpu": "4", "memory": "16Gi"}},
+            {"name": "aio-sandbox-custom", "resource_spec": {"cpu": "8", "memory": "32Gi"}},
         ]
         warnings = validate_template_specs(k8s_templates)
         assert any("aio-sandbox-custom" in w and "no entry in TEMPLATE_SPECS" in w for w in warnings)

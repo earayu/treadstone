@@ -158,9 +158,7 @@ class TestEnsureUserPlan:
         assert plan.period_end == datetime(2026, 4, 1, tzinfo=UTC)
 
         grants = _added_objects(session, ComputeGrant)
-        assert len(grants) == 1
-        assert grants[0].grant_type == "welcome_bonus"
-        assert grants[0].original_amount == WELCOME_BONUS_AMOUNT
+        assert len(grants) == 0
         session.flush.assert_awaited_once()
 
     async def test_creates_pro_plan_without_welcome_bonus(self, monkeypatch):
@@ -494,7 +492,7 @@ class TestOpenComputeSession:
         assert cs.user_id == "user01"
         assert cs.template == "aio-sandbox-small"
         assert cs.vcpu_request == Decimal("0.5")
-        assert cs.memory_gib_request == Decimal("1")
+        assert cs.memory_gib_request == Decimal("2")
         assert cs.started_at == FIXED_NOW
         assert cs.last_metered_at == FIXED_NOW
         assert cs.ended_at is None
@@ -507,7 +505,7 @@ class TestOpenComputeSession:
             user_id="user01",
             template="aio-sandbox-small",
             vcpu_request=Decimal("0.5"),
-            memory_gib_request=Decimal("1"),
+            memory_gib_request=Decimal("2"),
             started_at=FIXED_NOW,
             last_metered_at=FIXED_NOW,
         )
@@ -545,7 +543,7 @@ class TestCloseComputeSession:
             user_id="user01",
             template="aio-sandbox-small",
             vcpu_request=Decimal("0.5"),
-            memory_gib_request=Decimal("1"),
+            memory_gib_request=Decimal("2"),
             started_at=datetime(2026, 3, 15, 9, 0, 0, tzinfo=UTC),
             last_metered_at=last_tick,
             vcpu_hours=Decimal("0"),
@@ -562,7 +560,7 @@ class TestCloseComputeSession:
         assert cs.last_metered_at == close_time
         eh = Decimal("60") / Decimal("3600")
         assert abs(cs.vcpu_hours - Decimal("0.5") * eh) < Decimal("0.0001")
-        assert abs(cs.memory_gib_hours - Decimal("1") * eh) < Decimal("0.0001")
+        assert abs(cs.memory_gib_hours - Decimal("2") * eh) < Decimal("0.0001")
 
     async def test_close_consumes_credits_for_final_delta(self, monkeypatch):
         """Closing a session with elapsed time must consume credits via dual-pool."""
@@ -575,7 +573,7 @@ class TestCloseComputeSession:
             user_id="user01",
             template="aio-sandbox-small",
             vcpu_request=Decimal("0.5"),
-            memory_gib_request=Decimal("1"),
+            memory_gib_request=Decimal("2"),
             started_at=datetime(2026, 3, 15, 9, 0, 0, tzinfo=UTC),
             last_metered_at=last_tick,
             vcpu_hours=Decimal("0"),

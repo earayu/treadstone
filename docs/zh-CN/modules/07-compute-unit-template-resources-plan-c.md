@@ -948,10 +948,127 @@ ACS 官方文档也明确说明：
 - `docs/zh-CN/modules/02-sandbox-lifecycle-and-templates.md`
 - `docs/zh-CN/modules/05-metering-and-admin-ops.md`
 - `docs/zh-CN/modules/05-metering-system-audit.md`
-- `web/public/docs/getting-started.md`
+- `web/public/docs/index.md`
 
 ## 12. 最终建议
 
 如果只保留一句话作为执行结论，就是：
 
 **现在按 ACS 启动期落地：模板改成 `request = limit` 的精确支持规格，persistent sandbox 取消代码里的自动 `2x request` 推导并改为直接使用 template，CU 改成基于 `effective billed spec`，默认 Tier 收紧到 `free 10 / pro 80 / ultra 240 / custom 800`，关闭自动 welcome bonus；未来升级到 ACK 时，保留同一组 request 与 CU，只恢复 burst limit。至于用户级共享存储，建议作为 NAS 工作区 V2 单独设计，而不是在当前 `sandbox -> PVC` 模型上硬改。**
+
+---
+
+## 13. 实施记录（2026-03-31）
+
+> 本节记录方案 C 在代码库中的实际落地内容，与第 11 节的"预期影响"对照。
+
+### 13.1 与文档的两处调整
+
+实施时对文档原方案做了两处主动调整：
+
+**调整 1：CU 公式直接改为 sum，不保留 max**
+
+文档 §5.2 原本建议 `CU/h = 0.5 * vCPU + 0.125 * GiB`，但代码里还保留着旧的 `max(vCPU, GiB / divisor)` 实现。考虑到系统尚未上线，决定一步到位，将公式统一改为 sum formula。对于所有保持 `1:4` 比例的公开模板，两种公式结果完全相同（0.25 / 0.5 / 1 / 2 / 4）。
+
+**调整 2：Ultra 并发改为 5，Pro 并发改为 3**
+
+文档 §7.1 建议 ultra 并发上限为 4。考虑到 CU 月度限额本身已经起到约束作用——并发越高，额度消耗越快——适当放宽并发可以改善体验而不增加成本敞口。最终选择：
+
+- `pro`：3 个并发（文档建议 2）
+- `ultra`：5 个并发（文档建议 4）
+
+### 13.2 模板资源规格（Helm values）
+
+修改文件：`deploy/sandbox-runtime/values.yaml` / `values-prod.yaml` / `values-local.yaml` / `values-demo.yaml`
+
+所有环境统一改为 `request = limit`，memory 按 1:4 比例调整：
+
+| 模板 | CPU request→limit | Memory request（旧→新）|
+| --- | --- | --- |
+| `aio-sandbox-tiny` | `250m` → `250m` | `512Mi` → `1Gi` |
+| `aio-sandbox-small` | `500m` → `500m` | `1Gi` → `2Gi` |
+| `aio-sandbox-medium` | `1` → `1` | `2Gi` → `4Gi` |
+| `aio-sandbox-large` | `2` → `2` | `4Gi` → `8Gi` |
+| `aio-sandbox-xlarge` | `4` → `4` | `8Gi` → `16Gi` |
+
+warm pool 在 `values.yaml`（dev 环境）保留 tiny `enabled: true replicas: 1`，其余环境全部关闭。
+
+### 13.3 计量静态表与 CU 公式
+
+修改文件：`treadstone/services/metering_helpers.py`
+
+- `TEMPLATE_SPECS` 中每个模板的 `memory_gib` 同步翻倍，与 Helm values 对齐
+- 移除 `CU_MEMORY_GIB_DIVISOR = 2`，替换为：
+  - `CU_VCPU_WEIGHT = Decimal("0.5")`
+  - `CU_MEMORY_WEIGHT = Decimal("0.125")`
+- `calculate_cu_rate` 改为：`CU_VCPU_WEIGHT * vcpu + CU_MEMORY_WEIGHT * memory_gib`
+
+修改文件：`treadstone/services/metering_service.py`
+
+- `get_compute_unit_hours_for_period` 中 per-session 的 CU 计算同步改为 sum 公式
+
+修改文件：`treadstone/api/usage.py`
+
+- `_serialize_session` 中的 `cu_hours` 计算同步改为 sum 公式
+
+### 13.4 Persistent Sandbox 资源推导移除
+
+修改文件：`treadstone/services/sandbox_service.py`
+
+- 删除 `_RESOURCE_LIMITS_MULTIPLIER = 2` 和 `_build_resource_limits()` 函数
+- `_create_direct()` 改为读取 `tmpl.get("resource_limits") or resource_requests`，不再做任何二次推导
+
+修改文件：`treadstone/services/k8s_client.py`
+
+- `_parse_sandbox_template()` 新增 `limits` 字段解析，返回结构增加 `resource_limits`
+- `FakeK8sClient._DEFAULT_TEMPLATES` 中每个模板同步更新 memory 并补充 `resource_limits`
+
+### 13.5 Tier 默认值（Alembic migration）
+
+新增文件：`alembic/versions/d4e5f6a7b8c9_plan_c_acs_startup_tier_defaults.py`
+
+| Tier | CU-h/月 | Storage | 并发 | 最长时长 | Allowed Templates | Grace |
+| --- | --- | --- | --- | --- | --- | --- |
+| `free` | `10` | `0 GiB` | `1` | `7200 s` | `tiny` | `900 s` |
+| `pro` | `80` | `10 GiB` | `3` | `28800 s` | `tiny, small, medium` | `3600 s` |
+| `ultra` | `240` | `30 GiB` | `5` | `86400 s` | `tiny, small, medium` | `10800 s` |
+| `custom` | `800` | `100 GiB` | `10` | `259200 s` | 全部模板 | `43200 s` |
+
+### 13.6 Welcome bonus 关闭
+
+修改文件：`treadstone/services/metering_service.py`
+
+- `WELCOME_BONUS_AMOUNT` 从 `50` 改为 `0`
+- `ensure_user_plan` 中增加 `WELCOME_BONUS_AMOUNT > 0` 守卫，amount 为 0 时不创建 `ComputeGrant`
+- `_create_welcome_bonus` 方法本身保留，供未来管理员通过活动显式调用
+
+### 13.7 落地页定价卡片
+
+修改文件：`web/src/pages/public/landing.tsx`
+
+| Plan | CU-h（旧→新）| 并发（旧→新）| Storage（旧→新）| Max 时长（旧→新）|
+| --- | --- | --- | --- | --- |
+| Free | 20 → 10 | 3 → 1 | - | 2 hr（不变）|
+| Pro | 120 → 80 | 8 → 3 | 15 GiB → 10 GiB | 24 hr → 8 hr |
+| Ultra | 400 → 240 | 20 → 5 | 50 GiB → 30 GiB | 72 hr → 24 hr |
+| Custom | 1000 → 800 | 50 → 10 | 100 GiB（不变）| 72 hr（新增展示）|
+
+### 13.8 测试更新
+
+| 文件 | 变更内容 |
+| --- | --- |
+| `tests/unit/test_metering_models.py` | 导入改为 `CU_VCPU_WEIGHT / CU_MEMORY_WEIGHT`；`test_ratio_is_1_to_2` 重命名为 `test_ratio_is_1_to_4`；新增 `test_cu_rate_equals_vcpu_for_1_to_4`；`validate_template_specs` 测试数据更新为新 memory 值 |
+| `tests/unit/test_metering_service.py` | `test_creates_new_free_plan` 改为断言 grants 为 0 |
+| `tests/unit/test_sandbox_service.py` | 模板 fixture 更新为新 memory 及 `resource_limits` 字段 |
+| `tests/api/test_usage_api.py` | `extra_remaining` 改为 `0.0`，`total_remaining` 改为 `10.0`；welcome bonus 断言改为 `None`；`test_list_grants_includes_welcome_bonus` 重命名为 `test_list_grants_no_welcome_bonus_when_disabled` |
+| `tests/e2e/07-metering-usage.hurl` | grants 断言改为 `count == 0` |
+
+### 13.9 未纳入本次实施的内容
+
+以下内容文档已讨论，但本次 PR 不涉及：
+
+- ACS pod annotation（`alibabacloud.com/pod-use-spec`）读取：模板已精确命中 ACS 规格，暂不需要
+- 平台开关（`sandboxPlatform = acs | ack`）：部署差异化时再引入
+- NAS 用户工作区 V2：文档明确建议延后
+- ACK 增长期模板（`limit > request`）：待迁移 ACK 时处理
+- ACK 增长期 Tier 额度提升：作为后续独立 migration

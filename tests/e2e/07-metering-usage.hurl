@@ -102,19 +102,13 @@ jsonpath "$.limit" == 5
 jsonpath "$.offset" == 0
 
 
-# ── GET /v1/usage/grants — verify welcome bonus ─────────────────────────────
+# ── GET /v1/usage/grants — no welcome bonus when amount is 0 ─────────────────
 
 GET {{base_url}}/v1/usage/grants
 Authorization: Bearer {{api_key}}
 HTTP 200
 [Asserts]
-jsonpath "$.compute_grants" count >= 1
-jsonpath "$.compute_grants[0].grant_type" == "welcome_bonus"
-jsonpath "$.compute_grants[0].original_amount" == 50.0
-jsonpath "$.compute_grants[0].remaining_amount" == 50.0
-jsonpath "$.compute_grants[0].status" == "active"
-jsonpath "$.compute_grants[0].granted_at" isString
-jsonpath "$.compute_grants[0].expires_at" isString
+jsonpath "$.compute_grants" count == 0
 
 
 # ── Non-admin access to admin endpoint → 403 ────────────────────────────────

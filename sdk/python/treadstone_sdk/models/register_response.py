@@ -18,11 +18,17 @@ class RegisterResponse:
         id (str):
         email (str):
         role (Role):
+        is_active (bool):
+        is_verified (bool):
+        verification_email_sent (bool):
     """
 
     id: str
     email: str
     role: Role
+    is_active: bool
+    is_verified: bool
+    verification_email_sent: bool
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -32,6 +38,12 @@ class RegisterResponse:
 
         role = self.role.value
 
+        is_active = self.is_active
+
+        is_verified = self.is_verified
+
+        verification_email_sent = self.verification_email_sent
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -39,6 +51,9 @@ class RegisterResponse:
                 "id": id,
                 "email": email,
                 "role": role,
+                "is_active": is_active,
+                "is_verified": is_verified,
+                "verification_email_sent": verification_email_sent,
             }
         )
 
@@ -53,10 +68,19 @@ class RegisterResponse:
 
         role = Role(d.pop("role"))
 
+        is_active = d.pop("is_active")
+
+        is_verified = d.pop("is_verified")
+
+        verification_email_sent = d.pop("verification_email_sent")
+
         register_response = cls(
             id=id,
             email=email,
             role=role,
+            is_active=is_active,
+            is_verified=is_verified,
+            verification_email_sent=verification_email_sent,
         )
 
         register_response.additional_properties = d

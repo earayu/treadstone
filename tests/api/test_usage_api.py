@@ -111,8 +111,8 @@ async def test_get_usage_returns_summary(user_client):
     assert data["compute"]["monthly_limit"] == 10.0
     assert data["compute"]["monthly_used"] == 0.0
     assert data["compute"]["monthly_remaining"] == 10.0
-    assert data["compute"]["extra_remaining"] == 50.0
-    assert data["compute"]["total_remaining"] == 60.0
+    assert data["compute"]["extra_remaining"] == 0.0
+    assert data["compute"]["total_remaining"] == 10.0
     assert data["compute"]["unit"] == "CU-hours"
 
     assert data["storage"]["gib_hours"] == 0.0
@@ -129,22 +129,21 @@ async def test_get_usage_returns_summary(user_client):
 
 
 async def test_get_usage_includes_credit_pool_and_grants(user_client):
-    """Usage summary includes credit pool status; grants endpoint lists welcome bonus."""
+    """Usage summary includes credit pool status; no welcome bonus when amount is 0."""
     usage = await user_client.get("/v1/usage")
     assert usage.status_code == 200
     u = usage.json()
     assert u["compute"]["compute_unit_hours"] == 0.0
     assert u["compute"]["monthly_limit"] == 10.0
     assert u["compute"]["monthly_used"] == 0.0
-    assert u["compute"]["extra_remaining"] == 50.0
-    assert u["compute"]["total_remaining"] == 60.0
+    assert u["compute"]["extra_remaining"] == 0.0
+    assert u["compute"]["total_remaining"] == 10.0
 
     grants = await user_client.get("/v1/usage/grants")
     assert grants.status_code == 200
     compute = grants.json()["compute_grants"]
     welcome = next((g for g in compute if g["grant_type"] == "welcome_bonus"), None)
-    assert welcome is not None
-    assert welcome["remaining_amount"] == 50.0
+    assert welcome is None
 
     plan = await user_client.get("/v1/usage/plan")
     assert plan.status_code == 200
@@ -204,7 +203,8 @@ async def test_get_usage_clips_cross_period_cumulative_usage(user_client, monkey
 
     assert resp.status_code == 200
     data = resp.json()
-    assert data["compute"]["compute_unit_hours"] == 1.0
+    # Sum formula: 0.5*vcpu_hours + 0.125*memory_gib_hours; overlap_ratio 0.5 → 1.5 * 0.5 = 0.75
+    assert data["compute"]["compute_unit_hours"] == 0.75
     assert data["storage"]["gib_hours"] == 5.0
 
 
@@ -274,18 +274,15 @@ async def test_list_sessions_pagination(user_client):
 # ── GET /v1/usage/grants ────────────────────────────────────────────────────
 
 
-async def test_list_grants_includes_welcome_bonus(user_client):
+async def test_list_grants_no_welcome_bonus_when_disabled(user_client):
     resp = await user_client.get("/v1/usage/grants")
     assert resp.status_code == 200
     data = resp.json()
-    assert len(data["compute_grants"]) >= 1
+    assert "compute_grants" in data
     assert "storage_quota_grants" in data
 
     welcome = next((g for g in data["compute_grants"] if g["grant_type"] == "welcome_bonus"), None)
-    assert welcome is not None
-    assert welcome["original_amount"] == 50.0
-    assert welcome["remaining_amount"] == 50.0
-    assert welcome["status"] == "active"
+    assert welcome is None
 
 
 async def test_list_grants_shows_correct_status(user_client):

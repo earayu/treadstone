@@ -23,6 +23,7 @@ class ApiKeyResponse:
     Attributes:
         id (str):
         name (str):
+        is_enabled (bool):
         key (str):
         created_at (datetime.datetime):
         updated_at (datetime.datetime):
@@ -32,6 +33,7 @@ class ApiKeyResponse:
 
     id: str
     name: str
+    is_enabled: bool
     key: str
     created_at: datetime.datetime
     updated_at: datetime.datetime
@@ -43,6 +45,8 @@ class ApiKeyResponse:
         id = self.id
 
         name = self.name
+
+        is_enabled = self.is_enabled
 
         key = self.key
 
@@ -66,6 +70,7 @@ class ApiKeyResponse:
             {
                 "id": id,
                 "name": name,
+                "is_enabled": is_enabled,
                 "key": key,
                 "created_at": created_at,
                 "updated_at": updated_at,
@@ -85,6 +90,8 @@ class ApiKeyResponse:
         id = d.pop("id")
 
         name = d.pop("name")
+
+        is_enabled = d.pop("is_enabled")
 
         key = d.pop("key")
 
@@ -114,6 +121,7 @@ class ApiKeyResponse:
         api_key_response = cls(
             id=id,
             name=name,
+            is_enabled=is_enabled,
             key=key,
             created_at=created_at,
             updated_at=updated_at,

@@ -1,4 +1,4 @@
-import { NavLink } from "react-router"
+import { Link, NavLink } from "react-router"
 import {
   Box,
   Key,
@@ -9,6 +9,7 @@ import {
   Activity,
   Users,
   LayoutDashboard,
+  MessageSquareText,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCurrentUser } from "@/hooks/use-auth"
@@ -25,6 +26,7 @@ const adminNavItems = [
   { to: "/internal/admin/overview", icon: LayoutDashboard, label: "Overview" },
   { to: "/internal/admin/users", icon: Users, label: "User Management" },
   { to: "/internal/admin/metering", icon: Activity, label: "Admin Metering" },
+  { to: "/internal/admin/feedback", icon: MessageSquareText, label: "Feedback" },
   { to: "/internal/audit", icon: FileText, label: "Audit Events" },
 ]
 
@@ -34,14 +36,18 @@ export function Sidebar() {
 
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
-      <div className="flex items-center gap-3.5 px-6 py-6">
-        <div className="flex size-10 items-center justify-center bg-primary">
+      <Link
+        to="/app"
+        className="flex items-center gap-3.5 px-6 py-6 transition-colors hover:bg-sidebar-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
+        aria-label="Go to Sandboxes"
+      >
+        <div className="flex size-10 shrink-0 items-center justify-center bg-primary">
           <TreadstoneSymbol className="size-8 text-primary-foreground" />
         </div>
         <span className="text-2xl font-bold tracking-tight text-primary">
           Treadstone
         </span>
-      </div>
+      </Link>
 
       <nav className="flex flex-1 flex-col pt-4">
         {navItems.map((item) => (

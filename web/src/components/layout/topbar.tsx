@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react"
 import { Link, useLocation, useNavigate } from "react-router"
 import { Mail, User, Settings, LogOut, BookOpen } from "lucide-react"
 import { useCurrentUser, useLogout } from "@/hooks/use-auth"
+import { useSubmitFeedback } from "@/api/support"
 import { toast } from "sonner"
 
 const GITHUB_URL = "https://github.com/earayu/treadstone"
@@ -53,6 +54,8 @@ export function Topbar() {
 
   const [mailOpen, setMailOpen] = useState(false)
   const [userOpen, setUserOpen] = useState(false)
+  const [feedbackText, setFeedbackText] = useState("")
+  const submitFeedback = useSubmitFeedback()
 
   const mailRef = useRef<HTMLDivElement>(null)
   const userRef = useRef<HTMLDivElement>(null)
@@ -63,6 +66,23 @@ export function Topbar() {
   const pageLabel = location.pathname.startsWith("/app/sandboxes/")
     ? "Sandbox Detail"
     : (ROUTE_LABELS[location.pathname] ?? "Console")
+
+  async function handleFeedbackSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const trimmed = feedbackText.trim()
+    if (!trimmed) {
+      toast.error("Please enter a message.")
+      return
+    }
+    try {
+      await submitFeedback.mutateAsync({ body: trimmed })
+      toast.success("Thanks — we received your message.")
+      setFeedbackText("")
+      setMailOpen(false)
+    } catch {
+      toast.error("Could not send feedback. Try again or use email.")
+    }
+  }
 
   async function handleSignOut() {
     try {
@@ -77,7 +97,12 @@ export function Topbar() {
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-background px-6">
       <div className="flex items-center gap-2 text-xs uppercase tracking-widest">
-        <span className="text-muted-foreground">Console</span>
+        <Link
+          to="/app"
+          className="text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Console
+        </Link>
         <span className="text-muted-foreground">&rsaquo;</span>
         <span className="font-medium text-foreground">{pageLabel}</span>
       </div>
@@ -111,7 +136,7 @@ export function Topbar() {
               <Mail className="size-4" />
             </button>
             {mailOpen && (
-              <div className="absolute right-0 top-8 z-50 w-72 border border-border/30 bg-popover p-4 shadow-lg">
+              <div className="absolute right-0 top-8 z-50 w-80 border border-border/30 bg-popover p-4 shadow-lg">
                 <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Support</p>
                 <a
                   href={`mailto:${SUPPORT_EMAIL}`}
@@ -120,8 +145,26 @@ export function Topbar() {
                   {SUPPORT_EMAIL}
                 </a>
                 <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                  Encountered an issue or have feedback? Feel free to reach out via email — we read every message.
+                  Or send a message from the console (linked to your account). You can still email us directly.
                 </p>
+                <form onSubmit={(e) => void handleFeedbackSubmit(e)} className="mt-3 flex flex-col gap-2">
+                  <textarea
+                    value={feedbackText}
+                    onChange={(e) => setFeedbackText(e.target.value)}
+                    placeholder="Describe your issue or feedback…"
+                    rows={4}
+                    maxLength={10_000}
+                    disabled={submitFeedback.isPending}
+                    className="resize-y rounded-sm border border-border/40 bg-background px-2.5 py-2 text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+                  />
+                  <button
+                    type="submit"
+                    disabled={submitFeedback.isPending}
+                    className="rounded-sm bg-primary px-3 py-2 text-xs font-semibold uppercase tracking-wider text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    {submitFeedback.isPending ? "Sending…" : "Submit"}
+                  </button>
+                </form>
               </div>
             )}
           </div>

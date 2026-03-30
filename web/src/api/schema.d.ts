@@ -257,6 +257,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/support/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List User Feedback
+         * @description List user-submitted support feedback (newest first).
+         */
+        get: operations["admin-list_user_feedback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/waitlist/{application_id}": {
         parameters: {
             query?: never;
@@ -747,6 +767,26 @@ export interface paths {
         post: operations["sandboxes-create_sandbox_web_link"];
         /** Delete Sandbox Web Link */
         delete: operations["sandboxes-delete_sandbox_web_link"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/support/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Feedback
+         * @description Submit support or product feedback (requires login).
+         */
+        post: operations["support-create_feedback"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1551,6 +1591,23 @@ export interface components {
             /** Expires At */
             expires_at?: string | null;
         };
+        /** CreateFeedbackRequest */
+        CreateFeedbackRequest: {
+            /**
+             * Body
+             * @description Feedback or support message from the user.
+             * @example The usage chart does not load on Safari.
+             */
+            body: string;
+        };
+        /** CreateFeedbackResponse */
+        CreateFeedbackResponse: {
+            /**
+             * Id
+             * @example fbabc123def456
+             */
+            id: string;
+        };
         /** CreateSandboxRequest */
         CreateSandboxRequest: {
             /**
@@ -1660,6 +1717,45 @@ export interface components {
             granted_at: string;
             /** Expires At */
             expires_at?: string | null;
+        };
+        /** FeedbackItemResponse */
+        FeedbackItemResponse: {
+            /**
+             * Id
+             * @example fbabc123def456
+             */
+            id: string;
+            /**
+             * User Id
+             * @example userabc123
+             */
+            user_id: string;
+            /**
+             * Email
+             * @example alice@example.com
+             */
+            email: string;
+            /**
+             * Body
+             * @example The usage chart does not load on Safari.
+             */
+            body: string;
+            /**
+             * Gmt Created
+             * Format: date-time
+             * @example 2026-03-31T00:00:00Z
+             */
+            gmt_created: string;
+        };
+        /** FeedbackListResponse */
+        FeedbackListResponse: {
+            /** Items */
+            items: components["schemas"]["FeedbackItemResponse"][];
+            /**
+             * Total
+             * @example 42
+             */
+            total: number;
         };
         /** GracePeriodStatus */
         GracePeriodStatus: {
@@ -3254,6 +3350,40 @@ export interface operations {
             };
         };
     };
+    "admin-list_user_feedback": {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                /** @description Optional case-insensitive substring match on submitter email. */
+                email?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     "admin-update_waitlist_application": {
         parameters: {
             query?: never;
@@ -4220,6 +4350,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "support-create_feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateFeedbackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateFeedbackResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
