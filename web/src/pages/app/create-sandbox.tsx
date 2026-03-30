@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react"
+import { useEffect, useMemo, useState, type FormEvent } from "react"
 import { Link, useNavigate } from "react-router"
 import { toast } from "sonner"
 
@@ -90,6 +90,19 @@ export function CreateSandboxPage() {
   const maxAutoStopMinutes = usage
     ? Math.floor(usage.limits.max_sandbox_duration_seconds / 60)
     : undefined
+
+  useEffect(() => {
+    if (maxAutoStopMinutes === undefined) {
+      return
+    }
+
+    const currentMinutes = parseInt(autoStopMinutes, 10)
+    if (Number.isNaN(currentMinutes) || currentMinutes <= maxAutoStopMinutes) {
+      return
+    }
+
+    setAutoStopMinutes(String(maxAutoStopMinutes))
+  }, [autoStopMinutes, maxAutoStopMinutes])
 
   const nameTrimmed = name.trim()
   const nameInvalid =
