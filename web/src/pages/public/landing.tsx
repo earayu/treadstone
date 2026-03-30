@@ -728,7 +728,7 @@ export function LandingPage() {
                 to="/app"
                 className="rounded-[10px] bg-primary px-7 py-3.5 text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                Open Dashboard
+                Open Console
               </Link>
             ) : (
               <Link

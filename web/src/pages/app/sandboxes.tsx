@@ -440,7 +440,7 @@ function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
   )
 }
 
-export function DashboardPage() {
+export function SandboxesPage() {
   const { data: sandboxData, isLoading } = useSandboxes()
   const sandboxes = sandboxData?.items ?? []
 
