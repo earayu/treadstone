@@ -17,7 +17,7 @@ from collections.abc import Awaitable, Callable
 from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import select, update
+from sqlalchemy import Numeric, cast, func, literal, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from treadstone.models.audit_event import AuditActorType
@@ -123,25 +123,34 @@ async def tick_metering(session: AsyncSession) -> int:
 async def tick_storage_metering(session: AsyncSession) -> int:
     """Update gib_hours_consumed for all ACTIVE StorageLedger entries.
 
+    Uses a single bulk UPDATE instead of loading all rows into Python.
     Returns the number of entries updated.
     """
     now = utc_now()
 
-    result = await session.execute(select(StorageLedger).where(StorageLedger.storage_state == StorageState.ACTIVE))
-    active_entries = result.scalars().all()
+    elapsed_seconds = func.extract("epoch", literal(now) - StorageLedger.last_metered_at)
+    increment = func.round(
+        cast(
+            StorageLedger.size_gib * elapsed_seconds / 3600,
+            Numeric(10, 4),
+        ),
+        4,
+    )
 
-    updated = 0
-    for entry in active_entries:
-        elapsed_seconds = (now - entry.last_metered_at).total_seconds()
-        if elapsed_seconds <= 0:
-            continue
-
-        new_gib_hours = Decimal(str(entry.size_gib)) * Decimal(str(elapsed_seconds)) / Decimal("3600")
-        entry.gib_hours_consumed += new_gib_hours.quantize(Decimal("0.0001"))
-        entry.last_metered_at = now
-        entry.gmt_updated = now
-        session.add(entry)
-        updated += 1
+    stmt = (
+        update(StorageLedger)
+        .where(
+            StorageLedger.storage_state == StorageState.ACTIVE,
+            StorageLedger.last_metered_at < now,
+        )
+        .values(
+            gib_hours_consumed=StorageLedger.gib_hours_consumed + increment,
+            last_metered_at=now,
+            gmt_updated=now,
+        )
+    )
+    result = await session.execute(stmt)
+    updated = result.rowcount
 
     if updated > 0:
         await session.commit()

@@ -32,5 +32,6 @@ export function useAuditEvents(params?: {
       })
       return data!
     },
+    refetchInterval: 30_000,
   })
 }

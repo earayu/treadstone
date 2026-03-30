@@ -50,7 +50,13 @@ def format_shutdown_time(dt: datetime) -> str:
 class K8sClientProtocol(Protocol):
     # ── SandboxClaim (extensions.agents.x-k8s.io) ──
     async def create_sandbox_claim(
-        self, name: str, template_ref: str, namespace: str, shutdown_time: datetime | None = None
+        self,
+        name: str,
+        template_ref: str,
+        namespace: str,
+        shutdown_time: datetime | None = None,
+        labels: dict[str, str] | None = None,
+        annotations: dict[str, str] | None = None,
     ) -> dict[str, Any]: ...
 
     async def delete_sandbox_claim(self, name: str, namespace: str) -> bool: ...
@@ -67,6 +73,9 @@ class K8sClientProtocol(Protocol):
         resources: dict[str, Any],
         volume_claim_templates: list[dict[str, Any]] | None = None,
         shutdown_time: datetime | None = None,
+        labels: dict[str, str] | None = None,
+        annotations: dict[str, str] | None = None,
+        pod_labels: dict[str, str] | None = None,
     ) -> dict[str, Any]: ...
 
     async def delete_sandbox(self, name: str, namespace: str) -> bool: ...
@@ -112,13 +121,24 @@ class Kr8sClient:
     # ── SandboxClaim ──
 
     async def create_sandbox_claim(
-        self, name: str, template_ref: str, namespace: str, shutdown_time: datetime | None = None
+        self,
+        name: str,
+        template_ref: str,
+        namespace: str,
+        shutdown_time: datetime | None = None,
+        labels: dict[str, str] | None = None,
+        annotations: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         api = await self._get_api()
+        metadata: dict[str, Any] = {"name": name, "namespace": namespace}
+        if labels:
+            metadata["labels"] = labels
+        if annotations:
+            metadata["annotations"] = annotations
         manifest: dict[str, Any] = {
             "apiVersion": f"{CLAIM_API_GROUP}/{CLAIM_API_VERSION}",
             "kind": "SandboxClaim",
-            "metadata": {"name": name, "namespace": namespace},
+            "metadata": metadata,
             "spec": {"sandboxTemplateRef": {"name": template_ref}},
         }
         if shutdown_time:
@@ -156,6 +176,9 @@ class Kr8sClient:
         resources: dict[str, Any],
         volume_claim_templates: list[dict[str, Any]] | None = None,
         shutdown_time: datetime | None = None,
+        labels: dict[str, str] | None = None,
+        annotations: dict[str, str] | None = None,
+        pod_labels: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         api = await self._get_api()
         container: dict[str, Any] = {
@@ -199,13 +222,23 @@ class Kr8sClient:
                 }
             ]
 
+        cr_metadata: dict[str, Any] = {"name": name, "namespace": namespace}
+        if labels:
+            cr_metadata["labels"] = labels
+        if annotations:
+            cr_metadata["annotations"] = annotations
+
+        pod_template: dict[str, Any] = {"spec": pod_spec}
+        if pod_labels:
+            pod_template["metadata"] = {"labels": pod_labels}
+
         manifest: dict[str, Any] = {
             "apiVersion": f"{SANDBOX_API_GROUP}/{SANDBOX_API_VERSION}",
             "kind": "Sandbox",
-            "metadata": {"name": name, "namespace": namespace},
+            "metadata": cr_metadata,
             "spec": {
                 "replicas": 1,
-                "podTemplate": {"spec": pod_spec},
+                "podTemplate": pod_template,
             },
         }
         if volume_claim_templates:
@@ -321,6 +354,14 @@ class Kr8sClient:
 
 ANNOTATION_ALLOWED_STORAGE_SIZES = "treadstone-ai.dev/allowed-storage-sizes"
 
+# Treadstone-managed label / annotation keys written to every SandboxClaim and Sandbox CR.
+LABEL_SANDBOX_ID = "treadstone-ai.dev/sandbox-id"
+LABEL_OWNER_ID = "treadstone-ai.dev/owner-id"
+LABEL_TEMPLATE = "treadstone-ai.dev/template"
+LABEL_PROVISION_MODE = "treadstone-ai.dev/provision-mode"
+ANNOTATION_SANDBOX_NAME = "treadstone-ai.dev/sandbox-name"
+ANNOTATION_CREATED_AT = "treadstone-ai.dev/created-at"
+
 
 def _parse_sandbox_template(template: dict) -> dict:
     containers = template.get("spec", {}).get("podTemplate", {}).get("spec", {}).get("containers", [])
@@ -416,14 +457,25 @@ class FakeK8sClient:
         self._watch_queue: asyncio.Queue[tuple[str, dict[str, Any]] | None] = asyncio.Queue()
 
     async def create_sandbox_claim(
-        self, name: str, template_ref: str, namespace: str, shutdown_time: datetime | None = None
+        self,
+        name: str,
+        template_ref: str,
+        namespace: str,
+        shutdown_time: datetime | None = None,
+        labels: dict[str, str] | None = None,
+        annotations: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         key = f"{namespace}/{name}"
         sandbox_name = name
+        claim_metadata: dict[str, Any] = {"name": name, "namespace": namespace, "resourceVersion": "1"}
+        if labels:
+            claim_metadata["labels"] = labels
+        if annotations:
+            claim_metadata["annotations"] = annotations
         claim: dict[str, Any] = {
             "apiVersion": f"{CLAIM_API_GROUP}/{CLAIM_API_VERSION}",
             "kind": "SandboxClaim",
-            "metadata": {"name": name, "namespace": namespace, "resourceVersion": "1"},
+            "metadata": claim_metadata,
             "spec": {"sandboxTemplateRef": {"name": template_ref}},
             "status": {"conditions": [], "sandbox": {"Name": sandbox_name}},
         }
@@ -465,19 +517,30 @@ class FakeK8sClient:
         resources: dict[str, Any],
         volume_claim_templates: list[dict[str, Any]] | None = None,
         shutdown_time: datetime | None = None,
+        labels: dict[str, str] | None = None,
+        annotations: dict[str, str] | None = None,
+        pod_labels: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         key = f"{namespace}/{name}"
+        sb_metadata: dict[str, Any] = {"name": name, "namespace": namespace, "resourceVersion": "1"}
+        if labels:
+            sb_metadata["labels"] = labels
+        if annotations:
+            sb_metadata["annotations"] = annotations
+        pod_template: dict[str, Any] = {
+            "spec": {
+                "containers": [{"name": "sandbox", "image": image, "resources": resources}],
+            },
+        }
+        if pod_labels:
+            pod_template["metadata"] = {"labels": pod_labels}
         sandbox: dict[str, Any] = {
             "apiVersion": f"{SANDBOX_API_GROUP}/{SANDBOX_API_VERSION}",
             "kind": "Sandbox",
-            "metadata": {"name": name, "namespace": namespace, "resourceVersion": "1"},
+            "metadata": sb_metadata,
             "spec": {
                 "replicas": 1,
-                "podTemplate": {
-                    "spec": {
-                        "containers": [{"name": "sandbox", "image": image, "resources": resources}],
-                    },
-                },
+                "podTemplate": pod_template,
             },
             "status": {
                 "conditions": [_make_ready_condition("False", "DependenciesNotReady", "Pod does not exist")],

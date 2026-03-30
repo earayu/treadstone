@@ -5,12 +5,20 @@ import type { components } from "@/api/schema"
 export type Sandbox = components["schemas"]["SandboxResponse"]
 export type CreateSandboxBody = components["schemas"]["CreateSandboxRequest"]
 
+const TRANSITIONING_STATUSES = new Set(["creating", "starting", "stopping", "deleting"])
+
 export function useSandboxes() {
   return useQuery({
     queryKey: ["sandboxes"],
     queryFn: async () => {
       const { data } = await client.GET("/v1/sandboxes")
       return data!
+    },
+    refetchInterval: (query) => {
+      const data = query.state.data
+      if (!data) return 30_000
+      const hasTransitioning = data.items?.some((s) => TRANSITIONING_STATUSES.has(s.status))
+      return hasTransitioning ? 5_000 : 30_000
     },
   })
 }
@@ -25,6 +33,11 @@ export function useSandbox(id: string) {
       return data!
     },
     enabled: !!id,
+    refetchInterval: (query) => {
+      const data = query.state.data
+      if (!data) return 30_000
+      return TRANSITIONING_STATUSES.has(data.status) ? 5_000 : 30_000
+    },
   })
 }
 

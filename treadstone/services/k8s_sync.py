@@ -16,7 +16,7 @@ import contextlib
 import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from treadstone.config import settings
@@ -472,41 +472,57 @@ async def reconcile_metering(
     async with session_factory() as session:
         from treadstone.models.metering import ComputeSession
 
-        # Case 1: READY sandboxes missing an open session
-        ready_result = await session.execute(select(Sandbox).where(Sandbox.status == SandboxStatus.READY))
-        for sandbox in ready_result.scalars():
-            open_result = await session.execute(
-                select(ComputeSession).where(
-                    ComputeSession.sandbox_id == sandbox.id,
+        # Case 1: READY sandboxes missing an open session (single JOIN query)
+        missing_stmt = (
+            select(Sandbox)
+            .outerjoin(
+                ComputeSession,
+                and_(
+                    ComputeSession.sandbox_id == Sandbox.id,
                     ComputeSession.ended_at.is_(None),
-                )
+                ),
             )
-            if open_result.scalar_one_or_none() is None:
-                logger.warning("Ready sandbox %s has no open ComputeSession, opening one", sandbox.id)
-                try:
-                    await _metering.open_compute_session(session, sandbox.id, sandbox.owner_id, sandbox.template)
-                except Exception:
-                    logger.exception("Failed to open compute session for sandbox %s during reconciliation", sandbox.id)
+            .where(
+                Sandbox.status == SandboxStatus.READY,
+                ComputeSession.id.is_(None),
+            )
+        )
+        missing_result = await session.execute(missing_stmt)
+        for sandbox in missing_result.scalars():
+            logger.warning("Ready sandbox %s has no open ComputeSession, opening one", sandbox.id)
+            try:
+                await _metering.open_compute_session(session, sandbox.id, sandbox.owner_id, sandbox.template)
+            except Exception:
+                logger.exception("Failed to open compute session for sandbox %s during reconciliation", sandbox.id)
 
-        # Case 2: open sessions for non-READY (or deleted) sandboxes
-        open_sessions_result = await session.execute(select(ComputeSession).where(ComputeSession.ended_at.is_(None)))
-        for cs in open_sessions_result.scalars():
-            sandbox = await session.get(Sandbox, cs.sandbox_id)
-            if sandbox is None or sandbox.status != SandboxStatus.READY:
-                status_desc = sandbox.status if sandbox else "deleted"
-                logger.warning(
-                    "ComputeSession %s for sandbox %s is open but sandbox is %s, closing",
+        # Case 2: open sessions for non-READY (or deleted) sandboxes (single JOIN query)
+        stale_stmt = (
+            select(ComputeSession, Sandbox)
+            .outerjoin(Sandbox, ComputeSession.sandbox_id == Sandbox.id)
+            .where(
+                ComputeSession.ended_at.is_(None),
+                or_(
+                    Sandbox.id.is_(None),
+                    Sandbox.status != SandboxStatus.READY,
+                ),
+            )
+        )
+        stale_result = await session.execute(stale_stmt)
+        for cs, sandbox in stale_result:
+            status_desc = sandbox.status if sandbox else "deleted"
+            logger.warning(
+                "ComputeSession %s for sandbox %s is open but sandbox is %s, closing",
+                cs.id,
+                cs.sandbox_id,
+                status_desc,
+            )
+            try:
+                await _metering.close_compute_session(session, cs.sandbox_id)
+            except Exception:
+                logger.exception(
+                    "Failed to close compute session %s during reconciliation",
                     cs.id,
-                    cs.sandbox_id,
-                    status_desc,
                 )
-                try:
-                    await _metering.close_compute_session(session, cs.sandbox_id)
-                except Exception:
-                    logger.exception(
-                        "Failed to close compute session %s during reconciliation",
-                        cs.id,
-                    )
 
         await session.commit()
 
@@ -524,51 +540,68 @@ async def reconcile_storage_metering(
     from treadstone.services.metering_helpers import parse_storage_size_gib
 
     async with session_factory() as session:
-        # Case 1: persistent sandboxes missing a storage ledger entry
-        persist_result = await session.execute(
-            select(Sandbox).where(
+        # Case 1: persistent sandboxes missing a storage ledger entry (single JOIN query)
+        missing_stmt = (
+            select(Sandbox)
+            .outerjoin(
+                StorageLedger,
+                and_(
+                    StorageLedger.sandbox_id == Sandbox.id,
+                    StorageLedger.storage_state == StorageState.ACTIVE,
+                ),
+            )
+            .where(
                 Sandbox.persist.is_(True),
                 Sandbox.status.notin_([SandboxStatus.DELETING, SandboxStatus.DELETED]),
                 Sandbox.storage_size.isnot(None),
                 Sandbox.gmt_deleted.is_(None),
+                StorageLedger.id.is_(None),
             )
         )
-        for sandbox in persist_result.scalars():
-            ledger_result = await session.execute(
-                select(StorageLedger).where(
-                    StorageLedger.sandbox_id == sandbox.id,
-                    StorageLedger.storage_state == StorageState.ACTIVE,
-                )
-            )
-            if ledger_result.scalar_one_or_none() is None:
-                logger.warning("Persistent sandbox %s has no ACTIVE storage ledger, creating one", sandbox.id)
-                try:
-                    size_gib = parse_storage_size_gib(sandbox.storage_size)
-                    await _metering.record_storage_allocation(session, sandbox.owner_id, sandbox.id, size_gib)
-                except Exception:
-                    logger.exception("Failed to create storage ledger for sandbox %s during reconciliation", sandbox.id)
+        missing_result = await session.execute(missing_stmt)
+        for sandbox in missing_result.scalars():
+            logger.warning("Persistent sandbox %s has no ACTIVE storage ledger, creating one", sandbox.id)
+            try:
+                size_gib = parse_storage_size_gib(sandbox.storage_size)
+                await _metering.record_storage_allocation(session, sandbox.owner_id, sandbox.id, size_gib)
+            except Exception:
+                logger.exception("Failed to create storage ledger for sandbox %s during reconciliation", sandbox.id)
 
-        # Case 2: ACTIVE ledger entries for deleted/missing sandboxes
-        active_ledgers_result = await session.execute(
-            select(StorageLedger).where(StorageLedger.storage_state == StorageState.ACTIVE)
+        # Case 2: ACTIVE ledger entries for deleted/missing sandboxes (single JOIN query)
+        stale_stmt = (
+            select(StorageLedger, Sandbox)
+            .outerjoin(Sandbox, StorageLedger.sandbox_id == Sandbox.id)
+            .where(
+                StorageLedger.storage_state == StorageState.ACTIVE,
+                or_(
+                    StorageLedger.sandbox_id.is_(None),
+                    Sandbox.id.is_(None),
+                    Sandbox.status.in_([SandboxStatus.DELETING, SandboxStatus.DELETED]),
+                ),
+            )
         )
-        for ledger in active_ledgers_result.scalars():
-            sandbox = await session.get(Sandbox, ledger.sandbox_id) if ledger.sandbox_id else None
-            if sandbox is None or sandbox.status in (SandboxStatus.DELETING, SandboxStatus.DELETED):
-                status_desc = sandbox.status if sandbox else "deleted"
+        stale_result = await session.execute(stale_stmt)
+        for ledger, sandbox in stale_result:
+            if ledger.sandbox_id is None:
                 logger.warning(
-                    "StorageLedger %s for sandbox %s is ACTIVE but sandbox is %s, releasing",
+                    "StorageLedger %s is ACTIVE but has NULL sandbox_id, skipping",
                     ledger.id,
-                    ledger.sandbox_id,
-                    status_desc,
                 )
-                try:
-                    await _metering.record_storage_release(session, ledger.sandbox_id)
-                except Exception:
-                    logger.exception(
-                        "Failed to release storage ledger %s during reconciliation",
-                        ledger.id,
-                    )
+                continue
+            status_desc = sandbox.status if sandbox else "deleted"
+            logger.warning(
+                "StorageLedger %s for sandbox %s is ACTIVE but sandbox is %s, releasing",
+                ledger.id,
+                ledger.sandbox_id,
+                status_desc,
+            )
+            try:
+                await _metering.record_storage_release(session, ledger.sandbox_id)
+            except Exception:
+                logger.exception(
+                    "Failed to release storage ledger %s during reconciliation",
+                    ledger.id,
+                )
 
         await session.commit()
 

@@ -65,12 +65,12 @@ class Sandbox(Base):
     storage_size: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     k8s_sandbox_claim_name: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
-    k8s_sandbox_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    k8s_sandbox_name: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     k8s_namespace: Mapped[str] = mapped_column(String(255), nullable=False)
     k8s_resource_version: Mapped[str | None] = mapped_column(String(255), nullable=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    status: Mapped[str] = mapped_column(String(32), nullable=False, default=SandboxStatus.CREATING)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default=SandboxStatus.CREATING, index=True)
     status_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     endpoints: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 

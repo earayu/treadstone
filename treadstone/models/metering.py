@@ -52,7 +52,7 @@ class UserPlan(Base):
 
     # Current period state
     period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     compute_units_monthly_used: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False, default=Decimal("0"))
     compute_units_overage: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False, default=Decimal("0"))
 
@@ -84,6 +84,12 @@ class ComputeGrant(Base):
         Index("ix_compute_grant_user", "user_id"),
         Index(
             "ix_compute_grant_expires",
+            "expires_at",
+            postgresql_where=text("remaining_amount > 0"),
+        ),
+        Index(
+            "ix_compute_grant_user_expires_active",
+            "user_id",
             "expires_at",
             postgresql_where=text("remaining_amount > 0"),
         ),
