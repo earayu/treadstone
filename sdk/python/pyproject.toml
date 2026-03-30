@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "treadstone-sdk"
-version = "0.6.14"
+version = "0.6.15"
 description = "A client library for accessing treadstone"
 authors = []
 readme = "README.md"

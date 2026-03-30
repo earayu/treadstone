@@ -1,5 +1,7 @@
 import { Outlet, Link } from "react-router"
+import { BookOpen } from "lucide-react"
 import { useCurrentUser } from "@/hooks/use-auth"
+import { TreadstoneLockup } from "@/components/brand/logo"
 
 function GithubIcon({ className }: { className?: string }) {
   return (
@@ -31,9 +33,9 @@ export function PublicLayout() {
         <div className="flex items-center gap-9">
           <Link
             to="/"
-            className="text-sm font-semibold tracking-wide text-primary transition-opacity hover:opacity-80"
+            className="text-sm text-primary transition-opacity hover:opacity-80"
           >
-            Treadstone
+            <TreadstoneLockup />
           </Link>
           <nav className="flex items-center gap-7">
             <a
@@ -48,10 +50,23 @@ export function PublicLayout() {
             >
               Plans
             </a>
+            <Link
+              to="/docs"
+              className="text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              Docs
+            </Link>
           </nav>
         </div>
 
         <div className="flex items-center gap-4">
+          <Link
+            to="/docs"
+            aria-label="Documentation"
+            className="text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <BookOpen className="size-5" />
+          </Link>
           <a
             href={GITHUB_URL}
             target="_blank"

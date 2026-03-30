@@ -6,6 +6,7 @@ import { AppLayout } from "@/components/layout/app-layout"
 import { AdminLayout } from "@/components/layout/admin-layout"
 
 import { LandingPage } from "@/pages/public/landing"
+import { DocsPage } from "@/pages/public/docs"
 
 import { SignInPage } from "@/pages/auth/sign-in"
 import { SignUpPage } from "@/pages/auth/sign-up"
@@ -20,6 +21,7 @@ import { UsagePage } from "@/pages/app/usage"
 import { SettingsPage } from "@/pages/app/settings"
 
 import { AdminMeteringPage } from "@/pages/internal/admin-metering"
+import { AdminOverviewPage } from "@/pages/internal/admin-overview"
 import { AdminUsersPage } from "@/pages/internal/admin-users"
 import { AuditEventsPage } from "@/pages/internal/audit-events"
 
@@ -45,6 +47,7 @@ const router = createBrowserRouter([
     element: <PublicLayout />,
     children: [
       { index: true, element: <LandingPage /> },
+      { path: "docs", element: <DocsPage /> },
     ],
   },
   {
@@ -76,6 +79,7 @@ const router = createBrowserRouter([
     path: "internal",
     element: <AdminLayout />,
     children: [
+      { path: "admin/overview", element: <AdminOverviewPage /> },
       { path: "admin/users", element: <AdminUsersPage /> },
       { path: "admin/metering", element: <AdminMeteringPage /> },
       { path: "audit", element: <AuditEventsPage /> },

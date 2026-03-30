@@ -1,10 +1,25 @@
+import { useEffect, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { client } from "@/lib/api-client"
 import type { components } from "@/api/schema"
 
+/** Page size for admin user list (must match `GET /v1/auth/users` pagination). */
+export const ADMIN_USERS_PAGE_SIZE = 20
+
 export type TierTemplate = components["schemas"]["TierTemplateItem"]
 export type UsageSummary = components["schemas"]["UsageSummaryResponse"]
 export type UserItem = components["schemas"]["UserResponse"]
+export type PlatformStats = components["schemas"]["PlatformStatsResponse"]
+
+export function usePlatformStats() {
+  return useQuery({
+    queryKey: ["admin", "platform-stats"],
+    queryFn: async () => {
+      const { data } = await client.GET("/v1/admin/stats")
+      return data!
+    },
+  })
+}
 
 export function useTierTemplates() {
   return useQuery({
@@ -152,16 +167,48 @@ export function useAdminBatchStorageGrants() {
   })
 }
 
-export function useAdminListUsers() {
+export function useAdminListUsers(params: { page: number; email?: string }) {
   return useQuery({
-    queryKey: ["admin", "users"],
+    queryKey: ["admin", "users", params.page, ADMIN_USERS_PAGE_SIZE, params.email ?? ""],
     queryFn: async () => {
       const { data } = await client.GET("/v1/auth/users", {
-        params: { query: { limit: 1000, offset: 0 } },
+        params: {
+          query: {
+            limit: ADMIN_USERS_PAGE_SIZE,
+            offset: params.page * ADMIN_USERS_PAGE_SIZE,
+            ...(params.email ? { email: params.email } : {}),
+          },
+        },
       })
       return data!
     },
   })
+}
+
+/** Debounced email filter + page state for the admin users table. */
+export function useAdminUsersListState() {
+  const [page, setPage] = useState(0)
+  const [emailInput, setEmailInput] = useState("")
+  const [debouncedEmail, setDebouncedEmail] = useState("")
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedEmail(emailInput.trim()), 300)
+    return () => window.clearTimeout(t)
+  }, [emailInput])
+
+  const list = useAdminListUsers({
+    page,
+    email: debouncedEmail || undefined,
+  })
+
+  return {
+    ...list,
+    page,
+    setPage,
+    emailInput,
+    setEmailInput,
+    debouncedEmail,
+  }
 }
 
 export function useAdminUpdateUserStatus() {

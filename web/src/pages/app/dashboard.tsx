@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { useSandboxes, useStartSandbox, useStopSandbox, useDeleteSandbox, type Sandbox } from "@/api/sandboxes"
 import { cn } from "@/lib/utils"
 import { formatMinutes } from "@/lib/format-time"
+import { HelpIcon } from "@/components/ui/help-icon"
 
 const PAGE_SIZE = 8
 
@@ -47,12 +48,29 @@ function StatusDot({ status }: { status: string }) {
 
 
 const TABLE_COLUMNS = [
-  { key: "id", label: "Sandbox", className: "w-[16%]" },
-  { key: "status", label: "Status", className: "w-[8%]" },
-  { key: "template", label: "Template", className: "w-[15%]" },
+  { key: "id", label: "Sandbox", className: "w-[14%]" },
+  {
+    key: "status",
+    label: "Status",
+    className: "w-[8%]",
+    help: "Running: the sandbox is active and accepting connections. Creating: startup in progress. Stopped: the sandbox has been paused and is not consuming compute.",
+  },
+  {
+    key: "template",
+    label: "Template",
+    className: "w-[13%]",
+    help: "The base image used to create this sandbox. The disk icon indicates persistent storage is enabled — data survives restarts.",
+    helpLink: { href: "/docs/templates", label: "View template docs" },
+  },
   { key: "created_at", label: "Created At", className: "w-[12%]" },
-  { key: "lifecycle", label: "Lifecycle", className: "w-[18%]" },
-  { key: "web_url", label: "Web URL", className: "w-[23%]" },
+  {
+    key: "lifecycle",
+    label: "Lifecycle",
+    className: "w-[16%]",
+    help: "Auto-stop: the sandbox is stopped automatically after this period of inactivity. Auto-delete: the sandbox is permanently deleted after this duration once stopped.",
+    helpLink: { href: "/docs/lifecycle", label: "Learn about lifecycle policies" },
+  },
+  { key: "web_url", label: "Web URL", className: "w-[29%]" },
   { key: "actions", label: "", className: "w-[8%]" },
 ] as const
 
@@ -260,7 +278,12 @@ function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
         </div>
       </div>
 
-      <table className="w-full">
+      <table className="w-full table-fixed">
+        <colgroup>
+          {TABLE_COLUMNS.map((col) => (
+            <col key={col.key} className={col.className} />
+          ))}
+        </colgroup>
         <thead>
           <tr className="border-b border-border/15 bg-card">
             {TABLE_COLUMNS.map((col) => (
@@ -271,7 +294,18 @@ function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
                   col.className,
                 )}
               >
-                {col.label}
+                {"help" in col && col.help ? (
+                  <div className="flex items-center gap-1">
+                    {col.label}
+                    <HelpIcon
+                      content={col.help}
+                      link={"helpLink" in col ? col.helpLink : undefined}
+                      side="top"
+                    />
+                  </div>
+                ) : (
+                  col.label
+                )}
               </th>
             ))}
           </tr>
@@ -342,13 +376,13 @@ function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
                     </div>
                   </div>
                 </td>
-                <td className="px-6 py-4">
+                <td className="min-w-0 px-6 py-4 align-top">
                   {sandbox.urls?.web ? (
                     <a
                       href={sandbox.urls.web}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="font-mono text-xs text-primary/80 hover:text-primary"
+                      className="break-all font-mono text-xs leading-snug text-primary/80 hover:text-primary"
                     >
                       {new URL(sandbox.urls.web).hostname}
                     </a>
@@ -357,7 +391,7 @@ function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
                       href={sandbox.urls.proxy}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="font-mono text-xs text-primary/80 hover:text-primary"
+                      className="break-all font-mono text-xs leading-snug text-primary/80 hover:text-primary"
                     >
                       {sandbox.name ?? sandbox.id}.tread.zone
                     </a>

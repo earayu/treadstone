@@ -702,3 +702,39 @@ class AuditFilterOptionsResponse(BaseModel):
     actions: list[str] = Field(default_factory=list)
     target_types: list[str] = Field(default_factory=list)
     results: list[str] = Field(default_factory=list)
+
+
+# ── Platform Stats (Admin) ────────────────────────────────────────────────────
+
+
+class SandboxStatusCount(BaseModel):
+    status: str
+    count: int
+
+
+class UserStats(BaseModel):
+    total: int
+    active: int
+    admin_count: int
+
+
+class SandboxStats(BaseModel):
+    total_created: int
+    currently_running: int
+    status_breakdown: list[SandboxStatusCount]
+
+
+class ComputeStats(BaseModel):
+    total_cu_hours_this_period: float
+
+
+class StorageStats(BaseModel):
+    total_allocated_gib: float
+    total_consumed_gib_hours: float
+
+
+class PlatformStatsResponse(BaseModel):
+    users: UserStats
+    sandboxes: SandboxStats
+    compute: ComputeStats
+    storage: StorageStats

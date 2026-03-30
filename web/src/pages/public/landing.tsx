@@ -1,5 +1,6 @@
 import { Link } from "react-router"
 import { useCurrentUser } from "@/hooks/use-auth"
+import { TreadstoneSymbol } from "@/components/brand/logo"
 
 const GITHUB_URL = "https://github.com/earayu/treadstone"
 const RELEASES_URL = "https://github.com/earayu/treadstone/releases"
@@ -279,7 +280,10 @@ export function LandingPage() {
         <div className="mx-auto grid max-w-[1280px] gap-10 md:grid-cols-[1fr_auto_auto_auto]">
           {/* Brand */}
           <div>
-            <p className="text-sm font-semibold tracking-wide text-primary">Treadstone</p>
+            <div className="flex items-center gap-2 text-primary">
+              <TreadstoneSymbol className="size-5" />
+              <p className="text-sm font-semibold tracking-wide">Treadstone</p>
+            </div>
             <p className="mt-1.5 text-xs text-muted-foreground/70">Agent-native sandbox platform.</p>
             <p className="mt-1 text-xs text-muted-foreground/40">&copy; 2026 Treadstone. Apache-2.0 License.</p>
           </div>

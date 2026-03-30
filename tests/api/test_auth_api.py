@@ -334,3 +334,52 @@ async def test_list_users_includes_is_active(db_session):
     items = resp.json()["items"]
     assert len(items) >= 1
     assert "is_active" in items[0]
+
+
+@pytest.mark.asyncio
+async def test_list_users_admin_newest_first_and_paginated(db_session):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post("/v1/auth/register", json={"email": "admin-order@test.com", "password": "Pass123!"})
+        await client.post("/v1/auth/register", json={"email": "second-user@test.com", "password": "Pass123!"})
+        await client.post("/v1/auth/register", json={"email": "third-user@test.com", "password": "Pass123!"})
+        login = await client.post(
+            "/v1/auth/login",
+            json={"email": "admin-order@test.com", "password": "Pass123!"},
+        )
+        cookies = login.cookies
+
+        resp = await client.get("/v1/auth/users", cookies=cookies, params={"limit": 10, "offset": 0})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total"] == 3
+        emails = [i["email"] for i in body["items"]]
+        assert emails[0] == "third-user@test.com"
+        assert emails[1] == "second-user@test.com"
+        assert emails[2] == "admin-order@test.com"
+
+        page1 = await client.get("/v1/auth/users", cookies=cookies, params={"limit": 1, "offset": 0})
+        assert page1.json()["items"][0]["email"] == "third-user@test.com"
+        page2 = await client.get("/v1/auth/users", cookies=cookies, params={"limit": 1, "offset": 1})
+        assert page2.json()["items"][0]["email"] == "second-user@test.com"
+
+
+@pytest.mark.asyncio
+async def test_list_users_admin_email_filter(db_session):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post("/v1/auth/register", json={"email": "filter-admin@test.com", "password": "Pass123!"})
+        await client.post("/v1/auth/register", json={"email": "alice.unique@test.com", "password": "Pass123!"})
+        await client.post("/v1/auth/register", json={"email": "bob.unique@test.com", "password": "Pass123!"})
+        login = await client.post(
+            "/v1/auth/login",
+            json={"email": "filter-admin@test.com", "password": "Pass123!"},
+        )
+        cookies = login.cookies
+
+        resp = await client.get("/v1/auth/users", cookies=cookies, params={"email": "alice.unique"})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total"] == 1
+        assert body["items"][0]["email"] == "alice.unique@test.com"
+
+        resp_all = await client.get("/v1/auth/users", cookies=cookies, params={"email": "unique@"})
+        assert resp_all.json()["total"] == 2

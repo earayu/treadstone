@@ -1,6 +1,13 @@
+import { useMemo } from "react"
+import { Search, ChevronLeft, ChevronRight } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { useAdminListUsers, useAdminUpdateUserStatus, type UserItem } from "@/api/admin"
+import {
+  ADMIN_USERS_PAGE_SIZE,
+  useAdminUsersListState,
+  useAdminUpdateUserStatus,
+  type UserItem,
+} from "@/api/admin"
 import { useCurrentUser } from "@/hooks/use-auth"
 
 function StatusBadge({ isActive }: { isActive: boolean }) {
@@ -83,9 +90,32 @@ function UserRow({
 
 export function AdminUsersPage() {
   const { data: currentUser } = useCurrentUser()
-  const { data, isLoading, isError, refetch } = useAdminListUsers()
+  const {
+    data,
+    isLoading,
+    isError,
+    refetch,
+    page,
+    setPage,
+    emailInput,
+    setEmailInput,
+    debouncedEmail,
+  } = useAdminUsersListState()
   const updateStatus = useAdminUpdateUserStatus()
   const users = data?.items ?? []
+  const total = data?.total ?? 0
+
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(total / ADMIN_USERS_PAGE_SIZE)),
+    [total],
+  )
+
+  const rangeLabel = useMemo(() => {
+    if (total === 0) return "No users"
+    const start = page * ADMIN_USERS_PAGE_SIZE + 1
+    const end = Math.min((page + 1) * ADMIN_USERS_PAGE_SIZE, total)
+    return `Showing ${start}–${end} of ${total}`
+  }, [total, page])
 
   const handleToggleStatus = (userId: string, newStatus: boolean) => {
     updateStatus.mutate(
@@ -115,15 +145,31 @@ export function AdminUsersPage() {
       </div>
 
       <div className="rounded border border-border/20 bg-black">
-        <div className="flex items-center justify-between border-b border-border/20 bg-card px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/20 bg-card px-5 py-4">
           <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-muted-foreground">
             ALL USERS
           </span>
-          {data && (
-            <span className="text-[11px] text-muted-foreground/60">
-              {users.length} user{users.length !== 1 && "s"}
-            </span>
-          )}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
+              <input
+                type="search"
+                placeholder="Search by email…"
+                value={emailInput}
+                onChange={(e) => {
+                  setPage(0)
+                  setEmailInput(e.target.value)
+                }}
+                className="h-8 w-56 bg-background pl-8 pr-3 text-[11px] text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+                aria-label="Filter users by email"
+              />
+            </div>
+            {data !== undefined && (
+              <span className="text-[11px] text-muted-foreground/60">
+                {debouncedEmail ? `${total} match${total !== 1 ? "es" : ""}` : `${total} user${total !== 1 ? "s" : ""}`}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -178,6 +224,30 @@ export function AdminUsersPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        <div className="flex items-center justify-between border-t border-border/20 bg-card px-5 py-3">
+          <span className="text-[10px] uppercase tracking-[1px] text-muted-foreground">{rangeLabel}</span>
+          <div className="flex gap-1">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0 || isLoading}
+              className="flex size-8 items-center justify-center border border-border/30 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
+              aria-label="Previous page"
+            >
+              <ChevronLeft className="size-3" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1 || isLoading || total === 0}
+              className="flex size-8 items-center justify-center border border-border/30 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
+              aria-label="Next page"
+            >
+              <ChevronRight className="size-3" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/v1/admin/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Platform Stats
+         * @description Return aggregated platform-level operational statistics.
+         */
+        get: operations["admin-get_platform_stats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/tier-templates": {
         parameters: {
             query?: never;
@@ -1295,6 +1315,11 @@ export interface components {
              */
             offset: number;
         };
+        /** ComputeStats */
+        ComputeStats: {
+            /** Total Cu Hours This Period */
+            total_cu_hours_this_period: number;
+        };
         /** ComputeUsage */
         ComputeUsage: {
             /**
@@ -1445,8 +1470,8 @@ export interface components {
             /**
              * Auto Stop Interval
              * @description Minutes of inactivity before the sandbox is automatically stopped.
-             * @default 15
-             * @example 15
+             * @default 60
+             * @example 60
              */
             auto_stop_interval: number;
             /**
@@ -1464,10 +1489,10 @@ export interface components {
             persist: boolean;
             /**
              * Storage Size
-             * @description Persistent volume size. Supported tiers: 5Gi, 10Gi, 20Gi.
+             * @description Persistent volume size (e.g. 5Gi, 10Gi, 20Gi). Allowed values depend on the sandbox template's annotation.
              * @example 5Gi
              */
-            storage_size?: ("5Gi" | "10Gi" | "20Gi") | null;
+            storage_size?: string | null;
         };
         /** CreateStorageQuotaGrantRequest */
         CreateStorageQuotaGrantRequest: {
@@ -1616,6 +1641,13 @@ export interface components {
              */
             detail: string;
         };
+        /** PlatformStatsResponse */
+        PlatformStatsResponse: {
+            users: components["schemas"]["UserStats"];
+            sandboxes: components["schemas"]["SandboxStats"];
+            compute: components["schemas"]["ComputeStats"];
+            storage: components["schemas"]["StorageStats"];
+        };
         /** RegisterRequest */
         RegisterRequest: {
             /**
@@ -1761,10 +1793,10 @@ export interface components {
             persist: boolean;
             /**
              * Storage Size
-             * @description Persistent volume size when persist=true. Supported tiers: 5Gi, 10Gi, 20Gi.
+             * @description Persistent volume size when persist=true.
              * @example 5Gi
              */
-            storage_size?: ("5Gi" | "10Gi" | "20Gi") | null;
+            storage_size?: string | null;
             urls: components["schemas"]["SandboxUrls"];
             /**
              * Created At
@@ -1855,10 +1887,10 @@ export interface components {
             persist: boolean;
             /**
              * Storage Size
-             * @description Persistent volume size when persist=true. Supported tiers: 5Gi, 10Gi, 20Gi.
+             * @description Persistent volume size when persist=true.
              * @example 5Gi
              */
-            storage_size?: ("5Gi" | "10Gi" | "20Gi") | null;
+            storage_size?: string | null;
             urls: components["schemas"]["SandboxUrls"];
             /**
              * Created At
@@ -1866,6 +1898,22 @@ export interface components {
              * @example 2026-03-21T12:00:00+00:00
              */
             created_at: string;
+        };
+        /** SandboxStats */
+        SandboxStats: {
+            /** Total Created */
+            total_created: number;
+            /** Currently Running */
+            currently_running: number;
+            /** Status Breakdown */
+            status_breakdown: components["schemas"]["SandboxStatusCount"][];
+        };
+        /** SandboxStatusCount */
+        SandboxStatusCount: {
+            /** Status */
+            status: string;
+            /** Count */
+            count: number;
         };
         /** SandboxTemplateListResponse */
         SandboxTemplateListResponse: {
@@ -1895,6 +1943,15 @@ export interface components {
              */
             image: string;
             resource_spec: components["schemas"]["ResourceSpec"];
+            /**
+             * Allowed Storage Sizes
+             * @example [
+             *       "5Gi",
+             *       "10Gi",
+             *       "20Gi"
+             *     ]
+             */
+            allowed_storage_sizes?: string[];
         };
         /** SandboxUrls */
         SandboxUrls: {
@@ -1924,10 +1981,9 @@ export interface components {
             open_link: string;
             /**
              * Expires At
-             * Format: date-time
              * @example 2026-03-31T12:00:00+00:00
              */
-            expires_at: string;
+            expires_at?: string | null;
         };
         /** SandboxWebLinkStatusResponse */
         SandboxWebLinkStatusResponse: {
@@ -2061,6 +2117,13 @@ export interface components {
              * @example 2026-06-01T00:00:00+00:00
              */
             expires_at?: string | null;
+        };
+        /** StorageStats */
+        StorageStats: {
+            /** Total Allocated Gib */
+            total_allocated_gib: number;
+            /** Total Consumed Gib Hours */
+            total_consumed_gib_hours: number;
         };
         /** StorageUsage */
         StorageUsage: {
@@ -2518,6 +2581,15 @@ export interface components {
              */
             is_active: boolean;
         };
+        /** UserStats */
+        UserStats: {
+            /** Total */
+            total: number;
+            /** Active */
+            active: number;
+            /** Admin Count */
+            admin_count: number;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -2548,6 +2620,26 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    "admin-get_platform_stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformStatsResponse"];
+                };
+            };
+        };
+    };
     "admin-list_tier_templates": {
         parameters: {
             query?: never;
@@ -3044,6 +3136,8 @@ export interface operations {
                 limit?: number;
                 /** @description Number of items to skip. */
                 offset?: number;
+                /** @description Optional case-insensitive substring filter on user email. */
+                email?: string | null;
             };
             header?: never;
             path?: never;

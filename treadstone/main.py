@@ -16,6 +16,7 @@ from treadstone.api.auth import router as auth_router
 from treadstone.api.browser import router as browser_router
 from treadstone.api.cli_auth import router as cli_auth_router
 from treadstone.api.config import router as config_router
+from treadstone.api.docs import router as docs_router
 from treadstone.api.sandbox_proxy import router as sandbox_proxy_router
 from treadstone.api.sandbox_templates import router as sandbox_templates_router
 from treadstone.api.sandboxes import router as sandboxes_router
@@ -203,6 +204,7 @@ app.add_middleware(SandboxSubdomainMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 
 # ── Routes ──
+app.include_router(docs_router)
 app.include_router(admin_router)
 app.include_router(audit_router)
 app.include_router(auth_router)
