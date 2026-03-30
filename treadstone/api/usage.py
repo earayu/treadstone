@@ -35,6 +35,7 @@ from treadstone.api.schemas import (
 from treadstone.core.database import get_session
 from treadstone.models.metering import ComputeSession, StorageLedger
 from treadstone.models.user import User, utc_now
+from treadstone.services.metering_helpers import CU_MEMORY_GIB_DIVISOR
 from treadstone.services.metering_service import MeteringService
 
 router = APIRouter(prefix="/v1/usage", tags=["usage"])
@@ -46,7 +47,7 @@ def _serialize_session(cs: ComputeSession) -> dict:
     now = utc_now()
     end = cs.ended_at or now
     duration = (end - cs.started_at).total_seconds()
-    cu_hours = float(max(cs.vcpu_hours, cs.memory_gib_hours / 2))
+    cu_hours = float(max(cs.vcpu_hours, cs.memory_gib_hours / CU_MEMORY_GIB_DIVISOR))
     return {
         "id": cs.id,
         "sandbox_id": cs.sandbox_id,

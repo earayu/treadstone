@@ -19,27 +19,45 @@ const INSTALL_PIP = "pip install treadstone-cli"
 
 type TermStep =
   | { type: "cmt"; text: string }
+  /** Narration / “thinking” lines — revealed character by character. `tone` matches prior sky vs zinc styling. */
+  | { type: "think"; text: string; pause?: number; speed?: number; tone?: "sky" | "zinc" }
   | { type: "cmd"; text: string; speed?: number }
   | { type: "out"; text: string; pause?: number }
   | { type: "sp" }
 
-// cmd `speed`: ms between keystrokes — lower is faster (not WPM).
+// cmd / think `speed`: ms between keystrokes — lower is faster (not WPM).
 const TERM_STEPS: TermStep[] = [
-  { type: "cmt", text: "# 1. Authenticate" },
-  { type: "cmd", text: "treadstone auth login --email agent@example.com --password ••••••••", speed: 18 },
-  { type: "out", text: "✓ Logged in as agent@example.com", pause: 140 },
+  { type: "think", text: "> request: check the target page (https://treadstone-ai.dev/) and see what’s going on", tone: "zinc", speed: 36 },
+  { type: "think", text: "thinking: install the treadstone-cli skill for control-plane actions", pause: 180, tone: "sky", speed: 36 },
+  { type: "cmd", text: "treadstone skills install --target project", speed: 34 },
+  { type: "out", text: "✓ installed: .agents/skills/treadstone-cli/SKILL.md", pause: 240 },
   { type: "sp" },
-  { type: "cmt", text: "# 2. Install the agent skill (Cursor, Codex, …)" },
-  { type: "cmd", text: "treadstone skills install", speed: 18 },
-  { type: "out", text: "Installed: ~/.agents/skills/treadstone-cli/SKILL.md", pause: 160 },
+
+  { type: "think", text: "thinking: this task needs a real browser and isolated runtime", tone: "zinc", speed: 36 },
   { type: "sp" },
-  { type: "cmt", text: "# 3. Create a sandbox — read the ID from JSON output" },
-  { type: "cmd", text: "treadstone --json sandboxes create --name agent-demo", speed: 20 },
-  { type: "out", text: '{"id":"sb_3kx9m2p","status":"running","urls":{"proxy":"https://sb_3kx9m2p.proxy.treadstone-ai.dev"}}', pause: 250 },
+
+  { type: "think", text: "thinking: confirm identity", tone: "zinc", speed: 36 },
+  { type: "cmd", text: "treadstone auth whoami", speed: 34 },
+  { type: "out", text: "✓ logged in as agent@example.com", pause: 220 },
   { type: "sp" },
-  { type: "cmt", text: "# 4. Hand the browser off to a human" },
-  { type: "cmd", text: "treadstone --json sandboxes web enable sb_3kx9m2p", speed: 20 },
-  { type: "out", text: '{"open_link":"https://sb_3kx9m2p.web.treadstone-ai.dev?token=...","expires_at":"2026-03-30T18:00:00Z"}', pause: 230 },
+
+  { type: "think", text: "thinking: create a sandbox", tone: "zinc", speed: 36 },
+  { type: "cmd", text: "treadstone --json sandboxes create --name page-check", speed: 38 },
+  { type: "out", text: '{"id":"sb_3kx9m2p","status":"running","urls":{"proxy":"https://sb_3kx9m2p.proxy.treadstone-ai.dev"}}', pause: 380 },
+  { type: "sp" },
+
+  { type: "think", text: "thinking: prepare a browser session in case human review is needed", tone: "zinc", speed: 36 },
+  { type: "cmd", text: "treadstone --json sandboxes web enable sb_3kx9m2p", speed: 38 },
+  { type: "out", text: '{"open_link":"https://sb_3kx9m2p.web.treadstone-ai.dev?token=...","expires_at":"2026-03-30T18:00:00Z"}', pause: 350 },
+  { type: "sp" },
+
+  { type: "think", text: "thinking: handoff is ready, stop the runtime", tone: "zinc", speed: 36 },
+  { type: "cmd", text: "treadstone sandboxes stop sb_3kx9m2p", speed: 34 },
+  { type: "out", text: "✓ sandbox stopped", pause: 270 },
+  { type: "sp" },
+
+  { type: "out", text: "✓ browser session ready for review", pause: 160 },
+  { type: "out", text: "awaiting next instruction", pause: 260 },
 ]
 
 // ── How It Works data ────────────────────────────────────────────────────────
@@ -520,6 +538,7 @@ function InstallCard({ os, hint, cmd, first }: { os: string; hint: string; cmd: 
 
 type RenderedLine =
   | { kind: "cmt"; text: string }
+  | { kind: "think"; text: string; tone: "sky" | "zinc" }
   | { kind: "cmd"; prompt: string; text: string }
   | { kind: "out"; text: string }
   | { kind: "sp" }
@@ -536,7 +555,7 @@ function AnimatedTerminal() {
     const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
     async function run() {
-      await sleep(700)
+      await sleep(950)
       for (const step of TERM_STEPS) {
         if (step.type === "sp") {
           setLines((prev) => [...prev, { kind: "sp" }])
@@ -544,13 +563,33 @@ function AnimatedTerminal() {
         }
         if (step.type === "cmt") {
           setLines((prev) => [...prev, { kind: "cmt", text: step.text }])
-          await sleep(95)
+          await sleep(150)
+          continue
+        }
+        if (step.type === "think") {
+          const tone = step.tone ?? "zinc"
+          const speed = step.speed ?? 40
+          await sleep(step.pause ?? 0)
+          setLines((prev) => [...prev, { kind: "think", text: "", tone }])
+          await sleep(80)
+          for (const ch of step.text) {
+            setLines((prev) => {
+              const next = [...prev]
+              const last = next[next.length - 1]
+              if (last?.kind === "think") {
+                next[next.length - 1] = { kind: "think", text: last.text + ch, tone }
+              }
+              return next
+            })
+            await sleep(speed + Math.random() * speed * 0.25)
+          }
+          await sleep(120)
           continue
         }
         if (step.type === "cmd") {
           const speed = step.speed ?? 40
           setLines((prev) => [...prev, { kind: "cmd", prompt: "$ ", text: "" }])
-          await sleep(95)
+          await sleep(150)
           for (const ch of step.text) {
             setLines((prev) => {
               const next = [...prev]
@@ -562,13 +601,13 @@ function AnimatedTerminal() {
             })
             await sleep(speed + Math.random() * speed * 0.25)
           }
-          await sleep(115)
+          await sleep(180)
           continue
         }
         if (step.type === "out") {
-          await sleep(step.pause ?? 200)
+          await sleep(step.pause ?? 280)
           setLines((prev) => [...prev, { kind: "out", text: step.text }])
-          await sleep(80)
+          await sleep(130)
         }
       }
       setCursor(false)
@@ -592,7 +631,16 @@ function AnimatedTerminal() {
           if (line.kind === "sp") return <div key={i} className="h-[10px]" />
           if (line.kind === "cmt")
             return (
-              <div key={i} className="text-muted-foreground/40">
+              <div key={i} className="text-zinc-400">
+                {line.text}
+              </div>
+            )
+          if (line.kind === "think")
+            return (
+              <div
+                key={i}
+                className={line.tone === "sky" ? "text-sky-300/80" : "text-zinc-400"}
+              >
                 {line.text}
               </div>
             )
