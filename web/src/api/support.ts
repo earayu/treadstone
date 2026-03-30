@@ -20,13 +20,20 @@ export function useSubmitFeedback() {
   })
 }
 
-/** First page only (`offset=0`). Add a `page` argument here if the admin UI gains pagination. */
-export function useAdminFeedbackList() {
+/** First page only (`offset=0`). Optional `emailFilter` is a case-insensitive substring match on submitter email. */
+export function useAdminFeedbackList(emailFilter?: string) {
+  const trimmed = emailFilter?.trim() ?? ""
   return useQuery({
-    queryKey: ["admin", "support-feedback"],
+    queryKey: ["admin", "support-feedback", trimmed],
     queryFn: async () => {
       const { data } = await client.GET("/v1/admin/support/feedback", {
-        params: { query: { limit: ADMIN_FEEDBACK_PAGE_SIZE, offset: 0 } },
+        params: {
+          query: {
+            limit: ADMIN_FEEDBACK_PAGE_SIZE,
+            offset: 0,
+            ...(trimmed ? { email: trimmed } : {}),
+          },
+        },
       })
       return data!
     },

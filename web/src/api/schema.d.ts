@@ -3355,6 +3355,8 @@ export interface operations {
             query?: {
                 limit?: number;
                 offset?: number;
+                /** @description Optional case-insensitive substring match on submitter email. */
+                email?: string | null;
             };
             header?: never;
             path?: never;

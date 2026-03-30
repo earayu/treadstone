@@ -74,6 +74,12 @@ from treadstone.services.metering_service import MeteringService
 
 logger = logging.getLogger(__name__)
 
+
+def _sql_like_escape_fragment(value: str) -> str:
+    """Escape `\\`, `%`, and `_` for use in PostgreSQL ILIKE with ESCAPE '\\'."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
 
 _metering = MeteringService()
@@ -632,18 +638,25 @@ async def list_waitlist_applications(
 async def list_user_feedback(
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
+    email: str | None = Query(
+        default=None,
+        description="Optional case-insensitive substring match on submitter email.",
+    ),
     _admin: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_session),
 ) -> FeedbackListResponse:
     """List user-submitted support feedback (newest first)."""
     count_query = select(func.count()).select_from(UserFeedback)
+    query = select(UserFeedback)
+    if email and (trimmed := email.strip()):
+        pattern = f"%{_sql_like_escape_fragment(trimmed)}%"
+        email_filter = UserFeedback.email.ilike(pattern, escape="\\")
+        count_query = count_query.where(email_filter)
+        query = query.where(email_filter)
+
     total = (await session.execute(count_query)).scalar_one()
     rows = (
-        (
-            await session.execute(
-                select(UserFeedback).order_by(UserFeedback.gmt_created.desc()).limit(limit).offset(offset)
-            )
-        )
+        (await session.execute(query.order_by(UserFeedback.gmt_created.desc()).limit(limit).offset(offset)))
         .scalars()
         .all()
     )
