@@ -46,28 +46,24 @@ const TERM_STEPS: TermStep[] = [
 
 const HOW_STEPS = [
   {
-    n: "01 — AUTH",
-    title: "Authenticate once",
-    desc: "Set an API key in your environment. All subsequent commands are fully non-interactive.",
-    cmd: "export TREADSTONE_API_KEY=ts_...",
+    n: "01 — ORCHESTRATE",
+    title: "Agents control the workflow",
+    desc: "Plan tasks, call Treadstone directly, and decide when to create, reuse, or stop a sandbox.",
   },
   {
-    n: "02 — CREATE",
-    title: "Create a sandbox",
-    desc: "Pick a template by size. Receive a sandbox ID and proxy URL immediately in JSON.",
-    cmd: "sandboxes create --name task",
+    n: "02 — PROVISION",
+    title: "Spin up a real environment",
+    desc: "Each sandbox gives agents isolated runtime, files, tools, and browser access—not just a stateless function call.",
   },
   {
-    n: "03 — RUN",
-    title: "Execute your task",
-    desc: "Run code, browse the web, or use tools inside the isolated container via the proxy URL.",
-    cmd: "sb_xxx.proxy.treadstone-ai.dev",
+    n: "03 — EXECUTE",
+    title: "Run code, browse, and use tools",
+    desc: "Agents work inside the sandbox directly: write code, open pages, inspect files, and keep long-running tasks moving.",
   },
   {
     n: "04 — HAND OFF",
-    title: "Give a human the wheel",
-    desc: "Generate a secure, time-limited browser session URL and share it. One command.",
-    cmd: "sandboxes web enable sb_xxx",
+    title: "Bring in a human only when needed",
+    desc: "Generate a secure browser session when an agent needs review, input, or a final decision.",
   },
 ]
 
@@ -715,12 +711,12 @@ export function LandingPage() {
 
       {/* ── How It Works ──────────────────────────────────────── */}
       <section className="mx-auto max-w-[1080px] px-10 py-24">
-        <span className="font-mono text-[11.5px] tracking-[0.08em] text-primary">// workflow</span>
+        <span className="font-mono text-[11.5px] tracking-[0.08em] text-primary">// execution model</span>
         <h2 className="mt-3 font-mono text-[clamp(1.75rem,3.5vw,2.75rem)] font-semibold leading-[1.1] tracking-[-0.04em]">
-          Designed for agent workflows.
+          Built for autonomous agent workflows.
         </h2>
         <p className="mt-3 mb-12 max-w-[480px] text-base leading-[1.65] text-muted-foreground">
-          Four steps from task to hand-off. Every step is a single command — or a single API call.
+          Agents can create sandboxes, run code, use browsers and tools, and hand work off to humans when needed—through the same control plane.
         </p>
 
         <div className="grid grid-cols-1 overflow-hidden rounded-xl border border-border/20 sm:grid-cols-2 lg:grid-cols-4">
@@ -736,9 +732,6 @@ export function LandingPage() {
               <span className="font-mono text-[10px] tracking-[0.1em] text-muted-foreground/40">{step.n}</span>
               <div className="mt-3.5 text-[14px] font-semibold">{step.title}</div>
               <p className="mt-2 text-[12.5px] leading-[1.6] text-muted-foreground">{step.desc}</p>
-              <div className="mt-3.5 overflow-hidden rounded-md border border-border/20 bg-white/[0.03] px-3 py-2 font-mono text-[11.5px] text-primary">
-                {step.cmd}
-              </div>
             </div>
           ))}
         </div>
