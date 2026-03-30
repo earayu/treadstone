@@ -93,6 +93,7 @@ async def handle_watch_event(
             select(Sandbox).where(
                 ((Sandbox.k8s_sandbox_name == cr_name) | (Sandbox.k8s_sandbox_claim_name == cr_name)),
                 Sandbox.k8s_namespace == cr_namespace,
+                Sandbox.gmt_deleted.is_(None),
             )
         )
         sandbox = result.scalar_one_or_none()
@@ -103,6 +104,8 @@ async def handle_watch_event(
 
         if event_type == "DELETED":
             await _try_close_compute_session(session, sandbox.id)
+            if sandbox.persist:
+                await _try_release_storage_ledger(session, sandbox.id)
             if sandbox.status == SandboxStatus.DELETING:
                 await _record_status_change(
                     session,
@@ -202,7 +205,9 @@ async def reconcile(
             cr_map[name] = cr
 
     async with session_factory() as session:
-        result = await session.execute(select(Sandbox).where(Sandbox.k8s_namespace == namespace))
+        result = await session.execute(
+            select(Sandbox).where(Sandbox.k8s_namespace == namespace, Sandbox.gmt_deleted.is_(None))
+        )
         sandboxes = result.scalars().all()
 
         for sandbox in sandboxes:
@@ -212,6 +217,8 @@ async def reconcile(
             if cr is None:
                 if sandbox.status == SandboxStatus.DELETING:
                     await _try_close_compute_session(session, sandbox.id)
+                    if sandbox.persist:
+                        await _try_release_storage_ledger(session, sandbox.id)
                     await _record_status_change(
                         session,
                         sandbox_id=sandbox.id,
@@ -396,10 +403,14 @@ async def _update_sync_metadata(
 
 
 async def _delete_sandbox_row(session: AsyncSession, sandbox_id: str) -> None:
+    from treadstone.models.user import utc_now
+
     sandbox = await session.get(Sandbox, sandbox_id)
     if sandbox is None:
         return
-    await session.delete(sandbox)
+    sandbox.status = SandboxStatus.DELETED
+    sandbox.gmt_deleted = utc_now()
+    session.add(sandbox)
     await session.commit()
 
 
@@ -434,6 +445,14 @@ async def _try_close_compute_session(session: AsyncSession, sandbox_id: str) -> 
         await _metering.close_compute_session(session, sandbox_id)
     except Exception:
         logger.exception("Failed to close compute session for sandbox %s", sandbox_id)
+
+
+async def _try_release_storage_ledger(session: AsyncSession, sandbox_id: str) -> None:
+    """Best-effort release of ACTIVE StorageLedger for a persistent sandbox."""
+    try:
+        await _metering.record_storage_release(session, sandbox_id)
+    except Exception:
+        logger.exception("Failed to release storage ledger for sandbox %s", sandbox_id)
 
 
 async def reconcile_metering(
@@ -504,8 +523,9 @@ async def reconcile_storage_metering(
         persist_result = await session.execute(
             select(Sandbox).where(
                 Sandbox.persist.is_(True),
-                Sandbox.status != SandboxStatus.DELETING,
+                Sandbox.status.notin_([SandboxStatus.DELETING, SandboxStatus.DELETED]),
                 Sandbox.storage_size.isnot(None),
+                Sandbox.gmt_deleted.is_(None),
             )
         )
         for sandbox in persist_result.scalars():
@@ -529,7 +549,7 @@ async def reconcile_storage_metering(
         )
         for ledger in active_ledgers_result.scalars():
             sandbox = await session.get(Sandbox, ledger.sandbox_id) if ledger.sandbox_id else None
-            if sandbox is None or sandbox.status == SandboxStatus.DELETING:
+            if sandbox is None or sandbox.status in (SandboxStatus.DELETING, SandboxStatus.DELETED):
                 status_desc = sandbox.status if sandbox else "deleted"
                 logger.warning(
                     "StorageLedger %s for sandbox %s is ACTIVE but sandbox is %s, releasing",

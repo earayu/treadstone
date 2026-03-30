@@ -18,7 +18,7 @@ from treadstone.core.errors import (
     ValidationError,
 )
 from treadstone.models.sandbox import Sandbox, SandboxStatus
-from treadstone.models.user import User
+from treadstone.models.user import User, utc_now
 from treadstone.services.sandbox_proxy import (
     proxy_http_request,
     resolve_routing,
@@ -41,13 +41,19 @@ async def http_proxy(
     user: User = Depends(get_current_data_plane_user),
     session: AsyncSession = Depends(get_session),
 ) -> StreamingResponse:
-    result = await session.execute(select(Sandbox).where(Sandbox.id == sandbox_id, Sandbox.owner_id == user.id))
+    result = await session.execute(
+        select(Sandbox).where(Sandbox.id == sandbox_id, Sandbox.owner_id == user.id, Sandbox.gmt_deleted.is_(None))
+    )
     sandbox = result.scalar_one_or_none()
     if sandbox is None:
         raise SandboxNotFoundError(sandbox_id)
 
     if sandbox.status != SandboxStatus.READY:
         raise SandboxNotReadyError(sandbox_id, sandbox.status)
+
+    sandbox.gmt_last_active = utc_now()
+    session.add(sandbox)
+    await session.commit()
 
     headers = dict(request.headers)
     try:

@@ -1,4 +1,4 @@
-"""Metering helper functions — credit rate calculation, storage size parsing, and shared data types."""
+"""Metering helper functions — Compute Unit rate calculation, storage size parsing, and shared data types."""
 
 import logging
 from dataclasses import dataclass
@@ -37,10 +37,10 @@ def get_template_resource_spec(template: str) -> tuple[Decimal, Decimal]:
     return spec["vcpu"], spec["memory_gib"]
 
 
-def calculate_credit_rate(template: str) -> Decimal:
-    """Return the credit rate (credits/hour) for the given sandbox template.
+def calculate_cu_rate(template: str) -> Decimal:
+    """Return the Compute Unit rate (CU/hour) for the given sandbox template.
 
-    Formula: max(vCPU_request, memory_GiB_request / 2)
+    Formula: CU = max(vCPU_request, memory_GiB_request / 2)
     Checks the K8s-synced runtime cache first, falls back to static TEMPLATE_SPECS.
     """
     spec = _resolve_spec(template)

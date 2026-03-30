@@ -182,7 +182,7 @@ export function SignUpPage() {
       </form>
 
       <div className="mt-8 border-l-4 border-primary bg-primary/10 px-4 py-3 text-sm leading-relaxed text-muted-foreground">
-        New users start on the free tier: 10 vCPU-hours monthly + 50 vCPU-hours welcome bonus. All sandbox templates
+        New users start on the free tier: 10 CU-hours monthly + 50 CU-hours welcome bonus. All sandbox templates
         included.
       </div>
 

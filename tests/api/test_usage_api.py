@@ -29,7 +29,7 @@ async def _seed_tier_templates(session: AsyncSession) -> None:
     defaults = [
         TierTemplate(
             tier_name="free",
-            compute_credits_monthly=Decimal("10"),
+            compute_units_monthly=Decimal("10"),
             storage_capacity_gib=0,
             max_concurrent_running=1,
             max_sandbox_duration_seconds=1800,
@@ -38,7 +38,7 @@ async def _seed_tier_templates(session: AsyncSession) -> None:
         ),
         TierTemplate(
             tier_name="pro",
-            compute_credits_monthly=Decimal("100"),
+            compute_units_monthly=Decimal("100"),
             storage_capacity_gib=10,
             max_concurrent_running=3,
             max_sandbox_duration_seconds=7200,
@@ -107,14 +107,13 @@ async def test_get_usage_returns_summary(user_client):
     assert data["billing_period"]["start"] is not None
     assert data["billing_period"]["end"] is not None
 
-    assert data["compute"]["vcpu_hours"] == 0.0
-    assert data["compute"]["memory_gib_hours"] == 0.0
+    assert data["compute"]["compute_unit_hours"] == 0.0
     assert data["compute"]["monthly_limit"] == 10.0
     assert data["compute"]["monthly_used"] == 0.0
     assert data["compute"]["monthly_remaining"] == 10.0
     assert data["compute"]["extra_remaining"] == 50.0
     assert data["compute"]["total_remaining"] == 60.0
-    assert data["compute"]["unit"] == "credits"
+    assert data["compute"]["unit"] == "CU-hours"
 
     assert data["storage"]["gib_hours"] == 0.0
     assert data["storage"]["current_used_gib"] == 0
@@ -134,8 +133,7 @@ async def test_get_usage_includes_credit_pool_and_grants(user_client):
     usage = await user_client.get("/v1/usage")
     assert usage.status_code == 200
     u = usage.json()
-    assert u["compute"]["vcpu_hours"] == 0.0
-    assert u["compute"]["memory_gib_hours"] == 0.0
+    assert u["compute"]["compute_unit_hours"] == 0.0
     assert u["compute"]["monthly_limit"] == 10.0
     assert u["compute"]["monthly_used"] == 0.0
     assert u["compute"]["extra_remaining"] == 50.0
@@ -150,8 +148,8 @@ async def test_get_usage_includes_credit_pool_and_grants(user_client):
 
     plan = await user_client.get("/v1/usage/plan")
     assert plan.status_code == 200
-    assert plan.json()["compute_credits_monthly_limit"] == 10.0
-    assert plan.json()["compute_credits_monthly_used"] == 0.0
+    assert plan.json()["compute_units_monthly_limit"] == 10.0
+    assert plan.json()["compute_units_monthly_used"] == 0.0
 
 
 async def test_get_usage_clips_cross_period_cumulative_usage(user_client, monkeypatch):
@@ -206,8 +204,7 @@ async def test_get_usage_clips_cross_period_cumulative_usage(user_client, monkey
 
     assert resp.status_code == 200
     data = resp.json()
-    assert data["compute"]["vcpu_hours"] == 1.0
-    assert data["compute"]["memory_gib_hours"] == 2.0
+    assert data["compute"]["compute_unit_hours"] == 1.0
     assert data["storage"]["gib_hours"] == 5.0
 
 
@@ -226,8 +223,8 @@ async def test_get_plan_returns_full_details(user_client):
     data = resp.json()
 
     assert data["tier"] == "free"
-    assert data["compute_credits_monthly_limit"] == 10.0
-    assert data["compute_credits_monthly_used"] == 0.0
+    assert data["compute_units_monthly_limit"] == 10.0
+    assert data["compute_units_monthly_used"] == 0.0
     assert data["storage_capacity_limit_gib"] == 0
     assert data["max_concurrent_running"] == 1
     assert data["max_sandbox_duration_seconds"] == 1800

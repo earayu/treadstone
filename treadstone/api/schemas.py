@@ -36,7 +36,7 @@ class CreateSandboxRequest(BaseModel):
     name: str | None = Field(default=None, examples=["my-sandbox"], description=SANDBOX_NAME_DESCRIPTION)
     labels: dict[str, str] = Field(default_factory=dict, examples=[{"env": "dev"}])
     auto_stop_interval: int = Field(
-        default=15, examples=[15], description="Minutes of inactivity before the sandbox is automatically stopped."
+        default=60, examples=[60], description="Minutes of inactivity before the sandbox is automatically stopped."
     )
     auto_delete_interval: int = Field(
         default=-1,
@@ -148,7 +148,7 @@ class SandboxWebLinkResponse(BaseModel):
         ...,
         examples=["https://sandbox-sbabc123def456.treadstone-ai.dev/_treadstone/open?token=swlabc123"],
     )
-    expires_at: datetime = Field(..., examples=["2026-03-31T12:00:00+00:00"])
+    expires_at: datetime | None = Field(default=None, examples=["2026-03-31T12:00:00+00:00"])
 
 
 class SandboxWebLinkStatusResponse(BaseModel):
@@ -407,14 +407,13 @@ class BillingPeriod(BaseModel):
 
 
 class ComputeUsage(BaseModel):
-    vcpu_hours: float = Field(..., examples=[12.5])
-    memory_gib_hours: float = Field(..., examples=[25.0])
+    compute_unit_hours: float = Field(..., examples=[12.5])
     monthly_limit: float = Field(..., examples=[100.0])
     monthly_used: float = Field(..., examples=[45.5])
     monthly_remaining: float = Field(..., examples=[54.5])
     extra_remaining: float = Field(..., examples=[50.0])
     total_remaining: float = Field(..., examples=[104.5])
-    unit: str = Field(default="credits", examples=["credits"])
+    unit: str = Field(default="CU-hours", examples=["CU-hours"])
 
 
 class StorageUsage(BaseModel):
@@ -454,8 +453,8 @@ class UserPlanResponse(BaseModel):
     id: str = Field(..., examples=["planabc123def456"])
     user_id: str = Field(..., examples=["userabc123def456"])
     tier: str = Field(..., examples=["pro"])
-    compute_credits_monthly_limit: float = Field(..., examples=[100.0])
-    compute_credits_monthly_used: float = Field(..., examples=[45.5])
+    compute_units_monthly_limit: float = Field(..., examples=[100.0])
+    compute_units_monthly_used: float = Field(..., examples=[45.5])
     storage_capacity_limit_gib: int = Field(..., examples=[10])
     max_concurrent_running: int = Field(..., examples=[3])
     max_sandbox_duration_seconds: int = Field(..., examples=[7200])
@@ -482,6 +481,7 @@ class ComputeSessionItem(BaseModel):
     started_at: str = Field(..., examples=["2026-03-26T08:00:00+00:00"])
     ended_at: str | None = Field(default=None)
     duration_seconds: float = Field(..., examples=[7200])
+    compute_unit_hours: float = Field(..., examples=[1.0])
     vcpu_hours: float = Field(..., examples=[1.0])
     memory_gib_hours: float = Field(..., examples=[2.0])
     status: str = Field(..., examples=["active"])
@@ -547,7 +547,7 @@ class GrantsResponse(BaseModel):
 
 class UpdatePlanRequest(BaseModel):
     tier: str | None = Field(default=None, examples=["ultra"])
-    overrides: dict[str, Any] | None = Field(default=None, examples=[{"compute_credits_monthly_limit": 500}])
+    overrides: dict[str, Any] | None = Field(default=None, examples=[{"compute_units_monthly_limit": 500}])
 
     @model_validator(mode="after")
     def at_least_one_field(self) -> UpdatePlanRequest:
@@ -599,7 +599,7 @@ class CreateStorageQuotaGrantResponse(BaseModel):
 
 class TierTemplateItem(BaseModel):
     tier: str = Field(..., examples=["pro"])
-    compute_credits_monthly: float = Field(..., examples=[100.0])
+    compute_units_monthly: float = Field(..., examples=[100.0])
     storage_capacity_gib: int = Field(..., examples=[10])
     max_concurrent_running: int = Field(..., examples=[3])
     max_sandbox_duration_seconds: int = Field(..., examples=[7200])
@@ -617,7 +617,7 @@ class TierTemplateListResponse(BaseModel):
 
 
 class UpdateTierTemplateRequest(BaseModel):
-    compute_credits_monthly: float | None = Field(default=None, examples=[150])
+    compute_units_monthly: float | None = Field(default=None, examples=[150])
     storage_capacity_gib: int | None = Field(default=None, examples=[15])
     max_concurrent_running: int | None = Field(default=None, examples=[5])
     max_sandbox_duration_seconds: int | None = Field(default=None, examples=[14400])
@@ -631,7 +631,7 @@ class UpdateTierTemplateRequest(BaseModel):
     @model_validator(mode="after")
     def at_least_one_update(self) -> UpdateTierTemplateRequest:
         updatable = (
-            self.compute_credits_monthly,
+            self.compute_units_monthly,
             self.storage_capacity_gib,
             self.max_concurrent_running,
             self.max_sandbox_duration_seconds,

@@ -40,6 +40,7 @@ async def browser_bootstrap(
         select(Sandbox).where(
             Sandbox.id == sandbox_id,
             Sandbox.owner_id == current_user.id,
+            Sandbox.gmt_deleted.is_(None),
         )
     )
     sandbox = result.scalar_one_or_none()

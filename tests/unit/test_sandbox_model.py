@@ -7,6 +7,7 @@ def test_sandbox_status_enum():
     assert SandboxStatus.STOPPED == "stopped"
     assert SandboxStatus.ERROR == "error"
     assert SandboxStatus.DELETING == "deleting"
+    assert SandboxStatus.DELETED == "deleted"
 
 
 def test_sandbox_fields_exist():
@@ -33,6 +34,7 @@ def test_sandbox_fields_exist():
         "gmt_created",
         "gmt_started",
         "gmt_stopped",
+        "gmt_deleted",
     ]:
         assert hasattr(sb, field), f"Missing field: {field}"
 
@@ -57,7 +59,7 @@ VALID_TRANSITIONS: dict[str, list[str]] = {
     "ready": ["stopped", "error", "deleting"],
     "stopped": ["ready", "deleting"],
     "error": ["stopped", "deleting"],
-    "deleting": [],
+    "deleting": ["deleted"],
 }
 
 
@@ -74,4 +76,21 @@ def test_is_valid_transition():
     assert is_valid_transition("creating", "error") is True
     assert is_valid_transition("creating", "stopped") is False
     assert is_valid_transition("deleting", "ready") is False
+    assert is_valid_transition("deleting", "deleted") is True
     assert is_valid_transition("ready", "deleting") is True
+    assert is_valid_transition("deleted", "ready") is False
+
+
+def test_gmt_deleted_defaults_to_none():
+    sb = Sandbox()
+    assert sb.gmt_deleted is None
+
+
+def test_partial_unique_index_exists():
+    indexes = {idx.name: idx for idx in Sandbox.__table__.indexes}
+    assert "uq_sandbox_owner_name_active" in indexes
+    idx = indexes["uq_sandbox_owner_name_active"]
+    assert idx.unique is True
+    col_names = [col.name for col in idx.columns]
+    assert "owner_id" in col_names
+    assert "name" in col_names

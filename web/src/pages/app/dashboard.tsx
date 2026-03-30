@@ -5,11 +5,9 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
 import * as Dialog from "@radix-ui/react-dialog"
 import { toast } from "sonner"
 import { useSandboxes, useStartSandbox, useStopSandbox, useDeleteSandbox, type Sandbox } from "@/api/sandboxes"
-import { useUsageOverview } from "@/api/usage"
-import { useGrants } from "@/api/usage"
 import { cn } from "@/lib/utils"
 
-const PAGE_SIZE = 4
+const PAGE_SIZE = 8
 
 function formatRelativeTime(dateStr: string): string {
   const now = Date.now()
@@ -42,57 +40,6 @@ function StatusDot({ status }: { status: string }) {
       >
         {status === "ready" ? "Running" : status}
       </span>
-    </div>
-  )
-}
-
-function InlineMetrics() {
-  const { data: usage } = useUsageOverview()
-  const { data: grants } = useGrants()
-
-  const computeVcpuHours = usage ? usage.compute.vcpu_hours.toFixed(2) : "—"
-  const tier = usage?.tier ?? "—"
-
-  const welcomeBonus = useMemo(() => {
-    const list = grants?.compute_grants
-    if (!list) return "—"
-    const bonus = list.find((g) => g.grant_type === "welcome_bonus" && g.status === "active")
-    return bonus ? bonus.remaining_amount.toFixed(1) : "0"
-  }, [grants])
-
-  return (
-    <div className="grid grid-cols-3 border border-border/15">
-      <div className="border-r border-border/15 bg-card px-6 py-6">
-        <p className="text-[10px] uppercase tracking-[2px] text-muted-foreground">
-          Compute Usage
-        </p>
-        <div className="mt-2 flex items-baseline gap-2">
-          <span className="text-2xl font-bold text-foreground">{computeVcpuHours}</span>
-          <span className="text-xs text-muted-foreground">vCPU-hours</span>
-        </div>
-      </div>
-      <div className="border-r border-border/15 bg-card px-6 py-6">
-        <p className="text-[10px] uppercase tracking-[2px] text-muted-foreground">
-          Current Tier
-        </p>
-        <div className="mt-2 flex items-baseline gap-2">
-          <span className="text-2xl font-bold capitalize text-primary">{tier}</span>
-          {usage && (
-            <span className="bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
-              ACTIVE
-            </span>
-          )}
-        </div>
-      </div>
-      <div className="bg-card px-6 py-6">
-        <p className="text-[10px] uppercase tracking-[2px] text-muted-foreground">
-          Welcome Bonus Credit
-        </p>
-        <div className="mt-2 flex items-baseline gap-2">
-          <span className="text-2xl font-bold text-foreground">{welcomeBonus}</span>
-          <span className="text-xs text-muted-foreground">vCPU-hours remaining</span>
-        </div>
-      </div>
     </div>
   )
 }
@@ -364,11 +311,13 @@ function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
                 <td className="px-6 py-4">
                   <div className="flex flex-col gap-1">
                     <span className="text-xs text-muted-foreground">{sandbox.template}</span>
-                    {sandbox.persist && (
-                      <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/60">
+                    {sandbox.persist ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] text-primary/70">
                         <HardDrive className="size-2.5 shrink-0" />
-                        {sandbox.storage_size ?? "PV"}
+                        {sandbox.storage_size ? sandbox.storage_size.replace("i", "") : "PV"}
                       </span>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground/40">No persistent storage</span>
                     )}
                   </div>
                 </td>
@@ -463,8 +412,6 @@ export function DashboardPage() {
           Create Sandbox
         </Link>
       </div>
-
-      <InlineMetrics />
 
       {isLoading ? (
         <div className="border border-border/15 bg-card px-6 py-12 text-center text-sm text-muted-foreground">

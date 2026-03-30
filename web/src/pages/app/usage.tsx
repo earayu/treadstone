@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
 import { useGrants, useComputeSessions, useUsageOverview, useUserPlan } from "@/api/usage"
@@ -55,12 +55,6 @@ export function UsagePage() {
   })
   const { data: grantsData, isLoading: gLoading } = useGrants()
 
-  const welcomeRemaining = useMemo(() => {
-    const compute = grantsData?.compute_grants ?? []
-    const bonus = compute.find((g) => g.grant_type === "welcome_bonus" && g.status === "active")
-    return bonus?.remaining_amount ?? null
-  }, [grantsData?.compute_grants])
-
   const sessions = sessionsData?.items ?? []
   const sessionsTotal = sessionsData?.total ?? 0
   const sessionsTotalPages = Math.ceil(sessionsTotal / SESSION_PAGE_SIZE)
@@ -78,8 +72,6 @@ export function UsagePage() {
       ? formatPeriod(usage.billing_period.start, usage.billing_period.end)
       : "—"
 
-  const computeVcpuHours = usage?.compute.vcpu_hours ?? 0
-  const computeMemGibHours = usage?.compute.memory_gib_hours ?? 0
   const monthlyLimit = usage?.compute.monthly_limit ?? 0
   const monthlyUsed = usage?.compute.monthly_used ?? 0
   const totalRemaining = usage?.compute.total_remaining ?? 0
@@ -88,6 +80,24 @@ export function UsagePage() {
 
   return (
     <div className="flex flex-col gap-10">
+      <div className="border border-border/15 bg-card px-6 py-4">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
+          <p className="text-sm text-foreground">
+            <span className="text-[10px] font-bold uppercase tracking-[1.5px] text-muted-foreground">Current plan</span>
+            {"  "}
+            <span className="capitalize font-semibold text-primary">{tier}</span>
+          </p>
+          {(maxConcurrent != null || maxDurMin != null) && (
+            <p className="text-xs text-muted-foreground">
+              {maxConcurrent != null && `Max ${maxConcurrent} concurrent sandboxes`}
+              {maxConcurrent != null && maxDurMin != null && " · "}
+              {maxDurMin != null && `Max ${maxDurMin} min per session`}
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">Period: {periodLabel}</p>
+        </div>
+      </div>
+
       <div>
         <h1 className="text-4xl font-bold tracking-tight text-foreground">Usage &amp; Quotas</h1>
         <p className="mt-1 text-base text-muted-foreground">
@@ -103,46 +113,32 @@ export function UsagePage() {
           {loading ? (
             <p className="mt-3 text-sm text-muted-foreground">Loading…</p>
           ) : (
-            <div className="mt-3 flex flex-col gap-1">
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-bold tabular-nums text-foreground">
-                  {computeVcpuHours.toFixed(2)}
-                </span>
-                <span className="text-xs text-muted-foreground">vCPU-hours</span>
-              </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-lg font-semibold tabular-nums text-foreground">
-                  {computeMemGibHours.toFixed(2)}
-                </span>
-                <span className="text-xs text-muted-foreground">GiB-hours</span>
-              </div>
-              <div className="mt-3 border-t border-border/15 pt-3">
-                <p className="text-sm text-foreground">
-                  <span className="tabular-nums">{monthlyUsed.toFixed(1)}</span>
-                  {" / "}
-                  <span className="tabular-nums">{monthlyLimit.toFixed(1)}</span>
-                  {" credits used"}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Total remaining:{" "}
-                  <span className="tabular-nums">{totalRemaining.toFixed(1)}</span> credits
-                </p>
-              </div>
+            <div className="mt-3">
+              <p className="text-sm font-semibold tabular-nums text-foreground">
+                {monthlyUsed.toFixed(1)} / {monthlyLimit.toFixed(1)} CU-hours used
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Total remaining:{" "}
+                <span className="tabular-nums text-foreground">{totalRemaining.toFixed(1)}</span>{" "}
+                CU-hours
+              </p>
             </div>
           )}
         </div>
         <div className="border-b border-border/15 bg-card px-6 py-6 lg:border-b-0 lg:border-r">
           <p className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground">
-            Welcome bonus
+            Current tier
           </p>
-          {gLoading ? (
+          {loading ? (
             <p className="mt-3 text-sm text-muted-foreground">Loading…</p>
           ) : (
             <div className="mt-3 flex items-baseline gap-2">
-              <span className="text-2xl font-bold tabular-nums text-foreground">
-                {welcomeRemaining != null ? welcomeRemaining.toFixed(1) : "—"}
-              </span>
-              <span className="text-xs text-muted-foreground">remaining</span>
+              <span className="text-2xl font-bold capitalize text-primary">{tier}</span>
+              {!loading && (
+                <span className="bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                  ACTIVE
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -161,18 +157,6 @@ export function UsagePage() {
             </div>
           )}
         </div>
-      </div>
-
-      <div className="border border-border/15 bg-card px-6 py-5">
-        <p className="text-sm text-foreground">
-          <span className="font-semibold">Current plan:</span>{" "}
-          <span className="capitalize text-primary">{tier}</span>
-        </p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {maxConcurrent != null && maxDurMin != null
-            ? `Max ${maxConcurrent} concurrent · ${maxDurMin} min max · Period: ${periodLabel}`
-            : `Period: ${periodLabel}`}
-        </p>
       </div>
 
       <div className="border border-border/15 bg-black">
@@ -207,12 +191,11 @@ export function UsagePage() {
               <tr className="border-b border-border/15 bg-card">
                 {(
                   [
-                    ["Sandbox", "w-[20%]"],
-                    ["Template", "w-[14%]"],
-                    ["Duration", "w-[14%]"],
-                    ["vCPU-hours", "w-[14%]"],
-                    ["Mem GiB-hours", "w-[14%]"],
-                    ["Status", "w-[12%]"],
+                    ["Sandbox", "w-[22%]"],
+                    ["Template", "w-[16%]"],
+                    ["Duration", "w-[16%]"],
+                    ["CU-hours", "w-[16%]"],
+                    ["Status", "w-[14%]"],
                   ] as const
                 ).map(([label, cls]) => (
                   <th
@@ -236,7 +219,7 @@ export function UsagePage() {
                 </tr>
               ) : sessions.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-sm text-muted-foreground">
+                  <td colSpan={5} className="px-6 py-12 text-center text-sm text-muted-foreground">
                     No compute sessions yet.
                   </td>
                 </tr>
@@ -252,10 +235,7 @@ export function UsagePage() {
                       {formatDuration(row.duration_seconds)}
                     </td>
                     <td className="px-6 py-4 text-xs tabular-nums text-foreground">
-                      {row.vcpu_hours.toFixed(4)}
-                    </td>
-                    <td className="px-6 py-4 text-xs tabular-nums text-foreground">
-                      {row.memory_gib_hours.toFixed(4)}
+                      {row.compute_unit_hours.toFixed(4)}
                     </td>
                     <td className="px-6 py-4 text-xs capitalize text-foreground">{row.status}</td>
                   </tr>
@@ -295,7 +275,7 @@ export function UsagePage() {
             Compute grants
           </h3>
           <p className="mt-1 text-[11px] text-muted-foreground/80">
-            Compute credit grants (original / remaining).
+            Compute Unit grants (original / remaining).
           </p>
         </div>
         <div className="overflow-x-auto">
@@ -305,7 +285,7 @@ export function UsagePage() {
                 {(
                   [
                     ["Grant type", "w-[22%]"],
-                    ["Original (vCPU-h)", "w-[18%]"],
+                    ["Original (CU-h)", "w-[18%]"],
                     ["Remaining", "w-[18%]"],
                     ["Status", "w-[14%]"],
                     ["Expires", "w-[28%]"],

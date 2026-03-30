@@ -40,7 +40,7 @@ FIXED_NOW = datetime(2026, 3, 15, 10, 0, 0, tzinfo=UTC)
 def _make_template(tier_name: str = "free", **kwargs) -> TierTemplate:
     defaults = {
         "free": {
-            "compute_credits_monthly": Decimal("10"),
+            "compute_units_monthly": Decimal("10"),
             "storage_capacity_gib": 0,
             "max_concurrent_running": 1,
             "max_sandbox_duration_seconds": 1800,
@@ -48,7 +48,7 @@ def _make_template(tier_name: str = "free", **kwargs) -> TierTemplate:
             "grace_period_seconds": 600,
         },
         "pro": {
-            "compute_credits_monthly": Decimal("100"),
+            "compute_units_monthly": Decimal("100"),
             "storage_capacity_gib": 10,
             "max_concurrent_running": 3,
             "max_sandbox_duration_seconds": 7200,
@@ -63,8 +63,8 @@ def _make_template(tier_name: str = "free", **kwargs) -> TierTemplate:
 def _make_plan(user_id: str = "user01", tier: str = "free", **kwargs) -> UserPlan:
     defaults = {
         "tier": tier,
-        "compute_credits_monthly_limit": Decimal("10"),
-        "compute_credits_monthly_used": Decimal("0"),
+        "compute_units_monthly_limit": Decimal("10"),
+        "compute_units_monthly_used": Decimal("0"),
         "storage_capacity_limit_gib": 0,
         "max_concurrent_running": 1,
         "max_sandbox_duration_seconds": 1800,
@@ -153,7 +153,7 @@ class TestEnsureUserPlan:
 
         assert plan.user_id == "user01"
         assert plan.tier == "free"
-        assert plan.compute_credits_monthly_limit == Decimal("10")
+        assert plan.compute_units_monthly_limit == Decimal("10")
         assert plan.period_start == datetime(2026, 3, 1, tzinfo=UTC)
         assert plan.period_end == datetime(2026, 4, 1, tzinfo=UTC)
 
@@ -175,7 +175,7 @@ class TestEnsureUserPlan:
         plan = await svc.ensure_user_plan(session, "user01", tier="pro")
 
         assert plan.tier == "pro"
-        assert plan.compute_credits_monthly_limit == Decimal("100")
+        assert plan.compute_units_monthly_limit == Decimal("100")
         grants = _added_objects(session, ComputeGrant)
         assert len(grants) == 0
 
@@ -241,7 +241,7 @@ class TestUpdateUserTier:
         plan = await svc.update_user_tier(session, "user01", "pro")
 
         assert plan.tier == "pro"
-        assert plan.compute_credits_monthly_limit == Decimal("100")
+        assert plan.compute_units_monthly_limit == Decimal("100")
         assert plan.max_concurrent_running == 3
         assert plan.gmt_updated == FIXED_NOW
 
@@ -255,10 +255,10 @@ class TestUpdateUserTier:
             _MockResult(value=old_plan),  # existing plan lookup
         )
 
-        overrides = {"compute_credits_monthly_limit": Decimal("500"), "max_concurrent_running": 10}
+        overrides = {"compute_units_monthly_limit": Decimal("500"), "max_concurrent_running": 10}
         plan = await svc.update_user_tier(session, "user01", "pro", overrides=overrides)
 
-        assert plan.compute_credits_monthly_limit == Decimal("500")
+        assert plan.compute_units_monthly_limit == Decimal("500")
         assert plan.max_concurrent_running == 10
         assert plan.overrides == overrides
 
@@ -269,7 +269,7 @@ class TestUpdateUserTier:
         svc = MeteringService()
         svc._get_tier_template = AsyncMock(return_value=pro_template)
 
-        created_plan = _make_plan("user01", tier="pro", compute_credits_monthly_limit=Decimal("100"))
+        created_plan = _make_plan("user01", tier="pro", compute_units_monthly_limit=Decimal("100"))
         svc.ensure_user_plan = AsyncMock(return_value=created_plan)
 
         session = _mock_session(
@@ -297,7 +297,7 @@ class TestUpdateUserTier:
         plan = await svc.update_user_tier(session, "user01", "pro")
 
         assert plan.tier == "pro"
-        assert plan.compute_credits_monthly_limit == Decimal("100")
+        assert plan.compute_units_monthly_limit == Decimal("100")
         assert plan.max_concurrent_running == 3
 
 
@@ -315,7 +315,7 @@ class TestApplyOverrides:
     def test_all_allowed_keys_accepted(self):
         plan = _make_plan()
         overrides = {
-            "compute_credits_monthly_limit": Decimal("999"),
+            "compute_units_monthly_limit": Decimal("999"),
             "storage_capacity_limit_gib": 999,
             "max_concurrent_running": 99,
             "max_sandbox_duration_seconds": 99999,
@@ -366,8 +366,8 @@ class TestConsumeComputeCredits:
         monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
         plan = _make_plan(
             "user01",
-            compute_credits_monthly_limit=Decimal("100"),
-            compute_credits_monthly_used=Decimal("50"),
+            compute_units_monthly_limit=Decimal("100"),
+            compute_units_monthly_used=Decimal("50"),
         )
         svc = MeteringService()
         svc._get_user_plan_for_update = AsyncMock(return_value=plan)
@@ -378,14 +378,14 @@ class TestConsumeComputeCredits:
         assert result.monthly == Decimal("10")
         assert result.extra == Decimal("0")
         assert result.shortfall == Decimal("0")
-        assert plan.compute_credits_monthly_used == Decimal("60")
+        assert plan.compute_units_monthly_used == Decimal("60")
 
     async def test_monthly_plus_extra(self, monkeypatch):
         monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
         plan = _make_plan(
             "user01",
-            compute_credits_monthly_limit=Decimal("100"),
-            compute_credits_monthly_used=Decimal("98"),
+            compute_units_monthly_limit=Decimal("100"),
+            compute_units_monthly_used=Decimal("98"),
         )
         grant = ComputeGrant(
             user_id="user01",
@@ -404,15 +404,15 @@ class TestConsumeComputeCredits:
         assert result.monthly == Decimal("2")
         assert result.extra == Decimal("3")
         assert result.shortfall == Decimal("0")
-        assert plan.compute_credits_monthly_used == Decimal("100")
+        assert plan.compute_units_monthly_used == Decimal("100")
         assert grant.remaining_amount == Decimal("47")
 
     async def test_both_pools_exhausted_returns_shortfall(self, monkeypatch):
         monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
         plan = _make_plan(
             "user01",
-            compute_credits_monthly_limit=Decimal("10"),
-            compute_credits_monthly_used=Decimal("10"),
+            compute_units_monthly_limit=Decimal("10"),
+            compute_units_monthly_used=Decimal("10"),
         )
         svc = MeteringService()
         svc._get_user_plan_for_update = AsyncMock(return_value=plan)
@@ -428,8 +428,8 @@ class TestConsumeComputeCredits:
         monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
         plan = _make_plan(
             "user01",
-            compute_credits_monthly_limit=Decimal("10"),
-            compute_credits_monthly_used=Decimal("10"),
+            compute_units_monthly_limit=Decimal("10"),
+            compute_units_monthly_used=Decimal("10"),
         )
         grant_soon = ComputeGrant(
             user_id="user01",
@@ -462,8 +462,8 @@ class TestConsumeComputeCredits:
         monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
         plan = _make_plan(
             "user01",
-            compute_credits_monthly_limit=Decimal("10"),
-            compute_credits_monthly_used=Decimal("12"),
+            compute_units_monthly_limit=Decimal("10"),
+            compute_units_monthly_used=Decimal("12"),
         )
         svc = MeteringService()
         svc._get_user_plan_for_update = AsyncMock(return_value=plan)
@@ -747,8 +747,8 @@ class TestCheckComputeQuota:
     async def test_sufficient_monthly_passes(self):
         plan = _make_plan(
             "user01",
-            compute_credits_monthly_limit=Decimal("100"),
-            compute_credits_monthly_used=Decimal("50"),
+            compute_units_monthly_limit=Decimal("100"),
+            compute_units_monthly_used=Decimal("50"),
         )
         svc = MeteringService()
         svc.get_user_plan = AsyncMock(return_value=plan)
@@ -759,8 +759,8 @@ class TestCheckComputeQuota:
     async def test_monthly_exhausted_but_extra_available(self):
         plan = _make_plan(
             "user01",
-            compute_credits_monthly_limit=Decimal("100"),
-            compute_credits_monthly_used=Decimal("100"),
+            compute_units_monthly_limit=Decimal("100"),
+            compute_units_monthly_used=Decimal("100"),
         )
         svc = MeteringService()
         svc.get_user_plan = AsyncMock(return_value=plan)
@@ -771,8 +771,8 @@ class TestCheckComputeQuota:
     async def test_both_exhausted_raises(self):
         plan = _make_plan(
             "user01",
-            compute_credits_monthly_limit=Decimal("100"),
-            compute_credits_monthly_used=Decimal("100"),
+            compute_units_monthly_limit=Decimal("100"),
+            compute_units_monthly_used=Decimal("100"),
         )
         svc = MeteringService()
         svc.get_user_plan = AsyncMock(return_value=plan)
@@ -786,8 +786,8 @@ class TestCheckComputeQuota:
     async def test_exactly_zero_remaining_raises(self):
         plan = _make_plan(
             "user01",
-            compute_credits_monthly_limit=Decimal("10"),
-            compute_credits_monthly_used=Decimal("10"),
+            compute_units_monthly_limit=Decimal("10"),
+            compute_units_monthly_used=Decimal("10"),
         )
         svc = MeteringService()
         svc.get_user_plan = AsyncMock(return_value=plan)
@@ -800,8 +800,8 @@ class TestCheckComputeQuota:
         """Grace period overage: monthly_used > limit, but extra credits compensate."""
         plan = _make_plan(
             "user01",
-            compute_credits_monthly_limit=Decimal("100"),
-            compute_credits_monthly_used=Decimal("105"),
+            compute_units_monthly_limit=Decimal("100"),
+            compute_units_monthly_used=Decimal("105"),
         )
         svc = MeteringService()
         svc.get_user_plan = AsyncMock(return_value=plan)
@@ -812,8 +812,8 @@ class TestCheckComputeQuota:
     async def test_error_includes_extra_remaining(self):
         plan = _make_plan(
             "user01",
-            compute_credits_monthly_limit=Decimal("50"),
-            compute_credits_monthly_used=Decimal("50"),
+            compute_units_monthly_limit=Decimal("50"),
+            compute_units_monthly_used=Decimal("50"),
         )
         svc = MeteringService()
         svc.get_user_plan = AsyncMock(return_value=plan)
@@ -828,8 +828,8 @@ class TestGetTotalComputeRemaining:
     async def test_monthly_plus_extra(self):
         plan = _make_plan(
             "user01",
-            compute_credits_monthly_limit=Decimal("100"),
-            compute_credits_monthly_used=Decimal("60"),
+            compute_units_monthly_limit=Decimal("100"),
+            compute_units_monthly_used=Decimal("60"),
         )
         svc = MeteringService()
         svc.get_user_plan = AsyncMock(return_value=plan)
@@ -841,8 +841,8 @@ class TestGetTotalComputeRemaining:
     async def test_overspent_returns_negative(self):
         plan = _make_plan(
             "user01",
-            compute_credits_monthly_limit=Decimal("100"),
-            compute_credits_monthly_used=Decimal("110"),
+            compute_units_monthly_limit=Decimal("100"),
+            compute_units_monthly_used=Decimal("110"),
         )
         svc = MeteringService()
         svc.get_user_plan = AsyncMock(return_value=plan)
@@ -854,8 +854,8 @@ class TestGetTotalComputeRemaining:
     async def test_no_extra_credits(self):
         plan = _make_plan(
             "user01",
-            compute_credits_monthly_limit=Decimal("100"),
-            compute_credits_monthly_used=Decimal("0"),
+            compute_units_monthly_limit=Decimal("100"),
+            compute_units_monthly_used=Decimal("0"),
         )
         svc = MeteringService()
         svc.get_user_plan = AsyncMock(return_value=plan)
@@ -867,8 +867,8 @@ class TestGetTotalComputeRemaining:
     async def test_monthly_unused_plus_large_extra(self):
         plan = _make_plan(
             "user01",
-            compute_credits_monthly_limit=Decimal("100"),
-            compute_credits_monthly_used=Decimal("0"),
+            compute_units_monthly_limit=Decimal("100"),
+            compute_units_monthly_used=Decimal("0"),
         )
         svc = MeteringService()
         svc.get_user_plan = AsyncMock(return_value=plan)
@@ -887,7 +887,7 @@ class TestCheckConcurrentLimit:
     async def test_under_limit_passes(self):
         plan = _make_plan("user01", max_concurrent_running=3)
         svc = MeteringService()
-        svc.get_user_plan = AsyncMock(return_value=plan)
+        svc._get_user_plan_for_update = AsyncMock(return_value=plan)
         svc._count_running_sandboxes = AsyncMock(return_value=1)
 
         await svc.check_concurrent_limit(AsyncMock(), "user01")
@@ -895,7 +895,7 @@ class TestCheckConcurrentLimit:
     async def test_zero_running_passes(self):
         plan = _make_plan("user01", max_concurrent_running=1)
         svc = MeteringService()
-        svc.get_user_plan = AsyncMock(return_value=plan)
+        svc._get_user_plan_for_update = AsyncMock(return_value=plan)
         svc._count_running_sandboxes = AsyncMock(return_value=0)
 
         await svc.check_concurrent_limit(AsyncMock(), "user01")
@@ -903,7 +903,7 @@ class TestCheckConcurrentLimit:
     async def test_at_limit_raises(self):
         plan = _make_plan("user01", max_concurrent_running=3)
         svc = MeteringService()
-        svc.get_user_plan = AsyncMock(return_value=plan)
+        svc._get_user_plan_for_update = AsyncMock(return_value=plan)
         svc._count_running_sandboxes = AsyncMock(return_value=3)
 
         with pytest.raises(ConcurrentLimitError) as exc_info:
@@ -914,7 +914,7 @@ class TestCheckConcurrentLimit:
     async def test_over_limit_raises(self):
         plan = _make_plan("user01", max_concurrent_running=3)
         svc = MeteringService()
-        svc.get_user_plan = AsyncMock(return_value=plan)
+        svc._get_user_plan_for_update = AsyncMock(return_value=plan)
         svc._count_running_sandboxes = AsyncMock(return_value=5)
 
         with pytest.raises(ConcurrentLimitError):
@@ -923,7 +923,7 @@ class TestCheckConcurrentLimit:
     async def test_single_slot_tier(self):
         plan = _make_plan("user01", max_concurrent_running=1)
         svc = MeteringService()
-        svc.get_user_plan = AsyncMock(return_value=plan)
+        svc._get_user_plan_for_update = AsyncMock(return_value=plan)
         svc._count_running_sandboxes = AsyncMock(return_value=1)
 
         with pytest.raises(ConcurrentLimitError) as exc_info:
@@ -954,22 +954,28 @@ class TestCountRunningSandboxes:
 
 class TestCheckStorageQuota:
     async def test_sufficient_quota_passes(self):
+        plan = _make_plan("user01", storage_capacity_limit_gib=10)
         svc = MeteringService()
-        svc.get_total_storage_quota = AsyncMock(return_value=10)
+        svc.get_user_plan = AsyncMock(return_value=plan)
+        svc.get_extra_storage_quota = AsyncMock(return_value=0)
         svc.get_current_storage_used = AsyncMock(return_value=3)
 
         await svc.check_storage_quota(AsyncMock(), "user01", requested_gib=5)
 
     async def test_exact_fit_passes(self):
+        plan = _make_plan("user01", storage_capacity_limit_gib=10)
         svc = MeteringService()
-        svc.get_total_storage_quota = AsyncMock(return_value=10)
+        svc.get_user_plan = AsyncMock(return_value=plan)
+        svc.get_extra_storage_quota = AsyncMock(return_value=0)
         svc.get_current_storage_used = AsyncMock(return_value=5)
 
         await svc.check_storage_quota(AsyncMock(), "user01", requested_gib=5)
 
     async def test_insufficient_quota_raises(self):
+        plan = _make_plan("user01", storage_capacity_limit_gib=10)
         svc = MeteringService()
-        svc.get_total_storage_quota = AsyncMock(return_value=10)
+        svc.get_user_plan = AsyncMock(return_value=plan)
+        svc.get_extra_storage_quota = AsyncMock(return_value=0)
         svc.get_current_storage_used = AsyncMock(return_value=8)
 
         with pytest.raises(StorageQuotaExceededError) as exc_info:
@@ -980,8 +986,10 @@ class TestCheckStorageQuota:
         assert "10 GiB" in exc_info.value.message
 
     async def test_zero_quota_raises(self):
+        plan = _make_plan("user01", storage_capacity_limit_gib=0)
         svc = MeteringService()
-        svc.get_total_storage_quota = AsyncMock(return_value=0)
+        svc.get_user_plan = AsyncMock(return_value=plan)
+        svc.get_extra_storage_quota = AsyncMock(return_value=0)
         svc.get_current_storage_used = AsyncMock(return_value=0)
 
         with pytest.raises(StorageQuotaExceededError):
@@ -989,8 +997,10 @@ class TestCheckStorageQuota:
 
     async def test_overcommitted_storage_raises(self):
         """Post-downgrade scenario: current_used > total_quota."""
+        plan = _make_plan("user01", storage_capacity_limit_gib=10)
         svc = MeteringService()
-        svc.get_total_storage_quota = AsyncMock(return_value=10)
+        svc.get_user_plan = AsyncMock(return_value=plan)
+        svc.get_extra_storage_quota = AsyncMock(return_value=0)
         svc.get_current_storage_used = AsyncMock(return_value=40)
 
         with pytest.raises(StorageQuotaExceededError):

@@ -78,14 +78,18 @@ export function CreateSandboxPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<string>("")
   const [name, setName] = useState("")
   const [labelsRaw, setLabelsRaw] = useState("")
-  const [autoStopMinutes, setAutoStopMinutes] = useState("15")
+  const [autoStopMinutes, setAutoStopMinutes] = useState("60")
   const [autoDeleteEnabled, setAutoDeleteEnabled] = useState(false)
-  const [autoDeleteMinutes, setAutoDeleteMinutes] = useState("60")
+  const [autoDeleteMinutes, setAutoDeleteMinutes] = useState("10080")
   const [persist, setPersist] = useState(false)
   const [storageSize, setStorageSize] = useState<"5Gi" | "10Gi" | "20Gi">("5Gi")
   const [nameTouched, setNameTouched] = useState(false)
 
   const activeTemplate = selectedTemplate || defaultTemplate
+
+  const maxAutoStopMinutes = usage
+    ? Math.floor(usage.limits.max_sandbox_duration_seconds / 60)
+    : undefined
 
   const nameTrimmed = name.trim()
   const nameInvalid =
@@ -118,6 +122,10 @@ export function CreateSandboxPage() {
     const stop = parseInt(autoStopMinutes, 10)
     if (Number.isNaN(stop) || stop < 1) {
       toast.error("Auto-stop must be at least 1 minute.")
+      return
+    }
+    if (maxAutoStopMinutes !== undefined && stop > maxAutoStopMinutes) {
+      toast.error(`Auto-stop cannot exceed your plan's max session time (${maxAutoStopMinutes} min).`)
       return
     }
 
@@ -267,7 +275,7 @@ export function CreateSandboxPage() {
               </div>
             </div>
 
-            <div className="grid gap-6 border border-border/15 bg-card/40 p-6 md:grid-cols-2">
+            <div className="grid gap-6 border border-border/30 bg-card/70 p-6 md:grid-cols-2">
               <div className="space-y-5">
                 <div>
                   <label
@@ -281,6 +289,7 @@ export function CreateSandboxPage() {
                       id="auto-stop"
                       type="number"
                       min={1}
+                      max={maxAutoStopMinutes}
                       inputMode="numeric"
                       value={autoStopMinutes}
                       onChange={(e) => setAutoStopMinutes(e.target.value)}
@@ -290,48 +299,63 @@ export function CreateSandboxPage() {
                       Minutes
                     </span>
                   </div>
+                  {maxAutoStopMinutes !== undefined && (
+                    <p className="mt-1.5 text-[10px] text-muted-foreground/60">
+                      Max {maxAutoStopMinutes} min (plan limit)
+                    </p>
+                  )}
                 </div>
                 <div>
-                  <label
-                    htmlFor="auto-delete"
-                    className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground"
-                  >
-                    Auto-delete interval
-                  </label>
-                  <div className="mt-2 flex flex-col gap-2">
-                    <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
-                      <input
-                        type="checkbox"
-                        checked={autoDeleteEnabled}
-                        onChange={(e) => setAutoDeleteEnabled(e.target.checked)}
-                        className="size-3.5 rounded border-border accent-primary"
-                      />
-                      <span className="text-xs text-muted-foreground">
-                        Delete automatically after stop
-                      </span>
+                  <div className="flex items-center justify-between gap-4">
+                    <label
+                      htmlFor="auto-delete"
+                      className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground"
+                    >
+                      Auto-delete interval
                     </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        id="auto-delete"
-                        type="number"
-                        min={1}
-                        inputMode="numeric"
-                        disabled={!autoDeleteEnabled}
-                        value={autoDeleteMinutes}
-                        onChange={(e) => setAutoDeleteMinutes(e.target.value)}
-                        className="h-10 w-full min-w-0 flex-1 border border-border/40 bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={autoDeleteEnabled}
+                      onClick={() => setAutoDeleteEnabled((p) => !p)}
+                      className={cn(
+                        "relative h-7 w-12 shrink-0 overflow-hidden rounded-full border transition-colors",
+                        autoDeleteEnabled
+                          ? "border-primary bg-primary/30"
+                          : "border-border/70 bg-muted/60",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "absolute left-0 top-0.5 size-6 rounded-full shadow transition-transform",
+                          autoDeleteEnabled
+                            ? "translate-x-5 bg-primary"
+                            : "translate-x-0.5 bg-foreground/40",
+                        )}
                       />
-                      <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                        Minutes
-                      </span>
-                    </div>
+                    </button>
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      id="auto-delete"
+                      type="number"
+                      min={1}
+                      inputMode="numeric"
+                      disabled={!autoDeleteEnabled}
+                      value={autoDeleteMinutes}
+                      onChange={(e) => setAutoDeleteMinutes(e.target.value)}
+                      className="h-10 w-full min-w-0 flex-1 border border-border/40 bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    />
+                    <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Minutes
+                    </span>
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-5 border-t border-border/15 pt-5 md:border-l md:border-t-0 md:pl-6 md:pt-0">
+              <div className="space-y-5 border-t border-border/30 pt-5 md:border-l md:border-t-0 md:pl-6 md:pt-0">
                 <div className="flex items-center justify-between gap-4">
-                  <span className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground">
+                  <span className="text-[10px] font-bold uppercase tracking-[2px] text-foreground/70">
                     Data persistence
                   </span>
                   <button
@@ -340,16 +364,18 @@ export function CreateSandboxPage() {
                     aria-checked={persist}
                     onClick={() => setPersist((p) => !p)}
                     className={cn(
-                      "relative h-7 w-12 shrink-0 rounded-full border transition-colors",
+                      "relative h-7 w-12 shrink-0 overflow-hidden rounded-full border transition-colors",
                       persist
-                        ? "border-primary bg-primary/20"
-                        : "border-border/50 bg-muted/30",
+                        ? "border-primary bg-primary/30"
+                        : "border-border/70 bg-muted/60",
                     )}
                   >
                     <span
                       className={cn(
-                        "absolute top-0.5 size-6 rounded-full bg-background shadow transition-transform",
-                        persist ? "translate-x-5" : "translate-x-0.5",
+                        "absolute left-0 top-0.5 size-6 rounded-full shadow transition-transform",
+                        persist
+                          ? "translate-x-5 bg-primary"
+                          : "translate-x-0.5 bg-foreground/40",
                       )}
                     />
                   </button>
@@ -410,9 +436,9 @@ export function CreateSandboxPage() {
                     Compute usage
                   </p>
                   <p className="mt-1 text-lg font-bold text-foreground">
-                    {usage.compute.vcpu_hours.toFixed(2)}{" "}
+                    {usage.compute.compute_unit_hours.toFixed(2)}{" "}
                     <span className="text-xs font-normal text-muted-foreground">
-                      vCPU-h
+                      CU-h
                     </span>
                   </p>
                 </li>

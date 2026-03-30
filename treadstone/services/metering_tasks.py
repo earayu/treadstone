@@ -25,7 +25,7 @@ from treadstone.models.metering import ComputeSession, StorageLedger, StorageSta
 from treadstone.models.sandbox import Sandbox, SandboxStatus
 from treadstone.models.user import utc_now
 from treadstone.services.audit import record_audit_event
-from treadstone.services.metering_helpers import calculate_credit_rate
+from treadstone.services.metering_helpers import calculate_cu_rate
 from treadstone.services.metering_service import MeteringService
 
 logger = logging.getLogger(__name__)
@@ -54,7 +54,7 @@ async def tick_metering(session: AsyncSession) -> int:
     conflict rolls back only that single session, not the entire tick batch.
 
     After accumulating raw hours, computes credit deltas per user using
-    ``calculate_credit_rate()`` and consumes them from the dual pool
+    ``calculate_cu_rate()`` and consumes them from the dual pool
     (monthly first, then ComputeGrant FIFO).
 
     Returns the number of sessions successfully metered.
@@ -101,9 +101,9 @@ async def tick_metering(session: AsyncSession) -> int:
             )
             continue
 
-        credit_rate = calculate_credit_rate(cs.template)
-        credit_delta = credit_rate * elapsed_hours
-        user_credit_deltas[cs.user_id] = user_credit_deltas.get(cs.user_id, Decimal("0")) + credit_delta
+        cu_rate = calculate_cu_rate(cs.template)
+        cu_delta = cu_rate * elapsed_hours
+        user_credit_deltas[cs.user_id] = user_credit_deltas.get(cs.user_id, Decimal("0")) + cu_delta
         metered += 1
 
     for user_id, total_delta in user_credit_deltas.items():
@@ -165,14 +165,14 @@ async def check_warning_thresholds(session: AsyncSession) -> None:
     warning fires; 80% fires on the next tick.  This is intentional — the
     100% signal is more urgent.
     """
-    user_ids = await _get_users_with_open_sessions(session)
+    user_ids = await _get_users_with_running_sandboxes(session)
 
     for user_id in user_ids:
         plan = await _metering.get_user_plan(session, user_id)
         total_remaining = await _metering.get_total_compute_remaining(session, user_id)
 
-        monthly_limit = plan.compute_credits_monthly_limit
-        monthly_used = plan.compute_credits_monthly_used
+        monthly_limit = plan.compute_units_monthly_limit
+        monthly_used = plan.compute_units_monthly_used
         extra_remaining = await _metering.get_extra_compute_remaining(session, user_id)
 
         # 100% warning: monthly + extra fully exhausted
@@ -280,8 +280,8 @@ async def _handle_exhausted(
             metadata={
                 "tier": plan.tier,
                 "grace_period_seconds": plan.grace_period_seconds,
-                "monthly_used": float(plan.compute_credits_monthly_used),
-                "monthly_limit": float(plan.compute_credits_monthly_limit),
+                "monthly_used": float(plan.compute_units_monthly_used),
+                "monthly_limit": float(plan.compute_units_monthly_limit),
             },
         )
         return
@@ -289,7 +289,7 @@ async def _handle_exhausted(
     elapsed = (now - plan.grace_period_started_at).total_seconds()
 
     overage = abs(total_remaining)
-    absolute_cap = plan.compute_credits_monthly_limit * ABSOLUTE_OVERAGE_CAP_RATIO
+    absolute_cap = plan.compute_units_monthly_limit * ABSOLUTE_OVERAGE_CAP_RATIO
     exceeded_absolute_cap = overage > absolute_cap
 
     if elapsed > plan.grace_period_seconds or exceeded_absolute_cap:
@@ -306,15 +306,23 @@ async def _enforce_stop(
     overage: Decimal,
     stop_callback: StopSandboxCallback | None,
 ) -> None:
-    """Force-stop all running sandboxes for a user (grace period enforcement)."""
+    """Force-stop all running sandboxes for a user (grace period enforcement).
+
+    Closes ComputeSession for each successfully stopped sandbox to prevent
+    continued billing.  Only clears grace state when all sandboxes are
+    stopped successfully; partial failures preserve the grace timer so
+    enforcement retries immediately on the next tick.
+    """
     sandboxes = await _get_running_sandboxes(session, user_id)
 
+    all_stopped = True
     for sandbox in sandboxes:
         try:
             if stop_callback is not None:
                 await stop_callback(session, sandbox)
             else:
                 await _db_only_stop(session, sandbox)
+            await _metering.close_compute_session(session, sandbox.id)
             await record_audit_event(
                 session,
                 action="metering.auto_stop",
@@ -326,15 +334,17 @@ async def _enforce_stop(
                     "tier": plan.tier,
                     "reason": reason,
                     "grace_elapsed_seconds": int(grace_elapsed_seconds),
-                    "overage_vcpu_hours": float(overage),
+                    "overage_compute_units": float(overage),
                 },
             )
         except Exception:
             logger.exception("Failed to force-stop sandbox %s during grace enforcement", sandbox.id)
+            all_stopped = False
 
-    plan.grace_period_started_at = None
-    plan.gmt_updated = utc_now()
-    session.add(plan)
+    if all_stopped:
+        plan.grace_period_started_at = None
+        plan.gmt_updated = utc_now()
+        session.add(plan)
 
 
 async def _handle_credits_restored(
@@ -415,7 +425,8 @@ async def handle_period_rollover(
     new_period_start = period_boundary
     new_period_end = period_boundary + relativedelta(months=1)
 
-    plan.compute_credits_monthly_used = Decimal("0")
+    plan.compute_units_monthly_used = Decimal("0")
+    plan.compute_units_overage = Decimal("0")
     plan.period_start = new_period_start
     plan.period_end = new_period_end
     plan.warning_80_notified_at = None
@@ -463,6 +474,8 @@ async def reset_monthly_credits(session: AsyncSession) -> int:
     """Bulk-reset monthly credits for all users whose period has ended.
 
     Handles cross-month session splitting for any open ComputeSessions.
+    Uses a while loop per plan to catch up multiple missed months in a
+    single tick (e.g. after prolonged leader downtime).
     Returns the number of user plans reset.
     """
     now = utc_now()
@@ -472,42 +485,42 @@ async def reset_monthly_credits(session: AsyncSession) -> int:
 
     reset_count = 0
     for plan in plans:
-        # Split any open sessions for this user at the period boundary
-        open_sessions_result = await session.execute(
-            select(ComputeSession).where(
-                ComputeSession.user_id == plan.user_id,
-                ComputeSession.ended_at.is_(None),
+        while plan.period_end <= now:
+            open_sessions_result = await session.execute(
+                select(ComputeSession).where(
+                    ComputeSession.user_id == plan.user_id,
+                    ComputeSession.ended_at.is_(None),
+                )
             )
-        )
-        for cs in open_sessions_result.scalars():
-            await handle_period_rollover(session, cs, plan)
+            for cs in open_sessions_result.scalars():
+                await handle_period_rollover(session, cs, plan)
 
-        # If no open sessions triggered the rollover, still reset the plan
-        if plan.period_end <= now:
-            new_period_start = plan.period_end
-            new_period_end = plan.period_end + relativedelta(months=1)
+            if plan.period_end <= now:
+                new_period_start = plan.period_end
+                new_period_end = plan.period_end + relativedelta(months=1)
 
-            plan.compute_credits_monthly_used = Decimal("0")
-            plan.period_start = new_period_start
-            plan.period_end = new_period_end
-            plan.warning_80_notified_at = None
-            plan.warning_100_notified_at = None
-            plan.grace_period_started_at = None
-            plan.gmt_updated = now
-            session.add(plan)
+                plan.compute_units_monthly_used = Decimal("0")
+                plan.compute_units_overage = Decimal("0")
+                plan.period_start = new_period_start
+                plan.period_end = new_period_end
+                plan.warning_80_notified_at = None
+                plan.warning_100_notified_at = None
+                plan.grace_period_started_at = None
+                plan.gmt_updated = now
+                session.add(plan)
 
-            await record_audit_event(
-                session,
-                action="metering.monthly_reset",
-                target_type="user",
-                target_id=plan.user_id,
-                actor_type=AuditActorType.SYSTEM.value,
-                metadata={
-                    "tier": plan.tier,
-                    "old_period_end": (new_period_start).isoformat(),
-                    "new_period_end": new_period_end.isoformat(),
-                },
-            )
+                await record_audit_event(
+                    session,
+                    action="metering.monthly_reset",
+                    target_type="user",
+                    target_id=plan.user_id,
+                    actor_type=AuditActorType.SYSTEM.value,
+                    metadata={
+                        "tier": plan.tier,
+                        "old_period_end": new_period_start.isoformat(),
+                        "new_period_end": new_period_end.isoformat(),
+                    },
+                )
 
         reset_count += 1
 
