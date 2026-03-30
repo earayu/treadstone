@@ -23,6 +23,7 @@ htmlcov/
 *.sqlite3
 
 openapi.json
+openapi-public.json
 reports/
 
 .DS_Store

@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager, suppress
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -28,6 +29,7 @@ from treadstone.config import settings, validate_runtime_settings
 from treadstone.core.errors import TreadstoneError
 from treadstone.middleware.request_logging import RequestLoggingMiddleware
 from treadstone.middleware.sandbox_subdomain import SandboxSubdomainMiddleware
+from treadstone.openapi_spec import build_full_openapi_spec, filter_public_openapi
 from treadstone.services.sandbox_proxy import close_http_client
 
 logger = logging.getLogger(__name__)
@@ -224,3 +226,15 @@ app.include_router(waitlist_router)
 @app.get("/health", tags=["system"], response_model=HealthResponse)
 async def health():
     return {"status": "ok"}
+
+
+def _public_openapi() -> dict[str, Any]:
+    """Serve OpenAPI without `/v1/admin` or `/v1/audit` paths (matches public SDK and docs)."""
+    if app.openapi_schema is not None:
+        return app.openapi_schema
+    full = build_full_openapi_spec(app)
+    app.openapi_schema = filter_public_openapi(full)
+    return app.openapi_schema
+
+
+app.openapi = _public_openapi  # type: ignore[method-assign]

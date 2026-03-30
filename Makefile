@@ -96,9 +96,9 @@ gen-openapi: ## Export openapi.json from FastAPI app (no server needed)
 gen-web-types: gen-openapi ## Generate web TypeScript types from OpenAPI spec
 	cd web && npx openapi-typescript ../openapi.json -o src/api/schema.d.ts
 
-gen-sdk-python: gen-openapi ## Generate Python SDK from OpenAPI spec
+gen-sdk-python: gen-openapi ## Generate Python SDK from public OpenAPI spec (excludes /v1/admin)
 	openapi-python-client generate \
-		--path openapi.json \
+		--path openapi-public.json \
 		--config openapi-client-config.yaml \
 		--output-path sdk/python \
 		--overwrite

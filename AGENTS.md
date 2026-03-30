@@ -125,7 +125,7 @@ Rules:
 ## OpenAPI / SDK Generation
 
 - Code-first: OpenAPI spec is auto-generated from FastAPI code. No static YAML to maintain.
-- `make gen-openapi` exports `openapi.json` (build artifact, gitignored).
+- `make gen-openapi` exports `openapi.json` (full spec, including admin and audit routes for web types) and `openapi-public.json` (no `/v1/admin` or `/v1/audit`, for Python SDK; both gitignored). Runtime `/openapi.json` matches the public spec.
 - All API routers must set `tags=["xxx"]` — SDK method names depend on tag + function name.
 - **Reviewability:** API-facing changes often regenerate large, mechanical diffs. Prefer either:
   - **Two commits on the same branch:** (1) hand-written work — `treadstone/`, `tests/`, `web/` app code, `alembic/`, plus `web/src/api/schema.d.ts` from `make gen-web-types` when the web app needs new types; (2) `chore: regenerate Python SDK from OpenAPI` touching **`sdk/python/`** only via `make gen-sdk-python`. Or:
@@ -175,8 +175,9 @@ Run `make help` for the full list. Key commands:
 | `make lint` / `make format-py` | Repo lint checks / Python auto-format |
 | `make migrate` | Apply database migrations |
 | `make migration MSG=x` | Generate a new Alembic migration |
-| `make gen-openapi` | Export `openapi.json` from the FastAPI app |
-| `make gen-web-types` / `make gen-sdk-python` | Generate client artifacts from OpenAPI |
+| `make gen-openapi` | Export `openapi.json` + `openapi-public.json` from the FastAPI app |
+| `make gen-web-types` | Generate `web/src/api/schema.d.ts` from full `openapi.json` |
+| `make gen-sdk-python` | Generate `sdk/python` from `openapi-public.json` (admin and audit excluded) |
 | `make up` / `make down` | Full K8s environment up/down (see `deploy/README.md`) |
 | `make ship MSG=x` | git add + commit + push (feature branches only) |
 | `make bump V=x.y.z` | Bump version files, commit + push (feature branches only) |
