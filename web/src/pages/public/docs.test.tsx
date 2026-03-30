@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react"
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import { createMemoryRouter, RouterProvider } from "react-router"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -7,44 +7,58 @@ import { DocsPage } from "@/pages/public/docs"
 const manifest = [
   {
     slug: "index",
-    title: "Start Here",
-    section: "Start Here",
+    title: "Overview",
+    section: "Get Started",
     order: 10,
     summary: "What Treadstone is.",
     default: true,
     llm_priority: 100,
+    aliases: [],
   },
   {
-    slug: "quickstart-agent-cli",
-    title: "Quickstart for Agents (CLI)",
-    section: "Quickstarts",
-    order: 10,
-    summary: "CLI path for agents.",
+    slug: "quickstart",
+    title: "Quickstart",
+    section: "Get Started",
+    order: 20,
+    summary: "Fastest path into the product.",
     default: false,
     llm_priority: 100,
+    aliases: ["quickstart-human"],
   },
   {
-    slug: "guide-browser-handoff",
+    slug: "cli-guide",
+    title: "CLI Guide",
+    section: "Integrate",
+    order: 10,
+    summary: "Use the hosted CLI surface.",
+    default: false,
+    llm_priority: 100,
+    aliases: ["quickstart-agent-cli"],
+  },
+  {
+    slug: "browser-handoff",
     title: "Browser Handoff",
-    section: "Guides",
+    section: "Core Workflows",
     order: 10,
     summary: "Create browser hand-off links.",
     default: false,
     llm_priority: 100,
+    aliases: ["guide-browser-handoff"],
   },
 ] as const
 
 const docsBySlug: Record<string, string> = {
-  index: "# Start Here\n\nHome content.",
-  "quickstart-agent-cli": "# Quickstart for Agents (CLI)\n\nCLI content.",
-  "guide-browser-handoff": "# Browser Handoff\n\nGuide content.",
+  index: "# Overview\n\n## Get Started\n\nHome content.",
+  quickstart: "# Quickstart\n\n## Fastest Path\n\nQuickstart content.",
+  "cli-guide": "# CLI Guide\n\n## Sign In\n\nCLI content.\n\n### Direct Login\n\nUse flags when needed.",
+  "browser-handoff": "# Browser Handoff\n\n## Create A Handoff URL\n\nGuide content.",
 }
 
 function renderDocsPage(initialEntry = "/docs") {
   const router = createMemoryRouter([{ path: "/docs", element: <DocsPage /> }], {
     initialEntries: [initialEntry],
   })
-  return render(<RouterProvider router={router} />)
+  return { router, ...render(<RouterProvider router={router} />) }
 }
 
 describe("DocsPage", () => {
@@ -77,32 +91,49 @@ describe("DocsPage", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    cleanup()
   })
 
   it("renders the sidebar from the manifest and falls back to the default page", async () => {
     renderDocsPage("/docs")
 
     expect(await screen.findByText("Home content.")).toBeInTheDocument()
-    expect(screen.getByText("Quickstarts")).toBeInTheDocument()
-    expect(screen.getByText("Guides")).toBeInTheDocument()
-    expect(screen.getAllByText("Quickstart for Agents (CLI)").length).toBeGreaterThan(0)
-    expect(screen.getAllByText("Browser Handoff").length).toBeGreaterThan(0)
+
+    const sidebar = screen.getByRole("navigation", { name: "Documentation sections" })
+    expect(within(sidebar).getByText("Get Started")).toBeInTheDocument()
+    expect(within(sidebar).getByText("Core Workflows")).toBeInTheDocument()
+    expect(within(sidebar).getByText("Integrate")).toBeInTheDocument()
+    expect(within(sidebar).getByRole("button", { name: "CLI Guide" })).toBeInTheDocument()
+    expect(within(sidebar).getByRole("button", { name: "Browser Handoff" })).toBeInTheDocument()
   })
 
-  it("uses manifest order for previous and next navigation", async () => {
-    renderDocsPage("/docs?page=quickstart-agent-cli")
+  it("renders a single page title even when markdown includes an h1", async () => {
+    renderDocsPage("/docs?page=cli-guide")
+
+    expect(await screen.findByText("CLI content.")).toBeInTheDocument()
+
+    const markdownHeading = document.querySelector(".docs-prose h1")
+    expect(markdownHeading).toBeNull()
+  })
+
+  it("canonicalizes legacy alias query params to the new slug", async () => {
+    const { router } = renderDocsPage("/docs?page=quickstart-agent-cli")
 
     expect(await screen.findByText("CLI content.")).toBeInTheDocument()
 
     await waitFor(() => {
-      expect(screen.getByRole("link", { name: /Previous.*Start Here/i })).toHaveAttribute(
-        "href",
-        "/docs?page=index",
-      )
-      expect(screen.getByRole("link", { name: /Next.*Browser Handoff/i })).toHaveAttribute(
-        "href",
-        "/docs?page=guide-browser-handoff",
-      )
+      expect(router.state.location.search).toBe("?page=cli-guide")
     })
+  })
+
+  it("renders an in-page navigation from markdown headings", async () => {
+    renderDocsPage("/docs?page=cli-guide")
+
+    expect(await screen.findByText("CLI content.")).toBeInTheDocument()
+
+    const onThisPage = screen.getByRole("navigation", { name: "On this page" })
+    expect(onThisPage).toBeInTheDocument()
+    expect(within(onThisPage).getByRole("link", { name: "Sign In" })).toHaveAttribute("href", "#sign-in")
+    expect(within(onThisPage).getByRole("link", { name: "Direct Login" })).toHaveAttribute("href", "#direct-login")
   })
 })

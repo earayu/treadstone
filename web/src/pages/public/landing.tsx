@@ -998,11 +998,15 @@ export function LandingPage() {
               <span className="font-mono text-[10px] tracking-[0.1em] text-muted-foreground/40">RESOURCES</span>
               <ul className="mt-3.5 flex flex-col gap-2.5">
                 {[
+                  { label: "Docs Overview", href: "/docs" },
+                  { label: "Quickstart", href: "/docs?page=quickstart" },
                   { label: "Install CLI", href: "#install" },
-                  { label: "GitHub Releases", href: RELEASES_URL, external: true },
-                  { label: "CLI on PyPI", href: PYPI_CLI_URL, external: true },
-                  { label: "Python SDK Reference", href: "/docs?page=sdk-python-reference" },
+                  { label: "CLI Guide", href: "/docs?page=cli-guide" },
+                  { label: "REST API Guide", href: "/docs?page=rest-api-guide" },
+                  { label: "Python SDK Guide", href: "/docs?page=python-sdk-guide" },
                   { label: "REST API Reference", href: "/docs?page=api-reference" },
+                  { label: "CLI on PyPI", href: PYPI_CLI_URL, external: true },
+                  { label: "GitHub Releases", href: RELEASES_URL, external: true },
                 ].map((l) => (
                   <li key={l.label}>
                     <a
