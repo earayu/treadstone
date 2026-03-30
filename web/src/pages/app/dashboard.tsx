@@ -300,7 +300,11 @@ function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
                     {col.label}
                     <HelpIcon
                       content={col.help}
-                      link={"helpLink" in col ? col.helpLink : undefined}
+                      link={
+                        "helpLink" in col
+                          ? (col as { helpLink?: { href: string; label?: string } }).helpLink
+                          : undefined
+                      }
                       side="top"
                     />
                   </div>
