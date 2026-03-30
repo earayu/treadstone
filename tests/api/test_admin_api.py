@@ -606,3 +606,16 @@ async def test_list_feedback_admin(admin_client):
 async def test_list_feedback_forbidden_member(member_client):
     resp = await member_client.get("/v1/admin/support/feedback")
     assert resp.status_code == 403
+
+
+async def test_list_feedback_filter_by_email(admin_client, member_client):
+    await member_client.post("/v1/support/feedback", json={"body": "email filter marker"})
+    resp = await admin_client.get("/v1/admin/support/feedback", params={"email": "member@example.com"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] >= 1
+    assert any("email filter marker" in item["body"] for item in data["items"])
+
+    resp_empty = await admin_client.get("/v1/admin/support/feedback", params={"email": "nomatch@example.com"})
+    assert resp_empty.status_code == 200
+    assert resp_empty.json()["total"] == 0

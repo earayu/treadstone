@@ -14,12 +14,20 @@ def _get_kwargs(
     *,
     limit: int | Unset = 50,
     offset: int | Unset = 0,
+    email: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
     params: dict[str, Any] = {}
 
     params["limit"] = limit
 
     params["offset"] = offset
+
+    json_email: None | str | Unset
+    if isinstance(email, Unset):
+        json_email = UNSET
+    else:
+        json_email = email
+    params["email"] = json_email
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -67,6 +75,7 @@ def sync_detailed(
     client: AuthenticatedClient,
     limit: int | Unset = 50,
     offset: int | Unset = 0,
+    email: None | str | Unset = UNSET,
 ) -> Response[FeedbackListResponse | HTTPValidationError]:
     """List User Feedback
 
@@ -75,6 +84,7 @@ def sync_detailed(
     Args:
         limit (int | Unset):  Default: 50.
         offset (int | Unset):  Default: 0.
+        email (None | str | Unset): Optional case-insensitive substring match on submitter email.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -87,6 +97,7 @@ def sync_detailed(
     kwargs = _get_kwargs(
         limit=limit,
         offset=offset,
+        email=email,
     )
 
     response = client.get_httpx_client().request(
@@ -101,6 +112,7 @@ def sync(
     client: AuthenticatedClient,
     limit: int | Unset = 50,
     offset: int | Unset = 0,
+    email: None | str | Unset = UNSET,
 ) -> FeedbackListResponse | HTTPValidationError | None:
     """List User Feedback
 
@@ -109,6 +121,7 @@ def sync(
     Args:
         limit (int | Unset):  Default: 50.
         offset (int | Unset):  Default: 0.
+        email (None | str | Unset): Optional case-insensitive substring match on submitter email.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -122,6 +135,7 @@ def sync(
         client=client,
         limit=limit,
         offset=offset,
+        email=email,
     ).parsed
 
 
@@ -130,6 +144,7 @@ async def asyncio_detailed(
     client: AuthenticatedClient,
     limit: int | Unset = 50,
     offset: int | Unset = 0,
+    email: None | str | Unset = UNSET,
 ) -> Response[FeedbackListResponse | HTTPValidationError]:
     """List User Feedback
 
@@ -138,6 +153,7 @@ async def asyncio_detailed(
     Args:
         limit (int | Unset):  Default: 50.
         offset (int | Unset):  Default: 0.
+        email (None | str | Unset): Optional case-insensitive substring match on submitter email.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -150,6 +166,7 @@ async def asyncio_detailed(
     kwargs = _get_kwargs(
         limit=limit,
         offset=offset,
+        email=email,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -162,6 +179,7 @@ async def asyncio(
     client: AuthenticatedClient,
     limit: int | Unset = 50,
     offset: int | Unset = 0,
+    email: None | str | Unset = UNSET,
 ) -> FeedbackListResponse | HTTPValidationError | None:
     """List User Feedback
 
@@ -170,6 +188,7 @@ async def asyncio(
     Args:
         limit (int | Unset):  Default: 50.
         offset (int | Unset):  Default: 0.
+        email (None | str | Unset): Optional case-insensitive substring match on submitter email.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -184,5 +203,6 @@ async def asyncio(
             client=client,
             limit=limit,
             offset=offset,
+            email=email,
         )
     ).parsed
