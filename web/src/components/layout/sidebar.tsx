@@ -34,11 +34,11 @@ export function Sidebar() {
 
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
-      <div className="flex items-center gap-3 px-6 py-6">
-        <div className="flex size-8 items-center justify-center bg-primary">
-          <TreadstoneSymbol className="size-6 text-primary-foreground" />
+      <div className="flex items-center gap-3.5 px-6 py-6">
+        <div className="flex size-10 items-center justify-center bg-primary">
+          <TreadstoneSymbol className="size-8 text-primary-foreground" />
         </div>
-        <span className="text-xl font-bold tracking-tight text-primary">
+        <span className="text-2xl font-bold tracking-tight text-primary">
           Treadstone
         </span>
       </div>
