@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react"
 
 import { useGrants, useComputeSessions, useUsageOverview, useUserPlan } from "@/api/usage"
 import { cn } from "@/lib/utils"
-import { formatSeconds, formatMinutes } from "@/lib/format-time"
+import { formatSeconds } from "@/lib/format-time"
 
 const SESSION_PAGE_SIZE = 10
 const SESSION_STATUS_OPTIONS = [

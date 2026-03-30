@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react"
+import { useMemo, useState, type FormEvent } from "react"
 import { Link, useNavigate } from "react-router"
 import { toast } from "sonner"
 
@@ -92,17 +92,19 @@ export function CreateSandboxPage() {
     ? Math.floor(usage.limits.max_sandbox_duration_seconds / 60)
     : undefined
 
-  useEffect(() => {
+  /** Clamp display when plan limit is known (avoids setState in an effect; satisfies react-hooks/set-state-in-effect). */
+  const autoStopMinutesDisplay = useMemo(() => {
     if (maxAutoStopMinutes === undefined) {
-      return
+      return autoStopMinutes
     }
-
-    const currentMinutes = parseInt(autoStopMinutes, 10)
-    if (Number.isNaN(currentMinutes) || currentMinutes <= maxAutoStopMinutes) {
-      return
+    const n = parseInt(autoStopMinutes, 10)
+    if (Number.isNaN(n)) {
+      return autoStopMinutes
     }
-
-    setAutoStopMinutes(String(maxAutoStopMinutes))
+    if (n > maxAutoStopMinutes) {
+      return String(maxAutoStopMinutes)
+    }
+    return autoStopMinutes
   }, [autoStopMinutes, maxAutoStopMinutes])
 
   const nameTrimmed = name.trim()
@@ -133,14 +135,13 @@ export function CreateSandboxPage() {
       return
     }
 
-    const stop = parseInt(autoStopMinutes, 10)
+    let stop = parseInt(autoStopMinutes, 10)
     if (Number.isNaN(stop) || stop < 1) {
       toast.error("Auto-stop must be at least 1 minute.")
       return
     }
-    if (maxAutoStopMinutes !== undefined && stop > maxAutoStopMinutes) {
-      toast.error(`Auto-stop interval cannot exceed plan limit (${maxAutoStopMinutes} min).`)
-      return
+    if (maxAutoStopMinutes !== undefined) {
+      stop = Math.min(stop, maxAutoStopMinutes)
     }
 
     let autoDelete = -1
@@ -305,7 +306,7 @@ export function CreateSandboxPage() {
                       min={1}
                       max={maxAutoStopMinutes}
                       inputMode="numeric"
-                      value={autoStopMinutes}
+                      value={autoStopMinutesDisplay}
                       onChange={(e) => setAutoStopMinutes(e.target.value)}
                       className="h-10 w-full min-w-0 flex-1 border border-border/40 bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                     />
