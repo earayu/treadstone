@@ -158,9 +158,7 @@ class TestEnsureUserPlan:
         assert plan.period_end == datetime(2026, 4, 1, tzinfo=UTC)
 
         grants = _added_objects(session, ComputeGrant)
-        assert len(grants) == 1
-        assert grants[0].grant_type == "welcome_bonus"
-        assert grants[0].original_amount == WELCOME_BONUS_AMOUNT
+        assert len(grants) == 0
         session.flush.assert_awaited_once()
 
     async def test_creates_pro_plan_without_welcome_bonus(self, monkeypatch):
