@@ -15,6 +15,7 @@ Use the matching local skill before you act:
 | Audit a subsystem against the current code and write a detailed report | `system-audit-report` |
 | Refresh an existing audit report against the latest code | `audit-report-refresh` |
 | Trace runtime architecture and end-to-end data flow | `architecture-data-flow-trace` |
+| Plan, write, or validate public docs, docs IA, `llms.txt`, or the docs manifest | [`treadstone-docs-maintenance`](.agents/skills/treadstone-docs-maintenance/SKILL.md) |
 
 Skills live under `.agents/skills/*/SKILL.md`. AGENTS.md defines repo facts and guardrails; skills define procedures.
 
@@ -65,6 +66,7 @@ scripts/           # Helper scripts (release, install, deploy, E2E)
 | `system-audit-report` | First-pass or general subsystem audits grounded in the current code |
 | `audit-report-refresh` | Re-auditing a subsystem and updating an existing report against the latest code |
 | `architecture-data-flow-trace` | Tracing runtime architecture, state transitions, and end-to-end data flow |
+| [`treadstone-docs-maintenance`](.agents/skills/treadstone-docs-maintenance/SKILL.md) | Public docs system, docs IA, manifest-driven docs delivery, `llms.txt`, and dual human/agent documentation quality |
 
 For K8s deployment (Kind cluster, Helm, smoke tests), see [`deploy/README.md`](deploy/README.md).
 

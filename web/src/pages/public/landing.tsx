@@ -200,8 +200,6 @@ const ok = "text-emerald-400"
 const js = "text-sky-300"
 const kw = "text-purple-400"
 const fn = "text-sky-300"
-const nm = "text-amber-400"
-
 const CLI_LINES: CodeLine[] = [
   [{ cls: cm, text: "# 1. Authenticate (or set TREADSTONE_API_KEY in env)" }],
   [{ cls: pr, text: "$ " }, { cls: fg, text: "treadstone auth login --email agent@example.com --password ••••••••" }],
@@ -225,30 +223,29 @@ const CLI_LINES: CodeLine[] = [
 ]
 
 const SDK_LINES: CodeLine[] = [
-  [{ cls: kw, text: "from " }, { cls: fg, text: "treadstone_sdk " }, { cls: kw, text: "import " }, { cls: fg, text: "Treadstone" }],
+  [{ cls: kw, text: "from " }, { cls: fg, text: "treadstone_sdk " }, { cls: kw, text: "import " }, { cls: fg, text: "AuthenticatedClient" }],
+  [{ cls: kw, text: "from " }, { cls: fg, text: "treadstone_sdk.api.sandboxes " }, { cls: kw, text: "import " }, { cls: fg, text: "sandboxes_create_sandbox, sandboxes_create_sandbox_web_link" }],
+  [{ cls: kw, text: "from " }, { cls: fg, text: "treadstone_sdk.models.create_sandbox_request " }, { cls: kw, text: "import " }, { cls: fg, text: "CreateSandboxRequest" }],
   [],
-  [{ cls: fg, text: 'client = Treadstone(api_key=' }, { cls: ok, text: '"ts_live_xxxx"' }, { cls: fg, text: ")" }],
-  [],
-  [{ cls: cm, text: "# List available templates" }],
-  [{ cls: fg, text: "templates = client.templates." }, { cls: fn, text: "list" }, { cls: fg, text: "()" }],
-  [{ cls: fn, text: "print" }, { cls: fg, text: "(templates[" }, { cls: nm, text: "0" }, { cls: fg, text: "].name)      " }, { cls: cm, text: '# "aio-sandbox-tiny"' }],
+  [{ cls: fg, text: "client = AuthenticatedClient(" }],
+  [{ cls: fg, text: '    base_url=' }, { cls: ok, text: '"https://api.treadstone-ai.dev"' }, { cls: fg, text: "," }],
+  [{ cls: fg, text: '    token=' }, { cls: ok, text: '"sk-..."' }],
+  [{ cls: fg, text: ")" }],
   [],
   [{ cls: cm, text: "# Create a sandbox" }],
-  [{ cls: fg, text: "sandbox = client.sandboxes." }, { cls: fn, text: "create" }, { cls: fg, text: "(" }],
-  [{ cls: fg, text: '    name=' }, { cls: ok, text: '"agent-demo"' }, { cls: fg, text: "," }],
-  [{ cls: fg, text: '    template=' }, { cls: ok, text: '"aio-sandbox-tiny"' }, { cls: fg, text: "," }],
+  [{ cls: fg, text: "sandbox = sandboxes_create_sandbox." }, { cls: fn, text: "sync" }, { cls: fg, text: "(" }],
+  [{ cls: fg, text: "    client=client," }],
+  [{ cls: fg, text: "    body=CreateSandboxRequest(" }],
+  [{ cls: fg, text: '        template=' }, { cls: ok, text: '"aio-sandbox-tiny"' }, { cls: fg, text: "," }],
+  [{ cls: fg, text: '        name=' }, { cls: ok, text: '"agent-demo"' }],
+  [{ cls: fg, text: "    )" }],
   [{ cls: fg, text: ")" }],
   [{ cls: fn, text: "print" }, { cls: fg, text: "(sandbox.id)            " }, { cls: cm, text: '# "sb_3kx9m2p"' }],
   [{ cls: fn, text: "print" }, { cls: fg, text: "(sandbox.urls.proxy)    " }, { cls: cm, text: '# "https://sb_3kx9m2p.proxy.treadstone-ai.dev"' }],
   [],
   [{ cls: cm, text: "# Generate a browser hand-off URL for a human" }],
-  [{ cls: fg, text: "session = sandbox.web." }, { cls: fn, text: "enable" }, { cls: fg, text: "()" }],
+  [{ cls: fg, text: "session = sandboxes_create_sandbox_web_link." }, { cls: fn, text: "sync" }, { cls: fg, text: "(sandbox.id, client=client)" }],
   [{ cls: fn, text: "print" }, { cls: fg, text: "(session.open_link)     " }, { cls: cm, text: '# "https://sb_3kx9m2p.web.treadstone-ai.dev?token=..."' }],
-  [],
-  [{ cls: cm, text: "# Lifecycle management" }],
-  [{ cls: fg, text: "sandbox." }, { cls: fn, text: "stop" }, { cls: fg, text: "()" }],
-  [{ cls: fg, text: "sandbox." }, { cls: fn, text: "start" }, { cls: fg, text: "()" }],
-  [{ cls: fg, text: "sandbox." }, { cls: fn, text: "delete" }, { cls: fg, text: "()" }],
 ]
 
 const REST_LINES: CodeLine[] = [
@@ -266,7 +263,7 @@ const REST_LINES: CodeLine[] = [
   [{ cls: js, text: "}" }],
   [],
   [{ cls: cm, text: "# Enable browser hand-off for a human" }],
-  [{ cls: pr, text: "$ " }, { cls: fg, text: "curl -X POST https://api.treadstone-ai.dev/v1/sandboxes/sb_3kx9m2p/web/enable \\" }],
+  [{ cls: pr, text: "$ " }, { cls: fg, text: "curl -X POST https://api.treadstone-ai.dev/v1/sandboxes/sb_3kx9m2p/web-link \\" }],
   [{ cls: fg, text: "    -H " }, { cls: ok, text: '"Authorization: Bearer $TREADSTONE_API_KEY"' }],
   [],
   [{ cls: js, text: "{" }],
@@ -676,9 +673,9 @@ export function LandingPage() {
   const cliCode =
     "# 1. Authenticate\n$ treadstone auth login --email agent@example.com --password ••••••••\n✓ Logged in as agent@example.com\n\n# 2. Install the agent skill (Cursor, Codex, …)\n$ treadstone skills install\nInstalled: ~/.agents/skills/treadstone-cli/SKILL.md\n\n# 3. Create a sandbox\n$ treadstone --json sandboxes create --name agent-demo\n{\"id\":\"sb_3kx9m2p\",\"status\":\"running\"}\n\n# 4. Hand the browser off\n$ treadstone --json sandboxes web enable sb_3kx9m2p\n{\"open_link\":\"https://sb_3kx9m2p.web.treadstone-ai.dev?token=...\"}"
   const sdkCode =
-    "from treadstone_sdk import Treadstone\nclient = Treadstone(api_key=\"ts_live_xxxx\")\nsandbox = client.sandboxes.create(name=\"agent-demo\", template=\"aio-sandbox-tiny\")\nsession = sandbox.web.enable()\nprint(session.open_link)"
+    "from treadstone_sdk import AuthenticatedClient\nfrom treadstone_sdk.api.sandboxes import sandboxes_create_sandbox, sandboxes_create_sandbox_web_link\nfrom treadstone_sdk.models.create_sandbox_request import CreateSandboxRequest\n\nclient = AuthenticatedClient(base_url=\"https://api.treadstone-ai.dev\", token=\"sk-...\")\nsandbox = sandboxes_create_sandbox.sync(client=client, body=CreateSandboxRequest(template=\"aio-sandbox-tiny\", name=\"agent-demo\"))\nsession = sandboxes_create_sandbox_web_link.sync(sandbox.id, client=client)\nprint(session.open_link)"
   const restCode =
-    "curl -X POST https://api.treadstone-ai.dev/v1/sandboxes \\\n  -H \"Authorization: Bearer $TREADSTONE_API_KEY\" \\\n  -d '{\"name\": \"agent-demo\", \"template\": \"aio-sandbox-tiny\"}'"
+    "curl -X POST https://api.treadstone-ai.dev/v1/sandboxes/sb_3kx9m2p/web-link \\\n  -H \"Authorization: Bearer $TREADSTONE_API_KEY\""
 
   const tabCopyText = { cli: cliCode, sdk: sdkCode, rest: restCode }
 
@@ -1003,8 +1000,9 @@ export function LandingPage() {
                 {[
                   { label: "Install CLI", href: "#install" },
                   { label: "GitHub Releases", href: RELEASES_URL, external: true },
-                  { label: "Python SDK Docs", href: PYPI_CLI_URL, external: true },
-                  { label: "REST API Reference", href: "#" },
+                  { label: "CLI on PyPI", href: PYPI_CLI_URL, external: true },
+                  { label: "Python SDK Reference", href: "/docs?page=sdk-python-reference" },
+                  { label: "REST API Reference", href: "/docs?page=api-reference" },
                 ].map((l) => (
                   <li key={l.label}>
                     <a

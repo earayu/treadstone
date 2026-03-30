@@ -1,188 +1,188 @@
 # API Reference
 
-The Treadstone REST API is the foundation for the CLI and SDK. All endpoints are prefixed with `/v1`.
+## What this page is for
 
-The interactive Swagger UI is available at `<base_url>/docs` when the server is running.
+Document the Treadstone-owned public API contract: route groups, auth model, proxy path, pagination, and error semantics.
 
-## Authentication
+## Use this when
 
-Most endpoints require an API key passed as a Bearer token:
+- You need exact route prefixes.
+- You need to know whether a request belongs to the control plane or the data plane.
+- You need contract-level truth before writing code.
 
-```
-Authorization: Bearer sk_your_api_key_here
+## Shortest path
+
+```text
+GET  /health
+GET  /v1/config
+GET  /v1/auth/user
+GET  /v1/sandbox-templates
+POST /v1/sandboxes
+POST /v1/sandboxes/{sandbox_id}/web-link
+GET  /v1/usage
+GET  /v1/admin/stats
 ```
 
 Obtain an API key via the web console or CLI:
 
-```bash
-treadstone api-keys create --name my-key --save
-```
+## Hard rules
 
-## Base URL
+- Health is `/health`, not `/v1/system/health`.
+- Current user is `/v1/auth/user`, not `/v1/auth/me`.
+- API keys live under `/v1/auth/api-keys`.
+- Browser hand-off uses `/v1/sandboxes/{sandbox_id}/web-link`.
+- Paginated list routes use `limit` and `offset`.
 
-| Environment | Base URL |
-|-------------|----------|
-| Cloud (default) | `https://api.treadstone-ai.dev` |
-| Self-hosted | Your deployment URL |
+## Auth Model
 
-## Core Endpoints
+### Control plane
 
-### Health
+Accepted credentials:
 
-```
-GET /v1/system/health
-```
+- session cookie
+- API key
 
-Returns server status. No authentication required.
+Examples:
 
-```json
-{"status": "healthy"}
-```
+- `/v1/auth/*`
+- `/v1/sandboxes/*`
+- `/v1/usage/*`
+- `/v1/admin/*`
 
-### Authentication
+### Data plane
 
-```
-POST /v1/auth/register
-POST /v1/auth/login
-POST /v1/auth/logout
-GET  /v1/auth/me
-POST /v1/auth/change-password
-```
+Accepted credential:
 
-### API Keys
+- API key only
 
-```
-POST   /v1/api-keys              Create a new API key
-GET    /v1/api-keys              List your API keys
-PATCH  /v1/api-keys/{key_id}    Update an API key
-DELETE /v1/api-keys/{key_id}    Delete an API key
-```
+Example:
 
-### Sandbox Templates
+- `/v1/sandboxes/{sandbox_id}/proxy/{path}`
 
-```
-GET /v1/sandbox-templates        List available templates
-```
+## Route Map
 
-Response:
+### System
 
-```json
-{
-  "items": [
-    {
-      "name": "aio-sandbox-tiny",
-      "cpu": "250m",
-      "memory": "512Mi",
-      "description": "Lightweight sandbox for scripts and code execution"
-    }
-  ]
-}
-```
+- `GET /health`
+
+### Config
+
+- `GET /v1/config`
+
+### Auth
+
+- `POST /v1/auth/register`
+- `POST /v1/auth/login`
+- `POST /v1/auth/logout`
+- `GET /v1/auth/user`
+- `POST /v1/auth/change-password`
+- `POST /v1/auth/verification/request`
+- `POST /v1/auth/verification/confirm`
+- `GET /v1/auth/users`
+- `DELETE /v1/auth/users/{user_id}`
+- `POST /v1/auth/api-keys`
+- `GET /v1/auth/api-keys`
+- `PATCH /v1/auth/api-keys/{key_id}`
+- `DELETE /v1/auth/api-keys/{key_id}`
+
+### Templates
+
+- `GET /v1/sandbox-templates`
 
 ### Sandboxes
 
-```
-POST   /v1/sandboxes              Create a sandbox
-GET    /v1/sandboxes              List sandboxes
-GET    /v1/sandboxes/{id}         Get a sandbox
-POST   /v1/sandboxes/{id}/start   Start a stopped sandbox
-POST   /v1/sandboxes/{id}/stop    Stop a running sandbox
-DELETE /v1/sandboxes/{id}         Delete a sandbox
-```
+- `POST /v1/sandboxes`
+- `GET /v1/sandboxes`
+- `GET /v1/sandboxes/{sandbox_id}`
+- `POST /v1/sandboxes/{sandbox_id}/start`
+- `POST /v1/sandboxes/{sandbox_id}/stop`
+- `DELETE /v1/sandboxes/{sandbox_id}`
+- `POST /v1/sandboxes/{sandbox_id}/web-link`
+- `GET /v1/sandboxes/{sandbox_id}/web-link`
+- `DELETE /v1/sandboxes/{sandbox_id}/web-link`
 
-**Create sandbox request body:**
+### Proxy
 
-```json
-{
-  "name": "my-sandbox",
-  "template": "aio-sandbox-tiny",
-  "persist": false,
-  "storage_size": null,
-  "labels": {"env": "dev"}
-}
-```
+- `GET|POST|PUT|PATCH|DELETE /v1/sandboxes/{sandbox_id}/proxy/{path}`
 
-**Sandbox object:**
+### Usage
 
-```json
-{
-  "id": "sb_abc123",
-  "name": "my-sandbox",
-  "status": "running",
-  "template": "aio-sandbox-tiny",
-  "created_at": "2026-01-01T00:00:00Z",
-  "urls": {
-    "web": "https://proxy.treadstone-ai.dev/sb_abc123"
-  }
-}
-```
+- `GET /v1/usage`
+- `GET /v1/usage/plan`
+- `GET /v1/usage/sessions`
+- `GET /v1/usage/storage-ledger`
+- `GET /v1/usage/grants`
 
-### Browser Hand-off
+### Admin
 
-```
-POST   /v1/sandboxes/{id}/web/enable    Enable browser access
-GET    /v1/sandboxes/{id}/web/status    Get browser access status
-POST   /v1/sandboxes/{id}/web/disable   Disable browser access
-```
+- `GET /v1/admin/stats`
+- `GET /v1/admin/tier-templates`
+- `PATCH /v1/admin/tier-templates/{tier_name}`
+- `GET /v1/admin/users/lookup-by-email`
+- `POST /v1/admin/users/resolve-emails`
+- `GET /v1/admin/users/{user_id}/usage`
+- `PATCH /v1/admin/users/{user_id}/plan`
+- `POST /v1/admin/users/{user_id}/compute-grants`
+- `POST /v1/admin/users/{user_id}/storage-grants`
+- `POST /v1/admin/compute-grants/batch`
+- `POST /v1/admin/storage-grants/batch`
 
-`enable` is idempotent — returns the existing URL if already active.
+## Pagination
 
-## Error Format
+List routes use:
 
-All errors follow a consistent JSON envelope:
+- `limit`
+- `offset`
+
+Examples:
+
+- `/v1/sandboxes?limit=20&offset=0`
+- `/v1/usage/sessions?limit=20&offset=0`
+- `/v1/usage/storage-ledger?limit=20&offset=0`
+
+## Error Envelope
+
+All API errors use:
 
 ```json
 {
   "error": {
-    "code": "not_found",
-    "message": "Sandbox sb_abc123 not found.",
-    "status": 404
+    "code": "snake_case_code",
+    "message": "Human-readable detail.",
+    "status": 409
   }
 }
 ```
 
-| HTTP Status | Code | Meaning |
-|-------------|------|---------|
-| 400 | `bad_request` | Invalid input |
-| 401 | `unauthorized` | Missing or invalid API key |
-| 403 | `forbidden` | Insufficient permissions |
-| 404 | `not_found` | Resource does not exist |
-| 409 | `conflict` | Duplicate name or conflicting state |
-| 422 | `validation_error` | Request body schema violation |
-| 500 | `internal_error` | Server error |
+## Browser Handoff Contract
 
-## Rate Limiting
+Create:
 
-Rate limits are enforced per API key. When exceeded, the API returns `429 Too Many Requests` with a `Retry-After` header.
-
-## Pagination
-
-List endpoints support cursor-based pagination:
-
-```
-GET /v1/sandboxes?limit=20&cursor=<next_cursor>
+```text
+POST /v1/sandboxes/{sandbox_id}/web-link
 ```
 
-Response includes a `next_cursor` field when more results exist:
+Response fields:
 
-```json
-{
-  "items": [...],
-  "next_cursor": "eyJpZCI6InNiX3h5eiJ9",
-  "total": 100
-}
+- `web_url`
+- `open_link`
+- `expires_at`
+
+Status:
+
+```text
+GET /v1/sandboxes/{sandbox_id}/web-link
 ```
 
-## OpenAPI Spec
+Response fields:
 
-The full OpenAPI spec can be exported from a running server:
+- `web_url`
+- `enabled`
+- `expires_at`
+- `last_used_at`
 
-```bash
-make gen-openapi           # exports openapi.json to the repo root
-```
+## For Agents
 
-Or fetched directly:
-
-```
-GET /openapi.json
-```
+- Use this page for route truth and auth truth.
+- Use the quickstarts for example flow.
+- Use [`error-reference.md`](/docs/error-reference.md) when you need recovery advice, not just error names.

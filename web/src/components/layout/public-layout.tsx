@@ -47,7 +47,7 @@ export function PublicLayout() {
               to="/docs"
               className="text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
-              Docs
+              Start Here
             </Link>
             <a
               href="/#pricing"

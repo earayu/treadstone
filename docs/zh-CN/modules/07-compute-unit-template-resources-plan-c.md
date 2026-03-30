@@ -948,7 +948,7 @@ ACS 官方文档也明确说明：
 - `docs/zh-CN/modules/02-sandbox-lifecycle-and-templates.md`
 - `docs/zh-CN/modules/05-metering-and-admin-ops.md`
 - `docs/zh-CN/modules/05-metering-system-audit.md`
-- `web/public/docs/getting-started.md`
+- `web/public/docs/index.md`
 
 ## 12. 最终建议
 

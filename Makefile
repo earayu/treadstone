@@ -6,6 +6,7 @@
 	lint lint-py lint-web format-py \
 	migrate migration downgrade \
 	gen-openapi gen-web-types gen-sdk-python gen-clients \
+	gen-public-docs check-public-docs \
 	build-web \
 	image-api image-web \
 	clean clean-py clean-web \
@@ -103,6 +104,12 @@ gen-sdk-python: gen-openapi ## Generate Python SDK from OpenAPI spec
 		--overwrite
 
 gen-clients: gen-web-types gen-sdk-python ## Generate all client artifacts
+
+gen-public-docs: ## Validate docs manifest and regenerate sitemap.md + llms.txt
+	uv run python scripts/generate_public_docs.py
+
+check-public-docs: ## Fail if generated docs artifacts are out of date
+	uv run python scripts/generate_public_docs.py --check
 
 # ── Web Frontend ─────────────────────────────────────────────────────────────
 

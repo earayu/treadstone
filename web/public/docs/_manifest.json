@@ -1,0 +1,218 @@
+[
+  {
+    "slug": "index",
+    "title": "Start Here",
+    "section": "Start Here",
+    "order": 10,
+    "summary": "What Treadstone is, who it is for, and the shortest path to a working sandbox.",
+    "default": true,
+    "llm_priority": 100
+  },
+  {
+    "slug": "why-treadstone",
+    "title": "Why Treadstone",
+    "section": "Start Here",
+    "order": 20,
+    "summary": "Why a raw container is not enough for autonomous agents, and what Treadstone adds on top.",
+    "default": false,
+    "llm_priority": 95
+  },
+  {
+    "slug": "core-concepts",
+    "title": "Core Concepts",
+    "section": "Start Here",
+    "order": 30,
+    "summary": "The core nouns and boundaries: control plane, data plane, sandbox, template, web link, plan, and grants.",
+    "default": false,
+    "llm_priority": 95
+  },
+  {
+    "slug": "quickstart-human",
+    "title": "Quickstart for Humans",
+    "section": "Quickstarts",
+    "order": 10,
+    "summary": "Register, sign in, create a sandbox, and open a browser hand-off URL from the CLI.",
+    "default": false,
+    "llm_priority": 90
+  },
+  {
+    "slug": "quickstart-agent-cli",
+    "title": "Quickstart for Agents (CLI)",
+    "section": "Quickstarts",
+    "order": 20,
+    "summary": "The shortest non-interactive CLI path for agents: auth, create, capture sandbox_id, and issue an open_link.",
+    "default": false,
+    "llm_priority": 100
+  },
+  {
+    "slug": "quickstart-python-sdk",
+    "title": "Quickstart for Python SDK",
+    "section": "Quickstarts",
+    "order": 30,
+    "summary": "Use the generated Python SDK with AuthenticatedClient and typed models to create sandboxes and issue web links.",
+    "default": false,
+    "llm_priority": 85
+  },
+  {
+    "slug": "quickstart-rest-api",
+    "title": "Quickstart for REST API",
+    "section": "Quickstarts",
+    "order": 40,
+    "summary": "Use the control-plane REST API directly to create sandboxes and hand browser sessions to humans.",
+    "default": false,
+    "llm_priority": 95
+  },
+  {
+    "slug": "guide-sandboxes",
+    "title": "Create and Manage Sandboxes",
+    "section": "Guides",
+    "order": 10,
+    "summary": "Choose templates, name sandboxes correctly, use labels, and control start, stop, and delete flows.",
+    "default": false,
+    "llm_priority": 90
+  },
+  {
+    "slug": "guide-browser-handoff",
+    "title": "Browser Handoff",
+    "section": "Guides",
+    "order": 20,
+    "summary": "Create, inspect, and revoke browser hand-off links without guessing URLs or inventing tokens.",
+    "default": false,
+    "llm_priority": 100
+  },
+  {
+    "slug": "guide-data-plane-access",
+    "title": "Data Plane Access",
+    "section": "Guides",
+    "order": 30,
+    "summary": "Use proxy access safely with API keys, selected sandbox grants, and the control-plane/data-plane auth split.",
+    "default": false,
+    "llm_priority": 100
+  },
+  {
+    "slug": "guide-usage-and-quotas",
+    "title": "Usage and Quotas",
+    "section": "Guides",
+    "order": 40,
+    "summary": "Read plan limits, usage summaries, compute sessions, storage ledger entries, and active grants.",
+    "default": false,
+    "llm_priority": 80
+  },
+  {
+    "slug": "guide-admin-operations",
+    "title": "Admin Operations",
+    "section": "Guides",
+    "order": 50,
+    "summary": "Operate tier templates, user plans, grants, waitlist state, and verification tooling as an admin.",
+    "default": false,
+    "llm_priority": 80
+  },
+  {
+    "slug": "cli-reference",
+    "title": "CLI Reference",
+    "section": "Reference",
+    "order": 10,
+    "summary": "Real command groups, auth precedence, config resolution, JSON mode, and the built-in skills workflow.",
+    "default": false,
+    "llm_priority": 85
+  },
+  {
+    "slug": "api-reference",
+    "title": "API Reference",
+    "section": "Reference",
+    "order": 20,
+    "summary": "Control-plane routes, proxy contract, auth model, pagination semantics, and the uniform error envelope.",
+    "default": false,
+    "llm_priority": 90
+  },
+  {
+    "slug": "sdk-python-reference",
+    "title": "Python SDK Reference",
+    "section": "Reference",
+    "order": 30,
+    "summary": "Package layout, generated modules, sync and async call shapes, and the most useful endpoint modules.",
+    "default": false,
+    "llm_priority": 80
+  },
+  {
+    "slug": "config-reference",
+    "title": "Config Reference",
+    "section": "Reference",
+    "order": 40,
+    "summary": "CLI config keys, environment variables, auth configuration, and sandbox subdomain settings.",
+    "default": false,
+    "llm_priority": 75
+  },
+  {
+    "slug": "error-reference",
+    "title": "Error Reference",
+    "section": "Reference",
+    "order": 50,
+    "summary": "The JSON error envelope, common error codes, and the recovery path that maps to each failure.",
+    "default": false,
+    "llm_priority": 75
+  },
+  {
+    "slug": "self-hosting",
+    "title": "Self-Hosting",
+    "section": "Operations",
+    "order": 10,
+    "summary": "The deployment model, the five Helm layers, and the minimum prerequisites for self-hosting.",
+    "default": false,
+    "llm_priority": 70
+  },
+  {
+    "slug": "local-development",
+    "title": "Local Development",
+    "section": "Operations",
+    "order": 20,
+    "summary": "Run the API and web locally, create a local cluster, and verify the stack with repo-native commands.",
+    "default": false,
+    "llm_priority": 70
+  },
+  {
+    "slug": "production-deployment",
+    "title": "Production Deployment",
+    "section": "Operations",
+    "order": 30,
+    "summary": "Promote Treadstone beyond local Kind: leader election, OAuth callbacks, public origins, ingress, and quotas.",
+    "default": false,
+    "llm_priority": 70
+  },
+  {
+    "slug": "troubleshooting",
+    "title": "Troubleshooting",
+    "section": "Operations",
+    "order": 40,
+    "summary": "Recover from the most common auth, quota, proxy, browser hand-off, and storage backend failures.",
+    "default": false,
+    "llm_priority": 70
+  },
+  {
+    "slug": "ai-index",
+    "title": "AI Index",
+    "section": "AI Docs",
+    "order": 10,
+    "summary": "Task routing for agents: which page answers create, proxy, browser hand-off, usage, admin, and self-hosting questions.",
+    "default": false,
+    "llm_priority": 100
+  },
+  {
+    "slug": "ai-invariants",
+    "title": "AI Invariants",
+    "section": "AI Docs",
+    "order": 20,
+    "summary": "Hard rules for agents that must not guess IDs, URLs, auth mode, pagination model, or error semantics.",
+    "default": false,
+    "llm_priority": 100
+  },
+  {
+    "slug": "sitemap",
+    "title": "Documentation Sitemap",
+    "section": "AI Docs",
+    "order": 30,
+    "summary": "The generated hierarchical index of all public docs pages and public machine-oriented endpoints.",
+    "default": false,
+    "llm_priority": 60
+  }
+]

@@ -1,52 +1,31 @@
-import { useState, useEffect, useCallback } from "react"
-import { useSearchParams, Link } from "react-router"
+import { useEffect, useState } from "react"
+import { Link, useSearchParams } from "react-router"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
-import { Menu, X, ChevronRight } from "lucide-react"
+import { ChevronLeft, ChevronRight, Menu, X } from "lucide-react"
 import "highlight.js/styles/github-dark.css"
 
-interface TocSection {
-  title: string
-  items: TocItem[]
-}
-
-interface TocItem {
-  slug: string
-  title: string
-}
-
-const TOC: TocSection[] = [
-  {
-    title: "Getting Started",
-    items: [
-      { slug: "getting-started", title: "Overview & Quickstart" },
-      { slug: "self-hosting", title: "Self-Hosting" },
-    ],
-  },
-  {
-    title: "Reference",
-    items: [
-      { slug: "cli-reference", title: "CLI Reference" },
-      { slug: "sdk-reference", title: "SDK Reference" },
-      { slug: "api-reference", title: "API Reference" },
-    ],
-  },
-]
-
-const ALL_ITEMS: TocItem[] = TOC.flatMap((s) => s.items)
-const DEFAULT_SLUG = "getting-started"
+import {
+  type DocsManifestEntry,
+  fetchDocsManifest,
+  getAdjacentDocs,
+  groupDocsBySection,
+  resolveCurrentDoc,
+} from "@/lib/docs"
 
 function Sidebar({
   currentSlug,
+  sections,
   onNavigate,
 }: {
   currentSlug: string
+  sections: ReturnType<typeof groupDocsBySection>
   onNavigate: (slug: string) => void
 }) {
   return (
     <nav className="flex flex-col gap-6 py-8">
-      {TOC.map((section) => (
+      {sections.map((section) => (
         <div key={section.title}>
           <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             {section.title}
@@ -64,8 +43,11 @@ function Sidebar({
                         : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                     }`}
                   >
-                    {active && <ChevronRight className="size-3 shrink-0 text-primary" />}
-                    {!active && <span className="size-3 shrink-0" />}
+                    {active ? (
+                      <ChevronRight className="size-3 shrink-0 text-primary" />
+                    ) : (
+                      <span className="size-3 shrink-0" />
+                    )}
                     {item.title}
                   </button>
                 </li>
@@ -74,31 +56,29 @@ function Sidebar({
           </ul>
         </div>
       ))}
+
       <div className="mt-2 border-t border-border/20 pt-4">
         <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           Resources
         </p>
         <ul className="flex flex-col gap-0.5">
-          <li>
-            <a
-              href="https://github.com/earayu/treadstone"
-              target="_blank"
-              rel="noreferrer"
-              className="flex w-full items-center gap-2 rounded px-3 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
-            >
-              <span className="size-3 shrink-0" />
-              GitHub
-            </a>
-          </li>
-          <li>
-            <a
-              href="/docs/sitemap.md"
-              className="flex w-full items-center gap-2 rounded px-3 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
-            >
-              <span className="size-3 shrink-0" />
-              Sitemap (for AI)
-            </a>
-          </li>
+          {[
+            { href: "https://github.com/earayu/treadstone", label: "GitHub", external: true },
+            { href: "/llms.txt", label: "llms.txt", external: false },
+            { href: "/docs/sitemap.md", label: "Documentation Sitemap", external: false },
+          ].map((item) => (
+            <li key={item.label}>
+              <a
+                href={item.href}
+                target={item.external ? "_blank" : undefined}
+                rel={item.external ? "noreferrer" : undefined}
+                className="flex w-full items-center gap-2 rounded px-3 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+              >
+                <span className="size-3 shrink-0" />
+                {item.label}
+              </a>
+            </li>
+          ))}
         </ul>
       </div>
     </nav>
@@ -135,12 +115,8 @@ function MarkdownContent({ content }: { content: string }) {
               </h3>
             )
           },
-          p: ({ children }) => (
-            <p className="mb-4 leading-7 text-muted-foreground">{children}</p>
-          ),
-          ul: ({ children }) => (
-            <ul className="mb-4 ml-4 list-disc space-y-1.5 text-muted-foreground">{children}</ul>
-          ),
+          p: ({ children }) => <p className="mb-4 leading-7 text-muted-foreground">{children}</p>,
+          ul: ({ children }) => <ul className="mb-4 ml-4 list-disc space-y-1.5 text-muted-foreground">{children}</ul>,
           ol: ({ children }) => (
             <ol className="mb-4 ml-4 list-decimal space-y-1.5 text-muted-foreground">{children}</ol>
           ),
@@ -159,10 +135,7 @@ function MarkdownContent({ content }: { content: string }) {
             const isInline = !className
             if (isInline) {
               return (
-                <code
-                  className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm text-foreground"
-                  {...props}
-                >
+                <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm text-foreground" {...props}>
                   {children}
                 </code>
               )
@@ -206,36 +179,130 @@ function MarkdownContent({ content }: { content: string }) {
   )
 }
 
+function PrevNextNav({
+  previous,
+  next,
+}: {
+  previous: DocsManifestEntry | null
+  next: DocsManifestEntry | null
+}) {
+  if (!previous && !next) {
+    return null
+  }
+
+  return (
+    <nav className="mt-12 grid gap-3 border-t border-border/20 pt-6 sm:grid-cols-2">
+      {previous ? (
+        <Link
+          to={`/docs?page=${previous.slug}`}
+          className="rounded border border-border/20 p-4 transition-colors hover:bg-accent/40"
+        >
+          <span className="mb-1 flex items-center gap-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            <ChevronLeft className="size-3" />
+            Previous
+          </span>
+          <p className="text-sm font-medium text-foreground">{previous.title}</p>
+        </Link>
+      ) : (
+        <div />
+      )}
+
+      {next ? (
+        <Link
+          to={`/docs?page=${next.slug}`}
+          className="rounded border border-border/20 p-4 text-right transition-colors hover:bg-accent/40"
+        >
+          <span className="mb-1 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            Next
+            <ChevronRight className="size-3" />
+          </span>
+          <p className="text-sm font-medium text-foreground">{next.title}</p>
+        </Link>
+      ) : null}
+    </nav>
+  )
+}
+
 export function DocsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const [content, setContent] = useState<string>("")
-  const [loading, setLoading] = useState(true)
+  const [manifest, setManifest] = useState<DocsManifestEntry[]>([])
+  const [content, setContent] = useState("")
+  const [loadingManifest, setLoadingManifest] = useState(true)
+  const [loadingContent, setLoadingContent] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
-  const pageParam = searchParams.get("page")
-  const currentSlug = ALL_ITEMS.find((i) => i.slug === pageParam) ? pageParam! : DEFAULT_SLUG
-  const currentItem = ALL_ITEMS.find((i) => i.slug === currentSlug)!
+  useEffect(() => {
+    let cancelled = false
 
-  const loadDoc = useCallback(async (slug: string) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch(`/docs/${slug}.md`)
-      if (!res.ok) throw new Error(`Failed to load: ${res.status}`)
-      const text = await res.text()
-      setContent(text)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load document.")
-    } finally {
-      setLoading(false)
+    async function loadManifest() {
+      setLoadingManifest(true)
+      setError(null)
+      try {
+        const nextManifest = await fetchDocsManifest()
+        if (!cancelled) {
+          setManifest(nextManifest)
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(loadError instanceof Error ? loadError.message : "Failed to load docs manifest.")
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingManifest(false)
+        }
+      }
+    }
+
+    void loadManifest()
+
+    return () => {
+      cancelled = true
     }
   }, [])
 
+  const currentEntry = manifest.length > 0 ? resolveCurrentDoc(manifest, searchParams.get("page")) : null
+  const sections = groupDocsBySection(manifest)
+  const adjacent = currentEntry ? getAdjacentDocs(manifest, currentEntry.slug) : { previous: null, next: null }
+
   useEffect(() => {
-    void loadDoc(currentSlug)
-    window.scrollTo(0, 0)
-  }, [currentSlug, loadDoc])
+    if (!currentEntry) {
+      return
+    }
+
+    let cancelled = false
+
+    async function loadDoc(slug: string) {
+      setLoadingContent(true)
+      setError(null)
+      try {
+        const response = await fetch(`/docs/${slug}.md`)
+        if (!response.ok) {
+          throw new Error(`Failed to load document: ${response.status}`)
+        }
+        const text = await response.text()
+        if (!cancelled) {
+          setContent(text)
+          window.scrollTo(0, 0)
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(loadError instanceof Error ? loadError.message : "Failed to load document.")
+          setContent("")
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingContent(false)
+        }
+      }
+    }
+
+    void loadDoc(currentEntry.slug)
+
+    return () => {
+      cancelled = true
+    }
+  }, [currentEntry])
 
   function navigate(slug: string) {
     setSearchParams({ page: slug })
@@ -244,14 +311,12 @@ export function DocsPage() {
 
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)] bg-background">
-      {/* Desktop sidebar */}
-      <aside className="hidden w-60 shrink-0 border-r border-border/20 lg:block">
+      <aside className="hidden w-72 shrink-0 border-r border-border/20 lg:block">
         <div className="sticky top-0 h-screen overflow-y-auto px-3">
-          <Sidebar currentSlug={currentSlug} onNavigate={navigate} />
+          <Sidebar currentSlug={currentEntry?.slug ?? ""} sections={sections} onNavigate={navigate} />
         </div>
       </aside>
 
-      {/* Mobile nav overlay */}
       {mobileNavOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <button
@@ -259,9 +324,9 @@ export function DocsPage() {
             onClick={() => setMobileNavOpen(false)}
             aria-label="Close navigation"
           />
-          <aside className="absolute left-0 top-0 h-full w-64 overflow-y-auto border-r border-border/20 bg-background px-3">
+          <aside className="absolute left-0 top-0 h-full w-72 overflow-y-auto border-r border-border/20 bg-background px-3">
             <div className="flex h-14 items-center justify-between border-b border-border/20 px-3">
-              <span className="text-sm font-semibold">Docs</span>
+              <span className="text-sm font-semibold">Documentation</span>
               <button
                 onClick={() => setMobileNavOpen(false)}
                 aria-label="Close"
@@ -270,94 +335,59 @@ export function DocsPage() {
                 <X className="size-4" />
               </button>
             </div>
-            <Sidebar currentSlug={currentSlug} onNavigate={navigate} />
+            <Sidebar currentSlug={currentEntry?.slug ?? ""} sections={sections} onNavigate={navigate} />
           </aside>
         </div>
       )}
 
-      {/* Main content */}
-      <main className="flex-1 min-w-0">
-        {/* Mobile top bar */}
-        <div className="flex h-12 items-center gap-3 border-b border-border/20 px-4 lg:hidden">
-          <button
-            onClick={() => setMobileNavOpen(true)}
-            aria-label="Open navigation"
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <Menu className="size-4" />
-          </button>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Link to="/docs" className="hover:text-foreground">Docs</Link>
-            <ChevronRight className="size-3" />
-            <span className="text-foreground">{currentItem.title}</span>
+      <main className="min-w-0 flex-1">
+        <div className="sticky top-0 z-10 border-b border-border/20 bg-background/90 px-4 py-3 backdrop-blur lg:hidden">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setMobileNavOpen(true)}
+              className="inline-flex items-center gap-2 rounded border border-border/20 px-3 py-1.5 text-sm text-foreground"
+            >
+              <Menu className="size-4" />
+              Browse Docs
+            </button>
+            <span className="max-w-[14rem] truncate text-sm font-medium text-foreground">
+              {currentEntry?.title ?? "Documentation"}
+            </span>
           </div>
         </div>
 
-        <div className="mx-auto max-w-3xl px-6 py-10 lg:px-12 lg:py-12">
-          {/* Breadcrumb (desktop) */}
-          <div className="mb-8 hidden items-center gap-1.5 text-xs text-muted-foreground lg:flex">
-            <Link to="/docs" className="hover:text-foreground transition-colors">Docs</Link>
-            <ChevronRight className="size-3" />
-            <span className="text-foreground">{currentItem.title}</span>
-          </div>
-
-          {loading && (
-            <div className="flex flex-col gap-4 animate-pulse">
-              <div className="h-8 w-2/3 rounded bg-accent" />
-              <div className="h-4 w-full rounded bg-accent/60" />
-              <div className="h-4 w-5/6 rounded bg-accent/60" />
-              <div className="h-4 w-4/6 rounded bg-accent/60" />
+        <div className="mx-auto max-w-4xl px-6 py-10 lg:px-10">
+          {loadingManifest ? (
+            <p className="text-sm text-muted-foreground">Loading documentation…</p>
+          ) : error ? (
+            <div className="rounded border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+              {error}
             </div>
-          )}
+          ) : currentEntry ? (
+            <>
+              <div className="mb-8 border-b border-border/20 pb-5">
+                <div className="mb-3 flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
+                  <Link to="/docs" className="hover:text-foreground">
+                    Start Here
+                  </Link>
+                  <span>/</span>
+                  <span>{currentEntry.section}</span>
+                </div>
+                <h1 className="text-3xl font-bold tracking-tight text-foreground">{currentEntry.title}</h1>
+                <p className="mt-3 max-w-3xl text-base leading-7 text-muted-foreground">{currentEntry.summary}</p>
+              </div>
 
-          {error && !loading && (
-            <div className="rounded border border-border/20 bg-destructive/10 p-6 text-sm text-destructive">
-              <p className="font-medium">Failed to load document</p>
-              <p className="mt-1 text-xs opacity-80">{error}</p>
-            </div>
-          )}
-
-          {!loading && !error && <MarkdownContent content={content} />}
-
-          {/* Page navigation */}
-          {!loading && !error && (
-            <div className="mt-12 flex items-center justify-between border-t border-border/20 pt-8">
-              {(() => {
-                const idx = ALL_ITEMS.findIndex((i) => i.slug === currentSlug)
-                const prev = ALL_ITEMS[idx - 1]
-                const next = ALL_ITEMS[idx + 1]
-                return (
-                  <>
-                    <div>
-                      {prev && (
-                        <button
-                          onClick={() => navigate(prev.slug)}
-                          className="group flex flex-col items-start gap-0.5 text-sm"
-                        >
-                          <span className="text-xs uppercase tracking-wider text-muted-foreground">Previous</span>
-                          <span className="font-medium text-foreground transition-colors group-hover:text-primary">
-                            ← {prev.title}
-                          </span>
-                        </button>
-                      )}
-                    </div>
-                    <div>
-                      {next && (
-                        <button
-                          onClick={() => navigate(next.slug)}
-                          className="group flex flex-col items-end gap-0.5 text-sm"
-                        >
-                          <span className="text-xs uppercase tracking-wider text-muted-foreground">Next</span>
-                          <span className="font-medium text-foreground transition-colors group-hover:text-primary">
-                            {next.title} →
-                          </span>
-                        </button>
-                      )}
-                    </div>
-                  </>
-                )
-              })()}
-            </div>
+              {loadingContent ? (
+                <p className="text-sm text-muted-foreground">Loading page…</p>
+              ) : (
+                <>
+                  <MarkdownContent content={content} />
+                  <PrevNextNav previous={adjacent.previous} next={adjacent.next} />
+                </>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">No documentation pages found.</p>
           )}
         </div>
       </main>
