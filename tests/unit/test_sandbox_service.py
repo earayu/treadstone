@@ -214,6 +214,18 @@ class TestSandboxServiceStartStop:
         with pytest.raises(InvalidTransitionError):
             await service.start(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
 
+    async def test_start_from_error_retries(self):
+        from treadstone.services.sandbox_service import SandboxService
+
+        sb = _make_sandbox(status=SandboxStatus.ERROR)
+        session = _mock_session(sb)
+        k8s = _mock_k8s_client()
+        service = SandboxService(session=session, k8s_client=k8s)
+
+        result = await service.start(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
+        assert result.status == SandboxStatus.CREATING
+        k8s.scale_sandbox.assert_called_once_with(name="sb1234567890abcdef", namespace="treadstone-local", replicas=1)
+
 
 class TestDualPathProvisioning:
     async def test_create_without_persist_uses_claim_path(self):

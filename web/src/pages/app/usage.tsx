@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react"
 
 import { useGrants, useComputeSessions, useUsageOverview, useUserPlan } from "@/api/usage"
 import { cn } from "@/lib/utils"
+import { formatSeconds, formatMinutes } from "@/lib/format-time"
 
 const SESSION_PAGE_SIZE = 10
 const SESSION_STATUS_OPTIONS = [
@@ -91,7 +92,7 @@ export function UsagePage() {
             <p className="text-xs text-muted-foreground">
               {maxConcurrent != null && `Max ${maxConcurrent} concurrent sandboxes`}
               {maxConcurrent != null && maxDurMin != null && " · "}
-              {maxDurMin != null && `Max ${maxDurMin} min per session`}
+              {maxDurSec != null && `Max auto-stop interval: ${formatSeconds(maxDurSec)}`}
             </p>
           )}
           <p className="text-xs text-muted-foreground">Period: {periodLabel}</p>

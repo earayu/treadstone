@@ -8,6 +8,7 @@ import { useUsageOverview } from "@/api/usage"
 import { useCurrentUser } from "@/hooks/use-auth"
 import { HttpError } from "@/lib/api-client"
 import { cn } from "@/lib/utils"
+import { formatSeconds, formatMinutes } from "@/lib/format-time"
 
 const SANDBOX_NAME_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,53}[a-z0-9])?$/
 
@@ -125,7 +126,7 @@ export function CreateSandboxPage() {
       return
     }
     if (maxAutoStopMinutes !== undefined && stop > maxAutoStopMinutes) {
-      toast.error(`Auto-stop cannot exceed your plan's max session time (${maxAutoStopMinutes} min).`)
+      toast.error(`Auto-stop interval cannot exceed plan limit (${maxAutoStopMinutes} min).`)
       return
     }
 
@@ -301,7 +302,7 @@ export function CreateSandboxPage() {
                   </div>
                   {maxAutoStopMinutes !== undefined && (
                     <p className="mt-1.5 text-[10px] text-muted-foreground/60">
-                      Max {maxAutoStopMinutes} min (plan limit)
+                      Max auto-stop interval: {formatMinutes(maxAutoStopMinutes)}
                     </p>
                   )}
                 </div>
@@ -455,11 +456,10 @@ export function CreateSandboxPage() {
                 </li>
                 <li>
                   <p className="text-[10px] uppercase tracking-[2px] text-muted-foreground">
-                    Max session time
+                    Max auto-stop interval
                   </p>
                   <p className="mt-1 text-lg font-bold text-foreground">
-                    {Math.round(usage.limits.max_sandbox_duration_seconds / 60)}{" "}
-                    <span className="text-xs font-normal text-muted-foreground">min</span>
+                    {formatSeconds(usage.limits.max_sandbox_duration_seconds)}
                   </p>
                 </li>
               </ul>

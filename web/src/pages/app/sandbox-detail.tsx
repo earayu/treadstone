@@ -14,6 +14,7 @@ import {
 import { useSandboxTemplates } from "@/api/templates"
 import { client } from "@/lib/api-client"
 import { cn } from "@/lib/utils"
+import { formatMinutes } from "@/lib/format-time"
 import type { components } from "@/api/schema"
 
 type SandboxDetail = components["schemas"]["SandboxDetailResponse"]
@@ -237,11 +238,11 @@ export function SandboxDetailPage() {
                     <span className="capitalize">{sandbox.status}</span>
                   </Row>
                   <Row label="Labels">{labelsToString(sandbox.labels)}</Row>
-                  <Row label="Auto-stop">{sandbox.auto_stop_interval} min inactivity</Row>
+                  <Row label="Auto-stop">{formatMinutes(sandbox.auto_stop_interval)} inactivity</Row>
                   <Row label="Auto-delete">
                     {sandbox.auto_delete_interval === -1
                       ? "Off"
-                      : `${sandbox.auto_delete_interval} min after stop`}
+                      : `${formatMinutes(sandbox.auto_delete_interval)} after stop`}
                   </Row>
                   <Row label="Persist">{sandbox.persist ? "Yes" : "No"}</Row>
                   <Row label="Storage">{sandbox.storage_size ?? "—"}</Row>

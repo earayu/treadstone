@@ -6,6 +6,7 @@ import * as Dialog from "@radix-ui/react-dialog"
 import { toast } from "sonner"
 import { useSandboxes, useStartSandbox, useStopSandbox, useDeleteSandbox, type Sandbox } from "@/api/sandboxes"
 import { cn } from "@/lib/utils"
+import { formatMinutes } from "@/lib/format-time"
 
 const PAGE_SIZE = 8
 
@@ -44,20 +45,14 @@ function StatusDot({ status }: { status: string }) {
   )
 }
 
-function formatAutoDelete(minutes: number): string {
-  if (minutes === -1) return "—"
-  if (minutes < 60) return `${minutes}m`
-  if (minutes < 1440) return `${Math.round(minutes / 60)}h`
-  return `${Math.round(minutes / 1440)}d`
-}
 
 const TABLE_COLUMNS = [
-  { key: "id", label: "Sandbox ID", className: "w-[17%]" },
+  { key: "id", label: "Sandbox", className: "w-[22%]" },
   { key: "status", label: "Status", className: "w-[10%]" },
-  { key: "template", label: "Template", className: "w-[17%]" },
+  { key: "template", label: "Template", className: "w-[15%]" },
   { key: "created_at", label: "Created At", className: "w-[12%]" },
   { key: "lifecycle", label: "Lifecycle", className: "w-[10%]" },
-  { key: "web_url", label: "Web URL", className: "w-[26%]" },
+  { key: "web_url", label: "Web URL", className: "w-[23%]" },
   { key: "actions", label: "", className: "w-[8%]" },
 ] as const
 
@@ -254,7 +249,7 @@ function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
           <Search className="absolute left-2 top-1/2 size-3 -translate-y-1/2 text-muted-foreground/60" />
           <input
             type="text"
-            placeholder="Filter IDs..."
+            placeholder="Filter by name or ID..."
             value={filter}
             onChange={(e) => {
               setFilter(e.target.value)
@@ -298,12 +293,19 @@ function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
                 )}
               >
                 <td className="px-6 py-4">
-                  <Link
-                    to={`/app/sandboxes/${sandbox.id}`}
-                    className="font-mono text-xs text-foreground hover:text-primary"
-                  >
-                    {sandbox.name || sandbox.id}
-                  </Link>
+                  <div className="flex flex-col gap-0.5">
+                    <Link
+                      to={`/app/sandboxes/${sandbox.id}`}
+                      className="font-mono text-xs font-medium text-foreground hover:text-primary"
+                    >
+                      {sandbox.name || sandbox.id}
+                    </Link>
+                    {sandbox.name && (
+                      <span className="font-mono text-[10px] text-muted-foreground/50">
+                        {sandbox.id}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-6 py-4">
                   <StatusDot status={sandbox.status} />
@@ -325,13 +327,19 @@ function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
                   {formatRelativeTime(sandbox.created_at)}
                 </td>
                 <td className="px-6 py-4">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-xs text-muted-foreground">
-                      {formatAutoDelete(sandbox.auto_delete_interval)}
-                    </span>
-                    {sandbox.auto_delete_interval !== -1 && (
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-xs tabular-nums text-muted-foreground">
+                        {formatMinutes(sandbox.auto_stop_interval)}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground/50">auto-stop</span>
+                    </div>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-xs tabular-nums text-muted-foreground">
+                        {sandbox.auto_delete_interval === -1 ? "—" : formatMinutes(sandbox.auto_delete_interval)}
+                      </span>
                       <span className="text-[10px] text-muted-foreground/50">auto-del</span>
-                    )}
+                    </div>
                   </div>
                 </td>
                 <td className="px-6 py-4">
