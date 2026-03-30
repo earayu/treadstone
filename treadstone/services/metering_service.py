@@ -54,6 +54,7 @@ from treadstone.models.metering import (
 from treadstone.models.sandbox import Sandbox, SandboxStatus
 from treadstone.models.user import utc_now
 from treadstone.services.metering_helpers import (
+    CU_MEMORY_GIB_DIVISOR,
     ConsumeResult,
     calculate_cu_rate,
     compute_period_bounds,
@@ -797,7 +798,7 @@ class MeteringService:
             )
             session_compute_unit_hours = max(
                 compute_session.vcpu_hours,
-                compute_session.memory_gib_hours / Decimal("2"),
+                compute_session.memory_gib_hours / CU_MEMORY_GIB_DIVISOR,
             )
             total_compute_unit_hours += session_compute_unit_hours * overlap_ratio
 

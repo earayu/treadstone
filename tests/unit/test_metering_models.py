@@ -16,6 +16,7 @@ from treadstone.models.metering import (
     UserPlan,
 )
 from treadstone.services.metering_helpers import (
+    CU_MEMORY_GIB_DIVISOR,
     TEMPLATE_SPECS,
     ConsumeResult,
     calculate_cu_rate,
@@ -293,7 +294,9 @@ class TestTemplateSpecs:
 
     def test_ratio_is_1_to_2(self):
         for name, spec in TEMPLATE_SPECS.items():
-            assert spec["memory_gib"] == spec["vcpu"] * 2, f"{name}: memory should be 2x vcpu"
+            assert spec["memory_gib"] == spec["vcpu"] * CU_MEMORY_GIB_DIVISOR, (
+                f"{name}: memory_gib should equal vcpu * CU_MEMORY_GIB_DIVISOR"
+            )
 
 
 class TestParseStorageSizeGib:
