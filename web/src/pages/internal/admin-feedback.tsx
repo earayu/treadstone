@@ -18,7 +18,7 @@ function formatTimestamp(iso: string): string {
 }
 
 export function AdminFeedbackPage() {
-  const { data, isLoading, isError, isFetching, refetch } = useAdminFeedbackList(0)
+  const { data, isLoading, isError, isFetching, refetch } = useAdminFeedbackList()
 
   const total = data?.total ?? 0
   const items = data?.items ?? []

@@ -20,13 +20,13 @@ export function useSubmitFeedback() {
   })
 }
 
-export function useAdminFeedbackList(page: number) {
-  const offset = page * ADMIN_FEEDBACK_PAGE_SIZE
+/** First page only (`offset=0`). Add a `page` argument here if the admin UI gains pagination. */
+export function useAdminFeedbackList() {
   return useQuery({
-    queryKey: ["admin", "support-feedback", page],
+    queryKey: ["admin", "support-feedback"],
     queryFn: async () => {
       const { data } = await client.GET("/v1/admin/support/feedback", {
-        params: { query: { limit: ADMIN_FEEDBACK_PAGE_SIZE, offset } },
+        params: { query: { limit: ADMIN_FEEDBACK_PAGE_SIZE, offset: 0 } },
       })
       return data!
     },
