@@ -1,6 +1,7 @@
 """Admin API — privileged endpoints for managing metering configuration and user plans.
 
 Endpoints:
+  GET    /v1/admin/stats                        — platform-level operational statistics
   GET    /v1/admin/tier-templates               — list all tier templates
   PATCH  /v1/admin/tier-templates/{tier_name}    — update a tier template
   GET    /v1/admin/users/lookup-by-email        — find user by email
@@ -19,7 +20,7 @@ import logging
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query, Request
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from treadstone.api.deps import get_current_admin
@@ -33,12 +34,17 @@ from treadstone.api.schemas import (
     BatchComputeGrantRequest,
     BatchGrantResponse,
     BatchStorageQuotaGrantRequest,
+    ComputeStats,
     CreateComputeGrantRequest,
     CreateComputeGrantResponse,
     CreateStorageQuotaGrantRequest,
     CreateStorageQuotaGrantResponse,
+    PlatformStatsResponse,
     ResolveEmailsRequest,
     ResolveEmailsResponse,
+    SandboxStats,
+    SandboxStatusCount,
+    StorageStats,
     TierTemplateListResponse,
     UpdatePlanRequest,
     UpdateTierTemplateRequest,
@@ -46,12 +52,14 @@ from treadstone.api.schemas import (
     UsageSummaryResponse,
     UserLookupResponse,
     UserPlanResponse,
+    UserStats,
 )
 from treadstone.config import settings
 from treadstone.core.database import get_session
 from treadstone.core.errors import NotFoundError
 from treadstone.models.email_verification_log import EmailVerificationLog
-from treadstone.models.metering import ComputeGrant, StorageQuotaGrant
+from treadstone.models.metering import ComputeGrant, StorageLedger, StorageQuotaGrant, UserPlan
+from treadstone.models.sandbox import Sandbox
 from treadstone.models.user import User
 from treadstone.services.audit import record_audit_event
 from treadstone.services.metering_service import MeteringService
@@ -92,6 +100,64 @@ def serialize_storage_quota_grant_response(grant: StorageQuotaGrant) -> dict:
         "granted_at": base["granted_at"],
         "expires_at": base["expires_at"],
     }
+
+
+# ── Platform Stats ───────────────────────────────────────────────────────────
+
+
+@router.get("/stats", response_model=PlatformStatsResponse)
+async def get_platform_stats(
+    _admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_session),
+) -> PlatformStatsResponse:
+    """Return aggregated platform-level operational statistics."""
+
+    # User stats
+    user_row = (
+        await session.execute(
+            select(
+                func.count().label("total"),
+                func.count().filter(User.is_active.is_(True)).label("active"),
+                func.count().filter(User.role == "admin").label("admin_count"),
+            )
+        )
+    ).one()
+    users = UserStats(total=user_row.total, active=user_row.active, admin_count=user_row.admin_count)
+
+    # Sandbox stats — one query grouped by status
+    sandbox_rows = (
+        await session.execute(select(Sandbox.status, func.count().label("cnt")).group_by(Sandbox.status))
+    ).all()
+    status_breakdown = [SandboxStatusCount(status=row.status, count=row.cnt) for row in sandbox_rows]
+    total_created = sum(row.count for row in status_breakdown)
+    currently_running = next((row.count for row in status_breakdown if row.status == "ready"), 0)
+    sandboxes = SandboxStats(
+        total_created=total_created,
+        currently_running=currently_running,
+        status_breakdown=status_breakdown,
+    )
+
+    # Compute stats — sum of current-period CU usage across all user plans
+    cu_row = (await session.execute(select(func.coalesce(func.sum(UserPlan.compute_units_monthly_used), 0)))).scalar()
+    compute = ComputeStats(total_cu_hours_this_period=float(cu_row))
+
+    # Storage stats — active ledger entries for allocated GiB, all entries for consumed GiB-hours
+    storage_row = (
+        await session.execute(
+            select(
+                func.coalesce(
+                    func.sum(StorageLedger.size_gib).filter(StorageLedger.storage_state == "active"), 0
+                ).label("allocated_gib"),
+                func.coalesce(func.sum(StorageLedger.gib_hours_consumed), 0).label("consumed_gib_hours"),
+            )
+        )
+    ).one()
+    storage = StorageStats(
+        total_allocated_gib=float(storage_row.allocated_gib),
+        total_consumed_gib_hours=float(storage_row.consumed_gib_hours),
+    )
+
+    return PlatformStatsResponse(users=users, sandboxes=sandboxes, compute=compute, storage=storage)
 
 
 # ── Tier Templates ───────────────────────────────────────────────────────────

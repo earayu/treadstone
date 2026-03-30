@@ -1,4 +1,5 @@
 import { Outlet, Link } from "react-router"
+import { BookOpen } from "lucide-react"
 import { useCurrentUser } from "@/hooks/use-auth"
 
 function GithubIcon({ className }: { className?: string }) {
@@ -48,10 +49,23 @@ export function PublicLayout() {
             >
               Plans
             </a>
+            <Link
+              to="/docs"
+              className="text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              Docs
+            </Link>
           </nav>
         </div>
 
         <div className="flex items-center gap-4">
+          <Link
+            to="/docs"
+            aria-label="Documentation"
+            className="text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <BookOpen className="size-5" />
+          </Link>
           <a
             href={GITHUB_URL}
             target="_blank"

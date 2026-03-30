@@ -47,12 +47,12 @@ function StatusDot({ status }: { status: string }) {
 
 
 const TABLE_COLUMNS = [
-  { key: "id", label: "Sandbox", className: "w-[16%]" },
+  { key: "id", label: "Sandbox", className: "w-[14%]" },
   { key: "status", label: "Status", className: "w-[8%]" },
-  { key: "template", label: "Template", className: "w-[15%]" },
+  { key: "template", label: "Template", className: "w-[13%]" },
   { key: "created_at", label: "Created At", className: "w-[12%]" },
-  { key: "lifecycle", label: "Lifecycle", className: "w-[18%]" },
-  { key: "web_url", label: "Web URL", className: "w-[23%]" },
+  { key: "lifecycle", label: "Lifecycle", className: "w-[16%]" },
+  { key: "web_url", label: "Web URL", className: "w-[29%]" },
   { key: "actions", label: "", className: "w-[8%]" },
 ] as const
 
@@ -260,7 +260,12 @@ function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
         </div>
       </div>
 
-      <table className="w-full">
+      <table className="w-full table-fixed">
+        <colgroup>
+          {TABLE_COLUMNS.map((col) => (
+            <col key={col.key} className={col.className} />
+          ))}
+        </colgroup>
         <thead>
           <tr className="border-b border-border/15 bg-card">
             {TABLE_COLUMNS.map((col) => (
@@ -342,13 +347,13 @@ function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
                     </div>
                   </div>
                 </td>
-                <td className="px-6 py-4">
+                <td className="min-w-0 px-6 py-4 align-top">
                   {sandbox.urls?.web ? (
                     <a
                       href={sandbox.urls.web}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="font-mono text-xs text-primary/80 hover:text-primary"
+                      className="break-all font-mono text-xs leading-snug text-primary/80 hover:text-primary"
                     >
                       {new URL(sandbox.urls.web).hostname}
                     </a>
@@ -357,7 +362,7 @@ function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
                       href={sandbox.urls.proxy}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="font-mono text-xs text-primary/80 hover:text-primary"
+                      className="break-all font-mono text-xs leading-snug text-primary/80 hover:text-primary"
                     >
                       {sandbox.name ?? sandbox.id}.tread.zone
                     </a>

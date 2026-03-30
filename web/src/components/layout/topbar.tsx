@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react"
 import { Link, useLocation, useNavigate } from "react-router"
-import { Mail, User, Settings, LogOut } from "lucide-react"
+import { Mail, User, Settings, LogOut, BookOpen } from "lucide-react"
 import { useCurrentUser, useLogout } from "@/hooks/use-auth"
 import { toast } from "sonner"
 
@@ -84,6 +84,13 @@ export function Topbar() {
 
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-4 border-r border-border/30 pr-6">
+          <Link
+            to="/docs"
+            aria-label="Documentation"
+            className="text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <BookOpen className="size-4" />
+          </Link>
           <a
             href={GITHUB_URL}
             target="_blank"

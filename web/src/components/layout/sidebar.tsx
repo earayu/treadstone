@@ -1,5 +1,5 @@
 import { NavLink } from "react-router"
-import { Box, Key, BarChart3, Settings, ShieldCheck, FileText, Activity, Users } from "lucide-react"
+import { Box, Key, BarChart3, Settings, ShieldCheck, FileText, Activity, Users, LayoutDashboard } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCurrentUser } from "@/hooks/use-auth"
 
@@ -11,6 +11,7 @@ const navItems = [
 ]
 
 const adminNavItems = [
+  { to: "/internal/admin/overview", icon: LayoutDashboard, label: "Overview" },
   { to: "/internal/admin/users", icon: Users, label: "User Management" },
   { to: "/internal/admin/metering", icon: Activity, label: "Admin Metering" },
   { to: "/internal/audit", icon: FileText, label: "Audit Events" },

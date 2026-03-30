@@ -802,13 +802,28 @@ async def list_users(
     session: AsyncSession = Depends(get_session),
     limit: int = Query(default=100, ge=1, le=1000, description="Maximum number of items to return."),
     offset: int = Query(default=0, ge=0, description="Number of items to skip."),
+    email: str | None = Query(
+        default=None,
+        description="Optional case-insensitive substring filter on user email.",
+    ),
 ):
+    email_filter = email.strip() if email else ""
+
     if current_user.role == Role.ADMIN.value:
-        count_result = await session.execute(select(func.count()).select_from(User))
-        total = count_result.scalar_one()
-        result = await session.execute(select(User).order_by(User.gmt_created).offset(offset).limit(limit))
+        stmt = select(User)
+        count_stmt = select(func.count()).select_from(User)
+        if email_filter:
+            pattern = f"%{email_filter}%"
+            stmt = stmt.where(User.email.ilike(pattern))
+            count_stmt = count_stmt.where(User.email.ilike(pattern))
+        total = (await session.execute(count_stmt)).scalar_one()
+        result = await session.execute(
+            stmt.order_by(User.gmt_created.desc()).offset(offset).limit(limit),
+        )
         page = list(result.unique().scalars().all())
     else:
+        if email_filter and email_filter.lower() not in current_user.email.lower():
+            return {"items": [], "total": 0}
         total = 1
         page = [current_user]
     return {
