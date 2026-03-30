@@ -82,6 +82,41 @@ ALLOWED_PLAN_OVERRIDES = frozenset(
 class MeteringService:
     """Core metering service for quota management and resource tracking."""
 
+    @staticmethod
+    def _period_overlap_ratio(
+        started_at: datetime,
+        ended_at: datetime | None,
+        *,
+        now: datetime,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> Decimal:
+        """Return the fraction of an entry's accumulated usage that falls inside the billing period."""
+        tzinfo = now.tzinfo
+        if started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=tzinfo)
+        if ended_at is not None and ended_at.tzinfo is None:
+            ended_at = ended_at.replace(tzinfo=tzinfo)
+        if period_start.tzinfo is None:
+            period_start = period_start.replace(tzinfo=tzinfo)
+        if period_end.tzinfo is None:
+            period_end = period_end.replace(tzinfo=tzinfo)
+
+        effective_end = min(ended_at or now, now, period_end)
+        if effective_end <= started_at:
+            return Decimal("0")
+
+        overlap_start = max(started_at, period_start)
+        overlap_end = min(effective_end, period_end)
+        if overlap_end <= overlap_start:
+            return Decimal("0")
+
+        total_seconds = Decimal(str((effective_end - started_at).total_seconds()))
+        overlap_seconds = Decimal(str((overlap_end - overlap_start).total_seconds()))
+        if total_seconds <= Decimal("0"):
+            return Decimal("0")
+        return overlap_seconds / total_seconds
+
     # ═══════════════════════════════════════════════════════
     #  Plan Management  (F05)
     # ═══════════════════════════════════════════════════════
@@ -691,20 +726,64 @@ class MeteringService:
     ) -> tuple[Decimal, Decimal]:
         """Sum raw resource-hours from ComputeSessions overlapping a billing period.
 
+        Uses proportional overlap against each session's accumulated totals so
+        sessions that straddle a billing boundary contribute only the portion
+        that falls inside the requested period.
+
         Returns (total_vcpu_hours, total_memory_gib_hours).
         """
+        now = utc_now()
         result = await session.execute(
-            select(
-                func.coalesce(func.sum(ComputeSession.vcpu_hours), Decimal("0")),
-                func.coalesce(func.sum(ComputeSession.memory_gib_hours), Decimal("0")),
-            ).where(
+            select(ComputeSession).where(
                 ComputeSession.user_id == user_id,
                 ComputeSession.started_at < period_end,
                 or_(ComputeSession.ended_at.is_(None), ComputeSession.ended_at > period_start),
             )
         )
-        row = result.one()
-        return row[0], row[1]
+        total_vcpu_hours = Decimal("0")
+        total_memory_gib_hours = Decimal("0")
+        for compute_session in result.scalars().all():
+            overlap_ratio = self._period_overlap_ratio(
+                compute_session.started_at,
+                compute_session.ended_at,
+                now=now,
+                period_start=period_start,
+                period_end=period_end,
+            )
+            total_vcpu_hours += compute_session.vcpu_hours * overlap_ratio
+            total_memory_gib_hours += compute_session.memory_gib_hours * overlap_ratio
+
+        return total_vcpu_hours, total_memory_gib_hours
+
+    async def get_storage_gib_hours_for_period(
+        self,
+        session: AsyncSession,
+        user_id: str,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> Decimal:
+        """Sum StorageLedger GiB-hours that fall inside the requested billing period."""
+        now = utc_now()
+        result = await session.execute(
+            select(StorageLedger).where(
+                StorageLedger.user_id == user_id,
+                StorageLedger.allocated_at < period_end,
+                or_(StorageLedger.released_at.is_(None), StorageLedger.released_at > period_start),
+            )
+        )
+
+        total_gib_hours = Decimal("0")
+        for storage_entry in result.scalars().all():
+            overlap_ratio = self._period_overlap_ratio(
+                storage_entry.allocated_at,
+                storage_entry.released_at,
+                now=now,
+                period_start=period_start,
+                period_end=period_end,
+            )
+            total_gib_hours += storage_entry.gib_hours_consumed * overlap_ratio
+
+        return total_gib_hours
 
     async def get_usage_summary(self, session: AsyncSession, user_id: str) -> dict:
         """Assemble the complete usage overview for GET /v1/usage."""
@@ -722,15 +801,12 @@ class MeteringService:
         monthly_remaining = max(Decimal("0"), plan.compute_credits_monthly_limit - plan.compute_credits_monthly_used)
         total_compute_remaining = monthly_remaining + extra_compute_remaining
 
-        # Storage gib-hours for the current period
-        storage_result = await session.execute(
-            select(func.coalesce(func.sum(StorageLedger.gib_hours_consumed), Decimal("0"))).where(
-                StorageLedger.user_id == user_id,
-                StorageLedger.allocated_at < plan.period_end,
-                or_(StorageLedger.released_at.is_(None), StorageLedger.released_at > plan.period_start),
-            )
+        storage_gib_hours = await self.get_storage_gib_hours_for_period(
+            session,
+            user_id,
+            plan.period_start,
+            plan.period_end,
         )
-        storage_gib_hours = storage_result.scalar_one()
 
         grace_active = plan.grace_period_started_at is not None
         grace_expires_at = None
