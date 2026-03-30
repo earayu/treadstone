@@ -5,17 +5,20 @@ Covers F24: Usage API endpoints accessible by authenticated users.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
 from fastapi_users.db import SQLAlchemyUserDatabase
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
-from treadstone.models.metering import TierTemplate
+from treadstone.models.metering import ComputeSession, StorageLedger, StorageState, TierTemplate
+from treadstone.models.sandbox import Sandbox, SandboxStatus
 from treadstone.models.user import OAuthAccount, User
 
 _test_session_factory: async_sessionmaker | None = None
@@ -147,6 +150,62 @@ async def test_get_usage_includes_credit_pool_and_grants(user_client):
     assert plan.status_code == 200
     assert plan.json()["compute_units_monthly_limit"] == 10.0
     assert plan.json()["compute_units_monthly_used"] == 0.0
+
+
+async def test_get_usage_clips_cross_period_cumulative_usage(user_client, monkeypatch):
+    fixed_now = datetime(2026, 3, 15, 12, 0, 0, tzinfo=UTC)
+    monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: fixed_now)
+
+    async with _test_session_factory() as session:
+        user = (await session.execute(select(User).where(User.email == "user@example.com"))).unique().scalar_one()
+
+        sandbox = Sandbox(
+            id="sbperiodoverlap001",
+            name="period-overlap",
+            owner_id=user.id,
+            template="aio-sandbox-small",
+            k8s_namespace="test",
+            status=SandboxStatus.STOPPED,
+            endpoints={},
+        )
+        session.add(sandbox)
+
+        session.add(
+            ComputeSession(
+                id="csperiodoverlap001",
+                sandbox_id=sandbox.id,
+                user_id=user.id,
+                template="aio-sandbox-small",
+                vcpu_request=Decimal("1"),
+                memory_gib_request=Decimal("2"),
+                started_at=datetime(2026, 2, 28, 23, 0, 0, tzinfo=UTC),
+                ended_at=datetime(2026, 3, 1, 1, 0, 0, tzinfo=UTC),
+                last_metered_at=datetime(2026, 3, 1, 1, 0, 0, tzinfo=UTC),
+                vcpu_hours=Decimal("2"),
+                memory_gib_hours=Decimal("4"),
+            )
+        )
+        session.add(
+            StorageLedger(
+                id="slperiodoverlap001",
+                user_id=user.id,
+                sandbox_id=sandbox.id,
+                size_gib=5,
+                storage_state=StorageState.DELETED,
+                allocated_at=datetime(2026, 2, 28, 23, 0, 0, tzinfo=UTC),
+                released_at=datetime(2026, 3, 1, 1, 0, 0, tzinfo=UTC),
+                gib_hours_consumed=Decimal("10"),
+                last_metered_at=datetime(2026, 3, 1, 1, 0, 0, tzinfo=UTC),
+            )
+        )
+        await session.commit()
+
+    resp = await user_client.get("/v1/usage")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["compute"]["compute_unit_hours"] == 1.0
+    assert data["storage"]["gib_hours"] == 5.0
 
 
 async def test_get_usage_unauthenticated(db_session):
