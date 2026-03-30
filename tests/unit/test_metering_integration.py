@@ -608,12 +608,11 @@ class TestReconcileMetering:
             if call_count == 1:
                 return _MockScalarsResult([])
             elif call_count == 2:
-                return _MockScalarsResult([open_cs])
+                return _MockScalarsResult([(open_cs, stopped_sandbox)])
             else:
                 return _MockScalarsResult([])
 
         session.execute = AsyncMock(side_effect=mock_execute)
-        session.get = AsyncMock(return_value=stopped_sandbox)
         session.commit = AsyncMock()
 
         factory = MagicMock()
@@ -652,12 +651,11 @@ class TestReconcileMetering:
             if call_count == 1:
                 return _MockScalarsResult([])
             elif call_count == 2:
-                return _MockScalarsResult([open_cs])
+                return _MockScalarsResult([(open_cs, None)])
             else:
                 return _MockScalarsResult([])
 
         session.execute = AsyncMock(side_effect=mock_execute)
-        session.get = AsyncMock(return_value=None)
         session.commit = AsyncMock()
 
         factory = MagicMock()

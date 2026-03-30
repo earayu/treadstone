@@ -30,7 +30,16 @@ from treadstone.core.errors import (
 from treadstone.models.sandbox import Sandbox, SandboxStatus, is_valid_transition
 from treadstone.models.sandbox_web_link import SandboxWebLink
 from treadstone.models.user import random_id, utc_now
-from treadstone.services.k8s_client import K8sClientProtocol, get_k8s_client
+from treadstone.services.k8s_client import (
+    ANNOTATION_CREATED_AT,
+    ANNOTATION_SANDBOX_NAME,
+    LABEL_OWNER_ID,
+    LABEL_PROVISION_MODE,
+    LABEL_SANDBOX_ID,
+    LABEL_TEMPLATE,
+    K8sClientProtocol,
+    get_k8s_client,
+)
 from treadstone.services.metering_helpers import parse_storage_size_gib
 
 if TYPE_CHECKING:
@@ -192,12 +201,24 @@ class SandboxService:
         await self._resolve_template(sandbox.k8s_namespace, template)
 
         claim_name = sandbox.k8s_sandbox_claim_name or sandbox.id
+        labels = {
+            LABEL_SANDBOX_ID: sandbox.id,
+            LABEL_OWNER_ID: sandbox.owner_id,
+            LABEL_TEMPLATE: template,
+            LABEL_PROVISION_MODE: "claim",
+        }
+        annotations = {
+            ANNOTATION_SANDBOX_NAME: sandbox.name,
+            ANNOTATION_CREATED_AT: sandbox.gmt_created.isoformat(),
+        }
         logger.info("Creating SandboxClaim %s (template=%s, ns=%s)", claim_name, template, sandbox.k8s_namespace)
         await self.k8s.create_sandbox_claim(
             name=claim_name,
             template_ref=template,
             namespace=sandbox.k8s_namespace,
             shutdown_time=shutdown_time,
+            labels=labels,
+            annotations=annotations,
         )
 
     async def _ensure_persistent_storage_backend_ready(self) -> None:
@@ -232,6 +253,20 @@ class SandboxService:
         ]
 
         k8s_name = sandbox.k8s_sandbox_name or sandbox.id
+        labels = {
+            LABEL_SANDBOX_ID: sandbox.id,
+            LABEL_OWNER_ID: sandbox.owner_id,
+            LABEL_TEMPLATE: template,
+            LABEL_PROVISION_MODE: "direct",
+        }
+        annotations = {
+            ANNOTATION_SANDBOX_NAME: sandbox.name,
+            ANNOTATION_CREATED_AT: sandbox.gmt_created.isoformat(),
+        }
+        pod_labels = {
+            LABEL_SANDBOX_ID: sandbox.id,
+            LABEL_OWNER_ID: sandbox.owner_id,
+        }
         logger.info(
             "Creating Sandbox CR %s (template=%s, persist=true, ns=%s)", k8s_name, template, sandbox.k8s_namespace
         )
@@ -243,6 +278,9 @@ class SandboxService:
             resources=resources,
             volume_claim_templates=volume_claim_templates,
             shutdown_time=shutdown_time,
+            labels=labels,
+            annotations=annotations,
+            pod_labels=pod_labels,
         )
 
     async def get(self, sandbox_id: str, owner_id: str) -> Sandbox | None:

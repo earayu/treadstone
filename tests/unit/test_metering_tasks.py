@@ -366,29 +366,22 @@ class TestTickStorageMetering:
     async def test_updates_gib_hours(self, mock_now):
         from treadstone.services.metering_tasks import tick_storage_metering
 
-        entry = _make_storage_entry(size_gib=10, last_metered_at=ONE_MINUTE_AGO)
-
         session = AsyncMock()
-        session.execute = AsyncMock(return_value=_MockScalars([entry]))
-        session.add = MagicMock()
+        session.execute = AsyncMock(return_value=_MockRowCount(3))
         session.commit = AsyncMock()
 
         result = await tick_storage_metering(session)
 
-        assert result == 1
-        expected_gib_hours = Decimal("10") * Decimal("60") / Decimal("3600")
-        assert abs(entry.gib_hours_consumed - expected_gib_hours.quantize(Decimal("0.0001"))) < Decimal("0.001")
+        assert result == 3
+        session.execute.assert_awaited_once()
         session.commit.assert_awaited_once()
 
     @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
-    async def test_skips_zero_elapsed(self, mock_now):
+    async def test_no_rows_matched(self, mock_now):
         from treadstone.services.metering_tasks import tick_storage_metering
 
-        entry = _make_storage_entry(last_metered_at=FIXED_NOW)
-
         session = AsyncMock()
-        session.execute = AsyncMock(return_value=_MockScalars([entry]))
-        session.add = MagicMock()
+        session.execute = AsyncMock(return_value=_MockRowCount(0))
         session.commit = AsyncMock()
 
         result = await tick_storage_metering(session)
@@ -401,7 +394,7 @@ class TestTickStorageMetering:
         from treadstone.services.metering_tasks import tick_storage_metering
 
         session = AsyncMock()
-        session.execute = AsyncMock(return_value=_MockScalars([]))
+        session.execute = AsyncMock(return_value=_MockRowCount(0))
         session.commit = AsyncMock()
 
         result = await tick_storage_metering(session)

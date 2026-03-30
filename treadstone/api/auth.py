@@ -804,12 +804,13 @@ async def list_users(
     offset: int = Query(default=0, ge=0, description="Number of items to skip."),
 ):
     if current_user.role == Role.ADMIN.value:
-        result = await session.execute(select(User))
-        users = list(result.unique().scalars().all())
+        count_result = await session.execute(select(func.count()).select_from(User))
+        total = count_result.scalar_one()
+        result = await session.execute(select(User).order_by(User.gmt_created).offset(offset).limit(limit))
+        page = list(result.unique().scalars().all())
     else:
-        users = [current_user]
-    total = len(users)
-    page = users[offset : offset + limit]
+        total = 1
+        page = [current_user]
     return {
         "items": [{"id": u.id, "email": u.email, "role": u.role, "is_active": u.is_active} for u in page],
         "total": total,

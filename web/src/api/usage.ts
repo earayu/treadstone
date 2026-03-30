@@ -16,6 +16,7 @@ export function useUsageOverview() {
       const { data } = await client.GET("/v1/usage")
       return data!
     },
+    refetchInterval: 30_000,
   })
 }
 
@@ -41,6 +42,12 @@ export function useComputeSessions(params?: {
         params: { query: params },
       })
       return data!
+    },
+    refetchInterval: (query) => {
+      const data = query.state.data
+      if (!data) return 30_000
+      const hasActive = data.items?.some((s: ComputeSession) => !s.ended_at)
+      return hasActive ? 10_000 : 30_000
     },
   })
 }
