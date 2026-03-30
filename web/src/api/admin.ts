@@ -224,3 +224,53 @@ export function useAdminUpdateUserStatus() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "users"] }),
   })
 }
+
+export type WaitlistApplication = components["schemas"]["WaitlistApplicationResponse"]
+
+export function useAdminListWaitlist(params: { tier?: string; status?: string; limit?: number; offset?: number }) {
+  return useQuery({
+    queryKey: ["admin", "waitlist", params.tier ?? "", params.status ?? "", params.offset ?? 0],
+    queryFn: async () => {
+      const { data } = await client.GET("/v1/admin/waitlist", {
+        params: {
+          query: {
+            ...(params.tier ? { tier: params.tier } : {}),
+            ...(params.status ? { status: params.status } : {}),
+            limit: params.limit ?? 50,
+            offset: params.offset ?? 0,
+          },
+        },
+      })
+      return data!
+    },
+  })
+}
+
+export function useAdminUpdateWaitlistApplication() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      applicationId,
+      status,
+    }: {
+      applicationId: string
+      status: "approved" | "rejected"
+    }) => {
+      const { data } = await client.PATCH("/v1/admin/waitlist/{application_id}", {
+        params: { path: { application_id: applicationId } },
+        body: { status },
+      })
+      return data!
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "waitlist"] }),
+  })
+}
+
+export function useSubmitWaitlistApplication() {
+  return useMutation({
+    mutationFn: async (body: components["schemas"]["WaitlistApplicationRequest"]) => {
+      const { data } = await client.POST("/v1/waitlist", { body })
+      return data!
+    },
+  })
+}

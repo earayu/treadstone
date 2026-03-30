@@ -68,29 +68,16 @@ class _TreadstoneGroup(click.Group):
 
         with formatter.section("Authentication"):
             formatter.write_text(
-                "Protected commands use an API key first. If no API key is configured, they fall back to the saved "
-                "login session for the active base URL."
-            )
-            formatter.write_text(
-                "Use 'treadstone auth login' for interactive control-plane access, "
-                "'treadstone api-keys create --save' for reusable automation, and "
-                "'treadstone config --help' to manage local defaults."
+                "Protected commands prefer an API key (flag, env, or saved config); "
+                "they fall back to the saved login session when no key is present. "
+                "Use 'treadstone auth login' for interactive sessions and "
+                "'treadstone api-keys create --save' for non-interactive automation."
             )
 
-        with formatter.section("Shortcuts"):
-            formatter.write_dl(
-                [
-                    ("treadstone system", "Runs `treadstone system health`"),
-                    ("treadstone templates", "Runs `treadstone templates list`"),
-                    ("treadstone sandboxes", "Runs `treadstone sandboxes list`"),
-                    ("treadstone config", "Runs `treadstone config get`"),
-                ]
-            )
-
-        with formatter.section("Command tree"):
+        with formatter.section("Command Reference"):
             formatter.write_dl(_leaf_command_rows(self, ctx))
 
-        with formatter.section("Common workflows"):
+        with formatter.section("Quick Start"):
             formatter.write_dl(
                 [
                     ("Check connectivity", "treadstone system health"),
@@ -98,11 +85,11 @@ class _TreadstoneGroup(click.Group):
                     ("List templates (JSON)", "treadstone --json templates list"),
                     ("Create a sandbox (JSON)", "treadstone --json sandboxes create --name demo"),
                     ("Get a browser hand-off URL", "treadstone --json sandboxes web enable SANDBOX_ID"),
-                    ("Print the agent skill", "treadstone guide agent  or  treadstone --skills"),
+                    ("Print the agent skill", "treadstone --skills"),
                 ]
             )
 
-        with formatter.section("Active configuration"):
+        with formatter.section("Active Configuration"):
             formatter.write_dl(
                 [
                     ("Base URL", f"{base_url}  [{source}]"),
@@ -139,21 +126,7 @@ class _TreadstoneGroup(click.Group):
 @click.version_option(package_name="treadstone-cli")
 @click.pass_context
 def cli(ctx: click.Context, json_output: bool, api_key: str | None, base_url: str | None) -> None:
-    """Treadstone CLI - manage system access, sandboxes, templates, and API keys.
-
-    \b
-    Canonical command paths:
-      treadstone system health
-      treadstone system
-      treadstone auth ...
-      treadstone api-keys ...
-      treadstone sandboxes ...
-      treadstone sandboxes create
-      treadstone templates list
-      treadstone templates
-      treadstone config ...
-      treadstone config
-    """
+    """Manage Treadstone sandboxes, auth, API keys, and configuration."""
     ctx.ensure_object(dict)
     ctx.obj["json_output"] = json_output
     if api_key:

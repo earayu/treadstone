@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useGrants, useComputeSessions, useUsageOverview, useUserPlan } from "@/api/usage"
 import { cn } from "@/lib/utils"
 import { formatSeconds } from "@/lib/format-time"
+import { formatTierDisplayName } from "@/lib/tier-label"
 
 const SESSION_PAGE_SIZE = 10
 const SESSION_STATUS_OPTIONS = [
@@ -86,7 +87,9 @@ export function UsagePage() {
           <p className="text-sm text-foreground">
             <span className="text-[10px] font-bold uppercase tracking-[1.5px] text-muted-foreground">Current plan</span>
             {"  "}
-            <span className="capitalize font-semibold text-primary">{tier}</span>
+            <span className="font-semibold text-primary">
+              {tier === "—" ? "—" : formatTierDisplayName(tier)}
+            </span>
           </p>
           {(maxConcurrent != null || maxDurMin != null) && (
             <p className="text-xs text-muted-foreground">

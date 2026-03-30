@@ -14,6 +14,7 @@ from treadstone.models.metering import (
 from treadstone.models.sandbox import Sandbox, SandboxStatus
 from treadstone.models.sandbox_web_link import SandboxWebLink
 from treadstone.models.user import OAuthAccount, Role, User
+from treadstone.models.waitlist import ApplicationStatus, WaitlistApplication
 
 __all__ = [
     "AuditActorType",
@@ -37,4 +38,6 @@ __all__ = [
     "Sandbox",
     "SandboxStatus",
     "SandboxWebLink",
+    "ApplicationStatus",
+    "WaitlistApplication",
 ]

@@ -9,6 +9,7 @@ import { useCurrentUser } from "@/hooks/use-auth"
 import { HttpError } from "@/lib/api-client"
 import { cn } from "@/lib/utils"
 import { formatSeconds, formatMinutes } from "@/lib/format-time"
+import { formatTierDisplayName } from "@/lib/tier-label"
 
 const SANDBOX_NAME_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,53}[a-z0-9])?$/
 
@@ -116,7 +117,7 @@ export function CreateSandboxPage() {
   const showNameError = nameTouched && nameInvalid
 
   const tierTitle = usage?.tier
-    ? `${usage.tier.toUpperCase().replace(/\s+/g, "-")}-TIER ALLOCATION`
+    ? `${formatTierDisplayName(usage.tier).toUpperCase().replace(/\s+/g, "-")} ALLOCATION`
     : "TIER ALLOCATION"
 
   async function handleSubmit(e: FormEvent) {

@@ -47,7 +47,7 @@ def _build_scope(control_plane: bool | None, data_plane: str | None, sandbox_ids
     }
 
 
-@api_keys.command("create")
+@api_keys.command("create", short_help="Create a key; use --save to store as default.")
 @click.option("--name", default="default", show_default=True, help="Key name.")
 @click.option("--expires-in", default=None, type=int, help="Key lifetime in seconds.")
 @click.option("--control-plane/--no-control-plane", default=None, help="Enable or disable control plane access.")
@@ -101,7 +101,7 @@ def create_key(
             click.echo(f"  Saved as the default api_key in {CONFIG_FILE}.")
 
 
-@api_keys.command("list")
+@api_keys.command("list", short_help="List API keys for the current user.")
 @click.pass_context
 def list_keys(ctx: click.Context) -> None:
     """List all API keys for the current user."""
@@ -132,7 +132,7 @@ def list_keys(ctx: click.Context) -> None:
         )
 
 
-@api_keys.command("update")
+@api_keys.command("update", short_help="Update key name, scope, or expiration.")
 @click.argument("key_id")
 @click.option("--name", default=None, help="New key name.")
 @click.option("--expires-in", default=None, type=int, help="Reset expiration from now in seconds.")
@@ -190,7 +190,7 @@ def update_key(
         )
 
 
-@api_keys.command("delete")
+@api_keys.command("delete", short_help="Revoke and delete an API key.")
 @click.argument("key_id")
 @click.pass_context
 def delete_key(ctx: click.Context, key_id: str) -> None:

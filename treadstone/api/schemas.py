@@ -744,3 +744,60 @@ class PlatformStatsResponse(BaseModel):
     sandboxes: SandboxStats
     compute: ComputeStats
     storage: StorageStats
+
+
+# ── Waitlist ──────────────────────────────────────────────────────────────────
+
+
+class WaitlistApplicationRequest(BaseModel):
+    email: EmailStr = Field(
+        ...,
+        examples=["alice@example.com"],
+        description="Applicant email. Does not require an existing account; multiple applications allowed.",
+    )
+    name: str = Field(..., min_length=1, max_length=256, examples=["Alice Smith"])
+    target_tier: str = Field(..., examples=["pro"], description="Target tier: 'pro' or 'ultra'")
+    company: str | None = Field(default=None, max_length=256, examples=["Acme Corp"])
+    use_case: str | None = Field(default=None, max_length=1000, examples=["Building AI coding agents"])
+
+    @field_validator("target_tier")
+    @classmethod
+    def validate_target_tier(cls, v: str) -> str:
+        allowed = {"pro", "ultra"}
+        if v.lower() not in allowed:
+            raise ValueError(f"target_tier must be one of: {', '.join(sorted(allowed))}")
+        return v.lower()
+
+
+class WaitlistApplicationResponse(BaseModel):
+    id: str = Field(..., examples=["wlabc123def456"])
+    email: str = Field(..., examples=["alice@example.com"])
+    name: str = Field(..., examples=["Alice Smith"])
+    target_tier: str = Field(..., examples=["pro"])
+    company: str | None = Field(default=None, examples=["Acme Corp"])
+    use_case: str | None = Field(default=None)
+    user_id: str | None = Field(default=None, examples=["userabc123"])
+    status: str = Field(..., examples=["pending"])
+    processed_at: datetime | None = Field(default=None)
+    gmt_created: datetime = Field(..., examples=["2026-03-30T00:00:00Z"])
+
+
+class WaitlistApplicationListResponse(BaseModel):
+    items: list[WaitlistApplicationResponse]
+    total: int = Field(..., examples=[42])
+
+
+class UpdateWaitlistApplicationRequest(BaseModel):
+    status: str = Field(
+        ...,
+        examples=["approved"],
+        description="Set to 'approved' or 'rejected'. Only allowed while the application is still pending.",
+    )
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: str) -> str:
+        allowed = {"approved", "rejected"}
+        if v.lower() not in allowed:
+            raise ValueError(f"status must be one of: {', '.join(sorted(allowed))}")
+        return v.lower()

@@ -32,7 +32,7 @@ def sandboxes(ctx: click.Context) -> None:
         ctx.invoke(list_sandboxes, labels=(), limit=100, offset=0)
 
 
-@sandboxes.command("create")
+@sandboxes.command("create", short_help="Create a sandbox from a template.")
 @click.option(
     "--template",
     envvar="TREADSTONE_DEFAULT_TEMPLATE",
@@ -132,7 +132,7 @@ def create(
         print_detail(data, title="Sandbox Created")
 
 
-@sandboxes.command("list")
+@sandboxes.command("list", short_help="List sandboxes with optional label filters.")
 @click.option("--label", "labels", multiple=True, help="Filter by label (key:val). Repeat to require multiple labels.")
 @click.option("--limit", default=100, show_default=True, type=int, help="Max results.")
 @click.option("--offset", default=0, show_default=True, type=int, help="Skip N results.")
@@ -161,7 +161,7 @@ def list_sandboxes(ctx: click.Context, labels: tuple[str, ...], limit: int, offs
         print_table(["ID", "Name", "Template", "Status", "Created"], rows, title=f"Sandboxes ({data['total']} total)")
 
 
-@sandboxes.command("get")
+@sandboxes.command("get", short_help="Show one sandbox by ID (not by name).")
 @click.argument("sandbox_id", metavar="SANDBOX_ID")
 @click.pass_context
 def get_sandbox(ctx: click.Context, sandbox_id: str) -> None:
@@ -180,7 +180,7 @@ def get_sandbox(ctx: click.Context, sandbox_id: str) -> None:
         print_detail(data, title=f"Sandbox {sandbox_id}")
 
 
-@sandboxes.command("delete")
+@sandboxes.command("delete", short_help="Delete a sandbox by ID.")
 @click.argument("sandbox_id", metavar="SANDBOX_ID")
 @click.pass_context
 def delete_sandbox(ctx: click.Context, sandbox_id: str) -> None:
@@ -191,7 +191,7 @@ def delete_sandbox(ctx: click.Context, sandbox_id: str) -> None:
     click.echo(f"Sandbox {sandbox_id} deleted.")
 
 
-@sandboxes.command("start")
+@sandboxes.command("start", short_help="Start a stopped sandbox by ID.")
 @click.argument("sandbox_id", metavar="SANDBOX_ID")
 @click.pass_context
 def start_sandbox(ctx: click.Context, sandbox_id: str) -> None:
@@ -206,7 +206,7 @@ def start_sandbox(ctx: click.Context, sandbox_id: str) -> None:
         click.echo(f"Sandbox {sandbox_id} starting.")
 
 
-@sandboxes.command("stop")
+@sandboxes.command("stop", short_help="Stop a running sandbox by ID.")
 @click.argument("sandbox_id", metavar="SANDBOX_ID")
 @click.pass_context
 def stop_sandbox(ctx: click.Context, sandbox_id: str) -> None:
@@ -237,7 +237,7 @@ def web() -> None:
     """
 
 
-@web.command("enable")
+@web.command("enable", short_help="Create or refresh browser hand-off URL.")
 @click.argument("sandbox_id", metavar="SANDBOX_ID")
 @click.pass_context
 def enable_web(ctx: click.Context, sandbox_id: str) -> None:
@@ -252,7 +252,7 @@ def enable_web(ctx: click.Context, sandbox_id: str) -> None:
         print_detail(data, title=f"Sandbox Web Access Enabled: {sandbox_id}")
 
 
-@web.command("status")
+@web.command("status", short_help="Show browser hand-off URL status.")
 @click.argument("sandbox_id", metavar="SANDBOX_ID")
 @click.pass_context
 def web_status(ctx: click.Context, sandbox_id: str) -> None:
@@ -267,7 +267,7 @@ def web_status(ctx: click.Context, sandbox_id: str) -> None:
         print_detail(data, title=f"Sandbox Web Access: {sandbox_id}")
 
 
-@web.command("disable")
+@web.command("disable", short_help="Revoke browser hand-off URL for a sandbox.")
 @click.argument("sandbox_id", metavar="SANDBOX_ID")
 @click.pass_context
 def disable_web(ctx: click.Context, sandbox_id: str) -> None:
