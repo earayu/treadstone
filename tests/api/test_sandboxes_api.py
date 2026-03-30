@@ -270,10 +270,17 @@ class TestCreateSandbox:
     async def test_create_with_invalid_auto_stop_interval_returns_422(self, auth_client):
         resp = await auth_client.post(
             "/v1/sandboxes",
-            json={"template": "aio-sandbox-tiny", "name": "bad-stop", "auto_stop_interval": 0},
+            json={"template": "aio-sandbox-tiny", "name": "bad-stop", "auto_stop_interval": -1},
         )
         assert resp.status_code == 422
         assert resp.json()["error"]["code"] == "validation_error"
+
+    async def test_create_with_zero_auto_stop_interval_accepted(self, auth_client):
+        resp = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": "never-stop", "auto_stop_interval": 0},
+        )
+        assert resp.status_code < 400
 
     async def test_create_with_invalid_auto_delete_interval_returns_422(self, auth_client):
         resp = await auth_client.post(

@@ -25,7 +25,10 @@ function EditTierDialog({ tier, onClose }: EditTierDialogProps) {
   const [compute, setCompute] = useState(String(tier.compute_units_monthly))
   const [storage, setStorage] = useState(String(tier.storage_capacity_gib))
   const [maxConcurrent, setMaxConcurrent] = useState(String(tier.max_concurrent_running))
-  const [maxDuration, setMaxDuration] = useState(String(tier.max_sandbox_duration_seconds))
+  const [maxDurationNever, setMaxDurationNever] = useState(tier.max_sandbox_duration_seconds === 0)
+  const [maxDuration, setMaxDuration] = useState(
+    tier.max_sandbox_duration_seconds === 0 ? "" : String(tier.max_sandbox_duration_seconds),
+  )
   const [gracePeriod, setGracePeriod] = useState(String(tier.grace_period_seconds))
   const [allowedTemplates, setAllowedTemplates] = useState(tier.allowed_templates.join(", "))
   const [applyToExisting, setApplyToExisting] = useState(false)
@@ -34,14 +37,14 @@ function EditTierDialog({ tier, onClose }: EditTierDialogProps) {
     const computeVal = parseFloat(compute)
     const storageVal = parseFloat(storage)
     const maxConcurrentVal = parseInt(maxConcurrent, 10)
-    const maxDurationVal = parseInt(maxDuration, 10)
+    const maxDurationVal = maxDurationNever ? 0 : parseInt(maxDuration, 10)
     const gracePeriodVal = parseInt(gracePeriod, 10)
 
     if (
       isNaN(computeVal) ||
       isNaN(storageVal) ||
       isNaN(maxConcurrentVal) ||
-      isNaN(maxDurationVal) ||
+      (!maxDurationNever && isNaN(maxDurationVal)) ||
       isNaN(gracePeriodVal)
     ) {
       toast.error("All numeric fields must be valid numbers.")
@@ -134,12 +137,25 @@ function EditTierDialog({ tier, onClose }: EditTierDialogProps) {
               <label className="text-[11px] font-medium text-muted-foreground">
                 Max Auto-Stop Interval (seconds)
               </label>
-              <input
-                type="number"
-                value={maxDuration}
-                onChange={(e) => setMaxDuration(e.target.value)}
-                className="h-[34px] rounded-sm border border-border/40 bg-background px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  disabled={maxDurationNever}
+                  value={maxDurationNever ? "" : maxDuration}
+                  placeholder={maxDurationNever ? "Never" : undefined}
+                  onChange={(e) => setMaxDuration(e.target.value)}
+                  className="h-[34px] flex-1 rounded-sm border border-border/40 bg-background px-3 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                />
+                <label className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={maxDurationNever}
+                    onChange={(e) => setMaxDurationNever(e.target.checked)}
+                    className="h-3.5 w-3.5 rounded-sm border border-border/40 bg-background accent-primary"
+                  />
+                  <span className="text-[11px] text-muted-foreground">Never</span>
+                </label>
+              </div>
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-medium text-muted-foreground">

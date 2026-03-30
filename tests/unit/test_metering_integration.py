@@ -284,6 +284,60 @@ class TestSandboxServiceCreateWithMetering:
         )
         assert result.status == SandboxStatus.CREATING
 
+    async def test_create_never_autostop_blocked_when_tier_has_limit(self, monkeypatch):
+        """auto_stop_interval=0 (never) must be rejected if the tier enforces a duration limit."""
+        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
+        from treadstone.services.sandbox_service import SandboxService
+
+        session = _mock_session()
+        k8s = _mock_k8s_client()
+        metering = _mock_metering()
+        metering.check_sandbox_duration = AsyncMock(return_value=1800)
+        service = SandboxService(session=session, k8s_client=k8s, metering=metering)
+
+        with pytest.raises(SandboxDurationExceededError):
+            await service.create(
+                owner_id="user1234567890abcd",
+                template="aio-sandbox-small",
+                auto_stop_interval=0,
+            )
+
+    async def test_create_never_autostop_allowed_when_tier_unlimited(self, monkeypatch):
+        """auto_stop_interval=0 (never) is allowed when the tier has no duration limit (max_duration=0)."""
+        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
+        from treadstone.services.sandbox_service import SandboxService
+
+        session = _mock_session()
+        k8s = _mock_k8s_client()
+        metering = _mock_metering()
+        metering.check_sandbox_duration = AsyncMock(return_value=0)
+        service = SandboxService(session=session, k8s_client=k8s, metering=metering)
+
+        result = await service.create(
+            owner_id="user1234567890abcd",
+            template="aio-sandbox-small",
+            auto_stop_interval=0,
+        )
+        assert result.status == SandboxStatus.CREATING
+
+    async def test_create_any_interval_allowed_when_tier_unlimited(self, monkeypatch):
+        """When tier has no duration limit (max_duration=0), any positive interval is allowed."""
+        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
+        from treadstone.services.sandbox_service import SandboxService
+
+        session = _mock_session()
+        k8s = _mock_k8s_client()
+        metering = _mock_metering()
+        metering.check_sandbox_duration = AsyncMock(return_value=0)
+        service = SandboxService(session=session, k8s_client=k8s, metering=metering)
+
+        result = await service.create(
+            owner_id="user1234567890abcd",
+            template="aio-sandbox-small",
+            auto_stop_interval=9999,
+        )
+        assert result.status == SandboxStatus.CREATING
+
     async def test_create_without_metering_skips_all_checks(self):
         from treadstone.services.sandbox_service import SandboxService
 

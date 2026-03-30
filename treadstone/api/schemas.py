@@ -36,7 +36,9 @@ class CreateSandboxRequest(BaseModel):
     name: str | None = Field(default=None, examples=["my-sandbox"], description=SANDBOX_NAME_DESCRIPTION)
     labels: dict[str, str] = Field(default_factory=dict, examples=[{"env": "dev"}])
     auto_stop_interval: int = Field(
-        default=60, examples=[60], description="Minutes of inactivity before the sandbox is automatically stopped."
+        default=60,
+        examples=[60],
+        description="Minutes of inactivity before the sandbox is automatically stopped. 0 means never auto-stop.",
     )
     auto_delete_interval: int = Field(
         default=-1,
@@ -63,8 +65,8 @@ class CreateSandboxRequest(BaseModel):
     @field_validator("auto_stop_interval")
     @classmethod
     def validate_auto_stop_interval(cls, value: int) -> int:
-        if value < 1:
-            raise ValueError("auto_stop_interval must be at least 1 minute.")
+        if value < 0:
+            raise ValueError("auto_stop_interval must be 0 (never) or at least 1 minute.")
         return value
 
     @field_validator("auto_delete_interval")
@@ -113,7 +115,9 @@ class SandboxResponse(BaseModel):
     status: str = Field(..., examples=["creating"])
     labels: dict = Field(default_factory=dict, examples=[{"env": "dev"}])
     auto_stop_interval: int = Field(
-        ..., examples=[15], description="Minutes of inactivity before the sandbox is automatically stopped."
+        ...,
+        examples=[15],
+        description="Minutes of inactivity before the sandbox is automatically stopped. 0 means never auto-stop.",
     )
     auto_delete_interval: int = Field(
         ..., examples=[-1], description="Minutes after stop before auto-delete. -1 means disabled."
@@ -427,7 +431,9 @@ class StorageUsage(BaseModel):
 class UsageLimits(BaseModel):
     max_concurrent_running: int = Field(..., examples=[3])
     current_running: int = Field(..., examples=[1])
-    max_sandbox_duration_seconds: int = Field(..., examples=[7200])
+    max_sandbox_duration_seconds: int = Field(
+        ..., examples=[7200], description="Maximum auto-stop interval in seconds. 0 means unlimited (never)."
+    )
     allowed_templates: list[str] = Field(
         ..., examples=[["aio-sandbox-tiny", "aio-sandbox-small", "aio-sandbox-medium"]]
     )

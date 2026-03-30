@@ -35,7 +35,7 @@ export function HelpIcon({ content, link, size = "sm", side = "top", className }
         </button>
       </TooltipTrigger>
       <TooltipContent side={side} className="leading-relaxed">
-        <p>{content}</p>
+        <p className="whitespace-pre-line">{content}</p>
         {link && (
           <a
             href={link.href}

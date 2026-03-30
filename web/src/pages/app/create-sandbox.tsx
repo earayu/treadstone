@@ -80,21 +80,24 @@ export function CreateSandboxPage() {
   const [name, setName] = useState("")
   const [labelsRaw, setLabelsRaw] = useState("")
   const [autoStopMinutes, setAutoStopMinutes] = useState("60")
+  const [autoStopNever, setAutoStopNever] = useState(false)
   const [autoDeleteEnabled, setAutoDeleteEnabled] = useState(false)
-  const [autoDeleteMinutes, setAutoDeleteMinutes] = useState("10080")
+  const [autoDeleteDays, setAutoDeleteDays] = useState("7")
   const [persist, setPersist] = useState(false)
   const [storageSize, setStorageSize] = useState<"5Gi" | "10Gi" | "20Gi">("5Gi")
   const [nameTouched, setNameTouched] = useState(false)
 
   const activeTemplate = selectedTemplate || defaultTemplate
 
-  const maxAutoStopMinutes = usage
-    ? Math.floor(usage.limits.max_sandbox_duration_seconds / 60)
-    : undefined
+  const tierAllowsNever = usage?.limits.max_sandbox_duration_seconds === 0
+  const maxAutoStopMinutes =
+    usage && usage.limits.max_sandbox_duration_seconds > 0
+      ? Math.floor(usage.limits.max_sandbox_duration_seconds / 60)
+      : undefined
 
   /** Clamp display when plan limit is known (avoids setState in an effect; satisfies react-hooks/set-state-in-effect). */
   const autoStopMinutesDisplay = useMemo(() => {
-    if (maxAutoStopMinutes === undefined) {
+    if (autoStopNever || maxAutoStopMinutes === undefined) {
       return autoStopMinutes
     }
     const n = parseInt(autoStopMinutes, 10)
@@ -105,7 +108,7 @@ export function CreateSandboxPage() {
       return String(maxAutoStopMinutes)
     }
     return autoStopMinutes
-  }, [autoStopMinutes, maxAutoStopMinutes])
+  }, [autoStopMinutes, autoStopNever, maxAutoStopMinutes])
 
   const nameTrimmed = name.trim()
   const nameInvalid =
@@ -135,23 +138,28 @@ export function CreateSandboxPage() {
       return
     }
 
-    let stop = parseInt(autoStopMinutes, 10)
-    if (Number.isNaN(stop) || stop < 1) {
-      toast.error("Auto-stop must be at least 1 minute.")
-      return
-    }
-    if (maxAutoStopMinutes !== undefined) {
-      stop = Math.min(stop, maxAutoStopMinutes)
+    let stop: number
+    if (autoStopNever) {
+      stop = 0
+    } else {
+      stop = parseInt(autoStopMinutes, 10)
+      if (Number.isNaN(stop) || stop < 1) {
+        toast.error("Auto-stop must be at least 1 minute.")
+        return
+      }
+      if (maxAutoStopMinutes !== undefined) {
+        stop = Math.min(stop, maxAutoStopMinutes)
+      }
     }
 
     let autoDelete = -1
     if (autoDeleteEnabled) {
-      const del = parseInt(autoDeleteMinutes, 10)
-      if (Number.isNaN(del) || del < 1) {
-        toast.error("Auto-delete must be at least 1 minute, or turn it off.")
+      const days = parseInt(autoDeleteDays, 10)
+      if (Number.isNaN(days) || days < 1) {
+        toast.error("Auto-delete must be at least 1 day, or turn it off.")
         return
       }
-      autoDelete = del
+      autoDelete = days * 24 * 60
     }
 
     try {
@@ -293,12 +301,42 @@ export function CreateSandboxPage() {
             <div className="grid gap-6 border border-border/30 bg-card/70 p-6 md:grid-cols-2">
               <div className="space-y-5">
                 <div>
-                  <label
-                    htmlFor="auto-stop"
-                    className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground"
-                  >
-                    Auto-stop interval
-                  </label>
+                  <div className="flex items-center justify-between gap-4">
+                    <label
+                      htmlFor="auto-stop"
+                      className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground"
+                    >
+                      Auto-stop interval
+                    </label>
+                    {tierAllowsNever && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Never
+                        </span>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={autoStopNever}
+                          onClick={() => setAutoStopNever((p) => !p)}
+                          className={cn(
+                            "relative h-7 w-12 shrink-0 overflow-hidden rounded-full border transition-colors",
+                            autoStopNever
+                              ? "border-primary bg-primary/30"
+                              : "border-border/70 bg-muted/60",
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "absolute left-0 top-0.5 size-6 rounded-full shadow transition-transform",
+                              autoStopNever
+                                ? "translate-x-5 bg-primary"
+                                : "translate-x-0.5 bg-foreground/40",
+                            )}
+                          />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   <div className="mt-2 flex items-center gap-2">
                     <input
                       id="auto-stop"
@@ -306,9 +344,11 @@ export function CreateSandboxPage() {
                       min={1}
                       max={maxAutoStopMinutes}
                       inputMode="numeric"
-                      value={autoStopMinutesDisplay}
+                      disabled={autoStopNever}
+                      value={autoStopNever ? "" : autoStopMinutesDisplay}
+                      placeholder={autoStopNever ? "Never" : undefined}
                       onChange={(e) => setAutoStopMinutes(e.target.value)}
-                      className="h-10 w-full min-w-0 flex-1 border border-border/40 bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                      className="h-10 w-full min-w-0 flex-1 border border-border/40 bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                     />
                     <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                       Minutes
@@ -357,12 +397,12 @@ export function CreateSandboxPage() {
                       min={1}
                       inputMode="numeric"
                       disabled={!autoDeleteEnabled}
-                      value={autoDeleteMinutes}
-                      onChange={(e) => setAutoDeleteMinutes(e.target.value)}
+                      value={autoDeleteDays}
+                      onChange={(e) => setAutoDeleteDays(e.target.value)}
                       className="h-10 w-full min-w-0 flex-1 border border-border/40 bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                     />
                     <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                      Minutes
+                      Days
                     </span>
                   </div>
                 </div>

@@ -53,22 +53,23 @@ const TABLE_COLUMNS = [
     key: "status",
     label: "Status",
     className: "w-[8%]",
-    help: "Running: the sandbox is active and accepting connections. Creating: startup in progress. Stopped: the sandbox has been paused and is not consuming compute.",
+    help: `Running: the sandbox is active and accepting connections.
+Creating: startup in progress.
+Stopped: the sandbox has been paused and is not consuming compute.`,
   },
   {
     key: "template",
     label: "Template",
     className: "w-[13%]",
     help: "The base image used to create this sandbox. The disk icon indicates persistent storage is enabled — data survives restarts.",
-    helpLink: { href: "/docs/templates", label: "View template docs" },
   },
   { key: "created_at", label: "Created At", className: "w-[12%]" },
   {
     key: "lifecycle",
     label: "Lifecycle",
     className: "w-[16%]",
-    help: "Auto-stop: the sandbox is stopped automatically after this period of inactivity. Auto-delete: the sandbox is permanently deleted after this duration once stopped.",
-    helpLink: { href: "/docs/lifecycle", label: "Learn about lifecycle policies" },
+    help: `Auto-stop: the sandbox is stopped automatically after this period of inactivity.
+Auto-delete: the sandbox is permanently deleted after this duration once stopped.`,
   },
   { key: "web_url", label: "Web URL", className: "w-[29%]" },
   { key: "actions", label: "", className: "w-[8%]" },
@@ -376,13 +377,14 @@ function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
                     </div>
                   </div>
                 </td>
-                <td className="min-w-0 px-6 py-4 align-top">
+                <td className="min-w-0 max-w-0 px-6 py-4 align-top">
                   {sandbox.urls?.web ? (
                     <a
                       href={sandbox.urls.web}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="break-all font-mono text-xs leading-snug text-primary/80 hover:text-primary"
+                      title={new URL(sandbox.urls.web).hostname}
+                      className="block truncate font-mono text-xs text-primary/80 hover:text-primary"
                     >
                       {new URL(sandbox.urls.web).hostname}
                     </a>
@@ -391,7 +393,8 @@ function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
                       href={sandbox.urls.proxy}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="break-all font-mono text-xs leading-snug text-primary/80 hover:text-primary"
+                      title={`${sandbox.name ?? sandbox.id}.tread.zone`}
+                      className="block truncate font-mono text-xs text-primary/80 hover:text-primary"
                     >
                       {sandbox.name ?? sandbox.id}.tread.zone
                     </a>
