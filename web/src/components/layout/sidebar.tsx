@@ -1,7 +1,18 @@
 import { NavLink } from "react-router"
-import { Box, Key, BarChart3, Settings, ShieldCheck, FileText, Activity, Users, LayoutDashboard } from "lucide-react"
+import {
+  Box,
+  Key,
+  BarChart3,
+  Settings,
+  ShieldCheck,
+  FileText,
+  Activity,
+  Users,
+  LayoutDashboard,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCurrentUser } from "@/hooks/use-auth"
+import { TreadstoneSymbol } from "@/components/brand/logo"
 
 const navItems = [
   { to: "/app", icon: Box, label: "Sandboxes", end: true },
@@ -25,7 +36,7 @@ export function Sidebar() {
     <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
       <div className="flex items-center gap-3 px-6 py-6">
         <div className="flex size-8 items-center justify-center bg-primary">
-          <Box className="size-4 text-primary-foreground" />
+          <TreadstoneSymbol className="size-4 text-primary-foreground" />
         </div>
         <span className="text-xl font-bold tracking-tight text-primary">
           Treadstone

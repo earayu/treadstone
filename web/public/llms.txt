@@ -1,0 +1,17 @@
+# Treadstone
+
+> Agent-native sandbox platform for AI agents. Run code, build projects, deploy environments, and hand off browser sessions via CLI, SDK, or REST API. Open source and self-hostable.
+
+## Documentation
+
+- [Overview & Quickstart](/docs/getting-started.md): Installation, first sandbox, human and agent workflows, built-in templates
+- [CLI Reference](/docs/cli-reference.md): Full CLI command reference, configuration, global flags, JSON output
+- [SDK Reference](/docs/sdk-reference.md): Python SDK installation, sync/async usage, authentication, agent patterns
+- [API Reference](/docs/api-reference.md): REST API endpoints, authentication, error format, pagination
+- [Self-Hosting](/docs/self-hosting.md): Kubernetes deployment, local Kind cluster, Helm charts, environment configuration
+
+## Optional
+
+- [GitHub](https://github.com/earayu/treadstone): Source code, issues, and releases
+- [Documentation Sitemap](/docs/sitemap.md): Full hierarchical documentation index
+- [OpenAPI Spec](/openapi.json): Machine-readable API spec (available on running server)

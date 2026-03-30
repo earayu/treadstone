@@ -1,0 +1,39 @@
+User-agent: *
+Allow: /
+Disallow: /app/
+Disallow: /auth/
+Disallow: /internal/
+
+# AI crawlers — welcome to index docs and public content
+User-agent: GPTBot
+Allow: /
+Disallow: /app/
+Disallow: /auth/
+Disallow: /internal/
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /app/
+Disallow: /auth/
+Disallow: /internal/
+
+User-agent: Google-Extended
+Allow: /
+Disallow: /app/
+Disallow: /auth/
+Disallow: /internal/
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /app/
+Disallow: /auth/
+Disallow: /internal/
+
+User-agent: Applebot-Extended
+Allow: /
+Disallow: /app/
+Disallow: /auth/
+Disallow: /internal/
+
+# Sitemap
+Sitemap: /docs/sitemap.md

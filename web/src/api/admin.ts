@@ -9,6 +9,17 @@ export const ADMIN_USERS_PAGE_SIZE = 20
 export type TierTemplate = components["schemas"]["TierTemplateItem"]
 export type UsageSummary = components["schemas"]["UsageSummaryResponse"]
 export type UserItem = components["schemas"]["UserResponse"]
+export type PlatformStats = components["schemas"]["PlatformStatsResponse"]
+
+export function usePlatformStats() {
+  return useQuery({
+    queryKey: ["admin", "platform-stats"],
+    queryFn: async () => {
+      const { data } = await client.GET("/v1/admin/stats")
+      return data!
+    },
+  })
+}
 
 export function useTierTemplates() {
   return useQuery({

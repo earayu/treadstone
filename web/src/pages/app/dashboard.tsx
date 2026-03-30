@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { useSandboxes, useStartSandbox, useStopSandbox, useDeleteSandbox, type Sandbox } from "@/api/sandboxes"
 import { cn } from "@/lib/utils"
 import { formatMinutes } from "@/lib/format-time"
+import { HelpIcon } from "@/components/ui/help-icon"
 
 const PAGE_SIZE = 8
 
@@ -48,10 +49,27 @@ function StatusDot({ status }: { status: string }) {
 
 const TABLE_COLUMNS = [
   { key: "id", label: "Sandbox", className: "w-[14%]" },
-  { key: "status", label: "Status", className: "w-[8%]" },
-  { key: "template", label: "Template", className: "w-[13%]" },
+  {
+    key: "status",
+    label: "Status",
+    className: "w-[8%]",
+    help: "Running: the sandbox is active and accepting connections. Creating: startup in progress. Stopped: the sandbox has been paused and is not consuming compute.",
+  },
+  {
+    key: "template",
+    label: "Template",
+    className: "w-[13%]",
+    help: "The base image used to create this sandbox. The disk icon indicates persistent storage is enabled — data survives restarts.",
+    helpLink: { href: "/docs/templates", label: "View template docs" },
+  },
   { key: "created_at", label: "Created At", className: "w-[12%]" },
-  { key: "lifecycle", label: "Lifecycle", className: "w-[16%]" },
+  {
+    key: "lifecycle",
+    label: "Lifecycle",
+    className: "w-[16%]",
+    help: "Auto-stop: the sandbox is stopped automatically after this period of inactivity. Auto-delete: the sandbox is permanently deleted after this duration once stopped.",
+    helpLink: { href: "/docs/lifecycle", label: "Learn about lifecycle policies" },
+  },
   { key: "web_url", label: "Web URL", className: "w-[29%]" },
   { key: "actions", label: "", className: "w-[8%]" },
 ] as const
@@ -276,7 +294,18 @@ function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
                   col.className,
                 )}
               >
-                {col.label}
+                {"help" in col && col.help ? (
+                  <div className="flex items-center gap-1">
+                    {col.label}
+                    <HelpIcon
+                      content={col.help}
+                      link={"helpLink" in col ? col.helpLink : undefined}
+                      side="top"
+                    />
+                  </div>
+                ) : (
+                  col.label
+                )}
               </th>
             ))}
           </tr>
