@@ -12,7 +12,7 @@ Most endpoints require an API key passed as a Bearer token:
 Authorization: Bearer sk_your_api_key_here
 ```
 
-Obtain an API key via the web dashboard or CLI:
+Obtain an API key via the web console or CLI:
 
 ```bash
 treadstone api-keys create --name my-key --save

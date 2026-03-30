@@ -54,7 +54,7 @@ export function VerifyEmailPage() {
           to="/app"
           className="mt-8 inline-block bg-primary px-6 py-2.5 text-sm font-bold uppercase tracking-widest text-primary-foreground transition-colors hover:bg-primary/90"
         >
-          Go to Dashboard
+          Go to Console
         </Link>
       </div>
     )
@@ -70,7 +70,7 @@ export function VerifyEmailPage() {
         to="/app"
         className="mt-8 inline-block bg-primary px-6 py-2.5 text-sm font-bold uppercase tracking-widest text-primary-foreground transition-colors hover:bg-primary/90"
       >
-        Go to Dashboard
+        Go to Console
       </Link>
     </div>
   )

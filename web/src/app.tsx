@@ -13,7 +13,7 @@ import { SignUpPage } from "@/pages/auth/sign-up"
 import { VerifyEmailPage } from "@/pages/auth/verify-email"
 import { CliLoginPage } from "@/pages/auth/cli-login"
 
-import { DashboardPage } from "@/pages/app/dashboard"
+import { SandboxesPage } from "@/pages/app/sandboxes"
 import { CreateSandboxPage } from "@/pages/app/create-sandbox"
 import { SandboxDetailPage } from "@/pages/app/sandbox-detail"
 import { ApiKeysPage } from "@/pages/app/api-keys"
@@ -67,7 +67,7 @@ const router = createBrowserRouter([
     path: "app",
     element: <AppLayout />,
     children: [
-      { index: true, element: <DashboardPage /> },
+      { index: true, element: <SandboxesPage /> },
       { path: "sandboxes/new", element: <CreateSandboxPage /> },
       { path: "sandboxes/:id", element: <SandboxDetailPage /> },
       { path: "api-keys", element: <ApiKeysPage /> },

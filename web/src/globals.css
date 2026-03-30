@@ -2,7 +2,7 @@
 
 /*
  * Treadstone Design Tokens — dark-first, flat, minimal.
- * Visual reference: Neon Console / Resend Dashboard.
+ * Visual reference: Neon Console–style shell.
  *
  * shadcn/ui convention: each semantic slot has a foreground pair.
  * Colors use oklch for perceptual uniformity.
