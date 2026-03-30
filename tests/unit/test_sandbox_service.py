@@ -58,6 +58,7 @@ def _mock_k8s_client():
     k8s.delete_sandbox = AsyncMock(return_value=True)
     k8s.scale_sandbox = AsyncMock(return_value=True)
     k8s.get_storage_class = AsyncMock(return_value={"metadata": {"name": "treadstone-workspace"}})
+    k8s.get_sandbox = AsyncMock(return_value=None)
     k8s.get_sandbox_claim = AsyncMock(return_value=None)
     k8s.list_sandbox_templates = AsyncMock(
         return_value=[

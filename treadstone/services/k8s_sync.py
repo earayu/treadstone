@@ -243,10 +243,15 @@ async def reconcile(
                 continue
 
             cr_rv = cr.get("metadata", {}).get("resourceVersion")
-            if sandbox.k8s_resource_version == cr_rv:
-                continue
-
             new_status, message = derive_status_from_sandbox_cr(cr)
+
+            # Skip only when both the resource version AND the derived status already
+            # match what is stored in the DB.  Checking resource version alone is not
+            # enough: a previous Watch event may have stored the resource version but
+            # failed to update the status (e.g. due to an optimistic-lock conflict or
+            # because the transition was previously blocked by the state machine).
+            if sandbox.k8s_resource_version == cr_rv and new_status == sandbox.status:
+                continue
 
             if new_status != sandbox.status and is_valid_transition(sandbox.status, new_status):
                 old_status = sandbox.status
