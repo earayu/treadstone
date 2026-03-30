@@ -1,5 +1,4 @@
 import { Outlet, Link } from "react-router"
-import { BookOpen } from "lucide-react"
 import { useCurrentUser } from "@/hooks/use-auth"
 import { TreadstoneLockup } from "@/components/brand/logo"
 
@@ -39,16 +38,10 @@ export function PublicLayout() {
           </Link>
           <nav className="flex items-center gap-7">
             <a
-              href="/#install-cli"
+              href="/#install"
               className="text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               Install CLI
-            </a>
-            <a
-              href="/#plans"
-              className="text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              Plans
             </a>
             <Link
               to="/docs"
@@ -56,17 +49,16 @@ export function PublicLayout() {
             >
               Docs
             </Link>
+            <a
+              href="/#pricing"
+              className="text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              Pricing
+            </a>
           </nav>
         </div>
 
         <div className="flex items-center gap-4">
-          <Link
-            to="/docs"
-            aria-label="Documentation"
-            className="text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          >
-            <BookOpen className="size-5" />
-          </Link>
           <a
             href={GITHUB_URL}
             target="_blank"

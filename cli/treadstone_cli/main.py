@@ -5,15 +5,7 @@ from __future__ import annotations
 import click
 
 from treadstone_cli._client import effective_api_key, effective_base_url, effective_default_template, effective_session
-from treadstone_cli._guide_text import AGENT_GUIDE
 from treadstone_cli._output import friendly_exception_handler
-
-
-def _print_skills(ctx: click.Context, param: click.Parameter, value: bool) -> None:
-    if not value or ctx.resilient_parsing:
-        return
-    click.echo(AGENT_GUIDE.rstrip())
-    ctx.exit()
 
 
 def _active_base_url(ctx: click.Context) -> tuple[str, str]:
@@ -85,7 +77,8 @@ class _TreadstoneGroup(click.Group):
                     ("List templates (JSON)", "treadstone --json templates list"),
                     ("Create a sandbox (JSON)", "treadstone --json sandboxes create --name demo"),
                     ("Get a browser hand-off URL", "treadstone --json sandboxes web enable SANDBOX_ID"),
-                    ("Print the agent skill", "treadstone --skills"),
+                    ("Print the agent skill", "treadstone skills"),
+                    ("Install the agent skill", "treadstone skills install"),
                 ]
             )
 
@@ -103,14 +96,6 @@ class _TreadstoneGroup(click.Group):
 
 @click.group(cls=_TreadstoneGroup)
 @click.option("--json", "json_output", is_flag=True, default=False, help="Output command results in JSON format.")
-@click.option(
-    "--skills",
-    is_flag=True,
-    is_eager=True,
-    expose_value=False,
-    callback=_print_skills,
-    help="Print the built-in agent skill in SKILL.md format for tools like GangGang, Codex, and Cursor.",
-)
 @click.option(
     "--api-key",
     envvar="TREADSTONE_API_KEY",
@@ -138,8 +123,8 @@ def cli(ctx: click.Context, json_output: bool, api_key: str | None, base_url: st
 from treadstone_cli.api_keys import api_keys  # noqa: E402
 from treadstone_cli.auth import auth  # noqa: E402
 from treadstone_cli.config_cmd import config  # noqa: E402
-from treadstone_cli.guide import guide  # noqa: E402
 from treadstone_cli.sandboxes import sandboxes  # noqa: E402
+from treadstone_cli.skills_cmd import skills  # noqa: E402
 from treadstone_cli.system import system  # noqa: E402
 from treadstone_cli.templates import templates  # noqa: E402
 
@@ -150,6 +135,6 @@ cli.add_command(sandboxes)
 cli.add_command(sandboxes, "sb")
 cli.add_command(templates)
 cli.add_command(config)
-cli.add_command(guide)
+cli.add_command(skills)
 
 friendly_exception_handler(cli)
