@@ -816,7 +816,7 @@ ACS 官方文档也明确说明：
 
 ## 9. 模板开放与 warm pool 策略
 
-### 8.1 ACS 启动期
+### 9.1 ACS 启动期
 
 #### 公开自助模板
 
@@ -839,7 +839,7 @@ ACS 官方文档也明确说明：
 - ACS 从镜像下载开始就计费
 - warm pool 不是“空着不花钱”，而是真成本
 
-### 8.2 ACK 增长期
+### 9.2 ACK 增长期
 
 #### 公开自助模板
 
@@ -859,7 +859,7 @@ ACS 官方文档也明确说明：
 
 ## 10. 迁移建议
 
-### 9.1 推荐迁移顺序
+### 10.1 推荐迁移顺序
 
 1. 现在先上 ACS
 2. 用户稳定后，创建 ACK Pro
@@ -868,7 +868,7 @@ ACS 官方文档也明确说明：
 5. 再把主力 sandbox 流量迁到 ACK 节点池
 6. 最后按需保留 ACS virtual node 处理峰值
 
-### 9.2 模板如何迁移
+### 10.2 模板如何迁移
 
 迁移时不要改：
 
@@ -888,7 +888,7 @@ ACS 官方文档也明确说明：
 
 ## 11. 实施影响
 
-### 10.1 计量实现
+### 11.1 计量实现
 
 需要改：
 
@@ -901,7 +901,7 @@ ACS 官方文档也明确说明：
 - 支持从 ACS pod annotation 读取 `effective billed spec`
 - 如果没有 annotation，再退回模板 request
 
-### 10.2 模板静态表与 Helm values
+### 11.2 模板静态表与 Helm values
 
 需要改：
 
@@ -917,7 +917,7 @@ ACS 官方文档也明确说明：
 - `sandboxPlatform = acs | ack`
 - `sandboxStorageMode = cloud_disk | nas`
 
-### 10.3 Persistent Storage 修改点
+### 11.3 Persistent Storage 修改点
 
 需要改：
 
