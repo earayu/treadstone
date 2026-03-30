@@ -36,7 +36,7 @@ def config(ctx: click.Context) -> None:
         ctx.invoke(get_value, key=None)
 
 
-@config.command("set")
+@config.command("set", short_help="Set base_url, api_key, or default_template.")
 @click.argument("key", type=click.Choice(_VALID_KEYS, case_sensitive=False))
 @click.argument("value")
 def set_value(key: str, value: str) -> None:
@@ -58,7 +58,7 @@ def set_value(key: str, value: str) -> None:
     click.echo(f"Set {key} = {value}")
 
 
-@config.command("get")
+@config.command("get", short_help="Show one config key or all saved values.")
 @click.argument("key", required=False, default=None)
 def get_value(key: str | None) -> None:
     """Get a configuration value (or all values if no key given).
@@ -91,7 +91,7 @@ def get_value(key: str | None) -> None:
                 click.echo(f"{k} = {_mask_secret(k, val)}")
 
 
-@config.command("unset")
+@config.command("unset", short_help="Remove a key from local config.")
 @click.argument("key", type=click.Choice(_VALID_KEYS, case_sensitive=False))
 def unset_value(key: str) -> None:
     """Remove a configuration value.
@@ -106,7 +106,7 @@ def unset_value(key: str) -> None:
         click.echo(f"{key} is not set.")
 
 
-@config.command("path")
+@config.command("path", short_help="Print path to config.toml.")
 def show_path() -> None:
     """Print the path to the configuration file.
 

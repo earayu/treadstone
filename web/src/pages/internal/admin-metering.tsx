@@ -1,7 +1,8 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { formatSeconds } from "@/lib/format-time"
+import { formatTierDisplayName } from "@/lib/tier-label"
 import {
   useTierTemplates,
   useUpdateTierTemplate,
@@ -10,7 +11,10 @@ import {
   useAdminUpdatePlan,
   useAdminCreateComputeGrant,
   useAdminCreateStorageGrant,
+  useAdminListWaitlist,
+  useAdminUpdateWaitlistApplication,
   type TierTemplate,
+  type WaitlistApplication,
 } from "@/api/admin"
 
 
@@ -71,7 +75,7 @@ function EditTierDialog({ tier, onClose }: EditTierDialogProps) {
       },
       {
         onSuccess: () => {
-          toast.success(`Tier "${tier.tier}" updated successfully.`)
+          toast.success(`Tier "${formatTierDisplayName(tier.tier)}" updated successfully.`)
           onClose()
         },
         onError: (e) => toast.error(e.message),
@@ -88,7 +92,7 @@ function EditTierDialog({ tier, onClose }: EditTierDialogProps) {
         <div className="flex items-center justify-between border-b border-border/20 px-5 py-4">
           <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-muted-foreground">
             EDIT TIER TEMPLATE —{" "}
-            <span className="text-primary">{tier.tier}</span>
+            <span className="text-primary">{formatTierDisplayName(tier.tier)}</span>
           </span>
           <button
             onClick={onClose}
@@ -306,7 +310,9 @@ function TierRow({
 }) {
   return (
     <tr className={cn("border-b border-border/15", odd && "bg-[hsl(0,0%,4%)]")}>
-      <td className="px-5 py-3 text-xs font-medium text-primary">{tier.tier}</td>
+      <td className="px-5 py-3 text-xs font-medium text-primary">
+        {formatTierDisplayName(tier.tier)}
+      </td>
       <td className="px-5 py-3 text-xs text-foreground">
         {tier.compute_units_monthly} CU-h
       </td>
@@ -334,8 +340,8 @@ function TierRow({
 const GRANT_TYPES = ["admin_grant", "welcome_bonus", "campaign", "support"] as const
 type GrantType = (typeof GRANT_TYPES)[number]
 
-function UserPlanSection() {
-  const [inputEmail, setInputEmail] = useState("")
+function UserPlanSection({ defaultEmail = "" }: { defaultEmail?: string }) {
+  const [inputEmail, setInputEmail] = useState(defaultEmail)
   const [resolvedUserId, setResolvedUserId] = useState<string | null>(null)
   const [resolvedEmail, setResolvedEmail] = useState<string | null>(null)
   const [lookupError, setLookupError] = useState<string | null>(null)
@@ -513,7 +519,9 @@ function UserPlanSection() {
                     <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
                       CURRENT TIER
                     </p>
-                    <p className="mt-1 text-base font-bold capitalize text-primary">{tier}</p>
+                    <p className="mt-1 text-base font-bold text-primary">
+                      {tier === "—" ? "—" : formatTierDisplayName(tier)}
+                    </p>
                   </div>
                   <div>
                     <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -540,10 +548,12 @@ function UserPlanSection() {
                     >
                       {availableTiers.length > 0 ? (
                         availableTiers.map((t) => (
-                          <option key={t} value={t}>{t}</option>
+                          <option key={t} value={t}>
+                            {formatTierDisplayName(t)}
+                          </option>
                         ))
                       ) : (
-                        <option value={tier}>{tier}</option>
+                        <option value={tier}>{formatTierDisplayName(tier)}</option>
                       )}
                     </select>
                   </div>
@@ -683,7 +693,7 @@ function UserPlanSection() {
                       type="text"
                       value={storageReason}
                       onChange={(e) => setStorageReason(e.target.value)}
-                      placeholder="e.g. Storage addon for enterprise trial"
+                      placeholder="e.g. Storage addon for Custom Plan trial"
                       className="h-[34px] w-full rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
                     />
                   </div>
@@ -706,7 +716,203 @@ function UserPlanSection() {
   )
 }
 
+function WaitlistApplicationsSection({ onLookupEmail }: { onLookupEmail: (email: string) => void }) {
+  const [tierFilter, setTierFilter] = useState<string>("")
+  const [statusFilter, setStatusFilter] = useState<string>("pending")
+  const { data, isLoading, isError, refetch } = useAdminListWaitlist({
+    tier: tierFilter || undefined,
+    status: statusFilter || undefined,
+  })
+  const updateApplication = useAdminUpdateWaitlistApplication()
+
+  const items: WaitlistApplication[] = data?.items ?? []
+  const total = data?.total ?? 0
+
+  const handleUpdateStatus = (applicationId: string, status: "approved" | "rejected") => {
+    updateApplication.mutate(
+      { applicationId, status },
+      {
+        onSuccess: () => toast.success(`Application marked as ${status}`),
+        onError: (e) => toast.error(e.message),
+      },
+    )
+  }
+
+  const columns = [
+    { label: "NAME / EMAIL", className: "w-[22%]" },
+    { label: "TIER", className: "w-[8%]" },
+    { label: "COMPANY", className: "w-[14%]" },
+    { label: "USE CASE", className: "w-[24%]" },
+    { label: "STATUS", className: "w-[10%]" },
+    { label: "SUBMITTED", className: "w-[12%]" },
+    { label: "ACTIONS", className: "w-[10%]" },
+  ] as const
+
+  return (
+    <div className="border border-border/20 bg-black rounded">
+      {/* Header */}
+      <div className="flex flex-wrap items-center gap-4 border-b border-border/20 bg-card px-5 py-4">
+        <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-muted-foreground">
+          WAITLIST APPLICATIONS
+        </span>
+        <span className="text-[11px] text-muted-foreground/50">— {total} total</span>
+        <div className="ml-auto flex items-center gap-3">
+          <select
+            value={tierFilter}
+            onChange={(e) => setTierFilter(e.target.value)}
+            className="h-[28px] rounded-sm border border-border/40 bg-card px-2 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            <option value="">All tiers</option>
+            <option value="pro">Pro</option>
+            <option value="ultra">Ultra</option>
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="h-[28px] rounded-sm border border-border/40 bg-card px-2 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            <option value="">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[800px]">
+          <thead>
+            <tr className="border-b border-border/20 bg-card">
+              {columns.map((col) => (
+                <th
+                  key={col.label}
+                  className={cn(
+                    "px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-[0.8px] text-muted-foreground",
+                    col.className,
+                  )}
+                >
+                  {col.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading ? (
+              <tr>
+                <td colSpan={7} className="px-5 py-10 text-center text-sm text-muted-foreground">
+                  Loading…
+                </td>
+              </tr>
+            ) : isError ? (
+              <tr>
+                <td colSpan={7} className="px-5 py-10 text-center text-sm text-destructive">
+                  Failed to load waitlist applications.{" "}
+                  <button onClick={() => refetch()} className="underline hover:text-destructive/80">
+                    Retry
+                  </button>
+                </td>
+              </tr>
+            ) : items.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="px-5 py-10 text-center text-sm text-muted-foreground">
+                  No applications found.
+                </td>
+              </tr>
+            ) : (
+              items.map((item, idx) => (
+                <tr
+                  key={item.id}
+                  className={cn(
+                    "border-b border-border/10 text-xs",
+                    idx % 2 === 1 ? "bg-card/30" : "bg-transparent",
+                  )}
+                >
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-foreground">{item.name}</div>
+                    <div className="mt-0.5 font-mono text-[10px] text-muted-foreground">{item.email}</div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={cn(
+                        "rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                        item.target_tier === "pro"
+                          ? "bg-primary/10 text-primary"
+                          : "bg-purple-500/10 text-purple-400",
+                      )}
+                    >
+                      {item.target_tier}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground">{item.company ?? "—"}</td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    <span className="line-clamp-2">{item.use_case ?? "—"}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={cn(
+                        "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                        item.status === "approved"
+                          ? "bg-emerald-500/10 text-emerald-400"
+                          : item.status === "rejected"
+                            ? "bg-destructive/10 text-destructive"
+                            : "bg-muted/40 text-muted-foreground",
+                      )}
+                    >
+                      {item.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    {new Date(item.gmt_created).toLocaleDateString()}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        onClick={() => onLookupEmail(item.email)}
+                        className="rounded-sm border border-border/40 px-2 py-1 text-[10px] font-medium text-foreground transition-colors hover:bg-accent"
+                      >
+                        Lookup
+                      </button>
+                      {item.status === "pending" && (
+                        <>
+                          <button
+                            onClick={() => handleUpdateStatus(item.id, "approved")}
+                            disabled={updateApplication.isPending}
+                            className="rounded-sm bg-emerald-600/80 px-2 py-1 text-[10px] font-medium text-white transition-colors hover:bg-emerald-600 disabled:opacity-50"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => handleUpdateStatus(item.id, "rejected")}
+                            disabled={updateApplication.isPending}
+                            className="rounded-sm bg-destructive/70 px-2 py-1 text-[10px] font-medium text-white transition-colors hover:bg-destructive disabled:opacity-50"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 export function AdminMeteringPage() {
+  const [lookupEmail, setLookupEmail] = useState("")
+  const [lookupKey, setLookupKey] = useState(0)
+  const userPlanRef = useRef<HTMLDivElement>(null)
+
+  const handleLookupEmail = (email: string) => {
+    setLookupEmail(email)
+    setLookupKey((k) => k + 1)
+    userPlanRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }
+
   return (
     <div className="flex flex-col gap-8">
       <div>
@@ -717,7 +923,10 @@ export function AdminMeteringPage() {
       </div>
 
       <TierTemplatesSection />
-      <UserPlanSection />
+      <div ref={userPlanRef}>
+        <UserPlanSection key={lookupKey} defaultEmail={lookupEmail} />
+      </div>
+      <WaitlistApplicationsSection onLookupEmail={handleLookupEmail} />
     </div>
   )
 }

@@ -27,7 +27,7 @@ def templates(ctx: click.Context) -> None:
         ctx.invoke(list_templates)
 
 
-@templates.command("list")
+@templates.command("list", short_help="List sandbox templates and resource specs.")
 @click.pass_context
 def list_templates(ctx: click.Context) -> None:
     """List all available sandbox templates with resource specs."""

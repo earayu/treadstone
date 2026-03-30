@@ -25,7 +25,7 @@ def system(ctx: click.Context) -> None:
         ctx.invoke(health)
 
 
-@system.command("health")
+@system.command("health", short_help="Check server reachability and health status.")
 @click.pass_context
 def health(ctx: click.Context) -> None:
     """Check if the Treadstone server is reachable and healthy."""

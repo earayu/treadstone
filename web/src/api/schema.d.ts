@@ -4,6 +4,49 @@
  */
 
 export interface paths {
+    "/docs/sitemap.md": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Docs Sitemap Md
+         * @description Serve the documentation sitemap as Markdown.
+         */
+        get: operations["docs-docs_sitemap_md"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/docs/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Docs Page
+         * @description Content-negotiation endpoint for documentation pages.
+         *
+         *     - `Accept: text/markdown` → returns raw Markdown (200)
+         *     - Other clients → redirects to the SPA docs page (302)
+         */
+        get: operations["docs-docs_page"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/stats": {
         parameters: {
             query?: never;
@@ -192,6 +235,46 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/waitlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Waitlist Applications
+         * @description List waitlist applications with optional filters.
+         */
+        get: operations["admin-list_waitlist_applications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/waitlist/{application_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Waitlist Application
+         * @description Approve or reject a waitlist application.
+         */
+        patch: operations["admin-update_waitlist_application"];
         trace?: never;
     };
     "/v1/audit/filter-options": {
@@ -748,6 +831,29 @@ export interface paths {
         get: operations["usage-list_grants"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/waitlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Waitlist Application
+         * @description Submit a waitlist application for Pro or Ultra plan access.
+         *
+         *     No authentication required — users may apply before registering. Multiple
+         *     applications from the same email (including same tier) are allowed.
+         */
+        post: operations["waitlist-submit_waitlist_application"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1469,7 +1575,7 @@ export interface components {
             };
             /**
              * Auto Stop Interval
-             * @description Minutes of inactivity before the sandbox is automatically stopped.
+             * @description Minutes of inactivity before the sandbox is automatically stopped. 0 means never auto-stop.
              * @default 60
              * @example 60
              */
@@ -1774,7 +1880,7 @@ export interface components {
             };
             /**
              * Auto Stop Interval
-             * @description Minutes of inactivity before the sandbox is automatically stopped.
+             * @description Minutes of inactivity before the sandbox is automatically stopped. 0 means never auto-stop.
              * @example 15
              */
             auto_stop_interval: number;
@@ -1868,7 +1974,7 @@ export interface components {
             };
             /**
              * Auto Stop Interval
-             * @description Minutes of inactivity before the sandbox is automatically stopped.
+             * @description Minutes of inactivity before the sandbox is automatically stopped. 0 means never auto-stop.
              * @example 15
              */
             auto_stop_interval: number;
@@ -2374,6 +2480,15 @@ export interface components {
              */
             is_active: boolean;
         };
+        /** UpdateWaitlistApplicationRequest */
+        UpdateWaitlistApplicationRequest: {
+            /**
+             * Status
+             * @description Set to 'approved' or 'rejected'. Only allowed while the application is still pending.
+             * @example approved
+             */
+            status: string;
+        };
         /** UsageLimits */
         UsageLimits: {
             /**
@@ -2388,6 +2503,7 @@ export interface components {
             current_running: number;
             /**
              * Max Sandbox Duration Seconds
+             * @description Maximum auto-stop interval in seconds. 0 means unlimited (never).
              * @example 7200
              */
             max_sandbox_duration_seconds: number;
@@ -2611,6 +2727,95 @@ export interface components {
              */
             token: string;
         };
+        /** WaitlistApplicationListResponse */
+        WaitlistApplicationListResponse: {
+            /** Items */
+            items: components["schemas"]["WaitlistApplicationResponse"][];
+            /**
+             * Total
+             * @example 42
+             */
+            total: number;
+        };
+        /** WaitlistApplicationRequest */
+        WaitlistApplicationRequest: {
+            /**
+             * Email
+             * Format: email
+             * @description Applicant email. Does not require an existing account; multiple applications allowed.
+             * @example alice@example.com
+             */
+            email: string;
+            /**
+             * Name
+             * @example Alice Smith
+             */
+            name: string;
+            /**
+             * Target Tier
+             * @description Target tier: 'pro' or 'ultra'
+             * @example pro
+             */
+            target_tier: string;
+            /**
+             * Company
+             * @example Acme Corp
+             */
+            company?: string | null;
+            /**
+             * Use Case
+             * @example Building AI coding agents
+             */
+            use_case?: string | null;
+        };
+        /** WaitlistApplicationResponse */
+        WaitlistApplicationResponse: {
+            /**
+             * Id
+             * @example wlabc123def456
+             */
+            id: string;
+            /**
+             * Email
+             * @example alice@example.com
+             */
+            email: string;
+            /**
+             * Name
+             * @example Alice Smith
+             */
+            name: string;
+            /**
+             * Target Tier
+             * @example pro
+             */
+            target_tier: string;
+            /**
+             * Company
+             * @example Acme Corp
+             */
+            company?: string | null;
+            /** Use Case */
+            use_case?: string | null;
+            /**
+             * User Id
+             * @example userabc123
+             */
+            user_id?: string | null;
+            /**
+             * Status
+             * @example pending
+             */
+            status: string;
+            /** Processed At */
+            processed_at?: string | null;
+            /**
+             * Gmt Created
+             * Format: date-time
+             * @example 2026-03-30T00:00:00Z
+             */
+            gmt_created: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -2620,6 +2825,57 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    "docs-docs_sitemap_md": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    "docs-docs_page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     "admin-get_platform_stats": {
         parameters: {
             query?: never;
@@ -2949,6 +3205,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BatchGrantResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "admin-list_waitlist_applications": {
+        parameters: {
+            query?: {
+                /** @description Filter by target tier (pro, ultra) */
+                tier?: string | null;
+                /** @description Filter by status (pending, approved, rejected) */
+                status?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitlistApplicationListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "admin-update_waitlist_application": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWaitlistApplicationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitlistApplicationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4027,6 +4354,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GrantsResponse"];
+                };
+            };
+        };
+    };
+    "waitlist-submit_waitlist_application": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaitlistApplicationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitlistApplicationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

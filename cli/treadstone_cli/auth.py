@@ -105,7 +105,7 @@ def _browser_login(ctx: click.Context) -> None:
     sys.exit(1)
 
 
-@auth.command("login")
+@auth.command("login", short_help="Log in via browser or with --email and --password.")
 @click.option("--email", default=None, help="Account email (enables direct login).")
 @click.option("--password", default=None, help="Account password (requires --email).")
 @click.pass_context
@@ -134,7 +134,7 @@ def login(ctx: click.Context, email: str | None, password: str | None) -> None:
         _browser_login(ctx)
 
 
-@auth.command("logout")
+@auth.command("logout", short_help="Clear the saved session for the active base URL.")
 @click.pass_context
 def logout(ctx: click.Context) -> None:
     """Log out and clear the saved local session for the active base URL."""
@@ -160,7 +160,7 @@ def logout(ctx: click.Context) -> None:
             click.echo(f"No saved session for {base_url}.")
 
 
-@auth.command("register")
+@auth.command("register", short_help="Register a new account.")
 @click.option("--email", required=True, prompt=True, help="Account email.")
 @click.option("--password", required=True, prompt=True, hide_input=True, confirmation_prompt=True, help="Password.")
 @click.pass_context
@@ -181,7 +181,7 @@ def register(ctx: click.Context, email: str, password: str) -> None:
                 click.echo("Email verification required. Use 'treadstone auth resend-verification' to request a link.")
 
 
-@auth.command("resend-verification")
+@auth.command("resend-verification", short_help="Request another email verification link.")
 @click.pass_context
 def resend_verification(ctx: click.Context) -> None:
     """Resend email verification link for the current account."""
@@ -195,7 +195,7 @@ def resend_verification(ctx: click.Context) -> None:
         click.echo(data.get("detail", "Verification email sent."))
 
 
-@auth.command("whoami")
+@auth.command("whoami", short_help="Show the current user from API key or session.")
 @click.pass_context
 def whoami(ctx: click.Context) -> None:
     """Show the current user resolved from the active API key or saved session."""
@@ -209,7 +209,7 @@ def whoami(ctx: click.Context) -> None:
         print_detail(data, title="Current User")
 
 
-@auth.command("change-password")
+@auth.command("change-password", short_help="Change password for the current account.")
 @click.option("--old-password", required=True, prompt=True, hide_input=True, help="Current password.")
 @click.option(
     "--new-password", required=True, prompt=True, hide_input=True, confirmation_prompt=True, help="New password."
@@ -226,7 +226,7 @@ def change_password(ctx: click.Context, old_password: str, new_password: str) ->
         click.echo("Password changed.")
 
 
-@auth.command("users")
+@auth.command("users", short_help="List users (admins see all; others see self).")
 @click.option("--limit", default=100, show_default=True, type=int, help="Max results.")
 @click.option("--offset", default=0, show_default=True, type=int, help="Skip N results.")
 @click.pass_context
@@ -247,7 +247,7 @@ def list_users(ctx: click.Context, limit: int, offset: int) -> None:
         print_table(["ID", "Email", "Role"], rows, title=f"Users ({data['total']} total)")
 
 
-@auth.command("delete-user")
+@auth.command("delete-user", short_help="Delete a user by ID (admin only).")
 @click.argument("user_id")
 @click.pass_context
 def delete_user(ctx: click.Context, user_id: str) -> None:

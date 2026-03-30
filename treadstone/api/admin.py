@@ -49,18 +49,22 @@ from treadstone.api.schemas import (
     UpdatePlanRequest,
     UpdateTierTemplateRequest,
     UpdateTierTemplateResponse,
+    UpdateWaitlistApplicationRequest,
     UsageSummaryResponse,
     UserLookupResponse,
     UserPlanResponse,
     UserStats,
+    WaitlistApplicationListResponse,
+    WaitlistApplicationResponse,
 )
 from treadstone.config import settings
 from treadstone.core.database import get_session
-from treadstone.core.errors import NotFoundError
+from treadstone.core.errors import ConflictError, NotFoundError
 from treadstone.models.email_verification_log import EmailVerificationLog
 from treadstone.models.metering import ComputeGrant, StorageLedger, StorageQuotaGrant, UserPlan
 from treadstone.models.sandbox import Sandbox
 from treadstone.models.user import User
+from treadstone.models.waitlist import ApplicationStatus, WaitlistApplication
 from treadstone.services.audit import record_audit_event
 from treadstone.services.metering_service import MeteringService
 
@@ -568,3 +572,96 @@ async def get_verification_token_by_email(
         "verify_url": latest.verify_url,
         "created_at": latest.gmt_created,
     }
+
+
+# ── Waitlist Applications (Admin) ─────────────────────────────────────────────
+
+
+def _serialize_waitlist_application(app: WaitlistApplication) -> dict:
+    return {
+        "id": app.id,
+        "email": app.email,
+        "name": app.name,
+        "target_tier": app.target_tier,
+        "company": app.company,
+        "use_case": app.use_case,
+        "user_id": app.user_id,
+        "status": app.status,
+        "processed_at": app.processed_at,
+        "gmt_created": app.gmt_created,
+    }
+
+
+@router.get("/waitlist", response_model=WaitlistApplicationListResponse)
+async def list_waitlist_applications(
+    tier: str | None = Query(default=None, description="Filter by target tier (pro, ultra)"),
+    status: str | None = Query(default=None, description="Filter by status (pending, approved, rejected)"),
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    _admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_session),
+) -> WaitlistApplicationListResponse:
+    """List waitlist applications with optional filters."""
+    from sqlalchemy import func
+
+    query = select(WaitlistApplication)
+    count_query = select(func.count()).select_from(WaitlistApplication)
+
+    if tier:
+        query = query.where(WaitlistApplication.target_tier == tier.lower())
+        count_query = count_query.where(WaitlistApplication.target_tier == tier.lower())
+    if status:
+        query = query.where(WaitlistApplication.status == status.lower())
+        count_query = count_query.where(WaitlistApplication.status == status.lower())
+
+    total = (await session.execute(count_query)).scalar_one()
+    rows = (
+        (await session.execute(query.order_by(WaitlistApplication.gmt_created.desc()).limit(limit).offset(offset)))
+        .scalars()
+        .all()
+    )
+
+    return {"items": [_serialize_waitlist_application(r) for r in rows], "total": total}
+
+
+@router.patch("/waitlist/{application_id}", response_model=WaitlistApplicationResponse)
+async def update_waitlist_application(
+    application_id: str,
+    body: UpdateWaitlistApplicationRequest,
+    request: Request,
+    admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_session),
+) -> WaitlistApplicationResponse:
+    """Approve or reject a waitlist application."""
+    from treadstone.models.user import utc_now
+
+    app = (
+        await session.execute(select(WaitlistApplication).where(WaitlistApplication.id == application_id))
+    ).scalar_one_or_none()
+
+    if app is None:
+        raise NotFoundError("WaitlistApplication", application_id)
+
+    if app.status != ApplicationStatus.PENDING:
+        raise ConflictError(
+            f"This application is already {app.status} and cannot be updated. "
+            "Only pending applications can be approved or rejected."
+        )
+
+    app.status = body.status
+    app.processed_at = utc_now()
+    app.gmt_updated = utc_now()
+
+    await record_audit_event(
+        session,
+        action="admin.waitlist.updated",
+        target_type="waitlist_application",
+        target_id=application_id,
+        actor_user_id=admin.id,
+        metadata={"status": body.status, "email": app.email, "target_tier": app.target_tier},
+        request=request,
+    )
+    await session.commit()
+    await session.refresh(app)
+
+    return _serialize_waitlist_application(app)

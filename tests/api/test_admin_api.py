@@ -17,6 +17,7 @@ from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
 from treadstone.models.metering import TierTemplate
 from treadstone.models.user import OAuthAccount, User
+from treadstone.models.waitlist import WaitlistApplication  # noqa: F401 — register model for SQLite metadata
 
 _test_session_factory: async_sessionmaker | None = None
 
@@ -109,6 +110,13 @@ async def member_client(db_session):
         reg = await client.post("/v1/auth/register", json={"email": "member@example.com", "password": "Pass123!"})
         await client.post("/v1/auth/login", json={"email": "member@example.com", "password": "Pass123!"})
         client._member_user_id = reg.json()["id"]  # type: ignore[attr-defined]
+        yield client
+
+
+@pytest.fixture
+async def anon_client(db_session):
+    """Unauthenticated client (same DB as admin tests)."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         yield client
 
 
@@ -495,4 +503,66 @@ async def test_resolve_emails_partial_not_found(admin_client):
 
 async def test_resolve_emails_requires_admin(member_client):
     resp = await member_client.post("/v1/admin/users/resolve-emails", json={"emails": ["admin@example.com"]})
+    assert resp.status_code == 403
+
+
+# ── Waitlist (public POST + admin list/patch) ────────────────────────────────
+
+
+_WAITLIST_BODY = {
+    "email": "guest@example.com",
+    "name": "Guest User",
+    "target_tier": "pro",
+}
+
+
+async def test_post_waitlist_without_auth(anon_client):
+    resp = await anon_client.post("/v1/waitlist", json=_WAITLIST_BODY)
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["email"] == "guest@example.com"
+    assert data["status"] == "pending"
+    assert data["user_id"] is None
+
+
+async def test_post_waitlist_allows_multiple_same_email_tier(anon_client):
+    body = {**_WAITLIST_BODY, "email": "repeat@example.com"}
+    r1 = await anon_client.post("/v1/waitlist", json=body)
+    r2 = await anon_client.post("/v1/waitlist", json=body)
+    assert r1.status_code == 201
+    assert r2.status_code == 201
+    assert r1.json()["id"] != r2.json()["id"]
+
+
+async def test_post_waitlist_links_user_id_when_email_matches(admin_client, anon_client):
+    r = await anon_client.post(
+        "/v1/waitlist",
+        json={
+            "email": "admin@example.com",
+            "name": "Admin Applicant",
+            "target_tier": "ultra",
+        },
+    )
+    assert r.status_code == 201
+    assert r.json()["user_id"] == _get_user_id(admin_client)
+
+
+async def test_patch_waitlist_only_from_pending(admin_client, anon_client):
+    r = await anon_client.post("/v1/waitlist", json={**_WAITLIST_BODY, "email": "pendingflow@example.com"})
+    assert r.status_code == 201
+    app_id = r.json()["id"]
+
+    ok = await admin_client.patch(f"/v1/admin/waitlist/{app_id}", json={"status": "approved"})
+    assert ok.status_code == 200
+    assert ok.json()["status"] == "approved"
+
+    conflict = await admin_client.patch(f"/v1/admin/waitlist/{app_id}", json={"status": "rejected"})
+    assert conflict.status_code == 409
+    msg = conflict.json()["error"]["message"].lower()
+    assert "pending" in msg or "already" in msg
+
+
+async def test_list_waitlist_requires_admin(member_client, anon_client):
+    await anon_client.post("/v1/waitlist", json=_WAITLIST_BODY)
+    resp = await member_client.get("/v1/admin/waitlist")
     assert resp.status_code == 403
