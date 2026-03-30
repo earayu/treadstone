@@ -113,9 +113,12 @@ class SandboxService:
                 await self._metering.check_storage_quota(self.session, owner_id, size_gib)
 
             max_duration = await self._metering.check_sandbox_duration(self.session, owner_id)
-            if auto_stop_interval > 0 and (auto_stop_interval * 60) > max_duration:
-                plan = await self._metering.get_user_plan(self.session, owner_id)
-                raise SandboxDurationExceededError(plan.tier, max_duration)
+            if max_duration > 0:
+                # Tier enforces a maximum duration.
+                # auto_stop_interval == 0 means "never", which is not allowed when tier has a limit.
+                if auto_stop_interval == 0 or (auto_stop_interval * 60) > max_duration:
+                    plan = await self._metering.get_user_plan(self.session, owner_id)
+                    raise SandboxDurationExceededError(plan.tier, max_duration)
 
         # ── Create sandbox record ──
         sandbox_id = "sb" + random_id()
