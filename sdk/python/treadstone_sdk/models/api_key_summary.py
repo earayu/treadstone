@@ -23,6 +23,7 @@ class ApiKeySummary:
     Attributes:
         id (str):
         name (str):
+        is_enabled (bool):
         key_prefix (str):
         created_at (datetime.datetime):
         updated_at (datetime.datetime):
@@ -32,6 +33,7 @@ class ApiKeySummary:
 
     id: str
     name: str
+    is_enabled: bool
     key_prefix: str
     created_at: datetime.datetime
     updated_at: datetime.datetime
@@ -43,6 +45,8 @@ class ApiKeySummary:
         id = self.id
 
         name = self.name
+
+        is_enabled = self.is_enabled
 
         key_prefix = self.key_prefix
 
@@ -66,6 +70,7 @@ class ApiKeySummary:
             {
                 "id": id,
                 "name": name,
+                "is_enabled": is_enabled,
                 "key_prefix": key_prefix,
                 "created_at": created_at,
                 "updated_at": updated_at,
@@ -85,6 +90,8 @@ class ApiKeySummary:
         id = d.pop("id")
 
         name = d.pop("name")
+
+        is_enabled = d.pop("is_enabled")
 
         key_prefix = d.pop("key_prefix")
 
@@ -114,6 +121,7 @@ class ApiKeySummary:
         api_key_summary = cls(
             id=id,
             name=name,
+            is_enabled=is_enabled,
             key_prefix=key_prefix,
             created_at=created_at,
             updated_at=updated_at,

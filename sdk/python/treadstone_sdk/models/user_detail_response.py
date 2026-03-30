@@ -20,6 +20,7 @@ class UserDetailResponse:
         email (str):
         role (Role):
         is_active (bool):
+        is_verified (bool):
         has_local_password (bool):
         username (None | str | Unset):
     """
@@ -28,6 +29,7 @@ class UserDetailResponse:
     email: str
     role: Role
     is_active: bool
+    is_verified: bool
     has_local_password: bool
     username: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
@@ -40,6 +42,8 @@ class UserDetailResponse:
         role = self.role.value
 
         is_active = self.is_active
+
+        is_verified = self.is_verified
 
         has_local_password = self.has_local_password
 
@@ -57,6 +61,7 @@ class UserDetailResponse:
                 "email": email,
                 "role": role,
                 "is_active": is_active,
+                "is_verified": is_verified,
                 "has_local_password": has_local_password,
             }
         )
@@ -76,6 +81,8 @@ class UserDetailResponse:
 
         is_active = d.pop("is_active")
 
+        is_verified = d.pop("is_verified")
+
         has_local_password = d.pop("has_local_password")
 
         def _parse_username(data: object) -> None | str | Unset:
@@ -92,6 +99,7 @@ class UserDetailResponse:
             email=email,
             role=role,
             is_active=is_active,
+            is_verified=is_verified,
             has_local_password=has_local_password,
             username=username,
         )

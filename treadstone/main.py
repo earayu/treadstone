@@ -21,6 +21,7 @@ from treadstone.api.sandbox_proxy import router as sandbox_proxy_router
 from treadstone.api.sandbox_templates import router as sandbox_templates_router
 from treadstone.api.sandboxes import router as sandboxes_router
 from treadstone.api.schemas import HealthResponse
+from treadstone.api.support import router as support_router
 from treadstone.api.usage import router as usage_router
 from treadstone.api.waitlist import router as waitlist_router
 from treadstone.config import settings, validate_runtime_settings
@@ -215,6 +216,7 @@ app.include_router(config_router)
 app.include_router(sandbox_proxy_router)
 app.include_router(sandbox_templates_router)
 app.include_router(sandboxes_router)
+app.include_router(support_router)
 app.include_router(usage_router)
 app.include_router(waitlist_router)
 

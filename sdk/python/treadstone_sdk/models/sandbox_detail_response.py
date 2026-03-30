@@ -8,7 +8,6 @@ from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 from dateutil.parser import isoparse
 
-from ..models.sandbox_detail_response_storage_size_type_0 import SandboxDetailResponseStorageSizeType0
 from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
@@ -27,16 +26,16 @@ class SandboxDetailResponse:
         name (str):
         template (str):
         status (str):
-        auto_stop_interval (int): Minutes of inactivity before the sandbox is automatically stopped.
+        auto_stop_interval (int): Minutes of inactivity before the sandbox is automatically stopped. 0 means never auto-
+            stop.
         auto_delete_interval (int): Minutes after stop before auto-delete. -1 means disabled.
         urls (SandboxUrls):
         created_at (datetime.datetime):
         labels (SandboxDetailResponseLabels | Unset):
+        persist (bool | Unset): Whether persistent storage is attached. Default: False.
+        storage_size (None | str | Unset): Persistent volume size when persist=true.
         image (None | str | Unset):
         status_message (None | str | Unset):
-        persist (bool | Unset):  Default: False.
-        storage_size (None | SandboxDetailResponseStorageSizeType0 | Unset): Persistent volume size (only present when
-            persist=true). Supported tiers: 5Gi, 10Gi, 20Gi.
         started_at (datetime.datetime | None | Unset):
         stopped_at (datetime.datetime | None | Unset):
     """
@@ -50,10 +49,10 @@ class SandboxDetailResponse:
     urls: SandboxUrls
     created_at: datetime.datetime
     labels: SandboxDetailResponseLabels | Unset = UNSET
+    persist: bool | Unset = False
+    storage_size: None | str | Unset = UNSET
     image: None | str | Unset = UNSET
     status_message: None | str | Unset = UNSET
-    persist: bool | Unset = False
-    storage_size: None | SandboxDetailResponseStorageSizeType0 | Unset = UNSET
     started_at: datetime.datetime | None | Unset = UNSET
     stopped_at: datetime.datetime | None | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
@@ -79,6 +78,14 @@ class SandboxDetailResponse:
         if not isinstance(self.labels, Unset):
             labels = self.labels.to_dict()
 
+        persist = self.persist
+
+        storage_size: None | str | Unset
+        if isinstance(self.storage_size, Unset):
+            storage_size = UNSET
+        else:
+            storage_size = self.storage_size
+
         image: None | str | Unset
         if isinstance(self.image, Unset):
             image = UNSET
@@ -90,16 +97,6 @@ class SandboxDetailResponse:
             status_message = UNSET
         else:
             status_message = self.status_message
-
-        persist = self.persist
-
-        storage_size: None | str | Unset
-        if isinstance(self.storage_size, Unset):
-            storage_size = UNSET
-        elif isinstance(self.storage_size, SandboxDetailResponseStorageSizeType0):
-            storage_size = self.storage_size.value
-        else:
-            storage_size = self.storage_size
 
         started_at: None | str | Unset
         if isinstance(self.started_at, Unset):
@@ -133,14 +130,14 @@ class SandboxDetailResponse:
         )
         if labels is not UNSET:
             field_dict["labels"] = labels
-        if image is not UNSET:
-            field_dict["image"] = image
-        if status_message is not UNSET:
-            field_dict["status_message"] = status_message
         if persist is not UNSET:
             field_dict["persist"] = persist
         if storage_size is not UNSET:
             field_dict["storage_size"] = storage_size
+        if image is not UNSET:
+            field_dict["image"] = image
+        if status_message is not UNSET:
+            field_dict["status_message"] = status_message
         if started_at is not UNSET:
             field_dict["started_at"] = started_at
         if stopped_at is not UNSET:
@@ -177,6 +174,17 @@ class SandboxDetailResponse:
         else:
             labels = SandboxDetailResponseLabels.from_dict(_labels)
 
+        persist = d.pop("persist", UNSET)
+
+        def _parse_storage_size(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        storage_size = _parse_storage_size(d.pop("storage_size", UNSET))
+
         def _parse_image(data: object) -> None | str | Unset:
             if data is None:
                 return data
@@ -194,25 +202,6 @@ class SandboxDetailResponse:
             return cast(None | str | Unset, data)
 
         status_message = _parse_status_message(d.pop("status_message", UNSET))
-
-        persist = d.pop("persist", UNSET)
-
-        def _parse_storage_size(data: object) -> None | SandboxDetailResponseStorageSizeType0 | Unset:
-            if data is None:
-                return data
-            if isinstance(data, Unset):
-                return data
-            try:
-                if not isinstance(data, str):
-                    raise TypeError()
-                storage_size_type_0 = SandboxDetailResponseStorageSizeType0(data)
-
-                return storage_size_type_0
-            except (TypeError, ValueError, AttributeError, KeyError):
-                pass
-            return cast(None | SandboxDetailResponseStorageSizeType0 | Unset, data)
-
-        storage_size = _parse_storage_size(d.pop("storage_size", UNSET))
 
         def _parse_started_at(data: object) -> datetime.datetime | None | Unset:
             if data is None:
@@ -258,10 +247,10 @@ class SandboxDetailResponse:
             urls=urls,
             created_at=created_at,
             labels=labels,
-            image=image,
-            status_message=status_message,
             persist=persist,
             storage_size=storage_size,
+            image=image,
+            status_message=status_message,
             started_at=started_at,
             stopped_at=stopped_at,
         )
