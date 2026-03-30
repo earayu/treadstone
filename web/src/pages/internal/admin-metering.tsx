@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { formatSeconds } from "@/lib/format-time"
 import {
   useTierTemplates,
   useUpdateTierTemplate,
@@ -12,13 +13,6 @@ import {
   type TierTemplate,
 } from "@/api/admin"
 
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`
-  const m = Math.floor(seconds / 60)
-  if (m < 60) return `${m} min`
-  const h = Math.floor(m / 60)
-  return `${h} hr`
-}
 
 interface EditTierDialogProps {
   tier: TierTemplate
@@ -138,7 +132,7 @@ function EditTierDialog({ tier, onClose }: EditTierDialogProps) {
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-medium text-muted-foreground">
-                Max Sandbox Duration (seconds)
+                Max Auto-Stop Interval (seconds)
               </label>
               <input
                 type="number"
@@ -216,7 +210,7 @@ function TierTemplatesSection() {
     { label: "COMPUTE / MO", className: "w-[15%]" },
     { label: "STORAGE / MO", className: "w-[15%]" },
     { label: "MAX CONCURRENT", className: "w-[16%]" },
-    { label: "MAX DURATION", className: "w-[15%]" },
+    { label: "MAX AUTO-STOP", className: "w-[15%]" },
     { label: "GRACE PERIOD", className: "w-[15%]" },
     { label: "ACTIONS", className: "w-[12%]" },
   ] as const
@@ -305,9 +299,9 @@ function TierRow({
       </td>
       <td className="px-5 py-3 text-xs text-foreground">{tier.max_concurrent_running}</td>
       <td className="px-5 py-3 text-xs text-foreground">
-        {formatDuration(tier.max_sandbox_duration_seconds)}
+        {formatSeconds(tier.max_sandbox_duration_seconds)}
       </td>
-      <td className="px-5 py-3 text-xs text-foreground">{tier.grace_period_seconds}s</td>
+      <td className="px-5 py-3 text-xs text-foreground">{formatSeconds(tier.grace_period_seconds)}</td>
       <td className="px-5 py-3">
         <button
           title="Edit tier template"
@@ -589,11 +583,11 @@ function UserPlanSection() {
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-medium text-muted-foreground">Expires at (optional)</label>
                     <input
-                      type="date"
-                      lang="en"
+                      type="text"
+                      placeholder="YYYY-MM-DD"
                       value={computeExpiresAt}
                       onChange={(e) => setComputeExpiresAt(e.target.value)}
-                      className="h-[34px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                      className="h-[34px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
                     />
                   </div>
                   <div className="col-span-2 flex flex-col gap-1 sm:col-span-3 lg:col-span-4">
@@ -660,11 +654,11 @@ function UserPlanSection() {
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-medium text-muted-foreground">Expires at (optional)</label>
                     <input
-                      type="date"
-                      lang="en"
+                      type="text"
+                      placeholder="YYYY-MM-DD"
                       value={storageExpiresAt}
                       onChange={(e) => setStorageExpiresAt(e.target.value)}
-                      className="h-[34px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                      className="h-[34px] rounded-sm border border-border/40 bg-card px-3 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
                     />
                   </div>
                   <div className="col-span-2 flex flex-col gap-1 sm:col-span-3 lg:col-span-4">

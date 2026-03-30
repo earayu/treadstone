@@ -308,7 +308,7 @@ class SandboxService:
         if sandbox is None:
             raise SandboxNotFoundError(sandbox_id)
 
-        if sandbox.status != SandboxStatus.STOPPED:
+        if sandbox.status not in (SandboxStatus.STOPPED, SandboxStatus.ERROR):
             raise InvalidTransitionError(sandbox_id, sandbox.status, "ready")
 
         # ── Metering: enforcement checks before resuming (gated by config) ──

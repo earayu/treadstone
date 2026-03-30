@@ -138,6 +138,39 @@ class TestHandleWatchEvent:
             sb = await session.get(Sandbox, "sb00000000test1234")
             assert sb.status == SandboxStatus.ERROR
 
+    async def test_modified_error_to_ready(self, session_factory):
+        await _create_sandbox(session_factory, status=SandboxStatus.ERROR, version=3)
+        cr = {
+            "metadata": {"name": "test-sb", "namespace": "treadstone-local", "resourceVersion": "400"},
+            "spec": {"replicas": 1},
+            "status": {
+                "conditions": [{"type": "Ready", "status": "True", "reason": "DependenciesReady", "message": "ok"}],
+            },
+        }
+        await handle_watch_event("MODIFIED", cr, session_factory)
+
+        async with session_factory() as session:
+            sb = await session.get(Sandbox, "sb00000000test1234")
+            assert sb.status == SandboxStatus.READY
+            assert sb.version == 4
+            assert sb.k8s_resource_version == "400"
+
+    async def test_modified_error_to_creating(self, session_factory):
+        await _create_sandbox(session_factory, status=SandboxStatus.ERROR, version=2)
+        cr = {
+            "metadata": {"name": "test-sb", "namespace": "treadstone-local", "resourceVersion": "410"},
+            "spec": {"replicas": 1},
+            "status": {
+                "conditions": [_cond("False", "DependenciesNotReady", "waiting for deps")],
+            },
+        }
+        await handle_watch_event("MODIFIED", cr, session_factory)
+
+        async with session_factory() as session:
+            sb = await session.get(Sandbox, "sb00000000test1234")
+            assert sb.status == SandboxStatus.CREATING
+            assert sb.version == 3
+
     async def test_unknown_cr_ignored(self, session_factory):
         cr = {
             "metadata": {"name": "unknown-cr", "namespace": "treadstone-local", "resourceVersion": "500"},
@@ -182,6 +215,18 @@ class TestReconcile:
             assert sb is not None
             assert sb.status == SandboxStatus.DELETED
             assert sb.gmt_deleted is not None
+
+    async def test_reconcile_error_to_ready(self, session_factory):
+        await _create_sandbox(session_factory, status=SandboxStatus.ERROR, k8s_resource_version="old")
+        k8s = FakeK8sClient()
+        await k8s.create_sandbox_claim("test-sb", "aio-sandbox-tiny", "treadstone-local")
+        k8s.simulate_sandbox_ready("test-sb", "treadstone-local")
+
+        await reconcile("treadstone-local", k8s, session_factory)
+
+        async with session_factory() as session:
+            sb = await session.get(Sandbox, "sb00000000test1234")
+            assert sb.status == SandboxStatus.READY
 
     async def test_reconcile_returns_resource_version(self, session_factory):
         k8s = FakeK8sClient()

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react"
+import { useMemo, useState, type FormEvent } from "react"
 import { Link, useNavigate } from "react-router"
 import { toast } from "sonner"
 
@@ -8,6 +8,7 @@ import { useUsageOverview } from "@/api/usage"
 import { useCurrentUser } from "@/hooks/use-auth"
 import { HttpError } from "@/lib/api-client"
 import { cn } from "@/lib/utils"
+import { formatSeconds, formatMinutes } from "@/lib/format-time"
 
 const SANDBOX_NAME_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,53}[a-z0-9])?$/
 
@@ -91,17 +92,19 @@ export function CreateSandboxPage() {
     ? Math.floor(usage.limits.max_sandbox_duration_seconds / 60)
     : undefined
 
-  useEffect(() => {
+  /** Clamp display when plan limit is known (avoids setState in an effect; satisfies react-hooks/set-state-in-effect). */
+  const autoStopMinutesDisplay = useMemo(() => {
     if (maxAutoStopMinutes === undefined) {
-      return
+      return autoStopMinutes
     }
-
-    const currentMinutes = parseInt(autoStopMinutes, 10)
-    if (Number.isNaN(currentMinutes) || currentMinutes <= maxAutoStopMinutes) {
-      return
+    const n = parseInt(autoStopMinutes, 10)
+    if (Number.isNaN(n)) {
+      return autoStopMinutes
     }
-
-    setAutoStopMinutes(String(maxAutoStopMinutes))
+    if (n > maxAutoStopMinutes) {
+      return String(maxAutoStopMinutes)
+    }
+    return autoStopMinutes
   }, [autoStopMinutes, maxAutoStopMinutes])
 
   const nameTrimmed = name.trim()
@@ -132,14 +135,13 @@ export function CreateSandboxPage() {
       return
     }
 
-    const stop = parseInt(autoStopMinutes, 10)
+    let stop = parseInt(autoStopMinutes, 10)
     if (Number.isNaN(stop) || stop < 1) {
       toast.error("Auto-stop must be at least 1 minute.")
       return
     }
-    if (maxAutoStopMinutes !== undefined && stop > maxAutoStopMinutes) {
-      toast.error(`Auto-stop cannot exceed your plan's max session time (${maxAutoStopMinutes} min).`)
-      return
+    if (maxAutoStopMinutes !== undefined) {
+      stop = Math.min(stop, maxAutoStopMinutes)
     }
 
     let autoDelete = -1
@@ -304,7 +306,7 @@ export function CreateSandboxPage() {
                       min={1}
                       max={maxAutoStopMinutes}
                       inputMode="numeric"
-                      value={autoStopMinutes}
+                      value={autoStopMinutesDisplay}
                       onChange={(e) => setAutoStopMinutes(e.target.value)}
                       className="h-10 w-full min-w-0 flex-1 border border-border/40 bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                     />
@@ -314,7 +316,7 @@ export function CreateSandboxPage() {
                   </div>
                   {maxAutoStopMinutes !== undefined && (
                     <p className="mt-1.5 text-[10px] text-muted-foreground/60">
-                      Max {maxAutoStopMinutes} min (plan limit)
+                      Max auto-stop interval: {formatMinutes(maxAutoStopMinutes)}
                     </p>
                   )}
                 </div>
@@ -468,11 +470,10 @@ export function CreateSandboxPage() {
                 </li>
                 <li>
                   <p className="text-[10px] uppercase tracking-[2px] text-muted-foreground">
-                    Max session time
+                    Max auto-stop interval
                   </p>
                   <p className="mt-1 text-lg font-bold text-foreground">
-                    {Math.round(usage.limits.max_sandbox_duration_seconds / 60)}{" "}
-                    <span className="text-xs font-normal text-muted-foreground">min</span>
+                    {formatSeconds(usage.limits.max_sandbox_duration_seconds)}
                   </p>
                 </li>
               </ul>
