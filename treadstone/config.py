@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     # Email verification
     email_backend: Literal["resend", "memory"] = "memory"
     resend_api_key: str = ""
-    email_from: str = "noreply@treadstone-ai.dev"
+    email_from: str = "support@treadstone-ai.dev"
     verification_token_lifetime_seconds: int = 3600
 
     # Sandbox proxy defaults (overridable per-request via X-Sandbox-* headers)
