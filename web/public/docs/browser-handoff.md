@@ -1,32 +1,26 @@
 # Browser Handoff
 
-**Browser handoff** is how a **human enters the sandbox through a normal web page** — the same runtime the agent is using, but viewed and controlled from a browser.
+Browser handoff is how a human opens the sandbox in a normal web page: the same runtime the agent uses, viewed and controlled from a browser.
 
-Access is **always gated**:
+Access is always gated in one of two ways. If the visitor is signed into the Treadstone account in the browser, they can reach the workspace from the Console or a normal login flow. Alternatively, the owner can issue a short-lived `open_link` with a handoff token on `/_treadstone/open`. Anyone who has that URL can enter without a Treadstone login in that tab; possession of the link is the credential. It expires according to `expires_at`; revoke or refresh if it leaks.
 
-- **Account session** — the sandbox owner (or anyone signed into that Treadstone account in the browser) can open the workspace after navigating from the Console or a normal login flow.
-- **Shared link** — the owner can **issue a short-lived URL** (`open_link`) that includes a **handoff token** on `/_treadstone/open`. **Anyone who has the link** can open the workspace in the browser without signing into Treadstone — possession of the URL is the credential. It expires on the schedule you see as `expires_at`; revoke or refresh if it leaks.
+So this is not a public directory: you either open `web_url` when you already have an account session, or you use `open_link` when you intend to share entry deliberately.
 
-So this is not a public directory: either you use `web_url` with an **account session** (Console login) in the browser, or you use `open_link` as a deliberate, shareable entry.
+How `urls.web` relates to the Console Web row and to the control plane vs data plane is summarized in [Sandbox endpoints](/docs/sandbox-endpoints.md).
 
-**See also:** [Sandbox endpoints](/docs/sandbox-endpoints.md) — control plane vs data plane and how **`urls.web`** relates to the Console **Web** row.
+## How to use the Web URL
+
+1. Read `urls.web` from `GET /v1/sandboxes/{id}` or the Console Endpoints → Web link.
+2. Open it in a browser for the workspace UI. It may include `/_treadstone/open?token=…` while a handoff session is active.
+3. For a shareable link that works without a Console login in that browser, use `open_link` from `POST /v1/sandboxes/{id}/web-link` (see [Generate a handoff URL](#generate-a-handoff-url)), not a guessed URL.
 
 ## What The Human Sees
 
-Opening the handoff gives a **full browser view into the container**: the in-sandbox browser, VS Code (including the integrated terminal), the file tree, Jupyter, and anything else running there — the same surfaces the agent can use.
+Opening the handoff shows the full workspace in the browser: the in-sandbox browser, VS Code (including the integrated terminal), the file tree, Jupyter, and anything else running there—the same surfaces the agent can use.
 
-In practice it is also the **human-in-the-loop entry**: someone can **watch** what the agent is doing inside the sandbox and **step in** to type, click, or fix things when review or takeover is needed.
+It is also the usual human-in-the-loop entry: someone can watch what the agent is doing and step in to type, click, or fix things when review or takeover is needed.
 
 ![Sandbox browser handoff view](/docs/images/sandbox.png)
-
-## `open_link` vs `web_url`
-
-You will see two URL fields in API responses. They are **not** interchangeable:
-
-- **`open_link`** — the **shareable** handoff URL. It includes a **token** on `/_treadstone/open?token=…` that the edge accepts to issue browser access. **Anyone who receives the link** can use it to enter the sandbox — no Treadstone login is required in that browser tab. **Use this** when you send someone a “click and you are in” link, or when automation needs a one-shot entry URL.
-- **`web_url`** — the **canonical** browser hostname for the sandbox (usually the sandbox root). **You cannot treat it like `open_link`.** Opening `web_url` in a fresh browser session does **not** grant access by itself: the visitor is sent through **account sign-in** (Console session) so the platform can establish a normal, logged-in browser session. Share `open_link` for handoffs; bookmark or use `web_url` only in contexts where the user is already signed in.
-
-Always obtain `open_link` from the platform response — never guess URLs from `sandbox_id` alone.
 
 ## Generate A Handoff URL
 
@@ -183,6 +177,39 @@ print(session.open_link)
 ```
 
 > For automation: always call the platform and read `open_link` from the response. Never construct or guess browser URLs from `sandbox_id` or `web_url` templates.
+
+## `open_link` vs `web_url` (API field reference)
+
+Use this section when you are parsing JSON or automating. The names `open_link` and `web_url` are **public API fields**—they are not internal-only identifiers. In prose above, “shareable handoff URL” corresponds to `open_link`; “canonical workspace browser URL” corresponds to `web_url`.
+
+You will see two URL fields in API responses. They are not interchangeable.
+
+A typical place they appear together is the JSON from `POST /v1/sandboxes/{sandbox_id}/web-link` (or `treadstone sandboxes web enable`). Pull both out with `jq` so you can compare shapes side by side:
+
+```bash
+export SANDBOX_ID="sb_your_sandbox_id"
+
+# Same response shape from the CLI:
+# treadstone --json sandboxes web enable "$SANDBOX_ID" | jq '{open_link, web_url}'
+
+curl -sS -X POST "https://api.treadstone-ai.dev/v1/sandboxes/${SANDBOX_ID}/web-link" \
+  -H "Authorization: Bearer ${TREADSTONE_API_KEY}" | jq '{open_link, web_url}'
+```
+
+Example (truncated paths; real tokens are longer):
+
+```json
+{
+  "open_link": "https://sb_3kx9m2p.web.treadstone-ai.dev/_treadstone/open?token=swl…",
+  "web_url": "https://sb_3kx9m2p.web.treadstone-ai.dev/"
+}
+```
+
+`open_link` is the shareable handoff URL. It includes a token on `/_treadstone/open?token=…` that the edge accepts for browser access. Anyone who receives the link can use it to enter the sandbox without signing into Treadstone in that tab. Use it when you send someone a “click and you are in” link, or when automation needs a one-shot entry URL.
+
+`web_url` is the canonical browser hostname for the sandbox (usually the sandbox root). You cannot treat it like `open_link`. Opening `web_url` in a fresh browser session does not grant access by itself: the visitor goes through account sign-in so the platform can establish a logged-in session. Share `open_link` for handoffs; use `web_url` when the user is already signed in.
+
+Always obtain `open_link` from the platform response. Do not guess URLs from `sandbox_id` alone.
 
 ## Read Next
 

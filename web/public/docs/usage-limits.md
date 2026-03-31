@@ -1,6 +1,6 @@
 # Usage & Limits
 
-Every time a sandbox is running, it consumes **Compute Units (CU)**. Your plan comes with a monthly CU budget. When the budget is exhausted, new sandboxes cannot start until the next billing period or until you upgrade.
+Every time a sandbox is running, it consumes Compute Units (CU). Your plan comes with a monthly CU budget. When the budget is exhausted, new sandboxes cannot start until the next billing period or until you upgrade.
 
 ## What Is a Compute Unit?
 

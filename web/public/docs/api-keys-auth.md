@@ -1,6 +1,6 @@
 # API Keys & Auth
 
-Treadstone has two surfaces with different auth rules. The **control plane** handles creating and managing sandboxes, issuing handoff links, and inspecting usage. The **data plane** proxies requests directly into a running sandbox through `/proxy`. Knowing this split determines which credential you need — and where session cookies stop working.
+Treadstone has two surfaces with different auth rules. The control plane handles creating and managing sandboxes, issuing handoff links, and inspecting usage. The data plane proxies requests into a running sandbox through `/proxy`. Knowing this split tells you which credential to use and where session cookies stop working.
 
 ## Registration
 
@@ -25,7 +25,7 @@ Open the Treadstone web app and sign up with **Google** or **GitHub** OAuth. Aft
 
 ### Saved sessions
 
-**Saved sessions** are for interactive use — humans running CLI commands or using the Console. After `treadstone auth login`, your session is stored locally and used automatically.
+Saved sessions are for interactive use: humans running CLI commands or using the Console. After `treadstone auth login`, your session is stored locally and used automatically.
 
 ```bash
 treadstone auth login
@@ -46,7 +46,13 @@ treadstone --json auth whoami
 
 ### API keys
 
-**API keys** are for programmatic and automated use. They are reusable, non-interactive, and explicit about scope. Any process that runs without a human in the loop should use an API key.
+API keys are for programmatic and automated use. They are reusable, non-interactive, and explicit about scope. Any process that runs without a human in the loop should use an API key.
+
+## In the Console
+
+On the Keys page, each row shows the key name, a masked preview, scope badges (control plane and/or data plane), created time, expiry, and whether the key is enabled. That matches the `scope` object you get from the API or CLI when you create or list keys.
+
+![API Keys table: name, preview, scope, expiry, and status](/docs/images/api-keys-console-table.png)
 
 ## Create An API Key
 

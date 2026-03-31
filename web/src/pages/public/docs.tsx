@@ -257,7 +257,11 @@ function buildMarkdownComponents(headingIdPrefix: string | undefined, surfaceHea
     hr: () => <hr className="my-8 border-border/20" />,
     strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
     img: ({ src, alt }) => (
-      <img src={src} alt={alt ?? ""} className="my-6 w-full rounded-lg border border-border/20" />
+      <img
+        src={src}
+        alt={alt ?? ""}
+        className="mx-auto my-6 block h-auto max-w-full rounded-lg border border-border/20"
+      />
     ),
   }
 }

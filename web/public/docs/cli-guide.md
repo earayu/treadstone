@@ -1,8 +1,8 @@
 # CLI Guide
 
-The `treadstone` CLI is how you drive the control plane from a terminal. This page covers **installation** and **how the tool behaves** — global flags, credentials, `--json`, `--help`, the optional `skills` commands, and defaults when you omit a subcommand.
+The `treadstone` CLI is how you drive the control plane from a terminal. This page covers installation and day-to-day behavior: global flags, credentials, `--json`, `--help`, the optional `skills` commands, and defaults when you omit a subcommand.
 
-Sandbox workflows, auth, API keys, and browser handoff are documented under **Core Workflows** and **Integrate**. For a **tabular list of every command**, see [CLI Reference](/docs/cli-reference.md).
+Sandbox workflows, auth, API keys, and browser handoff live under Core Workflows and Integrate. For a tabular list of every command, see [CLI Reference](/docs/cli-reference.md).
 
 ## Install
 
@@ -22,12 +22,12 @@ treadstone --version
 
 ### Global options (root command)
 
-These flags appear **before** the subcommand. They change how every invocation talks to the API and how output is formatted:
+These flags appear before the subcommand. They change how each invocation talks to the API and how output is formatted:
 
 | Option | Purpose |
 |--------|---------|
-| `--json` | Print **structured JSON** instead of human-oriented tables and sentences. Use this whenever a script, agent, or CI job parses the result. |
-| `--api-key` | Supply an API key for **this run only**. Same effect as the `TREADSTONE_API_KEY` environment variable for that process. |
+| `--json` | Print structured JSON instead of human-oriented tables and sentences. Use when a script, agent, or CI job parses the result. |
+| `--api-key` | Supply an API key for this run only. Same effect as `TREADSTONE_API_KEY` for that process. |
 | `--base-url` | Point the CLI at a specific control-plane URL (hosted cloud, self-hosted, or local dev). Overrides `TREADSTONE_BASE_URL` for that process when set. |
 | `--version` | Print the CLI version and exit (no API call). |
 
@@ -48,7 +48,7 @@ See [CLI Reference](/docs/cli-reference.md#auth-precedence) for the same rules i
 
 ### Human output vs `--json`
 
-Without `--json`, the CLI prints **tables**, short messages, and summaries meant for a terminal. With `--json`, responses are **stable, machine-readable objects** (often mirroring the HTTP API body). Parsers should rely on **`--json` output**, not on the formatting of human mode.
+Without `--json`, the CLI prints tables, short messages, and summaries meant for a terminal. With `--json`, responses are stable, machine-readable objects (often mirroring the HTTP API body). Parsers should rely on `--json` output, not on the formatting of human mode.
 
 ### `--help` at every level
 
@@ -60,14 +60,14 @@ Use this when you are unsure of a flag name, env var, or the exact argument orde
 
 ### `skills` (agent-focused)
 
-The hosted control plane does **not** depend on `skills`. It exists so **AI agents** can learn Treadstone **through the CLI itself**, instead of relying on a separate documentation bundle.
+The hosted control plane does not depend on `skills`. The command exists so AI agents can learn Treadstone through the CLI instead of a separate documentation bundle.
 
-**Why it matters:** the built-in skill teaches an agent *how to think about* Treadstone (when to use `--json`, how auth and sandboxes fit together, where to look next). Combined with **`treadstone --help`** and per-command **`--help`**, the agent can discover flags, env vars, and examples the same way a human would. In practice you can give an agent **only** the `treadstone` binary (or install path): it does not need a dump of the whole docs site, and a human operator does not have to pre-read every page — the agent can self-serve from **help** and **skills** as it works.
+The built-in skill explains how to think about Treadstone: when to use `--json`, how auth and sandboxes fit together, where to look next. Together with `treadstone --help` and per-command `--help`, an agent can discover flags, env vars, and examples the same way a human would. You can hand an agent only the `treadstone` binary; it does not need a dump of the whole docs site.
 
-**Commands:**
+Commands:
 
-- **`treadstone skills`** (no subcommand) — prints the **built-in agent skill** (`SKILL.md` content) to stdout so you can inspect it or pipe it elsewhere.
-- **`treadstone skills install`** — writes that skill to disk as `SKILL.md` under a skills directory. Use **`--target`** to pick a preset (`agents` → `~/.agents/skills`, `cursor`, `codex`, or `project` under the current repo), or **`--dir`** to set a custom base directory (the skill is written to `PATH/treadstone-cli/SKILL.md`).
+- `treadstone skills` (no subcommand) — prints the built-in agent skill (`SKILL.md` content) to stdout so you can inspect it or pipe it elsewhere.
+- `treadstone skills install` — writes that skill to disk as `SKILL.md` under a skills directory. Use `--target` to pick a preset (`agents` → `~/.agents/skills`, `cursor`, `codex`, or `project` under the current repo), or `--dir` to set a custom base directory (the skill is written to `PATH/treadstone-cli/SKILL.md`).
 
 ### Default subcommands
 

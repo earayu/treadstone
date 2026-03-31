@@ -80,7 +80,7 @@ const DOCS_SANDBOX_ENDPOINTS = "/docs?page=sandbox-endpoints"
 
 const ENDPOINT_TOOLTIP_WEB = `For humans: opens in your browser so you can use the built-in Chrome, VS Code, Terminal, Jupyter, and other tools inside the sandbox. Click opens this URL in a new tab. Full reference: ${DOCS_SANDBOX_ENDPOINTS}`
 
-const ENDPOINT_TOOLTIP_MCP = `For AI assistants: MCP clients connect here to work inside the sandbox—browser automation, VS Code, Share, and more. Click copies the URL so you can paste it into your MCP client. Full reference: ${DOCS_SANDBOX_ENDPOINTS}`
+const ENDPOINT_TOOLTIP_MCP = `For AI assistants: MCP clients connect here to work inside the sandbox—browser automation, VS Code, Share, and more. Use an API key (Authorization: Bearer) on requests; click copies the URL to paste into your MCP client. Full reference: ${DOCS_SANDBOX_ENDPOINTS}`
 
 const ENDPOINT_TOOLTIP_PROXY = `HTTP access to the sandbox runtime. Send requests with your API key. Click copies the URL. Full reference: ${DOCS_SANDBOX_ENDPOINTS}`
 

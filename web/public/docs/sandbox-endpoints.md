@@ -1,86 +1,64 @@
 # Sandbox endpoints
 
-## Start here (no API jargon yet)
+## What this page is for
 
-In the **Console → Sandboxes** table, each running sandbox can show up to **three links** in the **Endpoints** column: **Web**, **MCP**, and **Proxy**. Same order every time: Web on top, then MCP, then Proxy.
+In the Console, each sandbox row can show three links under Endpoints: Web, MCP, and Proxy. Those are the same three strings you get back under `urls` when you fetch that sandbox over the API or CLI.
 
-- **Web** — For **you in a browser**: open the workspace (Chrome, VS Code, terminal, Jupyter, etc., depending on the template).
-- **MCP** — For **AI tools and MCP clients** (IDEs, scripts): paste this URL so the client talks **inside** the sandbox.
-- **Proxy** — The **base URL for HTTP** into the sandbox: you append paths your app exposes; you authenticate with an **API key**.
+![Sandboxes table row: Endpoints column with Web, MCP, and Proxy](/docs/images/sandboxes-endpoints-column.png)
 
-You do **not** need to build these URLs yourself. They come from the platform.
+## Where the three URLs come from
 
-## Where `urls.web`, `urls.mcp`, and `urls.proxy` come from
+You do not compose these strings by hand. They are returned on sandbox detail: `GET /v1/sandboxes/{sandbox_id}`, or the equivalent `treadstone sandboxes get <sandbox_id>`. The Console reads the same `urls` object. For structured CLI output, see the [CLI Guide](/docs/cli-guide.md).
 
-When you **create or fetch a sandbox** (`GET /v1/sandboxes/{id}` or `treadstone sandboxes get …`), the JSON includes a **`urls`** object. The Console rows use the same three entries:
+The JSON below is a realistic shape; some fields are omitted, and the token in `urls.web` is truncated. Real handoff tokens are longer and short-lived.
 
-- **Web** → **`urls.web`** — Browser entry to the workspace UI.
-- **MCP** → **`urls.mcp`** — Ready-to-use MCP URL (often ends with `/mcp` on the same gateway as the proxy).
-- **Proxy** → **`urls.proxy`** — **Gateway prefix** for HTTP: paths after this are forwarded **into** the container.
+```bash
+$ treadstone sandboxes get sb_docexample01
+```
 
-If the `urls.*` names feel abstract, use this shorthand:
+```json
+{
+  "id": "sb_docexample01",
+  "name": "demo",
+  "template": "aio-sandbox-tiny",
+  "status": "stopped",
+  "auto_stop_interval": 15,
+  "auto_delete_interval": -1,
+  "urls": {
+    "proxy": "https://api.treadstone-ai.dev/v1/sandboxes/sb_docexample01/proxy",
+    "mcp": "https://api.treadstone-ai.dev/v1/sandboxes/sb_docexample01/proxy/mcp",
+    "web": "https://sandbox-sb_docexample01.treadstone-ai.dev/_treadstone/open?token=swl…"
+  },
+  "created_at": "2026-03-31T20:51:22Z",
+  "stopped_at": "2026-03-31T21:06:49Z"
+}
+```
 
-- **`urls.proxy`** — “**Where I send HTTP to reach the sandbox**” (append your app’s path; use an API key).
-- **`urls.mcp`** — “**Where I point an MCP client**” (AI tools; still uses API keys on the data plane).
-- **`urls.web`** — “**Where I open the workspace in a browser**.”
+### Web (`urls.web`)
 
-MCP is **not** a separate product: it is a **convenient URL** on the same data plane as the proxy.
-
-**Rule:** never guess hostnames or paths. Always copy from the **Console** or read **`urls`** from the API/CLI output.
-
-## Two surfaces (control plane vs data plane)
-
-Treadstone splits behavior into two layers:
-
-### Control plane
-
-The **control plane** is **`https://<api-host>/v1/...`**: sign-in, API keys, templates, create/start/stop/delete sandboxes, usage, handoff links—everything **about** the platform.
-
-**How to use it:** **[CLI](/docs/cli-guide.md)** first for day-to-day work; **[REST](/docs/rest-api-guide.md)** and the **[Python SDK](/docs/python-sdk-guide.md)** expose the same operations.
-
-### Data plane
-
-The **data plane** is how traffic reaches **HTTP services inside a running sandbox**. Treadstone fronts that with a **reverse proxy** (`urls.proxy` and paths under `/v1/sandboxes/{sandbox_id}/proxy/{path}`). The **Proxy** and **MCP** Console rows are **data plane** URLs. **Web** is also a browser entry into that environment.
-
-**How to use it:**
-
-1. **Web UI** — Open **`urls.web`** in a browser (human session).
-2. **Automation** — Send **`Authorization: Bearer <api_key>`** to URLs under the proxy. The data plane accepts **API keys only** for scripted access (not Console cookies). See [API Keys & Auth](/docs/api-keys-auth.md).
-
-### MCP (same data plane, AI-friendly URL)
-
-**MCP** is not a third platform. **`urls.mcp`** points at the MCP server **inside** the sandbox (commonly the `/mcp` path on the proxy). Clients use the same **API key** model as other data-plane HTTP. Details: [MCP in sandbox](/docs/mcp-sandbox.md).
-
-**At a glance**
-
-- **Control plane** — `/v1/...` for lifecycle and platform APIs.
-- **Data plane** — `urls.proxy` / `urls.mcp` / browser **Web** link for work **inside** the sandbox.
-
-## Console: Web, MCP, and Proxy (detail)
-
-The **Sandboxes** table **Endpoints** column lists up to three rows when the sandbox is running and URLs exist. **Order matches the Console:** Web first, then MCP, then Proxy.
-
-### WEB (`urls.web`)
-
-- **Purpose:** Open the **workspace in the browser** (Chrome, VS Code, terminal, Jupyter, etc.—depends on template).
-- **Click:** **Opens** the URL in a new tab.
+This is the browser entry to the workspace. The path may include `/_treadstone/open` and a token while a handoff session is active. In the table, Web opens in a new tab. Step-by-step usage, shareable links, and how that differs from `web_url` / `open_link` are covered in [Browser Handoff](/docs/browser-handoff.md#how-to-use-the-web-url).
 
 ### MCP (`urls.mcp`)
 
-- **Purpose:** **MCP clients** connect here to run tools **inside** the sandbox.
-- **Click:** **Copies** the URL (paste into your MCP client).
+MCP clients connect to this URL to run tools inside the sandbox. Requests use an API key on the data plane, not a Console cookie. In the table, MCP copies the URL so you can paste it into your client. For a sample remote MCP config and where client config files usually live, see [MCP in sandbox](/docs/mcp-sandbox.md#how-to-use-mcp-client-config).
 
-### PROXY (`urls.proxy`)
+### Proxy (`urls.proxy`)
 
-- **Purpose:** **Data-plane base URL** for HTTP: append the path your app serves inside the sandbox; use an **API key**.
-- **Click:** **Copies** the URL.
+This is the HTTP gateway prefix into the sandbox: you append the path your app serves, and you send `Authorization: Bearer` with an API key. In the table, Proxy copies that base URL. For cURL and Python examples, see [How to use the data-plane proxy](/docs/rest-api-guide.md#how-to-use-the-data-plane-proxy).
 
-For MCP protocol details (SSE, WebSocket, query forwarding), see [MCP in sandbox](/docs/mcp-sandbox.md).
+MCP is served on the same reverse-proxy path family as the rest of the data plane (typically `…/proxy/mcp` next to `…/proxy`). It is not a second platform. Protocol details live in [MCP in sandbox](/docs/mcp-sandbox.md).
 
-## Related fields (do not confuse)
+Always copy hostnames and paths from the API, the CLI, or the Console. Guessing breaks quickly.
 
-- **`web_url`** and **`open_link`** — Browser handoff and sharing; different from treating `urls.web` as “just another string.” See [Browser Handoff](/docs/browser-handoff.md).
-- **Subdomain browser URLs** — Sometimes used for browser-only flows; for **unattended MCP**, prefer **`urls.mcp`** / **`urls.proxy`** ([MCP in sandbox](/docs/mcp-sandbox.md)).
+## Control plane vs data plane
+
+The control plane is the Treadstone API at `https://api.treadstone-ai.dev/v1/...` on the hosted product: sign-in, keys, templates, sandbox lifecycle, usage, issuing handoff links. You can drive it with the CLI, raw HTTP, or the Python SDK; self-hosted installs use their own origin with the same `/v1/...` layout.
+
+The data plane is traffic into a running sandbox: `urls.proxy` and `urls.mcp` sit on that API host under `/v1/sandboxes/{id}/proxy/...`. Automation must use API keys. Session cookies from the browser do not replace keys here. More on credentials: [API Keys & Auth](/docs/api-keys-auth.md). REST-only framing: [REST API Guide](/docs/rest-api-guide.md).
+
+## Related fields
+
+`web_url` and `open_link` show up in handoff flows and are easy to confuse with `urls.web` when you only read field names. See [Browser Handoff](/docs/browser-handoff.md).
 
 ## Read next
 
