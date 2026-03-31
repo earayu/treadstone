@@ -18,6 +18,7 @@ Read [`/docs/index.md`](/docs/index.md) first if you are new.
 
 - [CLI Guide](/docs/cli-guide.md): Install the CLI and core behavior: global flags, credential precedence, JSON vs human output, --help, skills, defaults, and local config.
 - [REST API Guide](/docs/rest-api-guide.md): REST shape: base URL, /v1 and /health, headers, JSON, errors, OpenAPI, control vs data plane — not duplicate workflows.
+- [MCP in sandbox](/docs/mcp-sandbox.md): Expose an MCP server inside a sandbox via the data-plane proxy: urls.proxy + /mcp, API key auth, HTTP/SSE and WebSocket transports, query forwarding, and when to use subdomain browser URLs.
 - [Python SDK Guide](/docs/python-sdk-guide.md): Install treadstone-sdk, AuthenticatedClient, module layout, sync vs detailed vs asyncio, errors, regeneration — not duplicate workflows.
 
 ## Reference

@@ -14,12 +14,13 @@ Over HTTP there are **two surfaces**, not one: **control plane** calls (`/v1/...
 - **Browser handoff**: When a person must review, approve, or decide, mint a short-lived `open_link` instead of embedding long-lived credentials in agent code.
 - **Identity and scope**: Sign-in sessions, API keys, and layered access to control-plane APIs, sandbox proxies, and per-sandbox grants—least privilege for both operators and automation.
 - **Usage under your plan**: Remaining compute, storage quota, which templates you can use, concurrency caps, and max runtime—so autonomous runs stay predictable.
+- **MCP in sandbox**: Expose a Model Context Protocol server inside a sandbox through the data-plane proxy (`urls.proxy` + path, API key auth). See [MCP in sandbox](/docs/mcp-sandbox.md).
 
 ## Get Started
 
 1. Create an account at [/auth/sign-up](/auth/sign-up).
 2. Follow [CLI Guide](/docs/cli-guide.md) to install the CLI and authenticate, then [Sandbox Lifecycle](/docs/sandbox-lifecycle.md) to create and run your first sandbox.
-3. Open **Integrate** when you need install and auth for one surface — each guide is self-contained: [CLI Guide](/docs/cli-guide.md), [REST API Guide](/docs/rest-api-guide.md), [Python SDK Guide](/docs/python-sdk-guide.md). For the hosted control plane, interactive REST documentation (Swagger UI) is at [https://api.treadstone-ai.dev/docs](https://api.treadstone-ai.dev/docs).
+3. Open **Integrate** when you need install and auth for one surface — each guide is self-contained: [CLI Guide](/docs/cli-guide.md), [REST API Guide](/docs/rest-api-guide.md), [Python SDK Guide](/docs/python-sdk-guide.md), [MCP in sandbox](/docs/mcp-sandbox.md). For the hosted control plane, interactive REST documentation (Swagger UI) is at [https://api.treadstone-ai.dev/docs](https://api.treadstone-ai.dev/docs).
 4. Use **Core Workflows** for task-focused pages. Where it helps, the same workflow is shown for **CLI**, **REST API**, and **Python SDK** in parallel (on the website you can switch tabs; the raw Markdown file always contains all three).
 
 > For automation: use `sandbox_id`, not `name`. Read `urls.proxy`, `web_url`, and `open_link` from platform output. Do not construct them yourself. Share **`open_link`** for handoffs; **`web_url`** is not a bearer link — it needs a Console session.
