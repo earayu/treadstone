@@ -146,7 +146,7 @@ curl http://localhost:8000/health
 
 ## Basic Validation (Smoke Test)
 
-**Automated**: Run `make test-e2e` to execute the full E2E test suite against the deployed API (default `BASE_URL=http://api.localhost`). Override with `make test-e2e BASE_URL=http://localhost:8000` when using port-forward.
+**Automated**: Run `make test-e2e` to execute the full E2E test suite against the deployed API (default `BASE_URL=http://api.localhost`). Override with `make test-e2e BASE_URL=http://localhost:8000` when using port-forward. Scenario list and data-plane prerequisites: [`tests/e2e/README.md`](../tests/e2e/README.md).
 
 **Manual**: Use `BASE_URL=http://api.localhost` with Ingress, or `BASE_URL=http://localhost:8000` with port-forward.
 

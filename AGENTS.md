@@ -117,7 +117,7 @@ Rules:
   - `tests/unit/` — pure logic, no IO
   - `tests/api/` — API route tests via ASGITransport
   - `tests/integration/` — requires real DB, marked `@pytest.mark.integration`, excluded by default
-  - `tests/e2e/*.hurl` — E2E tests against a deployed cluster, written in [Hurl](https://hurl.dev) (run with `make test-e2e`)
+  - `tests/e2e/**/*.hurl` — E2E tests against a deployed cluster, written in [Hurl](https://hurl.dev) (run with `make test-e2e`; see `tests/e2e/README.md`)
 - Shared fixtures live in `tests/conftest.py`.
 - `make test` excludes integration tests via pytest config; use `make test-integration` or `make test-all` when real DB coverage is needed.
 - After `make up`, run `make test-e2e` to validate the deployment. Prefer this over manual curl exploration.

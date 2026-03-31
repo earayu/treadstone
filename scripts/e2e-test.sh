@@ -5,7 +5,7 @@
 #
 # Usage:
 #   make test-e2e                                  # run all tests (default: Kind Ingress API host)
-#   make test-e2e FILE=08-metering-admin.hurl      # run a single test file
+#   make test-e2e FILE=09-data-plane-proxy.hurl    # run a single test file
 #   make test-e2e BASE_URL=http://localhost:8000   # port-forward API instead of Ingress
 #   BASE_URL=http://api.localhost bash scripts/e2e-test.sh [file.hurl]
 
@@ -52,6 +52,8 @@ email_03=e2e-03-${UNIQUE}@test.treadstone.dev
 email_04=e2e-04-${UNIQUE}@test.treadstone.dev
 email_07=e2e-07-${UNIQUE}@test.treadstone.dev
 email_08=e2e-08-${UNIQUE}@test.treadstone.dev
+email_09=e2e-09-${UNIQUE}@test.treadstone.dev
+email_10=e2e-10-${UNIQUE}@test.treadstone.dev
 test_password=${TEST_PASSWORD}
 new_password=E2eStr0ng_New1!
 unique=${UNIQUE}
@@ -118,13 +120,25 @@ mkdir -p "$REPORT_DIR"
 
 if [ -n "$TARGET_FILE" ]; then
     printf "Running single test file: %s\n\n" "$TARGET_FILE"
+    if [ ! -f "$E2E_DIR/$TARGET_FILE" ]; then
+        printf "ERROR: E2E file not found: %s/%s\n" "$E2E_DIR" "$TARGET_FILE" >&2
+        exit 1
+    fi
     hurl --test --variables-file "$VARS_FILE" \
         --report-html "$REPORT_DIR" \
         "$E2E_DIR/$TARGET_FILE"
 else
+    hurl_files=()
+    while IFS= read -r f; do
+        hurl_files+=("$f")
+    done < <(find "$E2E_DIR" -name '*.hurl' -type f | sort)
+    if [ "${#hurl_files[@]}" -eq 0 ]; then
+        printf "ERROR: no .hurl files under %s\n" "$E2E_DIR" >&2
+        exit 1
+    fi
     hurl --test --variables-file "$VARS_FILE" \
         --report-html "$REPORT_DIR" \
-        "$E2E_DIR"/*.hurl
+        "${hurl_files[@]}"
 fi
 
 # ── Post-process: group by run, improve visual design ────────────────────────

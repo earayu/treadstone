@@ -1,4 +1,4 @@
-import { createBrowserRouter, RouterProvider, Link } from "react-router"
+import { createBrowserRouter, Navigate, RouterProvider, Link, useParams } from "react-router"
 
 import { PublicLayout } from "@/components/layout/public-layout"
 import { AuthLayout } from "@/components/layout/auth-layout"
@@ -26,6 +26,13 @@ import { AdminUsersPage } from "@/pages/internal/admin-users"
 import { AdminFeedbackPage } from "@/pages/internal/admin-feedback"
 import { AuditEventsPage } from "@/pages/internal/audit-events"
 
+/** `/docs/quickstart` → `/docs?page=quickstart` — SPA only registered `docs`, not `docs/:slug`. */
+function DocsSlugRedirect() {
+  const { slug } = useParams()
+  const to = slug ? `/docs?page=${encodeURIComponent(slug)}` : "/docs"
+  return <Navigate to={to} replace />
+}
+
 function NotFoundPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 text-center">
@@ -48,6 +55,7 @@ const router = createBrowserRouter([
     element: <PublicLayout />,
     children: [
       { index: true, element: <LandingPage /> },
+      { path: "docs/:slug", element: <DocsSlugRedirect /> },
       { path: "docs", element: <DocsPage /> },
     ],
   },
