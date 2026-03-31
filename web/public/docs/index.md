@@ -18,7 +18,7 @@ Almost everything in the product falls into two ideas that are easy to keep stra
 - **Managing the platform** — accounts, sandboxes, keys, templates, usage: you are talking to Treadstone to drive your project. In the docs we call that the **control plane**.
 - **Reaching what runs inside a sandbox** — the browser workspace, HTTP into the workload, MCP for AI tools: traffic is going into the box where the agent’s work runs. We call that the **data plane**.
 
-You only need those two names and what they stand for at first. When you want concrete URLs and field names (**Web**, **MCP**, **Proxy**, and **`urls.*`** in API responses), read [Sandbox endpoints](/docs/sandbox-endpoints.md). To **call HTTP into a running sandbox** (data plane), follow [Using the data plane](/docs/data-plane.md). For REST shape and auth, continue with [REST API Guide](/docs/rest-api-guide.md) and [API Keys & Auth](/docs/api-keys-auth.md).
+You only need those two names and what they stand for at first. When you want concrete URLs and field names (**Web**, **MCP**, **Proxy**, and **`urls.*`** in API responses), read [Sandbox endpoints](/docs/sandbox-endpoints.md). To **call HTTP into a running sandbox**, follow [Inside your sandbox](/docs/inside-sandbox.md). For REST shape and auth, continue with [REST API Guide](/docs/rest-api-guide.md) and [API Keys & Auth](/docs/api-keys-auth.md).
 
 ## See it in action (media)
 
@@ -28,7 +28,7 @@ We are adding screenshots, GIFs, and short videos here—examples like **an agen
 
 - [Quickstart](/docs/quickstart.md)
 - [Sandbox endpoints](/docs/sandbox-endpoints.md)
-- [Using the data plane](/docs/data-plane.md)
+- [Inside your sandbox](/docs/inside-sandbox.md)
 - [Usage & Limits](/docs/usage-limits.md)
 - [Sandbox Lifecycle](/docs/sandbox-lifecycle.md)
 - [CLI Guide](/docs/cli-guide.md)

@@ -40,7 +40,6 @@
       "endpoints",
       "urls",
       "proxy",
-      "data-plane",
       "control-plane"
     ]
   },
@@ -83,14 +82,15 @@
     ]
   },
   {
-    "slug": "data-plane",
-    "title": "Using the data plane",
+    "slug": "inside-sandbox",
+    "title": "Inside your sandbox",
     "section": "Core Workflows",
     "order": 35,
-    "summary": "Hands-on: get urls.proxy from a sandbox, call HTTP/WebSocket into the workload with an API key, MCP pointer, and Swagger for merged proxy paths.",
+    "summary": "Call HTTP/WebSocket into a running sandbox via urls.proxy: API key, curl, MCP pointer, and Swagger for merged runtime paths.",
     "default": false,
     "llm_priority": 96,
     "aliases": [
+      "data-plane",
       "guide-data-plane",
       "sandbox-proxy-http",
       "workload-http"

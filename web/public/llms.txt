@@ -12,7 +12,7 @@
 - [API Reference](/docs/api-reference.md): Control-plane route tables, generic proxy row, and a shell-path summary; full merged sandbox runtime API is in Swagger and openapi.json.
 - [Sandbox endpoints](/docs/sandbox-endpoints.md): Control plane vs data plane, CLI/SDK/HTTP vs Web and proxy, Web/MCP/Proxy URLs in the Console, and API key use on the data plane.
 - [Quickstart](/docs/quickstart.md): Install the CLI, sign in, optional API key, and create your first sandbox—bridge to Core Workflows.
-- [Using the data plane](/docs/data-plane.md): Hands-on: get urls.proxy from a sandbox, call HTTP/WebSocket into the workload with an API key, MCP pointer, and Swagger for merged proxy paths.
+- [Inside your sandbox](/docs/inside-sandbox.md): Call HTTP/WebSocket into a running sandbox via urls.proxy: API key, curl, MCP pointer, and Swagger for merged runtime paths.
 - [Sandbox Lifecycle](/docs/sandbox-lifecycle.md): Create, list, inspect, stop, start, and delete sandboxes. Sandboxes only consume Compute Units while running.
 - [REST API Guide](/docs/rest-api-guide.md): REST shape: base URL, /v1 and /health, headers, JSON, errors, OpenAPI, control vs data plane — not duplicate workflows.
 - [Usage & Limits](/docs/usage-limits.md): Read plan limits, compute remaining, storage quota, allowed templates, concurrency limits, and billing-period status.

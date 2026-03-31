@@ -57,7 +57,7 @@ Get from zero to a **running sandbox** in a few commands: install the CLI, sign 
 
 - **Operate sandboxes** — list, inspect, stop, start, delete: [Sandbox Lifecycle](/docs/sandbox-lifecycle.md).
 - **What Web, MCP, and Proxy mean** — and how **`urls.*`** fits with control vs data plane: [Sandbox endpoints](/docs/sandbox-endpoints.md).
-- **Call HTTP into the sandbox (data plane)** — [Using the data plane](/docs/data-plane.md).
+- **Call HTTP into the sandbox** — [Inside your sandbox](/docs/inside-sandbox.md).
 - **Keys, sessions, and scopes** — [API Keys & Auth](/docs/api-keys-auth.md).
 - **CLI behavior** — structured output (`--json`), config, install: [CLI Guide](/docs/cli-guide.md).
 
@@ -76,6 +76,6 @@ Get from zero to a **running sandbox** in a few commands: install the CLI, sign 
 
 - [Sandbox Lifecycle](/docs/sandbox-lifecycle.md)
 - [Sandbox endpoints](/docs/sandbox-endpoints.md)
-- [Using the data plane](/docs/data-plane.md)
+- [Inside your sandbox](/docs/inside-sandbox.md)
 - [API Keys & Auth](/docs/api-keys-auth.md)
 - [CLI Guide](/docs/cli-guide.md)

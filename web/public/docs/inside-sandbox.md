@@ -1,15 +1,15 @@
-# Using the data plane
+# Inside your sandbox
 
 ## What this page is for
 
-This page is the **hands-on path** for calling HTTP (or WebSocket) **workloads inside a sandbox** through Treadstone’s proxy. You already know control plane vs data plane in theory ([Sandbox endpoints](/docs/sandbox-endpoints.md)); here we focus on **what to do**: get URLs, pick an API key, send `curl` or client traffic, and avoid the usual mistakes.
+This is the **practical path** for calling HTTP (or WebSocket) **into a running sandbox** — the same traffic we call the **data plane** in architecture docs ([Sandbox endpoints](/docs/sandbox-endpoints.md)). Here we use plain language: get **`urls.proxy`**, use an API key that can reach this sandbox, and send `curl` or client requests — without guessing URLs.
 
-It does **not** replace [Sandbox Lifecycle](/docs/sandbox-lifecycle.md) (create/start/stop/delete) or [API Keys & Auth](/docs/api-keys-auth.md) (sign-up and scope model). Read those first if you are new.
+It does **not** replace [Sandbox Lifecycle](/docs/sandbox-lifecycle.md) (create/start/stop/delete) or [API Keys & Auth](/docs/api-keys-auth.md) (sign-up and scope). Read those first if you are new.
 
 ## Prerequisites
 
 1. A **running** sandbox (or one that is ready for traffic — see `status` on [Sandbox Lifecycle](/docs/sandbox-lifecycle.md)).
-2. An **API key** with **data-plane** access to that sandbox (`mode: all` or `mode: selected` with this `sandbox_id` in the allowlist). See [API Keys & Auth](/docs/api-keys-auth.md).
+2. An **API key** with access to this sandbox on the proxy (`data_plane.mode` is `all` or `selected` with this `sandbox_id` in the allowlist). See [API Keys & Auth](/docs/api-keys-auth.md).
 3. The **proxy base URL** from the platform — never guess hostnames or paths.
 
 ## Get the URLs (control plane, one call)
@@ -23,7 +23,7 @@ treadstone --json sandboxes get SANDBOX_ID
 
 From the JSON, read **`urls.proxy`** (HTTP prefix into the sandbox) and, if you use MCP, **`urls.mcp`**. Those strings are authoritative; copy them from the response or from the Console Endpoints row ([Sandbox endpoints](/docs/sandbox-endpoints.md)).
 
-## Call an HTTP route inside the sandbox (data plane)
+## Call HTTP into the workload
 
 Append the path your app serves **after** the `/proxy` segment. The first path segment after `/proxy/` is what the workload receives (see [API Reference](/docs/api-reference.md) for proxy behaviour).
 
@@ -38,7 +38,7 @@ curl -sS "$PROXY_BASE/health" \
 Rules that do not change:
 
 - **Only** `Authorization: Bearer <api_key>` — **not** a Console session cookie.
-- If your key uses **`selected`** data-plane mode, it must include this **`sandbox_id`**.
+- If your key uses **`selected`** scope for the proxy, it must include this **`sandbox_id`**.
 - **WebSocket**: same URL family; use the Bearer header, or `?token=sk-…` if the client cannot set WS headers (see [API Reference](/docs/api-reference.md#proxy)).
 
 ## MCP
