@@ -2,7 +2,9 @@
 
 ## What this page is for
 
-Expose a Model Context Protocol (MCP) server that runs inside a Treadstone sandbox to external MCP clients (IDEs, desktop apps, scripts) using the data-plane HTTP proxy and optional WebSocket proxy. Treadstone terminates TLS and API-key auth at the edge; traffic is forwarded to the sandbox container’s HTTP listener (typically port 8080).
+This page explains how to expose a **Model Context Protocol (MCP)** server that runs **inside** a Treadstone sandbox to external MCP clients (IDEs, desktop apps, scripts) using the **data-plane** HTTP proxy and optional WebSocket. Treadstone terminates TLS and API-key auth at the edge; traffic is forwarded to the sandbox container’s HTTP listener (typically port 8080).
+
+It assumes you already understand **control plane vs data plane** ([REST API Guide](/docs/rest-api-guide.md)) and how to **scope API keys** ([API Keys & Auth](/docs/api-keys-auth.md)). It does not replace the general proxy walkthrough in [REST API Guide](/docs/rest-api-guide.md#how-to-use-the-data-plane-proxy) — read that first if you are new to `urls.proxy`.
 
 For how Web, MCP, and Proxy relate to `urls.web`, `urls.mcp`, and `urls.proxy` in the Console, see [Sandbox endpoints](/docs/sandbox-endpoints.md).
 
@@ -22,7 +24,7 @@ For how Web, MCP, and Proxy relate to `urls.web`, `urls.mcp`, and `urls.proxy` i
 
 4. Send requests with `Authorization: Bearer sk-…` using an API key that has data-plane access ([API Keys & Auth](/docs/api-keys-auth.md)).
 
-For query forwarding, WebSocket, `?token=`, and subdomain browser URLs, see the Proxy section in the [API Reference](/docs/api-reference.md).
+For query forwarding, WebSocket, `?token=`, and subdomain browser URLs, see the Proxy section in [API Reference](/docs/api-reference.md).
 
 ## How to use (MCP client config)
 
@@ -65,15 +67,17 @@ Some clients use different keys (`env` for secrets, or a UI instead of a file). 
 
 Self-hosted operators: wildcard DNS, Ingress, and TLS for sandbox subdomains are documented in the repository at `deploy/README.md` (section *Exposing the Sandbox MCP Endpoint Publicly*).
 
-## Read next
-
-- [API Reference](/docs/api-reference.md) — Proxy routes, MCP subsection, error shape
-- [REST API Guide](/docs/rest-api-guide.md) — Control plane vs data plane
-- [API Keys & Auth](/docs/api-keys-auth.md) — Scoping keys for data-plane access
-
-## For agents
+## Notes for automation
 
 - Stable pattern on the hosted product: `https://api.treadstone-ai.dev/v1/sandboxes/{sandbox_id}/proxy/{mcp_path}` (or `{your_api_origin}/v1/...` when self-hosted); `mcp_path` is often literally `mcp`.
 - Auth header: `Authorization: Bearer <sk-…>` on every request and WebSocket handshake.
 - Discover URLs from `GET /v1/sandboxes/{id}` → `urls.proxy`; append `/mcp` (or the path your server uses).
-- Do not use subdomain `urls.web` for unattended MCP unless the client supports cookie or bootstrap flows documented in the [API Reference](/docs/api-reference.md).
+- Do not use subdomain `urls.web` for unattended MCP unless the client supports cookie or bootstrap flows documented in [API Reference](/docs/api-reference.md).
+
+## Read next
+
+- [REST API Guide](/docs/rest-api-guide.md) — Control plane vs data plane, proxy basics
+- [CLI Guide](/docs/cli-guide.md) — `treadstone` and `--json`
+- [Python SDK Guide](/docs/python-sdk-guide.md) — Generated client for the same API
+- [API Reference](/docs/api-reference.md) — Proxy routes, MCP subsection, error shape
+- [API Keys & Auth](/docs/api-keys-auth.md) — Scoping keys for data-plane access

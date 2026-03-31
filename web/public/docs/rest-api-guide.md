@@ -1,26 +1,34 @@
 # REST API Guide
 
-Use this page when you integrate over HTTP in any language, without going through the CLI or Python SDK. Treadstone exposes two HTTP surfaces, not one:
+## What this page is for
 
-1. **Control plane** — On the hosted cloud this is `https://api.treadstone-ai.dev/v1/...`. You call Treadstone itself: auth, templates, sandboxes, usage, issuing handoff links, and so on. The contract is in the [API Reference](/docs/api-reference.md). Self-hosted deployments use their own origin with the same `/v1/...` layout.
+Read this when you integrate **over HTTP in any language** (not via the [CLI](/docs/cli-guide.md) or [Python SDK](/docs/python-sdk-guide.md)). It explains how the **control plane** and **data plane** URLs fit together, which **headers** and **JSON** shapes to expect, and how to call the **sandbox proxy** from `curl` or httpx.
 
-2. **Data plane** — The `urls.proxy` value from a running sandbox (or the equivalent path `/v1/sandboxes/{sandbox_id}/proxy/{path}` on the API host). You use it to reach HTTP services inside the sandbox, not to manage the platform. Treadstone strips the proxy prefix and forwards the request into the container; method, path after `/proxy/`, headers, and body follow the rules in the [API Reference](/docs/api-reference.md). Take `urls.proxy` from API output; do not invent hostnames.
+It does **not** walk through lifecycle, key scoping, or browser handoff step by step — use [Sandbox Lifecycle](/docs/sandbox-lifecycle.md), [API Keys & Auth](/docs/api-keys-auth.md), and [Browser Handoff](/docs/browser-handoff.md) for those workflows. The full route list is in [API Reference](/docs/api-reference.md).
 
-Auth differs between these surfaces. The data plane accepts API keys only. Read [API Keys & Auth](/docs/api-keys-auth.md). This page focuses on how the control-plane REST shape fits together: base URL, headers, JSON, errors. It does not repeat sandbox lifecycle, key semantics, or browser handoff; see [Sandbox Lifecycle](/docs/sandbox-lifecycle.md) and [Browser Handoff](/docs/browser-handoff.md) when you need those workflows.
+## The two HTTP surfaces
+
+Treadstone exposes two surfaces, not one:
+
+1. **Control plane** — On hosted cloud: `https://api.treadstone-ai.dev/v1/...`. You call Treadstone for auth, templates, sandboxes, usage, handoff links, and so on. Self-hosted deployments use their own origin with the same `/v1/...` layout.
+
+2. **Data plane** — The `urls.proxy` value from a running sandbox (or the path `/v1/sandboxes/{sandbox_id}/proxy/{path}` on the API host). You use it to reach HTTP services **inside** the sandbox, not to manage the platform. Treadstone strips the proxy prefix and forwards into the container. Take `urls.proxy` from API output; do not invent hostnames.
+
+Auth differs: the data plane accepts **API keys only**. See [API Keys & Auth](/docs/api-keys-auth.md).
 
 ## Prerequisites
 
 - A control-plane base URL (hosted: `https://api.treadstone-ai.dev`, or your self-hosted URL).
-- An API key for service-to-service calls. Create and scope keys as described in [API Keys & Auth](/docs/api-keys-auth.md); do not paste long-lived secrets into prompts or logs.
+- An API key for service-to-service calls. Create and scope keys as in [API Keys & Auth](/docs/api-keys-auth.md); do not paste long-lived secrets into prompts or logs.
 
 ## How REST is shaped
 
 ### Versioning and health
 
-- Health (no version prefix): `GET /health` — small JSON such as `{"status":"ok"}`. Listed under System in the [API Reference](/docs/api-reference.md).
-- Control plane API: paths under `/v1/...`. On the hosted product, use `https://api.treadstone-ai.dev` as the origin and append `/v1/sandboxes`, etc. Self-hosted: substitute your control-plane origin.
+- **Health** (no version prefix): `GET /health` — small JSON such as `{"status":"ok"}`. Listed under System in [API Reference](/docs/api-reference.md).
+- **Control plane API**: paths under `/v1/...`. On hosted product, use `https://api.treadstone-ai.dev` as the origin and append `/v1/sandboxes`, etc.
 
-Always use HTTPS against production.
+Always use HTTPS in production.
 
 ### Headers you actually need
 
@@ -28,9 +36,9 @@ Always use HTTPS against production.
 |---------|----------------|
 | Authentication | `Authorization: Bearer <api_key>` on routes that require auth. |
 | JSON bodies | `Content-Type: application/json` with a UTF-8 JSON body. |
-| Request shape | Use the HTTP method, path, and JSON fields documented in the [API Reference](/docs/api-reference.md) for each operation. |
+| Request shape | Use the HTTP method, path, and JSON fields documented in [API Reference](/docs/api-reference.md) for each operation. |
 
-The control plane can accept a session cookie for browser-driven flows. For automation and server-to-server work, prefer API keys only; do not rely on cookie jars in your backend.
+The control plane can accept a session cookie for browser-driven flows. For automation and server-to-server work, prefer **API keys**; do not rely on cookie jars in your backend.
 
 ### Bodies and responses
 
@@ -51,7 +59,7 @@ In the Console Sandboxes table, Web, MCP, and Proxy map to `urls.web`, `urls.mcp
 
 ## How to use the data-plane proxy
 
-Use `urls.proxy` from `GET /v1/sandboxes/{sandbox_id}` (or `treadstone sandboxes get`) as the base URL for HTTP into the sandbox. Append the path your app serves after the `/proxy` segment: the first path segment after `/proxy/` is what the workload inside the container receives (see the [API Reference](/docs/api-reference.md) for hop filtering). Data plane requests use `Authorization: Bearer <api_key>` only, not a Console session cookie ([API Keys & Auth](/docs/api-keys-auth.md)).
+Use `urls.proxy` from `GET /v1/sandboxes/{sandbox_id}` (or `treadstone sandboxes get`) as the base URL for HTTP into the sandbox. Append the path your app serves after the `/proxy` segment: the first path segment after `/proxy/` is what the workload inside the container receives (see [API Reference](/docs/api-reference.md) for hop filtering). Data-plane requests use `Authorization: Bearer <api_key>` only, not a Console session cookie ([API Keys & Auth](/docs/api-keys-auth.md)).
 
 Replace `sb_xxx` and keys with values from your environment.
 
@@ -91,11 +99,12 @@ with httpx.Client(
 
 The server exposes OpenAPI at `/openapi.json` (public, code-first spec). On the hosted control plane, open [https://api.treadstone-ai.dev/docs](https://api.treadstone-ai.dev/docs) for Swagger UI. Use the JSON spec to generate clients or to inspect schemas when something is ambiguous. The hosted product’s public routes match what the Python SDK is generated from.
 
-## Read Next
+## Read next
 
-- [Sandbox endpoints](/docs/sandbox-endpoints.md)
+- [CLI Guide](/docs/cli-guide.md) — same platform, terminal and flags
+- [Python SDK Guide](/docs/python-sdk-guide.md) — same API, generated client
+- [Sandbox endpoints](/docs/sandbox-endpoints.md) — Web, MCP, Proxy in the Console
+- [MCP in sandbox](/docs/mcp-sandbox.md) — MCP behind `urls.proxy`
 - [API Reference](/docs/api-reference.md)
-- [MCP in sandbox](/docs/mcp-sandbox.md) — MCP servers behind `urls.proxy`
 - [Error Reference](/docs/error-reference.md)
-- [Python SDK Guide](/docs/python-sdk-guide.md)
 - [Sandbox Lifecycle](/docs/sandbox-lifecycle.md)
