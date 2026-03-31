@@ -77,7 +77,7 @@ def main() -> int:
         return 0
 
     # --- Step 4: Group by status ---
-    print_step("Step 3: Sandboxes grouped by status")
+    print_step("Step 4: Sandboxes grouped by status")
     by_status: dict[str, list] = defaultdict(list)
     for sb in sandboxes:
         status = getattr(sb, "status", "unknown")
@@ -100,7 +100,7 @@ def main() -> int:
                 print(f"      data-plane proxy: {proxy}")
 
     # --- Step 5: Full detail dump ---
-    print_step("Step 4: Full sandbox list (JSON)")
+    print_step("Step 5: Full sandbox list (JSON)")
     print_result("All sandboxes", sandboxes)
 
     return 0

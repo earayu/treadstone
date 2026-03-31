@@ -17,10 +17,16 @@ HIDDEN_FROM_PUBLIC_PATH_PREFIXES: tuple[str, ...] = ("/v1/admin", "/v1/audit")
 _SANDBOX_SPEC_PATH = Path(__file__).parent.parent / "scripts" / "sandbox_openapi_base.json"
 
 # Sandbox schemas that collide with Treadstone's own schema names — rename them before merging.
+# Important: keep this list complete.  Any schema key that exists in BOTH the sandbox spec and
+# Treadstone's compiled spec must appear here; otherwise .update() will silently overwrite
+# Treadstone's version and the Swagger UI will show incorrect field definitions.
 _SANDBOX_SCHEMA_RENAMES: dict[str, str] = {
     "Response": "SandboxApiResponse",
     "ValidationError": "SandboxValidationError",
     "HTTPValidationError": "SandboxHTTPValidationError",
+    # sandbox spec uses SandboxResponse as a generic wrapper; Treadstone uses it as the
+    # sandbox entity DTO (id, name, template, status, urls, …) — they must not collide.
+    "SandboxResponse": "SandboxRuntimeResponse",
 }
 
 # Path parameter injected into every proxied sandbox operation.

@@ -130,10 +130,11 @@ def wait_for_sandbox(
 # ---------------------------------------------------------------------------
 
 
-def create_data_plane_key(control_client: Any, sandbox_id: str) -> str:
-    """Create a sandbox-scoped data-plane API key and return the key string.
+def create_data_plane_key(control_client: Any, sandbox_id: str) -> tuple[str, str]:
+    """Create a sandbox-scoped data-plane API key and return ``(key_id, key_string)``.
 
     The key grants access *only* to the specified sandbox's data plane.
+    Both the ID (for deletion) and the secret string (for auth) are returned.
     """
     try:
         from treadstone_sdk.api.auth import auth_create_api_key
@@ -158,7 +159,7 @@ def create_data_plane_key(control_client: Any, sandbox_id: str) -> str:
     )
     if not isinstance(result, ApiKeyResponse) or not result.key:
         raise RuntimeError("Failed to create data-plane API key.")
-    return result.key
+    return result.id, result.key
 
 
 def get_sandbox_client(proxy_url: str, data_plane_key: str) -> Any:

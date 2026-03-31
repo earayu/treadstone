@@ -141,29 +141,7 @@ def main() -> int:
         # It is separate from your control-plane key for security isolation.
         #
         # control plane: POST /v1/auth/api-keys  (scope: data_plane, selected sandbox)
-        from treadstone_sdk.api.auth import auth_create_api_key
-        from treadstone_sdk.models.api_key_data_plane_mode import ApiKeyDataPlaneMode
-        from treadstone_sdk.models.api_key_data_plane_scope import ApiKeyDataPlaneScope
-        from treadstone_sdk.models.api_key_response import ApiKeyResponse
-        from treadstone_sdk.models.api_key_scope import ApiKeyScope
-        from treadstone_sdk.models.create_api_key_request import CreateApiKeyRequest
-
-        scope = ApiKeyScope(
-            control_plane=False,
-            data_plane=ApiKeyDataPlaneScope(
-                mode=ApiKeyDataPlaneMode.SELECTED,
-                sandbox_ids=[sandbox_id],
-            ),
-        )
-        key_resp = auth_create_api_key.sync(
-            client=ctrl,
-            body=CreateApiKeyRequest(name=f"example-04-dp-{sandbox_id[:8]}", scope=scope),
-        )
-        if not isinstance(key_resp, ApiKeyResponse) or not key_resp.key:
-            print("ERROR: Failed to create data-plane API key.", file=sys.stderr)
-            return 1
-        dp_key_id = key_resp.id
-        dp_key = key_resp.key
+        dp_key_id, dp_key = create_data_plane_key(ctrl, sandbox_id)
         print(f"  Data-plane key created (id: {dp_key_id})")
 
         # -------------------------------------------------------------------------
