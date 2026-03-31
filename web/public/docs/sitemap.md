@@ -5,21 +5,20 @@ Read [`/docs/index.md`](/docs/index.md) first if you are new.
 
 ## Get Started
 
-- [Overview](/docs/index.md): What Treadstone is, who it is for, and how to choose between the Console, CLI, REST API, and Python SDK.
-- [Quickstart](/docs/quickstart.md): The fastest hosted path from account creation to a running sandbox and a shareable browser handoff URL.
+- [Overview](/docs/index.md): Agent-native sandbox infrastructure: interfaces, lifecycle, templates, browser handoff, identity, and plan limits—plus how Integrate guides and Core Workflows map to CLI, REST API, and Python SDK.
 
 ## Core Workflows
 
-- [Create a Sandbox](/docs/create-sandbox.md): Choose a template, set lifecycle controls, attach storage when needed, and capture the fields you will use next.
-- [Browser Handoff](/docs/browser-handoff.md): Generate, inspect, and revoke browser handoff URLs without inventing tokens or guessing subdomain URLs.
-- [API Keys & Auth](/docs/api-keys-auth.md): Understand session login, API keys, control-plane access, data-plane access, and selected sandbox grants.
+- [Sandbox Lifecycle](/docs/sandbox-lifecycle.md): Create, list, inspect, stop, start, and delete sandboxes. Sandboxes only consume Compute Units while running.
+- [Browser Handoff](/docs/browser-handoff.md): Let humans enter the sandbox in a browser: authenticated session or owner-shared JWT link; full workspace view and human-in-the-loop control.
+- [API Keys & Auth](/docs/api-keys-auth.md): Sign up via CLI or Console OAuth (Google/GitHub), then session login, API keys, control-plane vs data-plane access, and selected sandbox grants.
 - [Usage & Limits](/docs/usage-limits.md): Read plan limits, compute remaining, storage quota, allowed templates, concurrency limits, and billing-period status.
 
 ## Integrate
 
-- [CLI Guide](/docs/cli-guide.md): Use the hosted CLI for login, sandbox lifecycle, browser handoff, and API key management with machine-safe JSON output.
-- [REST API Guide](/docs/rest-api-guide.md): Call the hosted control plane directly with API keys to create sandboxes, issue browser handoff links, and inspect usage.
-- [Python SDK Guide](/docs/python-sdk-guide.md): Use the generated Python SDK with AuthenticatedClient and typed request models for the hosted API.
+- [CLI Guide](/docs/cli-guide.md): Install the CLI and core behavior: global flags, credential precedence, JSON vs human output, --help, skills, defaults, and local config.
+- [REST API Guide](/docs/rest-api-guide.md): REST shape: base URL, /v1 and /health, headers, JSON, errors, OpenAPI, control vs data plane — not duplicate workflows.
+- [Python SDK Guide](/docs/python-sdk-guide.md): Install treadstone-sdk, AuthenticatedClient, module layout, sync vs detailed vs asyncio, errors, regeneration — not duplicate workflows.
 
 ## Reference
 

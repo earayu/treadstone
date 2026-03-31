@@ -3,6 +3,8 @@
 ## Hosted Base URL
 
 - **Control plane**: `https://api.treadstone-ai.dev`
+- **Interactive REST docs (Swagger UI)**: [https://api.treadstone-ai.dev/docs](https://api.treadstone-ai.dev/docs)
+- **OpenAPI JSON**: `https://api.treadstone-ai.dev/openapi.json` (same document as `GET /openapi.json` on the control plane host)
 - **Browser handoff and proxy URLs** are returned by the platform. Do not construct them client-side.
 
 ## Auth Surfaces
@@ -94,8 +96,8 @@
 
 | Field | Description |
 |-------|-------------|
-| `open_link` | The shareable handoff URL. This is what you send to a human. |
-| `web_url` | The canonical browser address for this sandbox. |
+| `open_link` | Shareable handoff URL with an embedded token. Anyone with the link can open the workspace without a Treadstone login. |
+| `web_url` | Canonical browser address for the sandbox. Opening it requires an existing Console (account) session — not a substitute for sharing `open_link`. |
 | `expires_at` | ISO 8601 timestamp when this handoff session expires. |
 
 ### Browser handoff status (`GET /web-link`)
@@ -103,7 +105,7 @@
 | Field | Description |
 |-------|-------------|
 | `enabled` | Whether a handoff session is currently active. |
-| `web_url` | The canonical browser address for this sandbox. |
+| `web_url` | Canonical browser address; access assumes a logged-in account unless you already hold a sandbox cookie from `open_link`. |
 | `expires_at` | When the current handoff session expires. |
 | `last_used_at` | When the handoff URL was last accessed by a browser. |
 
@@ -112,11 +114,12 @@
 | Field | Description |
 |-------|-------------|
 | `tier` | The current plan tier name. |
-| `compute.total_remaining` | Total compute seconds remaining in the current billing period. |
+| `compute.total_remaining` | **CU-hours** left in the current billing period (same unit as `compute.unit`, usually `CU-hours`). Monthly pool and bonus credits are reflected here. |
 | `storage.available_gib` | Storage quota remaining across all persistent sandboxes. |
 | `limits.allowed_templates` | Template names the current plan permits. |
 | `limits.max_concurrent_running` | Maximum number of simultaneously running sandboxes. |
-| `limits.max_sandbox_duration_seconds` | Maximum duration allowed for a single sandbox run. |
+| `limits.current_running` | How many sandboxes are **running** right now. |
+| `limits.max_sandbox_duration_seconds` | Upper bound for `auto_stop_interval` (and similar) in seconds; `0` means unlimited where the API allows. |
 
 ## Pagination
 

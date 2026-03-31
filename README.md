@@ -201,6 +201,11 @@ make down             # Tear down local environment
 
 For local Kubernetes deployment and smoke testing, see [deploy/README.md](deploy/README.md).
 
+## Community
+
+- [Discord](https://discord.gg/ygSP9tT5RB)
+- [X (Twitter)](https://x.com/treadstone_ai)
+
 ## License
 
 [Apache License 2.0](LICENSE)

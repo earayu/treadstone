@@ -64,7 +64,6 @@ Do not start pages with long background sections. The first screen should explai
 Public docs sections are fixed unless there is a deliberate structural change:
 
 - `Start Here`
-- `Quickstarts`
 - `Guides`
 - `Reference`
 - `Operations`
@@ -75,8 +74,7 @@ Prefer adding pages inside the existing IA before inventing a new category.
 Use page type appropriately:
 
 - `Start Here`: positioning, product argument, core concepts
-- `Quickstarts`: shortest runnable paths
-- `Guides`: task completion
+- `Guides`: task completion (shortest runnable paths live in **Integrate** and **Core Workflows**)
 - `Reference`: factual contracts only
 - `Operations`: self-hosting, local dev, deployment, troubleshooting
 - `AI Docs`: task routing and hard invariants

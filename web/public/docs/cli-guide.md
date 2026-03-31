@@ -1,57 +1,94 @@
 # CLI Guide
 
-The CLI is the shortest path when a human or agent wants to drive Treadstone without writing HTTP clients or SDK code.
+The `treadstone` CLI is how you drive the control plane from a terminal. This page covers **installation** and **how the tool behaves** — global flags, credentials, `--json`, `--help`, the optional `skills` commands, and defaults when you omit a subcommand.
+
+Sandbox workflows, auth, API keys, and browser handoff are documented under **Core Workflows** and **Integrate**. For a **tabular list of every command**, see [CLI Reference](/docs/cli-reference.md).
 
 ## Install
 
 ```bash
+# macOS / Linux:
+curl -fsSL https://treadstone-ai.dev/install.sh | sh
+# Windows (PowerShell):
+irm https://treadstone-ai.dev/install.ps1 | iex
+# pip
 pip install treadstone-cli
-export TREADSTONE_BASE_URL="https://api.treadstone-ai.dev"
+# then
+treadstone --help
+treadstone --version
 ```
 
-## Sign In
+## Core CLI behavior
 
-```bash
-treadstone auth login
-```
+### Global options (root command)
 
-This opens a browser-based login flow. For fully non-interactive environments — scripts, CI, agents — pass credentials directly:
+These flags appear **before** the subcommand. They change how every invocation talks to the API and how output is formatted:
 
-```bash
-treadstone auth login --email you@example.com --password 'StrongPass123!'
-```
+| Option | Purpose |
+|--------|---------|
+| `--json` | Print **structured JSON** instead of human-oriented tables and sentences. Use this whenever a script, agent, or CI job parses the result. |
+| `--api-key` | Supply an API key for **this run only**. Same effect as the `TREADSTONE_API_KEY` environment variable for that process. |
+| `--base-url` | Point the CLI at a specific control-plane URL (hosted cloud, self-hosted, or local dev). Overrides `TREADSTONE_BASE_URL` for that process when set. |
+| `--version` | Print the CLI version and exit (no API call). |
 
-## Core Workflow
+`--help` is available on the root command and on every group and subcommand; it is not listed in the table because it is added automatically by the CLI framework.
 
-```bash
-treadstone --json templates list                                           # see what your plan allows
-treadstone --json sandboxes create --template aio-sandbox-tiny --name demo  # create; save `id` from response
-treadstone --json sandboxes get SANDBOX_ID                                 # inspect current state
-treadstone --json sandboxes web enable SANDBOX_ID                          # generate handoff URL; share `open_link`
-```
+### Credential precedence
 
-Capture `id` from `sandboxes create`. Every follow-up command uses it, not `name`.
+Commands that need authentication resolve credentials in this order (highest priority first):
 
-## Create A Reusable API Key
+1. `--api-key` flag
+2. `TREADSTONE_API_KEY` environment variable
+3. Saved `api_key` in local config — the CLI stores defaults (including this key) in a config file on disk under your user account; `treadstone config path` prints the exact path.
+4. Saved login session from `treadstone auth login`
 
-```bash
-treadstone api-keys create --name service-key --save
-```
+If both an API key and a session are present, the **API key wins**.
 
-Use a saved session for interactive work. Use an API key for automation — scripts, agents, and scheduled tasks should not depend on browser login sessions. The `--save` flag writes the key to the local config so subsequent commands pick it up automatically.
+See [CLI Reference](/docs/cli-reference.md#auth-precedence) for the same rules in one place (useful when wiring automation).
 
-## Behavior Worth Knowing
+### Human output vs `--json`
 
-- `treadstone system health` checks connectivity to the hosted API. There is no top-level `health` command.
-- `treadstone sandboxes` without a subcommand is the same as `treadstone sandboxes list`.
-- When both an API key and a saved session exist, the API key wins.
-- `--json` outputs stable structured data safe for downstream parsing. Always use it in scripts.
-- `treadstone skills` exists but is optional; core hosted usage does not depend on it.
+Without `--json`, the CLI prints **tables**, short messages, and summaries meant for a terminal. With `--json`, responses are **stable, machine-readable objects** (often mirroring the HTTP API body). Parsers should rely on **`--json` output**, not on the formatting of human mode.
 
-> For automation: use `--json` whenever another tool, agent, or script will consume the result. Parse `id`, `urls.proxy`, `web_url`, and `open_link` from that output.
+### `--help` at every level
+
+- `treadstone --help` — root groups, global options, and pointers to the built-in quick start.
+- `treadstone GROUP --help` — options for that group (if any) and its subcommands.
+- `treadstone GROUP SUBCOMMAND --help` — flags, argument names, env vars, and examples for that command.
+
+Use this when you are unsure of a flag name, env var, or the exact argument order.
+
+### `skills` (agent-focused)
+
+The hosted control plane does **not** depend on `skills`. It exists so **AI agents** can learn Treadstone **through the CLI itself**, instead of relying on a separate documentation bundle.
+
+**Why it matters:** the built-in skill teaches an agent *how to think about* Treadstone (when to use `--json`, how auth and sandboxes fit together, where to look next). Combined with **`treadstone --help`** and per-command **`--help`**, the agent can discover flags, env vars, and examples the same way a human would. In practice you can give an agent **only** the `treadstone` binary (or install path): it does not need a dump of the whole docs site, and a human operator does not have to pre-read every page — the agent can self-serve from **help** and **skills** as it works.
+
+**Commands:**
+
+- **`treadstone skills`** (no subcommand) — prints the **built-in agent skill** (`SKILL.md` content) to stdout so you can inspect it or pipe it elsewhere.
+- **`treadstone skills install`** — writes that skill to disk as `SKILL.md` under a skills directory. Use **`--target`** to pick a preset (`agents` → `~/.agents/skills`, `cursor`, `codex`, or `project` under the current repo), or **`--dir`** to set a custom base directory (the skill is written to `PATH/treadstone-cli/SKILL.md`).
+
+### Default subcommands
+
+Some **groups** run a default subcommand when you do not pass one:
+
+| Group | If you run | The CLI runs |
+|-------|------------|--------------|
+| `system` | `treadstone system` | `system health` |
+| `sandboxes` | `treadstone sandboxes` | `sandboxes list` (`sb` is an alias for `sandboxes`) |
+| `templates` | `treadstone templates` | `templates list` |
+| `config` | `treadstone config` | `config get` (interactive behavior may prompt for a key) |
+| `skills` | `treadstone skills` | prints the skill (no `install`); see above |
+
+Other groups (`auth`, `api-keys`) require an explicit subcommand — run `treadstone GROUP --help` to see the list.
+
+### Local config
+
+The CLI can store defaults in a **local config file** (`treadstone config path` shows the location). Keys such as `base_url`, `api_key`, and `default_template` reduce repetition; see [CLI Reference](/docs/cli-reference.md#configuration-keys). **Login sessions** are stored separately from this file (they are not managed by `config`).
 
 ## Read Next
 
-- [CLI Reference](/docs/cli-reference.md)
-- [Create a Sandbox](/docs/create-sandbox.md)
-- [Browser Handoff](/docs/browser-handoff.md)
+- [CLI Reference](/docs/cli-reference.md) — full command tables and automation notes
+- [API Keys & Auth](/docs/api-keys-auth.md)
+- [Sandbox Lifecycle](/docs/sandbox-lifecycle.md)

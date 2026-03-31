@@ -98,4 +98,4 @@ Browser handoff subgroup:
 | `api_key` | A saved API key used as a fallback when `--api-key` and `TREADSTONE_API_KEY` are not present. |
 | `default_template` | A default template name used by `sandboxes create` when `--template` is not specified. |
 
-> For automation: prefer `--json` whenever another tool, agent, or script will consume the result. Parse `id`, `urls.proxy`, `urls.web`, `web_url`, and `open_link` from that output.
+> For automation: prefer `--json` whenever another tool, agent, or script will consume the result. Parse `id`, `urls.proxy`, `urls.web`, `web_url`, and `open_link` from that output. Only `open_link` is shareable as a bearer URL; `web_url` requires a Console login.

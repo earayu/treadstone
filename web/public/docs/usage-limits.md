@@ -1,50 +1,67 @@
 # Usage & Limits
 
-Before creating a sandbox, the key question is: do I have budget? Before debugging a quota rejection, the key question is: which limit did I hit? This page answers both.
+Every time a sandbox is running, it consumes **Compute Units (CU)**. Your plan comes with a monthly CU budget. When the budget is exhausted, new sandboxes cannot start until the next billing period or until you upgrade.
 
-## Where To Look
+## What Is a Compute Unit?
 
-- **Console**: [/app/usage](/app/usage) — visual breakdown of your current billing period
-- `GET /v1/usage` — summary: compute remaining, storage available, concurrency state, and plan limits
-- `GET /v1/usage/plan` — the full plan record, including the templates your plan allows
-- `GET /v1/usage/sessions` — paginated history of past compute sessions
-- `GET /v1/usage/storage-ledger` — paginated storage usage history
-- `GET /v1/usage/grants` — active compute and storage grants applied to the account
+A Compute Unit is a measure of compute resources consumed over time. The rate depends on the template you choose — larger templates burn CU faster.
 
-The hosted CLI does not have a dedicated `usage` command today. Use the API directly or check the Console.
+The unit is **CU-hours (CU-h)**: one CU-h is one Compute Unit running for one hour.
 
-## Fields That Drive Decisions
+| Template | CPU | Memory | CU/h |
+|---|---|---|---|
+| `aio-sandbox-tiny` | 0.25 core | 1 GiB | **0.25** |
+| `aio-sandbox-small` | 0.5 core | 2 GiB | **0.5** |
+| `aio-sandbox-medium` | 1 core | 4 GiB | **1.0** |
+| `aio-sandbox-large` | 2 cores | 8 GiB | **2.0** |
+| `aio-sandbox-xlarge` | 4 cores | 16 GiB | **4.0** |
 
-From `GET /v1/usage`:
+A sandbox only consumes CU while it is in the **running** state. A stopped or deleted sandbox does not burn compute.
 
-- `compute.total_remaining` — total compute seconds left in the current billing period
-- `compute.monthly_remaining` — this calendar month's remaining compute
-- `storage.available_gib` — storage quota remaining across all persistent sandboxes
-- `limits.allowed_templates` — the template names the current plan permits
-- `limits.max_concurrent_running` — how many sandboxes can run simultaneously
-- `limits.current_running` — how many are running right now
-- `limits.max_sandbox_duration_seconds` — the longest single run the plan allows
-- `grace_period.active` — whether the account is currently in a grace period
+## How the Budget Works
 
-## Quick Check
+Each plan includes a fixed number of CU-hours per month:
+
+| Plan | CU-h / month | Concurrent sandboxes |
+|---|---|---|
+| Free | 10 | 1 |
+| Pro | 80 | up to 3 |
+| Ultra | 240 | up to 8 |
+| Custom | 800 | up to 20 |
+
+**Example**: running an `aio-sandbox-tiny` (0.25 CU/h) for 8 hours costs 2 CU-h. On the Free plan that leaves 8 CU-h for the rest of the month.
+
+## Controlling Consumption
+
+The most effective lever is `--auto-stop-interval`. A sandbox automatically stops after this many seconds of inactivity, so it stops consuming CU even if you forget to stop it manually.
 
 ```bash
-curl -H "Authorization: Bearer $TREADSTONE_API_KEY" \
+# Stop automatically after 10 minutes of inactivity
+$ treadstone sandboxes create --template aio-sandbox-tiny --name demo --auto-stop-interval 600
+```
+
+Use `--auto-delete-interval -1` (the default) to keep the sandbox around after it stops — you can restart it later without losing state.
+
+## Checking Your Balance
+
+The Console at [/app/usage](/app/usage) shows a live breakdown of your CU consumption for the current billing period.
+
+From the CLI:
+
+```bash
+$ curl -H "Authorization: Bearer $TREADSTONE_API_KEY" \
   https://api.treadstone-ai.dev/v1/usage
 ```
 
-Read `compute.total_remaining` and `limits.current_running` before deciding whether to create or start another sandbox.
+The response includes `compute.total_remaining` (CU-h left) and `limits.current_running` (sandboxes currently consuming compute).
 
-## When Quota Blocks You
+## When You Hit a Limit
 
-- `compute_quota_exceeded` — wait for the next billing period or upgrade the plan.
-- `concurrent_limit_exceeded` — stop another sandbox before creating or starting one more.
-- `storage_quota_exceeded` — delete unused persistent sandboxes or increase quota.
-- `sandbox_duration_exceeded` — lower `auto_stop_interval` or move to a plan with a longer max runtime.
-
-> For automation: read `/v1/usage` before retrying quota failures. Do not blind-retry `compute_quota_exceeded` or `storage_quota_exceeded`.
+- **Compute quota exhausted** — wait for the next billing period to reset, or upgrade your plan.
+- **Concurrent limit reached** — stop one running sandbox before creating or starting another.
+- **Template not allowed on your plan** — `aio-sandbox-large` and above require Pro or higher.
 
 ## Read Next
 
+- [Sandbox Lifecycle](/docs/sandbox-lifecycle.md)
 - [Error Reference](/docs/error-reference.md)
-- [API Reference](/docs/api-reference.md)
