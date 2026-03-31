@@ -1,6 +1,6 @@
 # Python SDK Reference
 
-The SDK is generated from the OpenAPI schema and mirrors the control-plane API's tag structure. There is no handwritten service layer — endpoint functions map directly to API routes.
+The SDK is generated from the OpenAPI schema and mirrors the control-plane API's tag structure. There is no handwritten service layer — endpoint functions map directly to API routes. **Sandbox-only HTTP** served via `/v1/sandboxes/{sandbox_id}/proxy/...` is **not** in the generated client; explore those paths in the hosted [Swagger UI](https://api.treadstone-ai.dev/docs) or call them with httpx using `urls.proxy` from the sandbox API.
 
 ## Package Entry Points
 

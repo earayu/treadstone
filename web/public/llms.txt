@@ -9,7 +9,7 @@
 - [API Keys & Auth](/docs/api-keys-auth.md): Sign up via CLI or Console OAuth (Google/GitHub), then session login, API keys, control-plane vs data-plane access, and selected sandbox grants.
 - [CLI Guide](/docs/cli-guide.md): Install the CLI and core behavior: global flags, credential precedence, JSON vs human output, --help, skills, defaults, and local config.
 - [MCP in sandbox](/docs/mcp-sandbox.md): Expose an MCP server inside a sandbox via the data-plane proxy: urls.proxy + /mcp, API key auth, HTTP/SSE and WebSocket transports, query forwarding, and when to use subdomain browser URLs.
-- [API Reference](/docs/api-reference.md): The user-facing control-plane contract: auth, sandboxes, browser handoff, proxy, usage endpoints, pagination, and error shape.
+- [API Reference](/docs/api-reference.md): Handwritten route tables for control and data plane; hosted Swagger/OpenAPI also merges sandbox-runtime REST paths under the proxy.
 - [Sandbox endpoints](/docs/sandbox-endpoints.md): Control plane vs data plane, CLI/SDK/HTTP vs Web and proxy, Web/MCP/Proxy URLs in the Console, and API key use on the data plane.
 - [Quickstart](/docs/quickstart.md): Install the CLI, sign in, optional API key, and create your first sandbox—bridge to Core Workflows.
 - [Sandbox Lifecycle](/docs/sandbox-lifecycle.md): Create, list, inspect, stop, start, and delete sandboxes. Sandboxes only consume Compute Units while running.
@@ -31,5 +31,5 @@
 ## Optional
 
 - [Documentation Sitemap](/docs/sitemap.md): Full hierarchical index
-- [OpenAPI Spec](/openapi.json): Machine-readable control-plane API schema
-- Hosted Swagger UI: https://api.treadstone-ai.dev/docs
+- [OpenAPI Spec](/openapi.json): Hosted machine-readable schema (control plane + merged proxy paths)
+- Hosted Swagger UI: https://api.treadstone-ai.dev/docs (same merged spec as `/openapi.json`)

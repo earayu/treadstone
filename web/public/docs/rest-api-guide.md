@@ -97,7 +97,9 @@ with httpx.Client(
 
 ### Discovering the contract
 
-The server exposes OpenAPI at `/openapi.json` (public, code-first spec). On the hosted control plane, open [https://api.treadstone-ai.dev/docs](https://api.treadstone-ai.dev/docs) for Swagger UI. Use the JSON spec to generate clients or to inspect schemas when something is ambiguous. The hosted product’s public routes match what the Python SDK is generated from.
+On the **hosted** control plane, `GET /openapi.json` and [Swagger UI](https://api.treadstone-ai.dev/docs) include **both** control-plane routes and **merged** sandbox (data-plane) proxy paths under `/v1/sandboxes/{sandbox_id}/proxy/...`, so you can inspect REST shapes for HTTP into a sandbox.
+
+The **`openapi-public.json`** produced by **`make gen-openapi`** in this repository is used for the Python SDK and web types; it does **not** include those merged sandbox-runtime paths. For data-plane schema exploration, use the hosted spec or docs above.
 
 ## Read next
 

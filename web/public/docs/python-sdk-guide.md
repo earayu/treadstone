@@ -61,7 +61,9 @@ On unexpected HTTP status codes, behavior depends on `raise_on_unexpected_status
 
 ## Regeneration and scope
 
-The SDK is regenerated from the **public** OpenAPI spec (admin and internal-only routes are excluded from the published package). If you change server routes and need new Python types, regenerate with the repo’s tooling — `make gen-sdk-python` in this repository (see `AGENTS.md`). Do not hand-edit generated files under `sdk/python/` in the upstream project.
+The SDK is regenerated from the **public** OpenAPI spec (admin and internal-only routes are excluded from the published package). That export does **not** include merged **sandbox-runtime** paths that appear under `/v1/sandboxes/{sandbox_id}/proxy/...` in the **hosted** [`/openapi.json`](https://api.treadstone-ai.dev/openapi.json) and [Swagger UI](https://api.treadstone-ai.dev/docs) — use those when you need OpenAPI for workloads inside the sandbox.
+
+If you change control-plane routes and need new Python types, regenerate with `make gen-sdk-python` in this repository (see `AGENTS.md`). Do not hand-edit generated files under `sdk/python/` in the upstream project.
 
 ## Read next
 

@@ -149,7 +149,7 @@
     "title": "API Reference",
     "section": "Reference",
     "order": 10,
-    "summary": "The user-facing control-plane contract: auth, sandboxes, browser handoff, proxy, usage endpoints, pagination, and error shape.",
+    "summary": "Handwritten route tables for control and data plane; hosted Swagger/OpenAPI also merges sandbox-runtime REST paths under the proxy.",
     "default": false,
     "llm_priority": 100,
     "aliases": [

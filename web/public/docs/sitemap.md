@@ -25,7 +25,7 @@ Read [`/docs/index.md`](/docs/index.md) first if you are new.
 
 ## Reference
 
-- [API Reference](/docs/api-reference.md): The user-facing control-plane contract: auth, sandboxes, browser handoff, proxy, usage endpoints, pagination, and error shape.
+- [API Reference](/docs/api-reference.md): Handwritten route tables for control and data plane; hosted Swagger/OpenAPI also merges sandbox-runtime REST paths under the proxy.
 - [CLI Reference](/docs/cli-reference.md): Root options, command groups, auth precedence, JSON mode, config keys, and the exact hosted CLI surface.
 - [Python SDK Reference](/docs/python-sdk-reference.md): Real import paths, generated endpoint modules, request and response models, and sync or async call shapes.
 - [Error Reference](/docs/error-reference.md): The stable JSON error envelope, common public error codes, and the recovery step that matches each failure.
@@ -35,4 +35,4 @@ Read [`/docs/index.md`](/docs/index.md) first if you are new.
 - [`/docs/{slug}`](/docs/index): Returns raw Markdown when the client sends `Accept: text/markdown`; otherwise redirects to `/docs?page={slug}`.
 - [`/docs/sitemap.md`](/docs/sitemap.md): This complete documentation index.
 - [`/llms.txt`](/llms.txt): Short machine-oriented entrypoint.
-- [`/openapi.json`](/openapi.json): Generated OpenAPI document for the control plane.
+- [`/openapi.json`](/openapi.json): Hosted spec — control plane plus merged sandbox proxy paths (not the same as `make gen-openapi`, which feeds the SDK).

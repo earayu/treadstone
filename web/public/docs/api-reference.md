@@ -3,9 +3,11 @@
 ## Hosted Base URL
 
 - **Control plane**: `https://api.treadstone-ai.dev`
-- **Interactive REST docs (Swagger UI)**: [https://api.treadstone-ai.dev/docs](https://api.treadstone-ai.dev/docs)
-- **OpenAPI JSON**: `https://api.treadstone-ai.dev/openapi.json` (same document as `GET /openapi.json` on the control plane host)
+- **Interactive REST docs (Swagger UI)**: [https://api.treadstone-ai.dev/docs](https://api.treadstone-ai.dev/docs) — documents **control-plane** routes and **data-plane** proxy routes. Sandbox HTTP APIs are merged under `/v1/sandboxes/{sandbox_id}/proxy/...` (tagged like `Sandbox: …` in the UI) so you can explore REST shapes for traffic into a sandbox; call them with a real `sandbox_id` and `Authorization: Bearer <api_key>`.
+- **OpenAPI JSON**: `https://api.treadstone-ai.dev/openapi.json` (same as `GET /openapi.json` on the control plane host) — same merged document as Swagger.
 - **Browser handoff and proxy URLs** are returned by the platform. Do not construct them client-side.
+
+**SDK generation:** The Python SDK and repo `make gen-openapi` output use a **public** OpenAPI export **without** the merged sandbox-runtime paths. Use the hosted `/docs` or `/openapi.json` when you need schemas for operations under `/v1/sandboxes/{sandbox_id}/proxy/...`.
 
 ## Auth Surfaces
 
