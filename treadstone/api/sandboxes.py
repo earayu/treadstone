@@ -275,7 +275,6 @@ async def get_sandbox(
     sandbox = await service.get(sandbox_id=sandbox_id, owner_id=user.id)
     if sandbox is None:
         raise SandboxNotFoundError(sandbox_id)
-    await service.log_status_drift_error_vs_k8s_ready(sandbox)
     set_request_context(request, sandbox_id=sandbox.id)
     web_link = await _load_active_web_link(session, sandbox.id) if settings.sandbox_domain else None
     return _to_detail(sandbox, public_control_plane_base_url(request), web_link)
