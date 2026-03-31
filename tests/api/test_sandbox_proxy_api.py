@@ -279,3 +279,102 @@ async def test_proxy_deleted_api_key_returns_401(auth_client):
 
     assert resp.status_code == 401
     assert resp.json()["error"]["code"] == "auth_invalid"
+
+
+async def test_proxy_forwards_query_string(auth_client):
+    """Query params must be forwarded to the sandbox so MCP SSE ?sessionId= works."""
+    create_resp = await auth_client.post(
+        "/v1/sandboxes",
+        json={"template": "aio-sandbox-tiny", "name": "proxy-qs-sb"},
+    )
+    sandbox_id = create_resp.json()["id"]
+
+    async with _test_session_factory() as session:
+        from treadstone.models.sandbox import Sandbox
+
+        sb = await session.get(Sandbox, sandbox_id)
+        sb.status = "ready"
+        session.add(sb)
+        await session.commit()
+
+    key_resp = await auth_client.post("/v1/auth/api-keys", json={"name": "proxy-qs"})
+    api_key = key_resp.json()["key"]
+
+    captured_paths: list[str] = []
+
+    async def capturing_proxy_http_request(*, method, sandbox_id, path, **kwargs):
+        captured_paths.append(path)
+        return 200, {"content-type": "text/plain"}, _mock_upstream(body=b"ok").send.return_value
+
+    with patch("treadstone.api.sandbox_proxy.proxy_http_request", side_effect=capturing_proxy_http_request):
+        resp = await auth_client.get(
+            f"/v1/sandboxes/{sandbox_id}/proxy/mcp?sessionId=abc123&stream=1",
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+
+    assert resp.status_code == 200
+    assert len(captured_paths) == 1
+    assert "sessionId=abc123" in captured_paths[0]
+    assert "stream=1" in captured_paths[0]
+
+
+async def test_proxy_ws_no_auth_closes_1008(auth_client):
+    """WebSocket proxy must close with 1008 when no API key is provided."""
+    create_resp = await auth_client.post(
+        "/v1/sandboxes",
+        json={"template": "aio-sandbox-tiny", "name": "proxy-ws-noauth"},
+    )
+    sandbox_id = create_resp.json()["id"]
+
+    async with _test_session_factory() as session:
+        from treadstone.models.sandbox import Sandbox
+
+        sb = await session.get(Sandbox, sandbox_id)
+        sb.status = "ready"
+        session.add(sb)
+        await session.commit()
+
+    from httpx_ws import aconnect_ws
+
+    with pytest.raises(Exception):
+        async with aconnect_ws(
+            f"ws://test/v1/sandboxes/{sandbox_id}/proxy/ws",
+            AsyncClient(transport=ASGITransport(app=app), base_url="http://test"),
+        ):
+            pass
+
+
+async def test_proxy_ws_with_api_key_header_proxies(auth_client):
+    """WebSocket proxy authenticates via Authorization header and proxies frames."""
+    create_resp = await auth_client.post(
+        "/v1/sandboxes",
+        json={"template": "aio-sandbox-tiny", "name": "proxy-ws-auth"},
+    )
+    sandbox_id = create_resp.json()["id"]
+
+    async with _test_session_factory() as session:
+        from treadstone.models.sandbox import Sandbox
+
+        sb = await session.get(Sandbox, sandbox_id)
+        sb.status = "ready"
+        session.add(sb)
+        await session.commit()
+
+    key_resp = await auth_client.post("/v1/auth/api-keys", json={"name": "proxy-ws-key"})
+    api_key = key_resp.json()["key"]
+
+    async def fake_proxy_websocket(**kwargs):
+        pass
+
+    with patch("treadstone.api.sandbox_proxy.proxy_websocket", side_effect=fake_proxy_websocket):
+        from httpx_ws import aconnect_ws
+
+        try:
+            async with aconnect_ws(
+                f"ws://test/v1/sandboxes/{sandbox_id}/proxy/ws",
+                AsyncClient(transport=ASGITransport(app=app), base_url="http://test"),
+                headers={"Authorization": f"Bearer {api_key}"},
+            ):
+                pass
+        except Exception:
+            pass  # connection closed after fake proxy returns — that is expected

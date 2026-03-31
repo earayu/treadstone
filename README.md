@@ -1,5 +1,7 @@
 # Treadstone
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/earayu/treadstone)
+
 **Agent-native sandbox platform for AI agents.** Run code, install dependencies, execute tests, build software, and hand off a browser session from isolated environments.
 
 Open source and self-hostable. Built for two readers at once:
