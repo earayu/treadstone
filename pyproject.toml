@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "treadstone"
-version = "0.7.18"
+version = "0.7.19"
 description = "Agent-native sandbox service. Run code, build projects, deploy environments."
 readme = "README.md"
 requires-python = ">=3.12"
