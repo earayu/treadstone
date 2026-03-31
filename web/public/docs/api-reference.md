@@ -109,8 +109,6 @@ So a sandbox route like `/v1/shell/exec` becomes:
 
 In [Swagger UI](https://api.treadstone-ai.dev/docs) they appear under tags **`Sandbox: <name>`** (for example `Sandbox: shell`, `Sandbox: file`, `Sandbox: browser`) — the same operations as in `scripts/sandbox_openapi_base.json`, with `sandbox_id` injected. Auth is **`Authorization: Bearer <api_key>`** with data-plane access, same as the generic proxy.
 
-![Swagger UI: merged sandbox runtime routes (example: shell)](/docs/images/api-reference-swagger-sandbox-shell.png)
-
 #### Sandbox runtime paths (from `sandbox_openapi_base.json`)
 
 The tables below list **every path** in the bundled sandbox OpenAPI spec. Each row is the suffix after `/v1/sandboxes/{sandbox_id}/proxy`. If the spec changes, update this section from the same file or use **Swagger** / **`openapi.json`** as the source of truth.
