@@ -270,11 +270,10 @@ async def get_sandbox(
     user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
 ):
-    service = SandboxService(session=session, metering=_metering)
+    service = SandboxService(session=session)
     sandbox = await service.get(sandbox_id=sandbox_id, owner_id=user.id)
     if sandbox is None:
         raise SandboxNotFoundError(sandbox_id)
-    sandbox = await service.heal_error_if_k8s_ready(sandbox, request=request)
     set_request_context(request, sandbox_id=sandbox.id)
     web_link = await _load_active_web_link(session, sandbox.id) if settings.sandbox_domain else None
     return _to_detail(sandbox, str(request.base_url), web_link)
