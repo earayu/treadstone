@@ -938,7 +938,7 @@ export function LandingPage() {
               <ul className="mt-3.5 flex flex-col gap-2.5">
                 {[
                   { label: "Docs Overview", href: "/docs" },
-                  { label: "Install CLI", href: "#install" },
+                  { label: "Quickstart", href: "/docs?page=quickstart" },
                   { label: "CLI Guide", href: "/docs?page=cli-guide" },
                   { label: "REST API Guide", href: "/docs?page=rest-api-guide" },
                   { label: "Python SDK Guide", href: "/docs?page=python-sdk-guide" },

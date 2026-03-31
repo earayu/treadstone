@@ -4,7 +4,7 @@
     "title": "Overview",
     "section": "Get Started",
     "order": 10,
-    "summary": "Agent-native sandbox infrastructure: interfaces, lifecycle, templates, browser handoff, identity, and plan limits—plus how Integrate guides and Core Workflows map to CLI, REST API, and Python SDK.",
+    "summary": "Why Treadstone exists and what you can build with it—interest and outcomes, not procedural detail.",
     "default": true,
     "llm_priority": 100,
     "aliases": [
@@ -13,9 +13,19 @@
       "self-hosting",
       "local-development",
       "production-deployment",
-      "quickstart",
-      "quickstart-human",
       "ai-index"
+    ]
+  },
+  {
+    "slug": "quickstart",
+    "title": "Quickstart",
+    "section": "Get Started",
+    "order": 20,
+    "summary": "Install the CLI, sign in, optional API key, and create your first sandbox—bridge to Core Workflows.",
+    "default": false,
+    "llm_priority": 98,
+    "aliases": [
+      "quickstart-human"
     ]
   },
   {

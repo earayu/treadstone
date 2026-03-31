@@ -34,6 +34,21 @@ _metering = MeteringService()
 RECONCILE_INTERVAL = 300  # 5 minutes
 WATCH_RESTART_BACKOFF = 5  # seconds to wait before restarting Watch after unexpected failure
 
+
+def _reconcile_cr_is_stale_list_snapshot(cr_rv: str | None, db_rv: str | None) -> bool:
+    """True when LIST returned an older object revision than the DB (stale snapshot).
+
+    K8s LIST can be briefly inconsistent; applying derived status from an old CR
+    could regress the DB (e.g. READY → ERROR from a stale ReconcilerError).
+    Only compare when both versions are numeric strings (normal resourceVersion).
+    """
+    if not cr_rv or not db_rv:
+        return False
+    if not str(cr_rv).isdigit() or not str(db_rv).isdigit():
+        return False
+    return int(cr_rv) < int(db_rv)
+
+
 # ── CR-missing policy for reconcile ──────────────────────────────────────────
 # When the periodic reconcile List snapshot does not contain a sandbox's CR,
 # the policy table below determines what action to take based on the DB status.
@@ -323,6 +338,15 @@ async def reconcile(
                 continue
 
             cr_rv = cr.get("metadata", {}).get("resourceVersion")
+            if _reconcile_cr_is_stale_list_snapshot(cr_rv, sandbox.k8s_resource_version):
+                logger.info(
+                    "Stale CR (reconcile): sandbox_id=%s db_rv=%s cr_rv=%s — skipping (list snapshot behind DB)",
+                    sandbox.id,
+                    sandbox.k8s_resource_version,
+                    cr_rv,
+                )
+                continue
+
             new_status, message = derive_status_from_sandbox_cr(cr)
 
             # Skip only when both the resource version AND the derived status already

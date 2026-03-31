@@ -5,7 +5,8 @@ Read [`/docs/index.md`](/docs/index.md) first if you are new.
 
 ## Get Started
 
-- [Overview](/docs/index.md): Agent-native sandbox infrastructure: interfaces, lifecycle, templates, browser handoff, identity, and plan limits—plus how Integrate guides and Core Workflows map to CLI, REST API, and Python SDK.
+- [Overview](/docs/index.md): Why Treadstone exists and what you can build with it—interest and outcomes, not procedural detail.
+- [Quickstart](/docs/quickstart.md): Install the CLI, sign in, optional API key, and create your first sandbox—bridge to Core Workflows.
 
 ## Core Workflows
 

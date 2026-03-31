@@ -13,6 +13,16 @@ const manifest = [
     summary: "What Treadstone is.",
     default: true,
     llm_priority: 100,
+    aliases: [],
+  },
+  {
+    slug: "quickstart",
+    title: "Quickstart",
+    section: "Get Started",
+    order: 20,
+    summary: "Install and first sandbox.",
+    default: false,
+    llm_priority: 98,
     aliases: ["quickstart-human"],
   },
   {
@@ -38,7 +48,8 @@ const manifest = [
 ] as const
 
 const docsBySlug: Record<string, string> = {
-  index: "# Overview\n\n## Get Started\n\nHome content.",
+  index: "# Overview\n\n## Why\n\nHome content.",
+  quickstart: "# Quickstart\n\n## Shortest path\n\nQuickstart body.",
   "cli-guide": "# CLI Guide\n\n## Sign In\n\nCLI content.\n\n### Direct Login\n\nUse flags when needed.",
   "browser-handoff": "# Browser Handoff\n\n## Create A Handoff URL\n\nGuide content.",
 }

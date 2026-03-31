@@ -26,7 +26,9 @@ SANDBOX_API_VERSION = "v1alpha1"
 TEMPLATE_API_GROUP = "extensions.agents.x-k8s.io"
 TEMPLATE_API_VERSION = "v1alpha1"
 
-WATCH_TIMEOUT_SECONDS = 300
+# Slightly below RECONCILE_INTERVAL (300s in k8s_sync) so Watch expiry and periodic
+# reconcile do not fire in the same tick, reducing overlapping full reconciles.
+WATCH_TIMEOUT_SECONDS = 270
 
 # AIO Sandbox image conventions (ghcr.io/agent-infra/sandbox).
 # The image creates a non-root user `gem` with this UID/GID.  All internal
