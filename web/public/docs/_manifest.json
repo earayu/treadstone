@@ -4,7 +4,7 @@
     "title": "Overview",
     "section": "Get Started",
     "order": 10,
-    "summary": "Why Treadstone exists and what you can build with it—interest and outcomes, not procedural detail.",
+    "summary": "What Treadstone is and what you can build; introduces control plane vs data plane in plain language, then points to Sandbox endpoints for URLs.",
     "default": true,
     "llm_priority": 100,
     "aliases": [
@@ -21,11 +21,26 @@
     "title": "Quickstart",
     "section": "Get Started",
     "order": 20,
-    "summary": "Install the CLI, sign in, optional API key, and create your first sandbox—bridge to Core Workflows.",
+    "summary": "Install the CLI, sign in, optional API key, and create your first sandbox\u2014bridge to Core Workflows.",
     "default": false,
     "llm_priority": 98,
     "aliases": [
       "quickstart-human"
+    ]
+  },
+  {
+    "slug": "sandbox-endpoints",
+    "title": "Sandbox endpoints",
+    "section": "Get Started",
+    "order": 25,
+    "summary": "Control plane vs data plane, CLI/SDK/HTTP vs Web and proxy, Web/MCP/Proxy URLs in the Console, and API key use on the data plane.",
+    "default": false,
+    "llm_priority": 99,
+    "aliases": [
+      "endpoints",
+      "urls",
+      "proxy",
+      "control-plane"
     ]
   },
   {
@@ -67,6 +82,21 @@
     ]
   },
   {
+    "slug": "inside-sandbox",
+    "title": "Inside your sandbox",
+    "section": "Core Workflows",
+    "order": 35,
+    "summary": "Call HTTP/WebSocket into a running sandbox via urls.proxy: API key, curl, MCP pointer, and Swagger for merged runtime paths.",
+    "default": false,
+    "llm_priority": 96,
+    "aliases": [
+      "data-plane",
+      "guide-data-plane",
+      "sandbox-proxy-http",
+      "workload-http"
+    ]
+  },
+  {
     "slug": "usage-limits",
     "title": "Usage & Limits",
     "section": "Core Workflows",
@@ -96,7 +126,7 @@
     "title": "REST API Guide",
     "section": "Integrate",
     "order": 20,
-    "summary": "REST shape: base URL, /v1 and /health, headers, JSON, errors, OpenAPI, control vs data plane — not duplicate workflows.",
+    "summary": "REST shape: base URL, /v1 and /health, headers, JSON, errors, OpenAPI, control vs data plane \u2014 not duplicate workflows.",
     "default": false,
     "llm_priority": 95,
     "aliases": [
@@ -121,7 +151,7 @@
     "title": "Python SDK Guide",
     "section": "Integrate",
     "order": 30,
-    "summary": "Install treadstone-sdk, AuthenticatedClient, module layout, sync vs detailed vs asyncio, errors, regeneration — not duplicate workflows.",
+    "summary": "Install treadstone-sdk, AuthenticatedClient, module layout, sync vs detailed vs asyncio, errors, regeneration \u2014 not duplicate workflows.",
     "default": false,
     "llm_priority": 90,
     "aliases": [
@@ -133,7 +163,7 @@
     "title": "API Reference",
     "section": "Reference",
     "order": 10,
-    "summary": "The user-facing control-plane contract: auth, sandboxes, browser handoff, proxy, usage endpoints, pagination, and error shape.",
+    "summary": "Control-plane route tables, generic proxy row, and a shell-path summary; full merged sandbox runtime API is in Swagger and openapi.json.",
     "default": false,
     "llm_priority": 100,
     "aliases": [

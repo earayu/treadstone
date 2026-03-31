@@ -1,6 +1,6 @@
 # Python SDK Reference
 
-The SDK is generated from the OpenAPI schema and mirrors the control-plane API's tag structure. There is no handwritten service layer — endpoint functions map directly to API routes.
+The SDK is generated from the OpenAPI schema and mirrors the control-plane API's tag structure. There is no handwritten service layer — endpoint functions map directly to API routes. **Sandbox-only HTTP** served via `/v1/sandboxes/{sandbox_id}/proxy/...` is **not** in the generated client; explore those paths in the hosted [Swagger UI](https://api.treadstone-ai.dev/docs) or call them with httpx using `urls.proxy` from the sandbox API.
 
 ## Package Entry Points
 
@@ -68,7 +68,7 @@ treadstone_sdk.types                         # shared types and enums
 | Model | Returned by | Key fields |
 |-------|-------------|------------|
 | `SandboxResponse` | List operations | `id`, `name`, `status` |
-| `SandboxDetailResponse` | `sandboxes_get_sandbox` | `id`, `name`, `status`, `urls.proxy`, `urls.web` |
+| `SandboxDetailResponse` | `sandboxes_get_sandbox` | `id`, `name`, `status`, `urls.proxy`, `urls.mcp`, `urls.web` |
 | `SandboxWebLinkResponse` | `sandboxes_create_sandbox_web_link` | `open_link`, `web_url`, `expires_at` |
 | `SandboxWebLinkStatusResponse` | `sandboxes_get_sandbox_web_link` | `enabled`, `web_url`, `expires_at`, `last_used_at` |
 | `ApiKeyResponse` | `auth_create_api_key` | Full key value (shown once only), `id`, `name`, scope |

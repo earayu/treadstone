@@ -1,27 +1,34 @@
 # Overview
 
-Treadstone is **agent-native sandbox infrastructure**: a hosted service so you can spin up isolated environments for agents and teams, run tools and code inside them, and **bring a human in with one link** when judgement matters—without building your own control plane, identity, and routing for every project.
+**Treadstone is a hosted sandbox platform built for AI agents and the teams behind them.** Spin up isolated environments on demand, run code and tools inside them, drive a real browser when your workflow needs one, and—when judgement matters—**hand the same session to a human with a normal link**. No DIY control plane, no wiring a new ingress stack for every project.
 
-The bet is simple: **sandboxes are for automation first.** Humans step in for review, approval, or decisions—not to babysit every create-and-teardown. A raw container is not an agent platform; what matters is stable interfaces around lifecycle, access, and limits so agents can run end-to-end reliably.
+**Why it exists:** agents need **repeatable** infrastructure—stable ways to create and tear down environments, authenticate automation, and **not** paste secrets into prompts. Humans show up for **review, approval, or takeover**, not to babysit every sandbox lifecycle.
 
-## Why it matters
+## What you can do
 
-- **One contract, three ways in** — CLI, REST API, and Python SDK share the same resources and shapes, so humans and agents do not diverge.
-- **Predictable operations** — Create, inspect, start, stop, and delete sandboxes on demand; templates match what your plan allows.
-- **Identity that fits automation** — Sessions and API keys with scoped access so operators and scripts can both work safely.
-- **Humans when needed** — Short-lived browser handoff links instead of embedding long-lived credentials in agent code.
-- **Room to grow** — Usage, quotas, and plan limits keep autonomous runs bounded.
+- **Ship agent workflows** — Create sandboxes from templates, run long tasks in isolation, and integrate from scripts, services, or backends using the same platform surface.
+- **Same tools, many surfaces** — Drive the platform from the [CLI](/docs/cli-guide.md), [REST](/docs/rest-api-guide.md), or [Python SDK](/docs/python-sdk-guide.md)—pick what fits your stack.
+- **Bring a person in** — Short-lived **browser handoff** when someone needs to see or steer what the agent is doing ([Browser Handoff](/docs/browser-handoff.md)).
+- **Stay inside your plan** — Templates, concurrency, and usage are bounded by your account; see [Usage & Limits](/docs/usage-limits.md) for the numbers.
 
-## What you can build
+## Ideas to keep in mind (high level)
 
-- **Long-running agent tasks** in isolated runtimes with files, shell, and optional browser.
-- **Integrations** that call the same APIs from scripts, services, or the [Python SDK](/docs/python-sdk-guide.md).
-- **Human-in-the-loop** flows when something must be seen or approved in a real browser session.
+Almost everything in the product falls into two ideas that are easy to keep straight:
 
-When you are ready to run commands, go to [Quickstart](/docs/quickstart.md), then **Core Workflows** for task-focused guides (sandboxes, auth, browser handoff, limits). **Integrate** holds per-surface install and usage (CLI, REST, SDK, MCP).
+- **Managing the platform** — accounts, sandboxes, keys, templates, usage: you are talking to Treadstone to drive your project. In the docs we call that the **control plane**.
+- **Reaching what runs inside a sandbox** — the browser workspace, HTTP into the workload, MCP for AI tools: traffic is going into the box where the agent’s work runs. We call that the **data plane**.
+
+You only need those two names and what they stand for at first. When you want concrete URLs and field names (**Web**, **MCP**, **Proxy**, and **`urls.*`** in API responses), read [Sandbox endpoints](/docs/sandbox-endpoints.md). To **call HTTP into a running sandbox**, follow [Inside your sandbox](/docs/inside-sandbox.md). For REST shape and auth, continue with [REST API Guide](/docs/rest-api-guide.md) and [API Keys & Auth](/docs/api-keys-auth.md).
+
+## See it in action (media)
+
+We are adding screenshots, GIFs, and short videos here—examples like **an agent creating a sandbox and then driving the workspace inside**. Until those ship, start with [Quickstart](/docs/quickstart.md).
 
 ## Read next
 
 - [Quickstart](/docs/quickstart.md)
+- [Sandbox endpoints](/docs/sandbox-endpoints.md)
+- [Inside your sandbox](/docs/inside-sandbox.md)
+- [Usage & Limits](/docs/usage-limits.md)
 - [Sandbox Lifecycle](/docs/sandbox-lifecycle.md)
 - [CLI Guide](/docs/cli-guide.md)

@@ -79,7 +79,7 @@ Browser handoff subgroup:
 | Command | What it does |
 |---------|--------------|
 | `treadstone config set` | Set a config key-value pair in the local config file. |
-| `treadstone config get` | Read a config value by key. |
+| `treadstone config get` | With no key: print all configured keys (secrets masked). With a key: print that value only. |
 | `treadstone config unset` | Remove a config key. |
 | `treadstone config path` | Print the path to the config file on disk. |
 
@@ -87,8 +87,8 @@ Browser handoff subgroup:
 
 | Command | What it does |
 |---------|--------------|
-| `treadstone skills` | List installed CLI skills. Skills are optional; core hosted usage does not depend on them. |
-| `treadstone skills install` | Install a CLI skill by name or URL. |
+| `treadstone skills` | Print the built-in agent guide to stdout (same content as `skills install` writes). Optional; core hosted usage does not depend on it. |
+| `treadstone skills install` | Write that guide to `SKILL.md` under a skills directory (`--target` or `--dir`). |
 
 ## Configuration Keys
 
@@ -98,4 +98,4 @@ Browser handoff subgroup:
 | `api_key` | A saved API key used as a fallback when `--api-key` and `TREADSTONE_API_KEY` are not present. |
 | `default_template` | A default template name used by `sandboxes create` when `--template` is not specified. |
 
-> For automation: prefer `--json` whenever another tool, agent, or script will consume the result. Parse `id`, `urls.proxy`, `urls.web`, `web_url`, and `open_link` from that output. Only `open_link` is shareable as a bearer URL; `web_url` requires a Console login.
+> Automation: prefer `--json` and parse stable fields from that output (`id`, `urls.*`, `web_url`, `open_link`). Only `open_link` works as a shareable bearer-style URL; `web_url` assumes a Console login. For human vs JSON output, see [CLI Guide](/docs/cli-guide.md).

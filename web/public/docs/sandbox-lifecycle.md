@@ -8,6 +8,12 @@ create → running → stop → stopped → start → running → … → delete
 
 A sandbox only consumes [Compute Units](/docs/usage-limits.md) while it is in the **running** state.
 
+## In the Console
+
+On the Sandboxes page, each row includes a Lifecycle column: **auto-stop** is how long the sandbox can stay running before an idle stop (matches `auto_stop_interval`); **auto-del** is optional deletion after stop (matches `auto_delete_interval`; shown as a dash when disabled).
+
+![Sandboxes table: Lifecycle column with auto-stop and auto-del](/docs/images/sandboxes-lifecycle-column.png)
+
 ## Create
 
 ### CLI
@@ -183,6 +189,7 @@ Set `auto_delete_interval` at create time to have the platform delete automatica
 
 ## Read Next
 
+- [Inside your sandbox](/docs/inside-sandbox.md)
 - [Browser Handoff](/docs/browser-handoff.md)
 - [Usage & Limits](/docs/usage-limits.md)
 - [API Keys & Auth](/docs/api-keys-auth.md)

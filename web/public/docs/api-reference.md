@@ -3,9 +3,11 @@
 ## Hosted Base URL
 
 - **Control plane**: `https://api.treadstone-ai.dev`
-- **Interactive REST docs (Swagger UI)**: [https://api.treadstone-ai.dev/docs](https://api.treadstone-ai.dev/docs)
-- **OpenAPI JSON**: `https://api.treadstone-ai.dev/openapi.json` (same document as `GET /openapi.json` on the control plane host)
+- **Interactive REST docs (Swagger UI)**: [https://api.treadstone-ai.dev/docs](https://api.treadstone-ai.dev/docs) — documents **control-plane** routes and **data-plane** proxy routes. Sandbox HTTP APIs are merged under `/v1/sandboxes/{sandbox_id}/proxy/...` (tagged like `Sandbox: …` in the UI) so you can explore REST shapes for traffic into a sandbox; call them with a real `sandbox_id` and `Authorization: Bearer <api_key>`.
+- **OpenAPI JSON**: `https://api.treadstone-ai.dev/openapi.json` (same as `GET /openapi.json` on the control plane host) — same merged document as Swagger.
 - **Browser handoff and proxy URLs** are returned by the platform. Do not construct them client-side.
+
+**SDK generation:** The Python SDK and repo `make gen-openapi` output use a **public** OpenAPI export **without** the merged sandbox-runtime paths. Use the hosted `/docs` or `/openapi.json` when you need schemas for operations under `/v1/sandboxes/{sandbox_id}/proxy/...`.
 
 ## Auth Surfaces
 
@@ -91,7 +93,122 @@ wss://api.treadstone-ai.dev/v1/sandboxes/{id}/proxy/mcp
 Authorization: Bearer sk-…
 ```
 
-**Browser / subdomain access** — If the sandbox should be opened in a browser (e.g. for a web-based MCP client), use the `urls.web` field returned by the sandbox API. This URL (`https://sandbox-{id}.treadstone-ai.dev/mcp`) is authenticated via browser session cookie; use `POST /v1/sandboxes/{id}/web-link` to obtain a shareable `open_link`.
+**Browser / subdomain access** — For a human or browser session in the workspace UI, use **`urls.web`** from the API (host and path come from server config; do not hard-code). Authentication is via Console session cookie or a shareable **`open_link`** from `POST /v1/sandboxes/{id}/web-link`. That surface is different from **`urls.mcp`**: MCP automation should use the proxy URL and API keys, not `urls.web`, unless your client explicitly supports the browser flow.
+
+### Sandbox runtime APIs (merged data plane)
+
+The route tables **above** list **Treadstone control-plane** endpoints and **one generic** proxy row. They do **not** enumerate every HTTP route that runs **inside** the sandbox.
+
+Those workloads are described by a separate OpenAPI document bundled with the server (`scripts/sandbox_openapi_base.json` in the repository). At runtime, Treadstone **merges** it under:
+
+`/v1/sandboxes/{sandbox_id}/proxy` + **`<path from the sandbox spec>`**
+
+So a sandbox route like `/v1/shell/exec` becomes:
+
+`/v1/sandboxes/{sandbox_id}/proxy/v1/shell/exec`
+
+In [Swagger UI](https://api.treadstone-ai.dev/docs) they appear under tags **`Sandbox: <name>`** (for example `Sandbox: shell`, `Sandbox: file`, `Sandbox: browser`) — the same operations as in `scripts/sandbox_openapi_base.json`, with `sandbox_id` injected. Auth is **`Authorization: Bearer <api_key>`** with data-plane access, same as the generic proxy.
+
+#### Sandbox runtime paths (from `sandbox_openapi_base.json`)
+
+The tables below list **every path** in the bundled sandbox OpenAPI spec. Each row is the suffix after `/v1/sandboxes/{sandbox_id}/proxy`. If the spec changes, update this section from the same file or use **Swagger** / **`openapi.json`** as the source of truth.
+
+##### `browser` — in-VM browser automation
+
+| Method | Path suffix | Summary |
+|--------|-------------|---------|
+| `POST` | `/v1/browser/actions` | Execute action |
+| `POST` | `/v1/browser/config` | Set config |
+| `GET` | `/v1/browser/info` | Get browser info |
+| `GET` | `/v1/browser/screenshot` | Take screenshot |
+
+##### `code` — Python execution
+
+| Method | Path suffix | Summary |
+|--------|-------------|---------|
+| `POST` | `/v1/code/execute` | Execute code |
+| `GET` | `/v1/code/info` | Code info |
+
+##### `file` — filesystem
+
+| Method | Path suffix | Summary |
+|--------|-------------|---------|
+| `GET` | `/v1/file/download` | Download file |
+| `POST` | `/v1/file/find` | Find files |
+| `POST` | `/v1/file/list` | List path |
+| `POST` | `/v1/file/read` | Read file |
+| `POST` | `/v1/file/replace` | Replace in file |
+| `POST` | `/v1/file/search` | Search in file |
+| `POST` | `/v1/file/str_replace_editor` | Str replace editor |
+| `POST` | `/v1/file/upload` | Upload file |
+| `POST` | `/v1/file/write` | Write file |
+
+##### `jupyter`
+
+| Method | Path suffix | Summary |
+|--------|-------------|---------|
+| `POST` | `/v1/jupyter/execute` | Execute Jupyter code |
+| `GET` | `/v1/jupyter/info` | Jupyter info |
+| `GET` | `/v1/jupyter/sessions` | List sessions |
+| `DELETE` | `/v1/jupyter/sessions` | Cleanup all sessions |
+| `POST` | `/v1/jupyter/sessions/create` | Create Jupyter session |
+| `DELETE` | `/v1/jupyter/sessions/{session_id}` | Cleanup session |
+
+##### `mcp`
+
+| Method | Path suffix | Summary |
+|--------|-------------|---------|
+| `GET` | `/v1/mcp/servers` | List MCP servers |
+| `GET` | `/v1/mcp/{server_name}/tools` | List MCP tools |
+| `POST` | `/v1/mcp/{server_name}/tools/{tool_name}` | Execute MCP tool |
+
+##### `nodejs` — Node execution
+
+| Method | Path suffix | Summary |
+|--------|-------------|---------|
+| `POST` | `/v1/nodejs/execute` | Execute Node.js code |
+| `GET` | `/v1/nodejs/info` | Node.js info |
+
+##### `sandbox` — environment context
+
+| Method | Path suffix | Summary |
+|--------|-------------|---------|
+| `GET` | `/v1/sandbox` | Get sandbox context |
+| `GET` | `/v1/sandbox/packages/python` | Python packages |
+| `GET` | `/v1/sandbox/packages/nodejs` | Node.js packages |
+
+##### `shell`
+
+| Method | Path suffix | Summary |
+|--------|-------------|---------|
+| `POST` | `/v1/shell/exec` | Exec command (optional SSE via `Accept: text/event-stream`) |
+| `POST` | `/v1/shell/view` | View shell |
+| `POST` | `/v1/shell/wait` | Wait for process |
+| `POST` | `/v1/shell/write` | Write to process |
+| `POST` | `/v1/shell/kill` | Kill process |
+| `POST` | `/v1/shell/sessions/create` | Create session |
+| `GET` | `/v1/shell/terminal-url` | Get terminal URL |
+| `GET` | `/v1/shell/sessions` | List sessions |
+| `DELETE` | `/v1/shell/sessions` | Cleanup all sessions |
+| `DELETE` | `/v1/shell/sessions/{session_id}` | Cleanup session |
+
+##### `skills`
+
+| Method | Path suffix | Summary |
+|--------|-------------|---------|
+| `DELETE` | `/v1/skills` | Clear skills |
+| `GET` | `/v1/skills/metadatas` | List skills metadata |
+| `POST` | `/v1/skills/register` | Register skills |
+| `DELETE` | `/v1/skills/{name}` | Delete skill |
+| `GET` | `/v1/skills/{name}/content` | Get skill content |
+
+##### `util`
+
+| Method | Path suffix | Summary |
+|--------|-------------|---------|
+| `POST` | `/v1/util/convert_to_markdown` | Convert to Markdown |
+
+Request and response schemas for these operations are in **`sandbox_openapi_base.json`** and in the hosted **Swagger** / **`openapi.json`** — not duplicated here.
 
 ### Usage
 
@@ -112,8 +229,9 @@ Authorization: Bearer sk-…
 | `id` | The machine identifier for this sandbox. Use it for every subsequent operation. |
 | `name` | The human label. Not a stable identifier; use `id` for programmatic access. |
 | `status` | Current lifecycle state: `creating`, `stopped`, `running`, `error`, etc. |
-| `urls.proxy` | The data-plane URL for proxying requests into this sandbox. |
-| `urls.web` | The browser entry point, accessible once a web link is enabled. |
+| `urls.proxy` | The data-plane base for HTTP/WebSocket into this sandbox (`…/v1/sandboxes/{id}/proxy`). |
+| `urls.mcp` | The MCP endpoint URL (`urls.proxy` + `/mcp`). Prefer this for MCP clients instead of constructing paths. |
+| `urls.web` | Browser workspace entry (subdomain URL when configured; may include a handoff token when a web link is active). |
 
 ### Browser handoff create (`POST /web-link`)
 

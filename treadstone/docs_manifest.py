@@ -182,7 +182,8 @@ def render_sitemap_markdown(entries: Iterable[DocManifestEntry]) -> str:
             "`Accept: text/markdown`; otherwise redirects to `/docs?page={slug}`.",
             "- [`/docs/sitemap.md`](/docs/sitemap.md): This complete documentation index.",
             "- [`/llms.txt`](/llms.txt): Short machine-oriented entrypoint.",
-            "- [`/openapi.json`](/openapi.json): Generated OpenAPI document for the control plane.",
+            "- [`/openapi.json`](/openapi.json): Hosted spec — control plane plus merged sandbox proxy paths "
+            "(not the same as `make gen-openapi`, which feeds the SDK).",
             "",
         ]
     )
@@ -229,8 +230,8 @@ def render_llms_txt(entries: Iterable[DocManifestEntry]) -> str:
             "## Optional",
             "",
             "- [Documentation Sitemap](/docs/sitemap.md): Full hierarchical index",
-            "- [OpenAPI Spec](/openapi.json): Machine-readable control-plane API schema",
-            "- Hosted Swagger UI: https://api.treadstone-ai.dev/docs",
+            "- [OpenAPI Spec](/openapi.json): Hosted machine-readable schema (control plane + merged proxy paths)",
+            "- Hosted Swagger UI: https://api.treadstone-ai.dev/docs (same merged spec as `/openapi.json`)",
             "",
         ]
     )
