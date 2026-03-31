@@ -1,24 +1,24 @@
 # Treadstone Examples
 
-Step-by-step examples for creating, managing, and interacting with Treadstone sandboxes.
+Runnable samples aligned with the public docs in `web/public/docs/`. They are grouped by **control plane** (Treadstone API for lifecycle, keys, handoff) vs **data plane** (HTTP into a running sandbox via `urls.proxy`).
 
-## Architecture Overview
+## Architecture
 
-Treadstone is built around two distinct planes:
+Treadstone is two planes:
 
 ```
 ┌──────────────────────────────────────────────────────────┐
 │                   Your application                        │
 │                                                          │
 │   ┌─────────────────────┐   ┌──────────────────────────┐ │
-│   │   Control Plane      │   │      Data Plane          │ │
-│   │   (Treadstone API)   │   │   (Sandbox Runtime)      │ │
+│   │   Control plane      │   │      Data plane         │ │
+│   │   (Treadstone API)   │   │   (Sandbox runtime)     │ │
 │   │                      │   │                          │ │
-│   │  • Create sandbox    │   │  • Execute shell cmds    │ │
-│   │  • List sandboxes    │   │  • Read / write files    │ │
-│   │  • Start / stop      │   │  • Control browser       │ │
-│   │  • Delete sandbox    │   │  • Run Jupyter / Node.js │ │
-│   │  • Manage API keys   │   │  • Use MCP tools         │ │
+│   │  • Create sandbox    │   │  • Shell / file / browser │ │
+│   │  • List / get        │   │  • Jupyter, MCP, …       │ │
+│   │  • Stop / start      │   │                          │ │
+│   │  • Delete            │   │                          │ │
+│   │  • Web-link handoff  │   │                          │ │
 │   └──────────┬───────────┘   └──────────┬───────────────┘ │
 │              │                          │                  │
 │     treadstone_sdk                agent_sandbox            │
@@ -27,24 +27,16 @@ Treadstone is built around two distinct planes:
 └──────────────────────────────────────────────────────────┘
 ```
 
-**Control plane** manages sandbox lifecycle and is accessed via `treadstone_sdk`.
-
-**Data plane** runs operations *inside* a sandbox. You reach it through the proxy
-URL (`sandbox_detail.urls.proxy`) returned by the control plane, and interact with
-it using `agent_sandbox.Sandbox`.
-
-### Connecting the two planes
+**Connecting the two planes**
 
 ```python
-# 1. Control plane: create a sandbox and get its proxy URL
 from treadstone_sdk import AuthenticatedClient
 from treadstone_sdk.api.sandboxes import sandboxes_get_sandbox
 
 ctrl = AuthenticatedClient(base_url="https://api.treadstone-ai.dev", token="<api-key>")
 detail = sandboxes_get_sandbox.sync(sandbox_id="<id>", client=ctrl)
-proxy_url = detail.urls.proxy          # e.g. "https://…/v1/sandboxes/<id>/proxy"
+proxy_url = detail.urls.proxy
 
-# 2. Data plane: connect agent-sandbox to the proxy URL
 from agent_sandbox import Sandbox
 
 sb = Sandbox(
@@ -54,93 +46,56 @@ sb = Sandbox(
 result = sb.shell.exec_command(command="ls -la")
 ```
 
+See [Inside your sandbox](https://treadstone-ai.dev/docs/inside-sandbox.md) and [API Keys & Auth](https://treadstone-ai.dev/docs/api-keys-auth.md) for keys and scopes.
+
 ## Prerequisites
 
 ```bash
-pip install treadstone-sdk agent-sandbox
+pip install treadstone-sdk agent-sandbox   # data-plane agent example only
+pip install treadstone-sdk httpx           # httpx data-plane example only
 ```
 
-You need a control-plane API key. Set it as an environment variable or pass it via `--api-key`:
+Set a control-plane API key:
 
 ```bash
 export TREADSTONE_API_KEY=<your-key>
 ```
 
-## Examples
+Or pass `--api-key` on each run. Create a key with `treadstone api-keys create --name local --save` (see [Quickstart](https://treadstone-ai.dev/docs/quickstart.md)).
 
-| File | What it shows |
-|------|--------------|
-| [`01_create.py`](01_create.py) | List templates, create a sandbox, wait for ready |
-| [`02_list.py`](02_list.py) | List all sandboxes, group by status |
-| [`03_lifecycle.py`](03_lifecycle.py) | Stop and start a sandbox (status transitions) |
-| [`04_data_plane.py`](04_data_plane.py) | Shell, file, browser, and Jupyter operations |
+## Layout
 
-Run any example with `--help` for full options:
+| Path | Maps to docs | What it shows |
+|------|----------------|---------------|
+| [`control_plane/01_create_sandbox.py`](control_plane/01_create_sandbox.py) | [Quickstart](https://treadstone-ai.dev/docs/quickstart.md), [Sandbox lifecycle](https://treadstone-ai.dev/docs/sandbox-lifecycle.md) | List templates, create sandbox, wait for `ready`, optional delete |
+| [`control_plane/02_list_sandboxes.py`](control_plane/02_list_sandboxes.py) | [Sandbox lifecycle](https://treadstone-ai.dev/docs/sandbox-lifecycle.md) | List sandboxes, group by status, optional `--status` filter |
+| [`control_plane/03_lifecycle_stop_start.py`](control_plane/03_lifecycle_stop_start.py) | [Sandbox lifecycle](https://treadstone-ai.dev/docs/sandbox-lifecycle.md) | Stop → start transitions |
+| [`control_plane/04_browser_handoff.py`](control_plane/04_browser_handoff.py) | [Browser handoff](https://treadstone-ai.dev/docs/browser-handoff.md) | `web-link` create, status, delete, create again |
+| [`data_plane/01_agent_sandbox_runtime.py`](data_plane/01_agent_sandbox_runtime.py) | [Inside your sandbox](https://treadstone-ai.dev/docs/inside-sandbox.md) | Scoped data-plane key + `agent_sandbox`: shell, file, browser, Jupyter |
+| [`data_plane/02_httpx_proxy_shell_exec.py`](data_plane/02_httpx_proxy_shell_exec.py) | [REST API guide](https://treadstone-ai.dev/docs/rest-api-guide.md), [Inside your sandbox](https://treadstone-ai.dev/docs/inside-sandbox.md) | Minimal `httpx` `POST /v1/shell/exec` via `urls.proxy` (no `agent-sandbox`) |
 
-```bash
-python examples/01_create.py --help
-```
+Shared helpers: [`_shared.py`](_shared.py).
 
-## Quick Start
+## Run
 
-### 1. Create a sandbox
-
-```bash
-python examples/01_create.py --api-key $TREADSTONE_API_KEY
-```
-
-This creates a sandbox, waits for it to become ready, prints its proxy URL, and
-then deletes it. Pass `--keep` to leave the sandbox running.
-
-### 2. List your sandboxes
+From the repository root:
 
 ```bash
-python examples/02_list.py --api-key $TREADSTONE_API_KEY
+python examples/control_plane/01_create_sandbox.py --help
+python examples/control_plane/01_create_sandbox.py --api-key "$TREADSTONE_API_KEY"
 
-# Filter by status:
-python examples/02_list.py --api-key $TREADSTONE_API_KEY --status ready
+python examples/control_plane/02_list_sandboxes.py --api-key "$TREADSTONE_API_KEY"
+python examples/control_plane/02_list_sandboxes.py --api-key "$TREADSTONE_API_KEY" --status ready
+
+python examples/control_plane/03_lifecycle_stop_start.py --api-key "$TREADSTONE_API_KEY" --sandbox-id <id>
+python examples/control_plane/03_lifecycle_stop_start.py --api-key "$TREADSTONE_API_KEY"
+
+python examples/control_plane/04_browser_handoff.py --api-key "$TREADSTONE_API_KEY" --sandbox-id <id>
+
+python examples/data_plane/01_agent_sandbox_runtime.py --api-key "$TREADSTONE_API_KEY" --sandbox-id <id>
+python examples/data_plane/02_httpx_proxy_shell_exec.py --api-key "$TREADSTONE_API_KEY" --sandbox-id <id>
 ```
 
-### 3. Stop and start a sandbox
+## API reference
 
-```bash
-# Use an existing sandbox:
-python examples/03_lifecycle.py --api-key $TREADSTONE_API_KEY --sandbox-id <id>
-
-# Or let the example create a temporary one:
-python examples/03_lifecycle.py --api-key $TREADSTONE_API_KEY
-```
-
-### 4. Run data-plane operations
-
-```bash
-# Use an existing ready sandbox (fastest):
-python examples/04_data_plane.py --api-key $TREADSTONE_API_KEY --sandbox-id <id>
-
-# Or create a temporary sandbox for the demo:
-python examples/04_data_plane.py --api-key $TREADSTONE_API_KEY
-```
-
-This example covers:
-- **Shell**: execute arbitrary commands, capture stdout / exit code
-- **File**: write a file, read it back, list a directory
-- **Browser**: fetch viewport info, take a PNG screenshot
-- **Jupyter**: run Python code in a persistent kernel, capture outputs
-
-## API Reference
-
-The full OpenAPI specification — including sandbox runtime endpoints accessible
-through the proxy — is available at:
-
-```
-GET <base-url>/openapi.json
-```
-
-Or browse it interactively in the Swagger UI:
-
-```
-<base-url>/docs
-```
-
-The proxy routes are documented under the **"Sandbox: ..."** tag sections
-(e.g. "Sandbox: shell", "Sandbox: file", "Sandbox: browser").
+Full OpenAPI (including merged sandbox runtime paths under the proxy) is served by the API, e.g. `GET https://api.treadstone-ai.dev/openapi.json` and [Swagger UI](https://api.treadstone-ai.dev/docs). The Python SDK used here is generated from a **public** export that omits merged proxy paths; use hosted Swagger for data-plane HTTP contract details. See [Python SDK guide](https://treadstone-ai.dev/docs/python-sdk-guide.md).
