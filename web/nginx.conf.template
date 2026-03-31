@@ -14,8 +14,10 @@ server {
     }
 
     # SPA fallback — all non-file, non-API routes serve index.html
+    # Note: $uri/ is intentionally omitted. Including it causes nginx to match real
+    # directories (e.g. /docs/) and return 403 when no index.html exists inside them.
     location / {
-        try_files $uri $uri/ /index.html;
+        try_files $uri /index.html;
     }
 
     # Reverse proxy API calls to the backend (same-origin from browser's perspective)

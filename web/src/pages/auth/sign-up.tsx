@@ -127,11 +127,6 @@ export function SignUpPage() {
         </button>
       </form>
 
-      <div className="mt-8 border-l-4 border-primary bg-primary/10 px-4 py-3 text-sm leading-relaxed text-muted-foreground">
-        New users start on the free tier: 10 CU-hours monthly + 50 CU-hours welcome bonus. All sandbox templates
-        included.
-      </div>
-
       <p className="mt-10 text-center text-[10px] font-medium uppercase leading-relaxed tracking-[0.12em] text-muted-foreground">
         By creating an account, you agree to the Terms of Service and Privacy Policy.
       </p>

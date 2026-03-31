@@ -56,6 +56,10 @@ treadstone sandboxes list
 treadstone sandboxes web enable <sandbox_id>
 ```
 
+The command returns a browser link. Opening it gives a full live view into the sandbox — the agent's in-sandbox browser, VS Code, terminal, and file tree:
+
+![Sandbox browser handoff](docs/assets/image/sandbox.png)
+
 ### Agent Workflow
 
 For automation, prefer JSON output and capture returned IDs from command output.

@@ -15,6 +15,8 @@ Opening the handoff gives a **full browser view into the container**: the in-san
 
 In practice it is also the **human-in-the-loop entry**: someone can **watch** what the agent is doing inside the sandbox and **step in** to type, click, or fix things when review or takeover is needed.
 
+![Sandbox browser handoff view](/docs/images/sandbox.png)
+
 ## `open_link` vs `web_url`
 
 You will see two URL fields in API responses. They are **not** interchangeable:

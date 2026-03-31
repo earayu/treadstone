@@ -40,6 +40,10 @@
 
 ## 2. 浏览器接管
 
+打开 handoff 入口后，人类看到的是 sandbox 内部的完整浏览器视图——包括 in-sandbox 浏览器、VS Code（含集成终端）、文件树、Jupyter 等：
+
+![Sandbox 浏览器接管视图](../../assets/image/sandbox.png)
+
 ### 核心 URL 形态
 
 当前浏览器入口建立在 sandbox 子域名上：
