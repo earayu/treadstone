@@ -1,8 +1,8 @@
 # Create a Sandbox
 
-Use this page when you already know you need a sandbox and want the fields and controls that actually matter.
+A sandbox is an isolated runtime environment. You pick a template, set its lifecycle rules, and optionally attach persistent storage. The platform returns a `sandbox_id` immediately — that identifier is what every follow-up command uses.
 
-## Do This
+## Create One
 
 ```bash
 treadstone --json templates list
@@ -14,41 +14,33 @@ treadstone --json sandboxes create \
   --auto-delete-interval -1
 ```
 
-If you need persistent storage, add `--persist --storage-size 5Gi`.
+If you need a sandbox that retains data across restarts, add `--persist --storage-size 5Gi`.
 
-## Set These Fields On Purpose
+## Understand The Fields
 
-- `template`: must come from `templates list` or `/v1/sandbox-templates`.
-- `name`: optional human label; unique only within your own account.
-- `label`: repeatable `key:value` metadata for list filtering.
-- `auto-stop-interval`: inactivity timeout in minutes. `0` means never auto-stop.
-- `auto-delete-interval`: minutes after stop before deletion. `-1` disables auto-delete.
-- `persist` and `storage_size`: attach persistent storage only when you actually need it.
+- `template` — the runtime shape to use. Must come from `templates list` or `/v1/sandbox-templates`. Your plan determines which templates are available.
+- `name` — a human label. Optional and unique only within your account. Do not rely on it for programmatic access; use `id`.
+- `label` — repeatable `key:value` metadata you can filter on later with `sandboxes list`.
+- `auto-stop-interval` — minutes of inactivity before the platform stops the sandbox automatically. `0` means never auto-stop.
+- `auto-delete-interval` — minutes after stop before the sandbox is permanently deleted. `-1` disables auto-delete, leaving the sandbox in a stopped state until you delete it manually.
+- `persist` and `storage-size` — attach a persistent volume that survives restarts. Only set this when the sandbox actually needs to retain data. `storage-size` is invalid without `--persist`.
 
-## Save These Fields
+## Save These From The Response
 
-- `id`
-- `status`
-- `urls.proxy`
-- `urls.web`
-
-`id` is the machine identifier. Every follow-up action uses it.
-
-## Rules That Matter
-
-- Sandbox names are for humans. Follow-up commands use `sandbox_id`.
-- `storage_size` is only valid when `persist=true`.
-- Allowed templates and storage sizes depend on your plan and the server configuration.
-- `urls.web` is only useful as a browser entry point when sandbox web links are enabled.
+- `id` — the machine identifier. Every follow-up action (start, stop, browser handoff, delete) uses this.
+- `status` — the current lifecycle state.
+- `urls.proxy` — the data-plane entry for proxying requests into this sandbox.
+- `urls.web` — the browser entry point, accessible once you enable a web link.
 
 ## Common Failures
 
-- `template_not_found`: list templates again and retry with a valid name.
-- `sandbox_name_conflict`: pick another name or omit `--name`.
-- `email_verification_required`: verify the account before creating sandboxes.
-- `validation_error`: fix the request shape or field values and retry.
+- `template_not_found` — list templates again and retry with a name from that list.
+- `sandbox_name_conflict` — pick another name or omit `--name` to let the platform generate one.
+- `email_verification_required` — verify the account before sandbox creation is allowed.
+- `compute_quota_exceeded` or `storage_quota_exceeded` — check [Usage & Limits](/docs/usage-limits.md).
+- `validation_error` — fix the request shape or field values and retry.
 
-> For automation: always request JSON and capture `id` from the create response. Do not scrape table output.
+> For automation: always request JSON and capture `id` from the create response. Use `id` for every subsequent operation, not `name`.
 
 ## Read Next
 

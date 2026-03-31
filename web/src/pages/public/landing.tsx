@@ -11,8 +11,8 @@ const RELEASES_URL = "https://github.com/earayu/treadstone/releases"
 const PYPI_CLI_URL = "https://pypi.org/project/treadstone-cli/"
 const SUPPORT_EMAIL = "support@treadstone-ai.dev"
 
-const INSTALL_SH = "curl -fsSL https://github.com/earayu/treadstone/releases/latest/download/install.sh | sh"
-const INSTALL_PS = "irm https://github.com/earayu/treadstone/releases/latest/download/install.ps1 | iex"
+const INSTALL_SH = "curl -fsSL https://treadstone-ai.dev/install.sh | sh"
+const INSTALL_PS = "irm https://treadstone-ai.dev/install.ps1 | iex"
 const INSTALL_PIP = "pip install treadstone-cli"
 
 // ── Terminal animation data ──────────────────────────────────────────────────

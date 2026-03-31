@@ -1,6 +1,6 @@
 # REST API Guide
 
-Use this when another service needs direct control-plane calls into hosted Treadstone.
+Use this when another service needs direct control-plane calls into Treadstone without the CLI or SDK.
 
 ## Start With An API Key
 
@@ -10,7 +10,7 @@ Create one in the Console or with the CLI:
 treadstone api-keys create --name service-key --save
 ```
 
-Programmatic REST integrations should usually use API keys, even though control-plane routes also accept session cookies.
+All programmatic REST integrations should use API keys. Control-plane routes also accept session cookies, but that is for browser-based UIs, not service-to-service calls.
 
 ## Create A Sandbox
 
@@ -21,34 +21,34 @@ curl -X POST https://api.treadstone-ai.dev/v1/sandboxes \
   -d '{"template":"aio-sandbox-tiny","name":"agent-demo"}'
 ```
 
-Save:
+The response comes back immediately with the sandbox record. Save these fields:
 
-- `id`
-- `status`
-- `urls.proxy`
-- `urls.web`
+- `id` — the machine identifier; used in every follow-up request
+- `status` — the initial lifecycle state
+- `urls.proxy` — the data-plane entry for proxying requests into this sandbox
+- `urls.web` — the browser entry point once a web link is enabled
 
-## Hand The Browser To A Human
+## Generate A Browser Handoff URL
 
 ```bash
 curl -X POST https://api.treadstone-ai.dev/v1/sandboxes/SANDBOX_ID/web-link \
   -H "Authorization: Bearer $TREADSTONE_API_KEY"
 ```
 
-Read:
+From the response:
 
-- `web_url`
-- `open_link`
-- `expires_at`
+- `open_link` — the shareable handoff URL to send to a human
+- `web_url` — the canonical browser address for this sandbox
+- `expires_at` — when this handoff session expires
 
-## Know The Surface Split
+## Control Plane vs Data Plane
 
-- Control plane: auth, templates, sandboxes, browser handoff, usage
-- Data plane: `/v1/sandboxes/{sandbox_id}/proxy/{path}`
+Treadstone has two surfaces with different auth rules:
 
-The data plane requires an API key. Cookie sessions do not work there.
+- **Control plane** (`https://api.treadstone-ai.dev`): auth, templates, sandbox lifecycle, browser handoff, usage. Accepts session cookies or API keys.
+- **Data plane** (`/v1/sandboxes/{sandbox_id}/proxy/{path}`): proxies requests directly into a running sandbox. Requires an API key — session cookies are not accepted here.
 
-> For automation: follow the workflow with `id`, not `name`. Never reconstruct `web_url` or `open_link` on the client side.
+> For automation: follow operations by `id`, not `name`. Never reconstruct `web_url` or `open_link` from client-side templates.
 
 ## Read Next
 

@@ -1,48 +1,46 @@
 # Usage & Limits
 
-Use this page when you need to answer two questions fast: can I run another sandbox, and why did the platform reject my request?
+Before creating a sandbox, the key question is: do I have budget? Before debugging a quota rejection, the key question is: which limit did I hit? This page answers both.
 
-## Look Here First
+## Where To Look
 
-- Console: [/app/usage](/app/usage)
-- API summary: `GET /v1/usage`
-- API detail: `GET /v1/usage/plan`, `GET /v1/usage/sessions`, `GET /v1/usage/grants`
+- **Console**: [/app/usage](/app/usage) — visual breakdown of your current billing period
+- `GET /v1/usage` — summary: compute remaining, storage available, concurrency state, and plan limits
+- `GET /v1/usage/plan` — the full plan record, including the templates your plan allows
+- `GET /v1/usage/sessions` — paginated history of past compute sessions
+- `GET /v1/usage/storage-ledger` — paginated storage usage history
+- `GET /v1/usage/grants` — active compute and storage grants applied to the account
 
-The hosted product does not expose a dedicated CLI `usage` command today.
+The hosted CLI does not have a dedicated `usage` command today. Use the API directly or check the Console.
 
-## Fields That Actually Change Your Next Move
+## Fields That Drive Decisions
 
-- `compute.total_remaining`
-- `compute.monthly_remaining`
-- `storage.available_gib`
-- `limits.allowed_templates`
-- `limits.max_concurrent_running`
-- `limits.current_running`
-- `limits.max_sandbox_duration_seconds`
-- `grace_period.active`
+From `GET /v1/usage`:
 
-## Example
+- `compute.total_remaining` — total compute seconds left in the current billing period
+- `compute.monthly_remaining` — this calendar month's remaining compute
+- `storage.available_gib` — storage quota remaining across all persistent sandboxes
+- `limits.allowed_templates` — the template names the current plan permits
+- `limits.max_concurrent_running` — how many sandboxes can run simultaneously
+- `limits.current_running` — how many are running right now
+- `limits.max_sandbox_duration_seconds` — the longest single run the plan allows
+- `grace_period.active` — whether the account is currently in a grace period
+
+## Quick Check
 
 ```bash
 curl -H "Authorization: Bearer $TREADSTONE_API_KEY" \
   https://api.treadstone-ai.dev/v1/usage
 ```
 
-Use the summary response to decide whether to create another sandbox, switch templates, shorten runtime, or clean up storage.
+Read `compute.total_remaining` and `limits.current_running` before deciding whether to create or start another sandbox.
 
-## When Limits Block You
+## When Quota Blocks You
 
-- `compute_quota_exceeded`: wait for the next billing period or change the plan.
-- `concurrent_limit_exceeded`: stop another sandbox first.
-- `storage_quota_exceeded`: delete unused persistent sandboxes or increase quota.
-- `sandbox_duration_exceeded`: lower `auto_stop_interval` or move to a plan that allows longer runs.
-
-## Useful Detail Endpoints
-
-- `/v1/usage/plan`: the full plan record and allowed templates
-- `/v1/usage/sessions`: paginated compute sessions
-- `/v1/usage/storage-ledger`: paginated storage usage history
-- `/v1/usage/grants`: active compute and storage grants
+- `compute_quota_exceeded` — wait for the next billing period or upgrade the plan.
+- `concurrent_limit_exceeded` — stop another sandbox before creating or starting one more.
+- `storage_quota_exceeded` — delete unused persistent sandboxes or increase quota.
+- `sandbox_duration_exceeded` — lower `auto_stop_interval` or move to a plan with a longer max runtime.
 
 > For automation: read `/v1/usage` before retrying quota failures. Do not blind-retry `compute_quota_exceeded` or `storage_quota_exceeded`.
 

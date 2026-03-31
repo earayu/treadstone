@@ -7,13 +7,13 @@ Command-line interface for the Treadstone sandbox service.
 ### Recommended: release installer
 
 ```bash
-curl -fsSL https://github.com/earayu/treadstone/releases/latest/download/install.sh | sh
+curl -fsSL https://treadstone-ai.dev/install.sh | sh
 ```
 
 Windows PowerShell:
 
 ```powershell
-irm https://github.com/earayu/treadstone/releases/latest/download/install.ps1 | iex
+irm https://treadstone-ai.dev/install.ps1 | iex
 ```
 
 The installer downloads the correct binary for your platform and verifies checksums when available.

@@ -25,13 +25,13 @@ Treadstone packages that into an **agent-native sandbox service** instead of mak
 Use the release installer script. It downloads the right binary for your platform and verifies checksums when available.
 
 ```bash
-curl -fsSL https://github.com/earayu/treadstone/releases/latest/download/install.sh | sh
+curl -fsSL https://treadstone-ai.dev/install.sh | sh
 ```
 
 Windows PowerShell:
 
 ```powershell
-irm https://github.com/earayu/treadstone/releases/latest/download/install.ps1 | iex
+irm https://treadstone-ai.dev/install.ps1 | iex
 ```
 
 Alternative:

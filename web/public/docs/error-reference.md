@@ -1,5 +1,7 @@
 # Error Reference
 
+Every error response from the Treadstone API has the same shape. Build retry and recovery logic around `error.code` — it is stable. Do not parse `message`; it is human-readable prose and may change.
+
 ## Error Envelope
 
 ```json
@@ -11,8 +13,6 @@
   }
 }
 ```
-
-Build retry and recovery logic around `error.code`, not around free-form message text.
 
 ## Common Error Codes
 
