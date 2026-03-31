@@ -25,19 +25,23 @@ function formatRelativeTime(dateStr: string): string {
 }
 
 function StatusDot({ status }: { status: string }) {
-  const isRunning = status === "ready" || status === "creating"
+  const isReady = status === "ready"
+  const isCreating = status === "creating"
+  const isActiveLabel = isReady || isCreating
   return (
     <div className="flex items-center gap-2">
       <span
         className={cn(
           "inline-block size-1.5 rounded-full",
-          isRunning ? "bg-primary" : "bg-muted-foreground/60",
+          isReady && "bg-primary",
+          isCreating && "bg-amber-500",
+          !isReady && !isCreating && "bg-muted-foreground/60",
         )}
       />
       <span
         className={cn(
           "text-xs font-medium capitalize",
-          isRunning ? "text-foreground" : "text-muted-foreground",
+          isActiveLabel ? "text-foreground" : "text-muted-foreground",
         )}
       >
         {status === "ready" ? "Running" : status}
@@ -87,6 +91,7 @@ function DeleteConfirmDialog({
   const [input, setInput] = useState("")
   const deleteSandbox = useDeleteSandbox()
   const confirmName = sandbox.name || sandbox.id
+  const isCreating = sandbox.status === "creating"
 
   async function handleDelete() {
     try {
@@ -112,10 +117,12 @@ function DeleteConfirmDialog({
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/70 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(100vw-2rem,420px)] -translate-x-1/2 -translate-y-1/2 border border-border/20 bg-card p-6 shadow-xl outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0">
           <Dialog.Title className="text-base font-bold text-foreground">
-            Delete Sandbox
+            {isCreating ? "Cancel provisioning" : "Delete Sandbox"}
           </Dialog.Title>
           <Dialog.Description className="mt-2 text-sm text-muted-foreground">
-            This action is irreversible. Type{" "}
+            {isCreating
+              ? "Provisioning will stop and the sandbox will be permanently removed. Type "
+              : "This action is irreversible. Type "}
             <span className="font-mono font-bold text-foreground">{confirmName}</span> to confirm.
           </Dialog.Description>
           <input
@@ -135,7 +142,7 @@ function DeleteConfirmDialog({
               disabled={input !== confirmName || deleteSandbox.isPending}
               className="bg-destructive px-4 py-2 text-sm font-bold text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:opacity-40"
             >
-              Delete
+              {isCreating ? "Cancel provisioning" : "Delete"}
             </button>
           </div>
         </Dialog.Content>
@@ -150,8 +157,10 @@ function SandboxRowActions({ sandbox }: { sandbox: Sandbox }) {
   const stopSandbox = useStopSandbox()
   const startSandbox = useStartSandbox()
 
-  const isRunning = sandbox.status === "ready" || sandbox.status === "creating"
-  const isStopped = !isRunning
+  const isReady = sandbox.status === "ready"
+  const isCreating = sandbox.status === "creating"
+  const canStart = sandbox.status === "stopped" || sandbox.status === "error"
+  const canDelete = isCreating || sandbox.status === "stopped" || sandbox.status === "error"
 
   async function handleStop() {
     try {
@@ -177,9 +186,10 @@ function SandboxRowActions({ sandbox }: { sandbox: Sandbox }) {
         <DropdownMenu.Trigger asChild>
           <button
             type="button"
+            aria-label="Open sandbox actions"
             className="flex size-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none data-[state=open]:bg-accent data-[state=open]:text-foreground"
           >
-            <MoreHorizontal className="size-4" />
+            <MoreHorizontal className="size-4" aria-hidden />
           </button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
@@ -198,7 +208,7 @@ function SandboxRowActions({ sandbox }: { sandbox: Sandbox }) {
 
             <DropdownMenu.Separator className="my-1 border-t border-border/15" />
 
-            {isRunning ? (
+            {isReady && (
               <DropdownMenu.Item
                 onClick={() => void handleStop()}
                 disabled={stopSandbox.isPending}
@@ -207,7 +217,8 @@ function SandboxRowActions({ sandbox }: { sandbox: Sandbox }) {
                 <Square className="size-3.5 text-muted-foreground" />
                 Stop
               </DropdownMenu.Item>
-            ) : (
+            )}
+            {canStart && (
               <DropdownMenu.Item
                 onClick={() => void handleStart()}
                 disabled={startSandbox.isPending}
@@ -218,15 +229,17 @@ function SandboxRowActions({ sandbox }: { sandbox: Sandbox }) {
               </DropdownMenu.Item>
             )}
 
-            {isStopped && (
+            {canDelete && (
               <>
-                <DropdownMenu.Separator className="my-1 border-t border-border/15" />
+                {(isReady || canStart) && (
+                  <DropdownMenu.Separator className="my-1 border-t border-border/15" />
+                )}
                 <DropdownMenu.Item
                   onClick={() => setDeleteOpen(true)}
                   className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs text-destructive outline-none hover:bg-destructive/10 focus:bg-destructive/10"
                 >
                   <Trash2 className="size-3.5" />
-                  Delete
+                  {isCreating ? "Cancel provisioning" : "Delete"}
                 </DropdownMenu.Item>
               </>
             )}

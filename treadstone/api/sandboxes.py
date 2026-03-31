@@ -18,6 +18,7 @@ from treadstone.api.schemas import (
 from treadstone.config import settings
 from treadstone.core.database import get_session
 from treadstone.core.errors import EmailVerificationRequiredError, SandboxNotFoundError, ValidationError
+from treadstone.core.public_base_url import public_control_plane_base_url
 from treadstone.core.request_context import set_request_context
 from treadstone.models.sandbox_web_link import SandboxWebLink
 from treadstone.models.user import User, utc_now
@@ -240,7 +241,7 @@ async def create_sandbox(
         request=request,
     )
     await session.commit()
-    return _to_response(sandbox, str(request.base_url), web_link)
+    return _to_response(sandbox, public_control_plane_base_url(request), web_link)
 
 
 @router.get("", response_model=SandboxListResponse)
@@ -258,7 +259,7 @@ async def list_sandboxes(
     sandboxes = await service.list_by_owner(owner_id=user.id, labels=labels_dict or None)
     total = len(sandboxes)
     page = sandboxes[offset : offset + limit]
-    base_url = str(request.base_url)
+    base_url = public_control_plane_base_url(request)
     web_links = await _load_active_web_links(session, [sb.id for sb in page]) if settings.sandbox_domain else {}
     return {"items": [_to_response(sb, base_url, web_links.get(sb.id)) for sb in page], "total": total}
 
@@ -276,7 +277,7 @@ async def get_sandbox(
         raise SandboxNotFoundError(sandbox_id)
     set_request_context(request, sandbox_id=sandbox.id)
     web_link = await _load_active_web_link(session, sandbox.id) if settings.sandbox_domain else None
-    return _to_detail(sandbox, str(request.base_url), web_link)
+    return _to_detail(sandbox, public_control_plane_base_url(request), web_link)
 
 
 @router.delete("/{sandbox_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -318,7 +319,7 @@ async def start_sandbox(
     )
     await session.commit()
     web_link = await _load_active_web_link(session, sandbox.id) if settings.sandbox_domain else None
-    return _to_detail(sandbox, str(request.base_url), web_link)
+    return _to_detail(sandbox, public_control_plane_base_url(request), web_link)
 
 
 @router.post("/{sandbox_id}/stop", response_model=SandboxDetailResponse)
@@ -340,7 +341,7 @@ async def stop_sandbox(
     )
     await session.commit()
     web_link = await _load_active_web_link(session, sandbox.id) if settings.sandbox_domain else None
-    return _to_detail(sandbox, str(request.base_url), web_link)
+    return _to_detail(sandbox, public_control_plane_base_url(request), web_link)
 
 
 @router.post("/{sandbox_id}/web-link", response_model=SandboxWebLinkResponse)
@@ -356,7 +357,7 @@ async def create_sandbox_web_link(
         raise SandboxNotFoundError(sandbox_id)
     set_request_context(request, sandbox_id=sandbox.id)
 
-    web_url = _get_web_url(sandbox, str(request.base_url))
+    web_url = _get_web_url(sandbox, public_control_plane_base_url(request))
     link = await _load_active_web_link(session, sandbox.id)
     if link is None:
         link = await _upsert_web_link(session, sandbox, user.id)
@@ -389,7 +390,7 @@ async def get_sandbox_web_link(
         raise SandboxNotFoundError(sandbox_id)
     set_request_context(request, sandbox_id=sandbox.id)
 
-    web_url = _get_web_url(sandbox, str(request.base_url))
+    web_url = _get_web_url(sandbox, public_control_plane_base_url(request))
     link = await _load_active_web_link(session, sandbox.id)
     if link is None:
         return {"web_url": web_url, "enabled": False, "expires_at": None, "last_used_at": None}

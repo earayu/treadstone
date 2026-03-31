@@ -35,6 +35,30 @@ RECONCILE_INTERVAL = 300  # 5 minutes
 WATCH_RESTART_BACKOFF = 5  # seconds to wait before restarting Watch after unexpected failure
 
 
+def _reconcile_tried_cr_keys(sandbox: Sandbox) -> str:
+    """Build a comma-separated list of CR name candidates for logging (List snapshot lookup)."""
+    keys: list[str] = []
+    for k in (sandbox.k8s_sandbox_name, sandbox.k8s_sandbox_claim_name, sandbox.id):
+        if k and k not in keys:
+            keys.append(k)
+    return ", ".join(keys)
+
+
+def _pop_sandbox_cr_for_reconcile(cr_map: dict[str, dict], sandbox: Sandbox) -> dict | None:
+    """Pop the Sandbox CR from the List response keyed by ``metadata.name``.
+
+    ``handle_watch_event`` matches rows when the event's CR name equals either
+    ``k8s_sandbox_name`` or ``k8s_sandbox_claim_name``. Reconcile tries those names in the
+    same order, and additionally ``sandbox.id`` when the CR's ``metadata.name`` is the
+    sandbox id (e.g. direct provisioning) — Watch does not query by ``id``, but List keys
+    may still be the id string.
+    """
+    for k in (sandbox.k8s_sandbox_name, sandbox.k8s_sandbox_claim_name, sandbox.id):
+        if k and k in cr_map:
+            return cr_map.pop(k)
+    return None
+
+
 def derive_status_from_sandbox_cr(cr: dict) -> tuple[str, str]:
     """Derive Treadstone SandboxStatus from a real Sandbox CR's status + spec.
 
@@ -223,8 +247,8 @@ async def reconcile(
         sandboxes = result.scalars().all()
 
         for sandbox in sandboxes:
-            cr_key = sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.id
-            cr = cr_map.pop(cr_key, None)
+            cr = _pop_sandbox_cr_for_reconcile(cr_map, sandbox)
+            tried_keys = _reconcile_tried_cr_keys(sandbox)
 
             if cr is None:
                 if sandbox.status == SandboxStatus.DELETING:
@@ -239,26 +263,41 @@ async def reconcile(
                         source="k8s_reconcile",
                     )
                     await _delete_sandbox_row(session, sandbox.id)
+                elif sandbox.status == SandboxStatus.STOPPED:
+                    logger.warning(
+                        "CR missing (reconcile List): sandbox_id=%s db_status=stopped tried_cr_keys=%s ns=%s; "
+                        "not marking error — list snapshot may be incomplete; if CR was actually deleted, "
+                        "see this warning in logs/metrics",
+                        sandbox.id,
+                        tried_keys,
+                        sandbox.k8s_namespace,
+                    )
                 elif sandbox.status != SandboxStatus.CREATING:
                     logger.warning(
-                        "CR missing (reconcile List): sandbox_id=%s db_status=%s expected_cr_key=%s ns=%s; "
+                        "CR missing (reconcile List): sandbox_id=%s db_status=%s tried_cr_keys=%s ns=%s; "
                         "CR not in list snapshot (lag, name mismatch, or consistency) — marking error",
                         sandbox.id,
                         sandbox.status,
-                        cr_key,
+                        tried_keys,
                         sandbox.k8s_namespace,
                     )
                     old_status = sandbox.status
-                    await _optimistic_update(session, sandbox.id, sandbox.version, SandboxStatus.ERROR)
-                    await _record_status_change(
-                        session,
-                        sandbox_id=sandbox.id,
-                        from_status=old_status,
-                        to_status=SandboxStatus.ERROR,
-                        source="k8s_reconcile",
-                    )
-                    await _apply_metering_on_transition(session, sandbox, old_status, SandboxStatus.ERROR)
-                    await session.commit()
+                    rows = await _optimistic_update(session, sandbox.id, sandbox.version, SandboxStatus.ERROR)
+                    if rows == 0:
+                        logger.debug(
+                            "Optimistic lock conflict for reconcile (CR missing -> error) sandbox_id=%s, skipping",
+                            sandbox.id,
+                        )
+                    else:
+                        await _record_status_change(
+                            session,
+                            sandbox_id=sandbox.id,
+                            from_status=old_status,
+                            to_status=SandboxStatus.ERROR,
+                            source="k8s_reconcile",
+                        )
+                        await _apply_metering_on_transition(session, sandbox, old_status, SandboxStatus.ERROR)
+                        await session.commit()
                 continue
 
             cr_rv = cr.get("metadata", {}).get("resourceVersion")
@@ -274,19 +313,27 @@ async def reconcile(
 
             if new_status != sandbox.status and is_valid_transition(sandbox.status, new_status):
                 old_status = sandbox.status
-                await _optimistic_update(
+                rows = await _optimistic_update(
                     session, sandbox.id, sandbox.version, new_status, resource_version=cr_rv, message=message
                 )
-                await _record_status_change(
-                    session,
-                    sandbox_id=sandbox.id,
-                    from_status=old_status,
-                    to_status=new_status,
-                    source="k8s_reconcile",
-                    message=message,
-                )
-                await _apply_metering_on_transition(session, sandbox, old_status, new_status)
-                await session.commit()
+                if rows == 0:
+                    logger.debug(
+                        "Optimistic lock conflict for reconcile sandbox_id=%s (%s -> %s), skipping",
+                        sandbox.id,
+                        old_status,
+                        new_status,
+                    )
+                else:
+                    await _record_status_change(
+                        session,
+                        sandbox_id=sandbox.id,
+                        from_status=old_status,
+                        to_status=new_status,
+                        source="k8s_reconcile",
+                        message=message,
+                    )
+                    await _apply_metering_on_transition(session, sandbox, old_status, new_status)
+                    await session.commit()
             elif cr_rv != sandbox.k8s_resource_version:
                 await _update_sync_metadata(session, sandbox.id, cr_rv, message)
 

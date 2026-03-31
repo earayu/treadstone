@@ -54,6 +54,13 @@ def _infer_route_kind(scope: Scope) -> str:
     return "subdomain_ws" if scope["type"] == "websocket" else "subdomain_http"
 
 
+def _should_emit_http_request_log(method: str, path: str, status_code: int) -> bool:
+    """Omit noisy probe traffic: successful GET /health (K8s/ALB checks) from structured access logs."""
+    if method == "GET" and path == "/health" and 200 <= status_code < 300:
+        return False
+    return True
+
+
 class RequestLoggingMiddleware:
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -110,4 +117,8 @@ class RequestLoggingMiddleware:
                 "route_kind": get_scope_context(scope, "route_kind"),
                 "error_code": get_scope_context(scope, "error_code"),
             }
-            request_logger.info(json.dumps(payload, separators=(",", ":")))
+            method = scope.get("method", scope["type"].upper())
+            path = scope.get("path", "")
+            status = response_code or 500
+            if _should_emit_http_request_log(method, path, status):
+                request_logger.info(json.dumps(payload, separators=(",", ":")))

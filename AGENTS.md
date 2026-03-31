@@ -9,7 +9,7 @@ Use the matching local skill before you act:
 | If you need to... | Use |
 |-------|-------------|
 | Set up this repo for the first time | `dev-setup` |
-| Make any shippable change | `dev-lifecycle` |
+| Ship code, PRs, merges, version bumps, releases, or prod deploy | `dev-lifecycle` |
 | Add or change SQLAlchemy models / Alembic migrations | `database-migration` |
 | Answer Neon-specific questions or plan Neon usage | `neon-postgres` |
 | Audit a subsystem against the current code and write a detailed report | `system-audit-report` |
@@ -60,7 +60,7 @@ scripts/           # Helper scripts (release, install, deploy, E2E)
 | Skill | When to use |
 |-------|-------------|
 | `dev-setup` | First-time environment setup (once per clone) |
-| `dev-lifecycle` | Every feature/fix: branch, TDD, ship, PR, merge |
+| `dev-lifecycle` | Feature/fix: branch, TDD, ship, PR, merge; bump, tag, release; agreed codewords (合并代码 / 发版本 / 发生产); see skill |
 | `database-migration` | Adding/modifying SQLAlchemy models and Alembic migrations |
 | `neon-postgres` | Neon-specific questions (branching, connection methods, SDKs) |
 | `system-audit-report` | First-pass or general subsystem audits grounded in the current code |
@@ -139,17 +139,17 @@ Rules:
 - Never commit `.env`, secrets, or credentials.
 - PRs and Issues are automatically added to the [Project Board](https://github.com/users/earayu/projects/5/views/1) by GitHub Actions.
 
-## Release
+## Release and deploy (agents)
 
-Two-step flow: **bump** (on feature branch) → **release** (on main).
+**Agents must follow** [`.agents/skills/dev-lifecycle/SKILL.md`](.agents/skills/dev-lifecycle/SKILL.md) for:
 
-1. `git checkout -b chore/release-x.y.z && make bump V=x.y.z` — bumps version in `pyproject.toml` (server, CLI, SDK) + `uv.lock`, commits and pushes.
-2. Open a PR, wait for CI, merge.
-3. `git checkout main && git pull && make release V=x.y.z` — tags `vx.y.z` and pushes the tag (no branch push).
-4. Tag push triggers [`.github/workflows/release.yml`](.github/workflows/release.yml): Docker image → GHCR, `treadstone-cli` + `treadstone-sdk` → PyPI, CLI binaries + install scripts → GitHub Release assets.
-5. After Release succeeds, [`.github/workflows/update-prod-image.yml`](.github/workflows/update-prod-image.yml) auto-updates `deploy/treadstone/values-prod.yaml` image tag and commits to `main`.
+- PRs, CI, merges, and `make ship`
+- Version bumps (`make bump`), tagged releases (`make release`), and waiting for the Release workflow
+- Production deploy (`make deploy-all ENV=prod`) and the **发生产** path (including Update Prod Image)
 
-- **Agents:** Use `make bump V=…` then `make release V=…`. Do not hand-craft `git tag` / `git push origin v…` or `gh release create` unless fixing a broken release.
+That skill is the single source of truth for step order and the agreed codewords (**合并代码**, **发版本**, **发生产**). Do not improvise a parallel release checklist.
+
+**Guardrail:** Use `make bump` / `make release` as implemented in the Makefile. Do not hand-craft `git tag` / `git push origin v…` or `gh release create` unless fixing a broken release.
 
 ## Automation
 
@@ -157,8 +157,8 @@ Two-step flow: **bump** (on feature branch) → **release** (on main).
 - **pre-push hook**: blocks direct push to main.
 - **CI** (GitHub Actions): lint + test + openapi + build on pushes/PRs, plus integration on PRs. Any failure blocks merge.
 - **CD** (`.github/workflows/cd.yml`): pushes the `main` image to GHCR on changes to deployable server files.
-- **Release** (`.github/workflows/release.yml`): publishes tagged releases and GitHub Release assets on `v*` tags.
-- **Update Prod Image** (`.github/workflows/update-prod-image.yml`): after Release succeeds, auto-updates `values-prod.yaml` image tag and commits to `main`.
+- **Release** (`.github/workflows/release.yml`): publishes tagged releases and GitHub Release assets on `v*` tags. Agent steps: `dev-lifecycle` skill.
+- **Update Prod Image** (`.github/workflows/update-prod-image.yml`): after Release succeeds, updates `values-prod.yaml` on `main`. Wait for this before **发生产** deploy; see `dev-lifecycle` skill.
 
 ## Quick Command Reference
 
@@ -182,3 +182,4 @@ Run `make help` for the full list. Key commands:
 | `make ship MSG=x` | git add + commit + push (feature branches only) |
 | `make bump V=x.y.z` | Bump version files, commit + push (feature branches only) |
 | `make release V=x.y.z` | Tag `vx.y.z` on `main` and push tag (triggers full release pipeline) |
+| `make deploy-all ENV=prod` | Deploy all Helm layers to production (after **发生产** prerequisites; see `dev-lifecycle`) |

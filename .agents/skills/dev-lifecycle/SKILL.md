@@ -1,71 +1,129 @@
 ---
 name: dev-lifecycle
-description: Treadstone daily development lifecycle — the step-by-step loop from creating a branch to merging a PR. Use this skill every time you develop a new feature, fix a bug, refactor code, or make any code change that will be shipped. Covers branching, TDD cycle, shipping, PR creation, CI monitoring, and merging. If the user says "add feature X", "fix bug Y", "implement Z", or anything that implies writing and shipping code, this skill applies.
+description: Treadstone development lifecycle — feature branches, TDD, ship, PR, CI, merge, version bump, tagged release, and optional production deploy. Use for any shippable code change, GitHub flow, or release. Includes agreed “codeword” paths (合并代码 / 发版本 / 发生产). Source of truth for agents executing ship, bump, release, merge, or deploy-all.
 ---
 
 # Development Lifecycle
 
-Never push directly to main. All code merges go through Pull Requests — this includes AI Agents.
+**This file is the source of truth** for how agents run Git work, pull requests, CI, version bumps, releases, and production deployment. Follow it end-to-end; do not duplicate these procedures elsewhere except with a pointer here.
 
-## The Loop
+Never push directly to `main`. All changes land via Pull Requests, including work done by AI agents.
+
+All GitHub-visible text must be in English: commits, PR titles/bodies, review notes, release notes.
+
+---
+
+## Agreed trigger phrases (codewords)
+
+These are shorthand agreements with the project owner. When the user uses one of them, follow the matching path **fully** (including waiting for the right workflows).
+
+### 1. 合并代码 — “merge the code”
+
+**Intent:** Land the current work on `main` with automation.
+
+**Do:**
+
+1. Ensure work is on a **feature branch** (not `main`), pushed, and tested as needed (`make test`, `make lint`).
+2. Open a PR with `gh pr create` if one does not exist (HEREDOC body: Summary + Test Plan).
+3. Watch CI until it succeeds: `gh run watch` (or inspect failures with `gh run view <id> --log-failed`).
+4. When CI is green, merge: `gh pr merge --squash`.
+5. Update local `main`: `git checkout main && git pull`.
+
+Do not stop after opening the PR; continue until **merge is complete** unless the user aborts.
+
+### 2. 发版本 — “cut a release”
+
+**Intent:** Publish a **patch** release and wait until the **Release** GitHub Actions workflow finishes successfully.
+
+**Default:** Start from an up-to-date `main`, bump **one patch** version (e.g. `0.7.12` → `0.7.13`). Use another semver only if the user specifies it.
+
+**Do:**
+
+1. Sync: `git fetch origin && git checkout main && git pull`.
+2. Read the current version from `pyproject.toml` (root `version = "x.y.z"`) and compute the next **patch** `V=x.y.(z+1)` unless the user gave an explicit `V`.
+3. Create a bump branch: `git checkout -b chore/release-x.y.z` (use the new version in the name).
+4. Run **`make bump V=x.y.z`** (must not be on `main`). This updates version files, commits, and pushes the branch.
+5. Open a PR for the bump branch, wait for CI, then **`gh pr merge --squash`**.
+6. On **updated `main`**: `git checkout main && git pull`.
+7. Run **`make release V=x.y.z`** (only on `main`). This creates and pushes tag `vx.y.z` and triggers [`.github/workflows/release.yml`](../../../.github/workflows/release.yml).
+8. Wait until the **Release** workflow completes **successfully** (`gh run watch` or equivalent). Do not treat the release as done while the workflow is running or failed.
+
+Do not hand-craft `git tag`, `git push origin v…`, or `gh release create` unless fixing a broken release (see `AGENTS.md` guardrails).
+
+### 3. 发生产 — “deploy to production”
+
+**Intent:** After a successful version release, wait for the **prod image bump** on `main`, then deploy to the production cluster.
+
+**Prerequisite:** A **发版本** completed through a successful **Release** workflow (tag pushed).
+
+**Do:**
+
+1. Wait for the **Update Prod Image** workflow to finish successfully after that Release. It runs when the Release workflow completes ([`.github/workflows/update-prod-image.yml`](../../../.github/workflows/update-prod-image.yml)) and commits the new image tag to `deploy/treadstone/values-prod.yaml` on `main`.
+2. On your machine, sync `main`: `git checkout main && git pull` so you have the committed prod image tag and any other changes.
+3. Deploy production. The Makefile matches `deploy/*/values-<env>.yaml`; use **`ENV=prod`** (lowercase) so it resolves to `values-prod.yaml`. If the owner says **`ENV=PROD`**, treat it as the same intent and run `make deploy-all ENV=prod`.
+
+   ```bash
+   make deploy-all ENV=prod
+   ```
+
+Do not run `make deploy-all` until **Update Prod Image** has succeeded (otherwise the cluster may not track the intended image tag on `main`).
+
+---
+
+## The everyday development loop
+
+Feature work (no version bump):
 
 ```
-branch → TDD (write test → fail → implement → pass → refactor) → ship → PR → CI → merge
+branch → TDD → ship → PR → CI → merge
 ```
 
-## Step 1: Create a Feature Branch
+---
+
+## Step 1: Create a feature branch
 
 ```bash
 git checkout main && git pull
 git checkout -b feat/descriptive-name
 ```
 
-Branch naming: `feat/`, `fix/`, `chore/`, `refactor/`, `docs/`, `test/`.
+Use prefixes: `feat/`, `fix/`, `chore/`, `refactor/`, `docs/`, `test/`.
 
-## Step 2: TDD Cycle
+---
 
-Repeat per unit of work — keep iterations small. For docs-only changes, do not invent fake tests; instead verify examples against the source of truth (`Makefile`, CLI help, workflows, or code) and run lightweight checks such as `git diff --check`.
+## Step 2: TDD cycle
 
-1. **Write a failing test** in the appropriate directory (`tests/unit/`, `tests/api/`, or `tests/integration/`). See the Testing section in `AGENTS.md` for which directory to use.
+Keep iterations small. For docs-only changes, do not invent fake tests; validate paths and commands against the repo and run `git diff --check`.
 
-2. **Confirm it fails:**
-   ```bash
-   make test
-   ```
+1. Add a failing test under `tests/unit/`, `tests/api/`, or `tests/integration/` (see `AGENTS.md` → Testing).
+2. `make test` — confirm red.
+3. Implement the minimum to pass.
+4. `make test` — confirm green.
+5. Refactor if needed; re-run `make test`.
 
-3. **Write the minimal implementation** to make the test pass — nothing more.
+### Docs-only changes
 
-4. **Confirm it passes:**
-   ```bash
-   make test
-   ```
+For `README.md`, `AGENTS.md`, `.agents/skills/*/SKILL.md`, or similar:
 
-5. **Refactor** if needed, re-run `make test` to confirm nothing broke.
+- Still use a branch and PR.
+- Prefer `docs:` commits.
+- Run `git diff --check` before shipping.
 
-### Docs-Only Changes
+---
 
-For `README.md`, `AGENTS.md`, `.agents/skills/*/SKILL.md`, or similar documentation-only work:
-
-- Still use a feature branch and PR
-- Prefer `docs:` commit messages
-- Validate commands and paths against the current repo before editing
-- Run `git diff --check` before shipping
-
-## Step 3: Ship to Feature Branch
+## Step 3: Ship to the feature branch
 
 ```bash
 make ship MSG="feat: add user registration endpoint"
 ```
 
-This runs `git add -A && git commit && git push` on the current feature branch.
+Runs `git add -A`, `git commit`, `git push` on the current branch. **Never** run from `main` (`make` will error).
 
-Verify you are NOT on main before shipping: `git branch --show-current`.
+Commit messages: Conventional Commits (`feat:`, `fix:`, `test:`, `refactor:`, `chore:`, `docs:`). Small, one logical unit per commit.
 
-Commit messages follow Conventional Commits format (`feat:`, `fix:`, `test:`, `refactor:`, `chore:`, `docs:`). Keep commits small — one logical unit each. See `AGENTS.md` Git Workflow section for full conventions.
+---
 
-All GitHub-visible content (commit messages, PR titles/bodies, review comments) must be in English.
-
-## Step 4: Create a Pull Request
+## Step 4: Open a Pull Request
 
 ```bash
 gh pr create --title "feat: add user registration" --body "$(cat <<'EOF'
@@ -80,16 +138,18 @@ EOF
 )"
 ```
 
-Use HEREDOC for the body to avoid quote escaping issues.
+Use a HEREDOC for `--body` to avoid quoting bugs.
 
 ### Large OpenAPI / SDK diffs
 
-When `make gen-sdk-python` or `make gen-web-types` produces a big diff, help reviewers:
+When `make gen-sdk-python` or `make gen-web-types` produces a large diff:
 
-1. **Preferred:** Land **two commits** — first the feature (`treadstone/`, `tests/`, `web/` sources, migrations); second `chore: regenerate Python SDK from OpenAPI` with **`sdk/python/`** only (and optionally a third for `web/src/api/schema.d.ts` if you want web types separate).
-2. **If one commit:** Fill the PR template’s **Generated / mechanical** section so reviewers know `sdk/python/**` and `web/src/api/schema.d.ts` are tooling output, not hand-edited logic.
+1. **Preferred:** Two commits — (1) hand-written code + migrations + optional `web/src/api/schema.d.ts` from `make gen-web-types`; (2) `chore: regenerate Python SDK from OpenAPI` touching **`sdk/python/`** only.
+2. **Single commit:** State in the PR body that `sdk/python/**` and `web/src/api/schema.d.ts` are generated only.
 
 See `AGENTS.md` → OpenAPI / SDK Generation.
+
+---
 
 ## Step 5: Monitor CI
 
@@ -97,35 +157,59 @@ See `AGENTS.md` → OpenAPI / SDK Generation.
 gh run watch
 ```
 
-If CI fails:
+On failure:
 
 ```bash
-gh run view <run-id> --log-failed   # inspect failure
-make test                           # reproduce locally
-make lint                           # run repo lint checks
+gh run view <run-id> --log-failed
+make test
+make lint
 ```
 
-Fix, then `make ship MSG="fix: ..."` to push the fix.
+Fix, then `make ship MSG="fix: ..."` and push.
+
+---
 
 ## Step 6: Merge
 
-Once CI is green:
+When CI is green:
 
 ```bash
 gh pr merge --squash
 git checkout main && git pull
 ```
 
-## K8s Verification (When Needed)
+For **合并代码**, this merge step is mandatory unless the user says otherwise.
 
-If the change affects sandbox orchestration or deployment, verify on a local Kind cluster before merging. Follow `deploy/README.md` for the full workflow:
+---
+
+## K8s verification (when the change affects orchestration or deploy)
+
+Before merging risky work, validate on Kind per `deploy/README.md`:
 
 ```bash
-make up          # build + deploy to Kind
-make test-e2e    # run E2E tests against the cluster
-make down        # tear down when done
+make up
+make test-e2e
+make down
 ```
 
-## Quick Reference
+---
 
-Run `make help` for the full command list.
+## Automation reference (read-only context)
+
+- **CI** on PRs: lint, tests, OpenAPI checks, etc. Failures block merge.
+- **Release** (`.github/workflows/release.yml`): runs on tag push `v*`.
+- **Update Prod Image** (`.github/workflows/update-prod-image.yml`): after a successful Release run, updates `deploy/treadstone/values-prod.yaml` on `main`.
+
+Operational steps for agents live in this skill, not in workflow YAML.
+
+---
+
+## Quick reference
+
+| Goal | Command / pointer |
+|------|-------------------|
+| Commit + push branch | `make ship MSG="fix: ..."` |
+| Bump version (on bump branch) | `make bump V=x.y.z` |
+| Tag release (on `main` after bump merge) | `make release V=x.y.z` |
+| Prod deploy | `make deploy-all ENV=prod` |
+| Full Makefile | `make help` |

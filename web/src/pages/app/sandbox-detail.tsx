@@ -103,7 +103,13 @@ export function SandboxDetailPage() {
     if (!next) navigate("/app")
   }
 
-  const isRunning = sandbox?.status === "ready"
+  const isReady = sandbox?.status === "ready"
+  const isCreating = sandbox?.status === "creating"
+  const canStart = sandbox?.status === "stopped" || sandbox?.status === "error"
+  const canDelete =
+    sandbox?.status === "creating" ||
+    sandbox?.status === "stopped" ||
+    sandbox?.status === "error"
 
   async function handleRecreateLink() {
     if (!id) return
@@ -157,8 +163,12 @@ export function SandboxDetailPage() {
   }
 
   async function handleDelete() {
-    if (!id) return
-    if (!window.confirm("Delete this sandbox permanently?")) return
+    if (!id || !sandbox) return
+    const confirmMsg =
+      sandbox.status === "creating"
+        ? "Cancel provisioning and delete this sandbox permanently?"
+        : "Delete this sandbox permanently?"
+    if (!window.confirm(confirmMsg)) return
     try {
       await deleteSandbox.mutateAsync(id)
       toast.success("Sandbox deleted.")
@@ -211,11 +221,13 @@ export function SandboxDetailPage() {
                     <span
                       className={cn(
                         "inline-block size-2 rounded-full",
-                        isRunning ? "bg-primary" : "bg-muted-foreground/50",
+                        isReady && "bg-primary",
+                        isCreating && "bg-amber-500",
+                        !isReady && !isCreating && "bg-muted-foreground/50",
                       )}
                     />
                     <span className="text-sm font-semibold text-foreground">
-                      {isRunning ? "Running" : sandbox.status}
+                      {isReady ? "Running" : sandbox.status}
                     </span>
                   </div>
                   <span className="text-sm text-muted-foreground">·</span>
@@ -351,8 +363,8 @@ export function SandboxDetailPage() {
                   </div>
                 </div>
 
-                <div className="mt-8 flex items-center gap-2">
-                  {isRunning ? (
+                <div className="mt-8 flex flex-wrap items-center gap-2">
+                  {isReady && (
                     <button
                       type="button"
                       onClick={() => void handleStop()}
@@ -361,7 +373,17 @@ export function SandboxDetailPage() {
                     >
                       Stop
                     </button>
-                  ) : (
+                  )}
+                  {isCreating && (
+                    <span
+                      role="status"
+                      aria-live="polite"
+                      className="border border-border/40 bg-secondary/50 px-4 py-2 text-sm font-medium text-muted-foreground"
+                    >
+                      Provisioning…
+                    </span>
+                  )}
+                  {canStart && (
                     <button
                       type="button"
                       onClick={() => void handleStart()}
@@ -371,14 +393,16 @@ export function SandboxDetailPage() {
                       Start
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => void handleDelete()}
-                    disabled={deleteSandbox.isPending}
-                    className="bg-destructive px-4 py-2 text-sm font-bold text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:opacity-50"
-                  >
-                    Delete
-                  </button>
+                  {canDelete && (
+                    <button
+                      type="button"
+                      onClick={() => void handleDelete()}
+                      disabled={deleteSandbox.isPending}
+                      className="bg-destructive px-4 py-2 text-sm font-bold text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:opacity-50"
+                    >
+                      {isCreating ? "Cancel provisioning" : "Delete"}
+                    </button>
+                  )}
                 </div>
               </>
             )}

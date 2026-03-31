@@ -204,6 +204,17 @@ class TestReconcile:
             sb = await session.get(Sandbox, "sb00000000test1234")
             assert sb.status == SandboxStatus.ERROR
 
+    async def test_reconcile_missing_cr_stopped_stays_stopped(self, session_factory):
+        """Empty List must not promote STOPPED to ERROR (mirrors production stopped<->error oscillation fix)."""
+        await _create_sandbox(session_factory, status=SandboxStatus.STOPPED, k8s_resource_version="1")
+        k8s = FakeK8sClient()
+
+        await reconcile("treadstone-local", k8s, session_factory)
+
+        async with session_factory() as session:
+            sb = await session.get(Sandbox, "sb00000000test1234")
+            assert sb.status == SandboxStatus.STOPPED
+
     async def test_reconcile_missing_cr_deleting_marks_deleted(self, session_factory):
         await _create_sandbox(session_factory, status=SandboxStatus.DELETING)
         k8s = FakeK8sClient()
@@ -218,6 +229,25 @@ class TestReconcile:
 
     async def test_reconcile_error_to_ready(self, session_factory):
         await _create_sandbox(session_factory, status=SandboxStatus.ERROR, k8s_resource_version="old")
+        k8s = FakeK8sClient()
+        await k8s.create_sandbox_claim("test-sb", "aio-sandbox-tiny", "treadstone-local")
+        k8s.simulate_sandbox_ready("test-sb", "treadstone-local")
+
+        await reconcile("treadstone-local", k8s, session_factory)
+
+        async with session_factory() as session:
+            sb = await session.get(Sandbox, "sb00000000test1234")
+            assert sb.status == SandboxStatus.READY
+
+    async def test_reconcile_finds_cr_when_k8s_sandbox_name_mismatches_list_key(self, session_factory):
+        """If k8s_sandbox_name is wrong but claim name matches the CR, reconcile must not mark missing."""
+        await _create_sandbox(
+            session_factory,
+            k8s_sandbox_name="stale-wrong-name",
+            k8s_sandbox_claim_name="test-sb",
+            status=SandboxStatus.ERROR,
+            k8s_resource_version="old",
+        )
         k8s = FakeK8sClient()
         await k8s.create_sandbox_claim("test-sb", "aio-sandbox-tiny", "treadstone-local")
         k8s.simulate_sandbox_ready("test-sb", "treadstone-local")
