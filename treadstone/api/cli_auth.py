@@ -6,7 +6,6 @@ plus redirect stubs that point browsers to the SPA login pages.
 
 from __future__ import annotations
 
-import logging
 from datetime import timedelta
 from urllib.parse import urlencode
 
@@ -30,8 +29,6 @@ from treadstone.models.cli_login_flow import (
 )
 from treadstone.models.user import User, utc_now
 from treadstone.services.audit import record_audit_event
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/auth/cli", tags=["auth"])
 

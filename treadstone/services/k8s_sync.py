@@ -116,7 +116,14 @@ async def handle_watch_event(
                 )
                 await _delete_sandbox_row(session, sandbox.id)
             else:
-                logger.warning("Unexpected DELETED event for %s (status=%s), marking error", sandbox.id, sandbox.status)
+                logger.warning(
+                    "Unexpected DELETED (Watch): sandbox_id=%s db_status=%s cr=%s/%s rv=%s — marking error",
+                    sandbox.id,
+                    sandbox.status,
+                    cr_namespace,
+                    cr_name,
+                    cr_rv,
+                )
                 rows = await _optimistic_update(
                     session, sandbox.id, sandbox.version, SandboxStatus.ERROR, resource_version=cr_rv
                 )
@@ -157,10 +164,15 @@ async def handle_watch_event(
 
             if not is_valid_transition(sandbox.status, new_status):
                 logger.warning(
-                    "Invalid transition %s -> %s for %s from Watch, skipping",
+                    "Invalid transition (Watch): sandbox_id=%s db_status=%s -> k8s_derived=%s cr=%s/%s rv=%s "
+                    "cr_message=%r — skipping (state machine)",
+                    sandbox.id,
                     sandbox.status,
                     new_status,
-                    sandbox.id,
+                    cr_namespace,
+                    cr_name,
+                    cr_rv,
+                    message,
                 )
                 return
 
@@ -228,7 +240,14 @@ async def reconcile(
                     )
                     await _delete_sandbox_row(session, sandbox.id)
                 elif sandbox.status != SandboxStatus.CREATING:
-                    logger.warning("CR missing for %s (status=%s), marking error", sandbox.id, sandbox.status)
+                    logger.warning(
+                        "CR missing (reconcile List): sandbox_id=%s db_status=%s expected_cr_key=%s ns=%s; "
+                        "CR not in list snapshot (lag, name mismatch, or consistency) — marking error",
+                        sandbox.id,
+                        sandbox.status,
+                        cr_key,
+                        sandbox.k8s_namespace,
+                    )
                     old_status = sandbox.status
                     await _optimistic_update(session, sandbox.id, sandbox.version, SandboxStatus.ERROR)
                     await _record_status_change(
@@ -301,7 +320,7 @@ async def watch_loop(
     resource_version: str,
 ) -> None:
     """Consume Watch events and update DB in real time. Raises WatchExpiredError on 410."""
-    logger.info("Watch loop starting from rv=%s", resource_version)
+    logger.debug("Watch loop starting from rv=%s", resource_version)
     async for event_type, cr_object in k8s_client.watch_sandboxes(namespace, resource_version):
         try:
             await handle_watch_event(event_type, cr_object, session_factory)
@@ -310,7 +329,7 @@ async def watch_loop(
         rv = cr_object.get("metadata", {}).get("resourceVersion", "")
         if rv:
             resource_version = rv
-    logger.info("Watch stream ended (server closed connection)")
+    logger.debug("Watch stream ended (server closed connection)")
 
 
 async def _periodic_reconcile(
@@ -351,9 +370,9 @@ async def start_sync_loop(
             try:
                 await watch_loop(namespace, k8s_client, session_factory, list_rv)
                 # Watch stream ended normally (server timeout) — restart
-                logger.info("Watch stream ended, restarting")
+                logger.debug("Watch stream ended, restarting")
             except WatchExpiredError:
-                logger.info("Watch resourceVersion expired (410), re-listing")
+                logger.debug("Watch resourceVersion expired (410), re-listing")
             except Exception:
                 logger.exception("Watch loop failed, restarting in %ds", WATCH_RESTART_BACKOFF)
                 await asyncio.sleep(WATCH_RESTART_BACKOFF)
@@ -606,12 +625,19 @@ async def reconcile_storage_metering(
         await session.commit()
 
 
+def _sandbox_status_log_value(to_status: str | SandboxStatus) -> str:
+    return to_status.value if isinstance(to_status, SandboxStatus) else to_status
+
+
+_LOGGED_SANDBOX_TRANSITIONS = frozenset({SandboxStatus.ERROR.value, SandboxStatus.DELETING.value, "deleted"})
+
+
 async def _record_status_change(
     session: AsyncSession,
     *,
     sandbox_id: str,
     from_status: str,
-    to_status: str,
+    to_status: str | SandboxStatus,
     source: str,
     message: str | None = None,
 ) -> None:
@@ -621,5 +647,14 @@ async def _record_status_change(
         target_type="sandbox",
         target_id=sandbox_id,
         actor_type=AuditActorType.SYSTEM.value,
-        metadata={"from_status": from_status, "to_status": to_status, "source": source, "message": message},
+        metadata={
+            "from_status": from_status,
+            "to_status": _sandbox_status_log_value(to_status),
+            "source": source,
+            "message": message,
+        },
     )
+    ts = _sandbox_status_log_value(to_status)
+    if ts in _LOGGED_SANDBOX_TRANSITIONS:
+        msg_suffix = f" message={message!r}" if message else ""
+        logger.info("Sandbox %s status %s -> %s (source=%s)%s", sandbox_id, from_status, ts, source, msg_suffix)

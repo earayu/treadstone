@@ -26,6 +26,9 @@ openapi.json
 openapi-public.json
 reports/
 
+# Local incident / kubectl log exports (see scripts/export-k8s-logs.sh)
+logs/
+
 .DS_Store
 Thumbs.db
 

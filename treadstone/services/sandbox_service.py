@@ -13,7 +13,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,9 +27,11 @@ from treadstone.core.errors import (
     StorageBackendNotReadyError,
     TemplateNotFoundError,
 )
+from treadstone.models.audit_event import AuditActorType
 from treadstone.models.sandbox import Sandbox, SandboxStatus, is_valid_transition
 from treadstone.models.sandbox_web_link import SandboxWebLink
 from treadstone.models.user import random_id, utc_now
+from treadstone.services.audit import record_audit_event
 from treadstone.services.k8s_client import (
     ANNOTATION_CREATED_AT,
     ANNOTATION_SANDBOX_NAME,
@@ -40,6 +42,7 @@ from treadstone.services.k8s_client import (
     K8sClientProtocol,
     get_k8s_client,
 )
+from treadstone.services.k8s_sync import derive_status_from_sandbox_cr
 from treadstone.services.metering_helpers import parse_storage_size_gib
 
 if TYPE_CHECKING:
@@ -170,6 +173,11 @@ class SandboxService:
             sandbox.version += 1
             self.session.add(sandbox)
             await self.session.commit()
+            logger.info(
+                "Sandbox %s status creating -> error (source=api_create) message=%r",
+                sandbox_id,
+                sandbox.status_message,
+            )
 
         # ── Metering: record storage allocation for persistent sandboxes (best-effort) ──
         if self._metering is not None and persist and sandbox.status != SandboxStatus.ERROR:
@@ -284,6 +292,112 @@ class SandboxService:
         )
         return result.scalar_one_or_none()
 
+    async def heal_error_if_k8s_ready(self, sandbox: Sandbox, *, request: object | None = None) -> Sandbox:
+        """If DB says ``error`` but the live Sandbox CR is Ready, sync DB once (read self-heal).
+
+        Mitigates missed Watch events or transient List gaps that left the row in ``error`` while
+        the workload is healthy. Safe to call on read paths; uses optimistic locking on ``version``.
+        """
+        if sandbox.status != SandboxStatus.ERROR:
+            return sandbox
+
+        k8s_name = sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.id
+        try:
+            cr = await self.k8s.get_sandbox(name=k8s_name, namespace=sandbox.k8s_namespace)
+        except Exception:
+            logger.debug(
+                "Sandbox %s self-heal skipped: K8s GET failed for %s/%s",
+                sandbox.id,
+                k8s_name,
+                sandbox.k8s_namespace,
+                exc_info=True,
+            )
+            return sandbox
+
+        if cr is None:
+            logger.info(
+                "Sandbox %s self-heal skipped: DB=error but no Sandbox CR in K8s (name=%s ns=%s)",
+                sandbox.id,
+                k8s_name,
+                sandbox.k8s_namespace,
+            )
+            return sandbox
+
+        actual_status, msg = derive_status_from_sandbox_cr(cr)
+        if actual_status != SandboxStatus.READY:
+            logger.debug(
+                "Sandbox %s self-heal skipped: K8s derived status=%s (want ready) message=%r",
+                sandbox.id,
+                actual_status,
+                msg,
+            )
+            return sandbox
+
+        if not is_valid_transition(sandbox.status, actual_status):
+            logger.debug(
+                "Sandbox %s self-heal skipped: transition error -> %s not allowed by state machine",
+                sandbox.id,
+                actual_status,
+            )
+            return sandbox
+
+        cr_rv = cr.get("metadata", {}).get("resourceVersion")
+        now = datetime.now(UTC)
+        values: dict = {
+            "status": SandboxStatus.READY,
+            "status_message": msg,
+            "version": sandbox.version + 1,
+            "last_synced_at": now,
+            "gmt_started": now,
+        }
+        if cr_rv:
+            values["k8s_resource_version"] = cr_rv
+
+        result = await self.session.execute(
+            update(Sandbox)
+            .where(
+                Sandbox.id == sandbox.id,
+                Sandbox.version == sandbox.version,
+                Sandbox.status == SandboxStatus.ERROR,
+            )
+            .values(**values)
+        )
+        if result.rowcount == 0:
+            logger.debug("Sandbox %s self-heal skipped: optimistic version/status conflict", sandbox.id)
+            await self.session.refresh(sandbox)
+            return sandbox
+
+        await record_audit_event(
+            self.session,
+            action="sandbox.status.self_heal",
+            target_type="sandbox",
+            target_id=sandbox.id,
+            actor_type=AuditActorType.SYSTEM.value,
+            metadata={
+                "from_status": SandboxStatus.ERROR,
+                "to_status": SandboxStatus.READY,
+                "source": "api_get_detail",
+                "k8s_resource_version": cr_rv,
+                "status_message": msg,
+            },
+            request=request,
+        )
+
+        if self._metering is not None:
+            try:
+                await self._metering.open_compute_session(self.session, sandbox.id, sandbox.owner_id, sandbox.template)
+            except Exception:
+                logger.exception("Sandbox %s self-heal: open_compute_session failed", sandbox.id)
+
+        await self.session.commit()
+        await self.session.refresh(sandbox)
+        logger.info(
+            "Sandbox %s self-heal applied: DB error -> ready (K8s CR healthy, source=api_get_detail, rv=%s)",
+            sandbox.id,
+            cr_rv,
+        )
+        return sandbox
+
     async def list_by_owner(self, owner_id: str, labels: dict | None = None) -> list[Sandbox]:
         stmt = select(Sandbox).where(Sandbox.owner_id == owner_id, Sandbox.gmt_deleted.is_(None))
         result = await self.session.execute(stmt)
@@ -302,6 +416,7 @@ class SandboxService:
         if not is_valid_transition(sandbox.status, SandboxStatus.DELETING):
             raise InvalidTransitionError(sandbox_id, sandbox.status, "deleting")
 
+        prev_status = sandbox.status
         sandbox.status = SandboxStatus.DELETING
         sandbox.version += 1
         self.session.add(sandbox)
@@ -318,6 +433,11 @@ class SandboxService:
             link.gmt_updated = utc_now()
             self.session.add(link)
         await self.session.commit()
+        logger.info(
+            "Sandbox %s status %s -> deleting (source=user_api_delete)",
+            sandbox_id,
+            prev_status,
+        )
 
         try:
             if sandbox.provision_mode == "direct":
@@ -335,6 +455,11 @@ class SandboxService:
             sandbox.version += 1
             self.session.add(sandbox)
             await self.session.commit()
+            logger.info(
+                "Sandbox %s status deleting -> error (source=user_api_delete_k8s_failure) message=%r",
+                sandbox_id,
+                sandbox.status_message,
+            )
 
     async def start(self, sandbox_id: str, owner_id: str) -> Sandbox:
         sandbox = await self.get(sandbox_id, owner_id)
@@ -373,6 +498,11 @@ class SandboxService:
             sandbox.version += 1
             self.session.add(sandbox)
             await self.session.commit()
+            logger.info(
+                "Sandbox %s status creating -> error (source=user_api_start_k8s_failure) message=%r",
+                sandbox_id,
+                sandbox.status_message,
+            )
             return sandbox
 
         # The sandbox may already be READY in K8s (e.g. it auto-recovered from ERROR
@@ -429,6 +559,11 @@ class SandboxService:
             sandbox.version += 1
             self.session.add(sandbox)
             await self.session.commit()
+            logger.info(
+                "Sandbox %s status stopped -> error (source=user_api_stop_k8s_failure) message=%r",
+                sandbox_id,
+                sandbox.status_message,
+            )
 
         return sandbox
 

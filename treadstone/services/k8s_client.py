@@ -145,14 +145,14 @@ class Kr8sClient:
             manifest["spec"]["lifecycle"] = {"shutdownTime": format_shutdown_time(shutdown_time)}
 
         url = f"/apis/{CLAIM_API_GROUP}/{CLAIM_API_VERSION}/namespaces/{namespace}/sandboxclaims"
-        logger.info("K8s POST %s (name=%s)", url, name)
+        logger.debug("K8s POST %s (name=%s)", url, name)
         async with api.call_api("POST", base=url, version="", json=manifest) as resp:
             return resp.json()
 
     async def delete_sandbox_claim(self, name: str, namespace: str) -> bool:
         api = await self._get_api()
         url = f"/apis/{CLAIM_API_GROUP}/{CLAIM_API_VERSION}/namespaces/{namespace}/sandboxclaims/{name}"
-        logger.info("K8s DELETE %s", url)
+        logger.debug("K8s DELETE %s", url)
         async with api.call_api("DELETE", base=url, version="") as resp:
             return resp.status_code < 400
 
@@ -247,14 +247,14 @@ class Kr8sClient:
             manifest["spec"]["shutdownTime"] = format_shutdown_time(shutdown_time)
 
         url = f"/apis/{SANDBOX_API_GROUP}/{SANDBOX_API_VERSION}/namespaces/{namespace}/sandboxes"
-        logger.info("K8s POST %s (name=%s, direct=true)", url, name)
+        logger.debug("K8s POST %s (name=%s, direct=true)", url, name)
         async with api.call_api("POST", base=url, version="", json=manifest) as resp:
             return resp.json()
 
     async def delete_sandbox(self, name: str, namespace: str) -> bool:
         api = await self._get_api()
         url = f"/apis/{SANDBOX_API_GROUP}/{SANDBOX_API_VERSION}/namespaces/{namespace}/sandboxes/{name}"
-        logger.info("K8s DELETE %s", url)
+        logger.debug("K8s DELETE %s", url)
         async with api.call_api("DELETE", base=url, version="") as resp:
             return resp.status_code < 400
 
@@ -293,7 +293,7 @@ class Kr8sClient:
         if resource_version:
             params["resourceVersion"] = resource_version
 
-        logger.info("Starting K8s Watch on %s (rv=%s)", url, resource_version or "<latest>")
+        logger.debug("Starting K8s Watch on %s (rv=%s)", url, resource_version or "<latest>")
         async with api.call_api("GET", base=url, version="", params=params, stream=True) as resp:
             async for line in resp.aiter_lines():
                 line = line.strip()
@@ -321,7 +321,7 @@ class Kr8sClient:
     async def scale_sandbox(self, name: str, namespace: str, replicas: int) -> bool:
         api = await self._get_api()
         url = f"/apis/{SANDBOX_API_GROUP}/{SANDBOX_API_VERSION}/namespaces/{namespace}/sandboxes/{name}/scale"
-        logger.info("K8s PATCH %s (replicas=%d)", url, replicas)
+        logger.debug("K8s PATCH %s (replicas=%d)", url, replicas)
         scale_body = {"spec": {"replicas": replicas}}
         async with api.call_api(
             "PATCH",
@@ -654,7 +654,7 @@ _k8s_client: K8sClientProtocol | None = None
 def get_k8s_client() -> K8sClientProtocol:
     global _k8s_client
     if _k8s_client is None:
-        logger.info("Using Kr8sClient")
+        logger.debug("Using Kr8sClient")
         _k8s_client = Kr8sClient()
     return _k8s_client
 

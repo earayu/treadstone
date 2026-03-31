@@ -138,7 +138,7 @@ async def proxy_http_request(
 ) -> tuple[int, dict[str, str], httpx.Response]:
     """Proxy an HTTP request to a sandbox pod and return (status, headers, streaming response)."""
     target_url = build_sandbox_url(sandbox_id, path, namespace=namespace, port=port)
-    logger.info("Proxying %s to %s", method, target_url)
+    logger.debug("Proxying %s to %s", method, target_url)
 
     client = await get_http_client()
     outgoing = _filter_request_headers(headers)
@@ -160,7 +160,7 @@ async def proxy_websocket(
 ) -> None:
     """Bidirectional WebSocket proxy between the client and a sandbox pod."""
     target_url = build_sandbox_url(sandbox_id, path, namespace=namespace, port=port, scheme="ws")
-    logger.info("WS proxy to %s", target_url)
+    logger.debug("WS proxy to %s", target_url)
 
     async with websockets.asyncio.client.connect(target_url) as upstream:
 
