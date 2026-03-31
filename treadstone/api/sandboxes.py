@@ -67,10 +67,11 @@ def _build_canonical_web_url(sb, base_url: str) -> str | None:
 def _build_urls(sb, base_url: str, web_link: SandboxWebLink | None = None) -> dict:
     base = str(base_url).rstrip("/")
     proxy = f"{base}/v1/sandboxes/{sb.id}/proxy"
+    mcp = f"{proxy}/mcp"
     web = _build_canonical_web_url(sb, base_url)
     if web is not None and web_link is not None and not web_link.is_expired() and web_link.gmt_deleted is None:
         web = build_open_link_url(web, web_link.id)
-    return {"proxy": proxy, "web": web}
+    return {"proxy": proxy, "mcp": mcp, "web": web}
 
 
 def _to_response(sb, base_url: str, web_link: SandboxWebLink | None = None) -> dict:

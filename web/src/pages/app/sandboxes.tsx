@@ -50,6 +50,97 @@ function StatusDot({ status }: { status: string }) {
   )
 }
 
+function compactUrlDisplay(url: string): string {
+  try {
+    const u = new URL(url)
+    const host = u.hostname
+    const path = u.pathname + u.search
+    const tail = path && path !== "/" ? path : ""
+    const combined = tail ? `${host}${tail}` : host
+    return combined.length > 52 ? `${combined.slice(0, 49)}…` : combined
+  } catch {
+    return url.length > 52 ? `${url.slice(0, 49)}…` : url
+  }
+}
+
+function EndpointLinkRow({
+  kind,
+  href,
+  display,
+  labelClassName,
+}: {
+  kind: "PROXY" | "WEB" | "MCP"
+  href: string
+  display: string
+  labelClassName: string
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={href}
+      className="group flex min-w-0 items-center gap-2 rounded-sm py-0.5 transition-colors [-webkit-tap-highlight-color:transparent] hover:bg-muted/25 active:-translate-y-px"
+    >
+      <span
+        className={cn(
+          "shrink-0 rounded border px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-widest",
+          labelClassName,
+        )}
+      >
+        {kind}
+      </span>
+      <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground transition-colors group-hover:text-foreground">
+        {display}
+      </span>
+      <ExternalLink
+        className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+        strokeWidth={1.5}
+        aria-hidden
+      />
+    </a>
+  )
+}
+
+function SandboxEndpointsCell({ sandbox }: { sandbox: Sandbox }) {
+  const urls = sandbox.urls
+  if (!urls?.proxy) {
+    return <span className="text-xs text-muted-foreground/40">—</span>
+  }
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <EndpointLinkRow
+        kind="PROXY"
+        href={urls.proxy}
+        display={compactUrlDisplay(urls.proxy)}
+        labelClassName="border-border/50 bg-muted/15 text-muted-foreground"
+      />
+      {urls.web ? (
+        <EndpointLinkRow
+          kind="WEB"
+          href={urls.web}
+          display={(() => {
+            const w = urls.web
+            try {
+              return new URL(w).hostname
+            } catch {
+              return compactUrlDisplay(w)
+            }
+          })()}
+          labelClassName="border-primary/35 bg-primary/5 text-primary"
+        />
+      ) : null}
+      {urls.mcp ? (
+        <EndpointLinkRow
+          kind="MCP"
+          href={urls.mcp}
+          display={compactUrlDisplay(urls.mcp)}
+          labelClassName="border-slate-500/30 text-slate-500 dark:text-slate-400"
+        />
+      ) : null}
+    </div>
+  )
+}
 
 const TABLE_COLUMNS = [
   { key: "id", label: "Sandbox", className: "w-[14%]" },
@@ -75,7 +166,7 @@ Stopped: the sandbox has been paused and is not consuming compute.`,
     help: `Auto-stop: the sandbox is stopped automatically after this period of inactivity.
 Auto-delete: the sandbox is permanently deleted after this duration once stopped.`,
   },
-  { key: "web_url", label: "Web URL", className: "w-[29%]" },
+  { key: "web_url", label: "Endpoints", className: "w-[29%]" },
   { key: "actions", label: "", className: "w-[8%]" },
 ] as const
 
@@ -395,29 +486,7 @@ function SandboxTable({ sandboxes }: { sandboxes: Sandbox[] }) {
                   </div>
                 </td>
                 <td className="min-w-0 max-w-0 px-6 py-4 align-top">
-                  {sandbox.urls?.web ? (
-                    <a
-                      href={sandbox.urls.web}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title={new URL(sandbox.urls.web).hostname}
-                      className="block truncate font-mono text-xs text-primary/80 hover:text-primary"
-                    >
-                      {new URL(sandbox.urls.web).hostname}
-                    </a>
-                  ) : sandbox.urls?.proxy ? (
-                    <a
-                      href={sandbox.urls.proxy}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title={`${sandbox.name ?? sandbox.id}.tread.zone`}
-                      className="block truncate font-mono text-xs text-primary/80 hover:text-primary"
-                    >
-                      {sandbox.name ?? sandbox.id}.tread.zone
-                    </a>
-                  ) : (
-                    <span className="text-xs text-muted-foreground/40">—</span>
-                  )}
+                  <SandboxEndpointsCell sandbox={sandbox} />
                 </td>
                 <td className="px-4 py-4">
                   <SandboxRowActions sandbox={sandbox} />
