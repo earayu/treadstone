@@ -25,7 +25,7 @@ ingress:
   enabled: true
   className: nginx
   hosts:
-    - host: localhost
+    - host: api.localhost
       paths:
         - path: /
           pathType: Prefix

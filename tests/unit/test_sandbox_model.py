@@ -57,7 +57,7 @@ def test_sandbox_tablename():
 VALID_TRANSITIONS: dict[str, list[str]] = {
     "creating": ["ready", "error", "deleting"],
     "ready": ["stopped", "error", "deleting"],
-    "stopped": ["ready", "deleting"],
+    "stopped": ["ready", "error", "deleting"],
     "error": ["ready", "creating", "stopped", "deleting"],
     "deleting": ["deleted"],
 }
@@ -78,6 +78,7 @@ def test_is_valid_transition():
     assert is_valid_transition("deleting", "ready") is False
     assert is_valid_transition("deleting", "deleted") is True
     assert is_valid_transition("ready", "deleting") is True
+    assert is_valid_transition("stopped", "error") is True
     assert is_valid_transition("deleted", "ready") is False
     assert is_valid_transition("error", "ready") is True
     assert is_valid_transition("error", "creating") is True

@@ -34,17 +34,18 @@ Before deploying, prepare a `.env.{ENV}` file (e.g. `.env.local`). Refer to `.en
 cp .env.example .env.local
 # Edit .env.local and fill in at minimum:
 #   TREADSTONE_DATABASE_URL   — Neon connection string
-#   TREADSTONE_JWT_SECRET     — JWT secret
-#   TREADSTONE_LEADER_ELECTION_ENABLED=true  — Recommended for every K8s environment
+#   TREADSTONE_JWT_SECRET     — at least 32 characters (see .env.example)
+#   TREADSTONE_APP_BASE_URL     — http://app.localhost (Web UI origin; matches Helm for local)
+#   TREADSTONE_LEADER_ELECTION_ENABLED=true  — Recommended for every K8s environment (default in .env.example)
 # Optional for Google/GitHub login:
 #   TREADSTONE_GOOGLE_OAUTH_CLIENT_ID / TREADSTONE_GOOGLE_OAUTH_CLIENT_SECRET
 #   TREADSTONE_GITHUB_OAUTH_CLIENT_ID / TREADSTONE_GITHUB_OAUTH_CLIENT_SECRET
 ```
 
-For OAuth provider setup, register callback URLs that match the current environment:
+For OAuth provider setup, register callback URLs that match `TREADSTONE_APP_BASE_URL` (browser flows go through the Web app host, which proxies `/v1/` to the API):
 
-- local: `http://localhost/v1/auth/google/callback` and `http://localhost/v1/auth/github/callback`
-- demo/prod: `https://<api-host>/v1/auth/google/callback` and `https://<api-host>/v1/auth/github/callback`
+- local (Kind + Ingress): `http://app.localhost/v1/auth/google/callback` and `http://app.localhost/v1/auth/github/callback`
+- demo/prod: `https://app-demo.treadstone-ai.dev/...` / `https://app.treadstone-ai.dev/...` (see `.env.example` comments)
 
 ## One-Command Deployment (Recommended)
 
@@ -110,6 +111,10 @@ make deploy-web ENV=local       # Web frontend
 `deploy-api` automatically creates a K8s Secret (`treadstone-secrets`) from `.env.local`, and runs the database migration in a Helm pre-install/pre-upgrade hook.
 Persistent sandboxes use `TREADSTONE_SANDBOX_STORAGE_CLASS` from the environment file and default to a 5 GiB workspace.
 
+### Sandbox runtime image (local)
+
+`deploy/sandbox-runtime/values-local.yaml` defaults to a **mainland China** mirror for the all-in-one sandbox image (see the `image:` field). This matches typical developer networks in China. If you are outside mainland China or the mirror is unreachable, switch the `image` value to `ghcr.io/agent-infra/sandbox:latest` (same as `values-prod.yaml`) and redeploy the runtime chart. You can also `docker pull` + `kind load docker-image` that tag before creating sandboxes.
+
 ### 4. Verify Deployment
 
 ```bash
@@ -122,10 +127,13 @@ kubectl -n treadstone-local rollout status deploy/treadstone-local-treadstone --
 
 ### Via Ingress (enabled by default in local)
 
-The Kind cluster maps ports 80/443, access directly at `http://localhost`:
+The Kind cluster maps ports 80/443 to the host. Local uses two hostnames (aligned with production’s `api.*` / `app.*` split):
+
+- **API (direct):** `http://api.localhost` — use for `curl`, CLI `TREADSTONE_BASE_URL`, SDK `base_url`, and `make test-e2e`.
+- **Web UI:** `http://app.localhost` — React app; nginx proxies `/v1/` to the API service.
 
 ```bash
-curl http://localhost/health
+curl http://api.localhost/health
 ```
 
 ### Via port-forward (alternative)
@@ -138,12 +146,12 @@ curl http://localhost:8000/health
 
 ## Basic Validation (Smoke Test)
 
-**Automated**: Run `make test-e2e` to execute the full E2E test suite against the deployed service. Override the target with `make test-e2e BASE_URL=http://localhost:8000` when using port-forward.
+**Automated**: Run `make test-e2e` to execute the full E2E test suite against the deployed API (default `BASE_URL=http://api.localhost`). Override with `make test-e2e BASE_URL=http://localhost:8000` when using port-forward.
 
-**Manual**: The following commands can quickly verify that the deployment is working. Use `BASE_URL=http://localhost` with Ingress, or `BASE_URL=http://localhost:8000` with port-forward.
+**Manual**: Use `BASE_URL=http://api.localhost` with Ingress, or `BASE_URL=http://localhost:8000` with port-forward.
 
 ```bash
-BASE_URL=http://localhost
+BASE_URL=http://api.localhost
 ```
 
 ### Health Check
@@ -283,7 +291,7 @@ make kind-delete
 | Image source | Local build | `ghcr.io/earayu/treadstone` | Specified by CI/CD |
 | Replicas | 1 | 1 | 2 |
 | HPA | Off | Off | On (2–10) |
-| Ingress | `localhost` | `demo.treadstone-ai.dev` | `api.treadstone-ai.dev` + TLS |
+| Ingress | `api.localhost` (API) + `app.localhost` (Web) + `*.sandbox.localhost` | `demo.treadstone-ai.dev` | `api.treadstone-ai.dev` + TLS |
 | ALB Group | — | `treadstone` (order 2) | `treadstone` (order 1) |
 | DB migration | Auto (Helm hook) | Auto | Auto |
 
@@ -308,7 +316,7 @@ with the ACM certificate ARN for `api.treadstone-ai.dev`.
 | Templates API returns `python-dev` / `nodejs-dev` | `TREADSTONE_DEBUG=true` in `.env` | Set to `false` and recreate the Secret |
 | API returns 500 + `column "xxx" does not exist` | Database is missing new columns | Migration Job should run automatically; manual fix: `kubectl -n treadstone-<ENV> exec deploy/treadstone-<ENV>-treadstone -- uv run alembic upgrade head` |
 | Pod stuck not Ready | Image pull failure | For local: run `kind load docker-image` first; for remote: check image registry permissions |
-| `curl localhost` connection refused | ingress-nginx not ready or port conflict | Rebuild cluster with `make kind-delete && make kind-create`, or use `make port-forward-api` |
+| `curl http://api.localhost` connection refused | ingress-nginx not ready or port 80 conflict | Rebuild cluster with `make kind-delete && make kind-create`, or use `make port-forward-api` |
 | 403 Forbidden in pod logs | Insufficient RBAC permissions | Confirm the Helm chart deployed ClusterRole + ClusterRoleBinding |
 | Sandbox Pod in CrashLoopBackOff | Kind cannot pull sandbox image | `docker pull <image> && kind load docker-image <image> --name treadstone` |
 

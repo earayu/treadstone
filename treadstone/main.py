@@ -143,11 +143,7 @@ app = FastAPI(
     title=settings.app_name,
     generate_unique_id_function=custom_generate_unique_id,
     lifespan=lifespan,
-    servers=[
-        {"url": "https://api.treadstone-ai.dev", "description": "Production"},
-        {"url": "https://demo.treadstone-ai.dev", "description": "Demo"},
-        {"url": "http://localhost", "description": "Local ingress"},
-    ],
+    servers=[{"url": "https://api.treadstone-ai.dev", "description": "Production"}],
 )
 
 

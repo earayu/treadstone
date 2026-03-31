@@ -102,7 +102,8 @@ Quick start:
 
 ```bash
 make up   # One-command: Kind cluster + build + deploy
-make test-e2e
+curl -sf http://api.localhost/health   # API via Ingress (Web UI: http://app.localhost)
+make test-e2e                          # default BASE_URL=http://api.localhost
 ```
 
 Pure API development (`make dev-api`) does not require a K8s cluster.

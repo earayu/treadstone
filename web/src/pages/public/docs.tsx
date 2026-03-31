@@ -13,7 +13,7 @@ import { Link, useSearchParams } from "react-router"
 import ReactMarkdown from "react-markdown"
 import type { Components } from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { ChevronRight, Menu, X } from "lucide-react"
+import { ChevronRight, Copy, Menu, X } from "lucide-react"
 
 import { CodeBlockFrame } from "@/components/code/code-block-frame"
 import { CodeLines } from "@/components/code/code-lines"
@@ -493,6 +493,24 @@ export function DocsPage() {
   const canonicalSlug = manifest.length > 0 ? getCanonicalDocSlug(manifest, pageParam) : null
   const sections = groupDocsBySection(manifest)
   const headings = extractDocHeadings(content)
+  const [pageCopied, setPageCopied] = useState(false)
+
+  const copyPageMarkdown = useCallback(async () => {
+    if (!content) {
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(content)
+      setPageCopied(true)
+      window.setTimeout(() => setPageCopied(false), 1600)
+    } catch {
+      // Clipboard may be unavailable; avoid surfacing raw errors to the user.
+    }
+  }, [content])
+
+  useEffect(() => {
+    setPageCopied(false)
+  }, [currentEntry?.slug])
 
   useEffect(() => {
     if (!pageParam || !canonicalSlug || pageParam === canonicalSlug) {
@@ -621,33 +639,45 @@ export function DocsPage() {
               {error}
             </div>
           ) : currentEntry ? (
-            <>
-              <div className="mb-10">
-                {!currentEntry.default ? (
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                    {currentEntry.section}
-                  </p>
-                ) : null}
-                <h1 className="text-3xl font-bold tracking-tight text-foreground">{currentEntry.title}</h1>
-              </div>
-
-              {loadingContent ? (
-                <p className="text-sm text-muted-foreground">Loading page…</p>
-              ) : (
-                <div className="flex flex-col gap-8 xl:flex-row xl:items-stretch xl:justify-between xl:gap-10 2xl:gap-14">
-                  <div className="min-w-0 min-h-0 flex-1">
-                    <MarkdownContent content={content} />
-                  </div>
-                  {headings.length > 0 ? (
-                    <aside className="relative shrink-0 xl:w-56 xl:pl-1">
-                      <div className="xl:sticky xl:top-20 xl:z-10 xl:max-h-[calc(100vh-5.5rem)] xl:overflow-y-auto">
-                        <OnThisPage headings={headings} />
-                      </div>
-                    </aside>
+            <div className="flex flex-col gap-8 xl:flex-row xl:items-stretch xl:justify-between xl:gap-10 2xl:gap-14">
+              <div className="min-w-0 min-h-0 flex-1">
+                <div className="mb-10">
+                  {!currentEntry.default ? (
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                      {currentEntry.section}
+                    </p>
                   ) : null}
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-x-4 sm:gap-y-2">
+                    <h1 className="min-w-0 flex-1 pr-2 text-3xl font-bold tracking-tight text-foreground">
+                      {currentEntry.title}
+                    </h1>
+                    <button
+                      type="button"
+                      disabled={loadingContent || !content}
+                      onClick={() => void copyPageMarkdown()}
+                      aria-label="Copy page as Markdown"
+                      className="inline-flex shrink-0 items-center gap-2 self-end rounded-full border border-border/35 bg-muted/30 px-3 py-1.5 text-sm text-muted-foreground shadow-sm transition-colors hover:border-border/55 hover:bg-muted/50 hover:text-foreground focus-visible:outline focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 sm:self-start sm:pt-1"
+                    >
+                      <Copy className="size-4 shrink-0 opacity-90" aria-hidden />
+                      {pageCopied ? "Copied" : "Copy page"}
+                    </button>
+                  </div>
                 </div>
-              )}
-            </>
+
+                {loadingContent ? (
+                  <p className="text-sm text-muted-foreground">Loading page…</p>
+                ) : (
+                  <MarkdownContent content={content} />
+                )}
+              </div>
+              {!loadingContent && headings.length > 0 ? (
+                <aside className="relative shrink-0 xl:w-56 xl:pl-1">
+                  <div className="xl:sticky xl:top-20 xl:z-10 xl:max-h-[calc(100vh-5.5rem)] xl:overflow-y-auto">
+                    <OnThisPage headings={headings} />
+                  </div>
+                </aside>
+              ) : null}
+            </div>
           ) : (
             <p className="text-sm text-muted-foreground">No documentation pages found.</p>
           )}

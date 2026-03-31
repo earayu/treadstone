@@ -171,7 +171,7 @@ Run `make help` for the full list. Key commands:
 | `make dev-web` | Start web dev server (localhost:5173, hot reload) |
 | `make test` | Run tests (excludes integration) |
 | `make test-all` | Run all tests including integration |
-| `make test-e2e` | Run E2E tests against deployed cluster |
+| `make test-e2e` | Run E2E tests against deployed cluster (default `BASE_URL=http://api.localhost` for Kind Ingress) |
 | `make lint` / `make format-py` | Repo lint checks / Python auto-format |
 | `make migrate` | Apply database migrations |
 | `make migration MSG=x` | Generate a new Alembic migration |

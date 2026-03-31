@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { createMemoryRouter, RouterProvider } from "react-router"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -52,6 +52,10 @@ function renderDocsPage(initialEntry = "/docs") {
 
 describe("DocsPage", () => {
   beforeEach(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+      configurable: true,
+    })
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: string | URL | Request) => {
@@ -124,5 +128,23 @@ describe("DocsPage", () => {
     expect(onThisPage).toBeInTheDocument()
     expect(within(onThisPage).getByRole("link", { name: "Sign In" })).toHaveAttribute("href", "#sign-in")
     expect(within(onThisPage).getByRole("link", { name: "Direct Login" })).toHaveAttribute("href", "#direct-login")
+  })
+
+  it("copies full page markdown to the clipboard", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    })
+
+    renderDocsPage("/docs?page=cli-guide")
+
+    expect(await screen.findByText("CLI content.")).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy page as Markdown" }))
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(docsBySlug["cli-guide"])
+    })
   })
 })

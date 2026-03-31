@@ -22,7 +22,8 @@ class SandboxStatus(StrEnum):
 VALID_TRANSITIONS: dict[str, list[str]] = {
     SandboxStatus.CREATING: [SandboxStatus.READY, SandboxStatus.ERROR, SandboxStatus.DELETING],
     SandboxStatus.READY: [SandboxStatus.STOPPED, SandboxStatus.ERROR, SandboxStatus.DELETING],
-    SandboxStatus.STOPPED: [SandboxStatus.READY, SandboxStatus.DELETING],
+    # STOPPED→ERROR: reconcile/watch mirrors K8s when CR reports ReconcilerError (DB may lag STOPPED).
+    SandboxStatus.STOPPED: [SandboxStatus.READY, SandboxStatus.ERROR, SandboxStatus.DELETING],
     SandboxStatus.ERROR: [SandboxStatus.READY, SandboxStatus.CREATING, SandboxStatus.STOPPED, SandboxStatus.DELETING],
     SandboxStatus.DELETING: [SandboxStatus.DELETED],
 }
