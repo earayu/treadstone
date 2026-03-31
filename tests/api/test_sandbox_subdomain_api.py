@@ -344,3 +344,57 @@ class TestSubdomainRouting:
             resp = await client.get("/health", headers={"Host": "sandbox.localhost:8000"})
         assert resp.status_code == 200
         assert resp.json() == {"status": "ok"}
+
+
+class TestSubdomainErrorPages:
+    """Sandbox subdomain routing returns friendly HTML pages on failure."""
+
+    async def test_unknown_sandbox_returns_html_404(self, auth_client: AsyncClient, monkeypatch):
+        _enable_subdomain(monkeypatch)
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://app.localhost") as browser:
+            resp = await browser.get("https://sandbox-nonexistent-id.sandbox.localhost/")
+        assert resp.status_code == 404
+        assert "text/html" in resp.headers["content-type"]
+        body = resp.content.lower()
+        assert b"not found" in body
+
+    async def test_sandbox_not_ready_returns_html_200_with_refresh(self, auth_client: AsyncClient, monkeypatch):
+        _enable_subdomain(monkeypatch)
+        from treadstone.services.browser_auth import issue_sandbox_web_cookie
+
+        create_resp = await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "notready"})
+        sandbox_id = create_resp.json()["id"]
+
+        cookie_val = issue_sandbox_web_cookie(sandbox_id=sandbox_id, issued_via="test")
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://app.localhost") as browser:
+            browser.cookies.set("ts_bui", cookie_val, domain=f"sandbox-{sandbox_id}.sandbox.localhost", path="/")
+            resp = await browser.get(f"https://sandbox-{sandbox_id}.sandbox.localhost/", follow_redirects=False)
+
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+        body = resp.content.lower()
+        assert b"starting" in body
+        assert b"refresh" in body
+
+    async def test_proxy_failure_returns_html_200_with_refresh(self, auth_client: AsyncClient, monkeypatch):
+        _enable_subdomain(monkeypatch)
+        from treadstone.services.browser_auth import issue_sandbox_web_cookie
+
+        sandbox_id = await _create_ready_sandbox(auth_client)
+        cookie_val = issue_sandbox_web_cookie(sandbox_id=sandbox_id, issued_via="test")
+
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_client.is_closed = False
+        mock_client.build_request.return_value = httpx.Request("GET", "http://fake/")
+        mock_client.send.side_effect = httpx.ConnectError("Connection refused")
+
+        with patch("treadstone.middleware.sandbox_subdomain.get_http_client", return_value=mock_client):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="https://app.localhost") as browser:
+                browser.cookies.set("ts_bui", cookie_val, domain=f"sandbox-{sandbox_id}.sandbox.localhost", path="/")
+                resp = await browser.get(f"https://sandbox-{sandbox_id}.sandbox.localhost/", follow_redirects=False)
+
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+        body = resp.content.lower()
+        assert b"starting" in body
+        assert b"refresh" in body

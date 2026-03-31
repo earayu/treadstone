@@ -43,6 +43,76 @@ from treadstone.services.sandbox_proxy import (
 
 logger = logging.getLogger(__name__)
 
+_HTML_NOT_FOUND = """\
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Sandbox Not Found</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#09090b;color:#e4e4e7;
+         font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+         display:flex;align-items:center;justify-content:center;min-height:100vh}
+    .card{text-align:center;max-width:440px;padding:3rem 2rem}
+    .icon{font-size:2.5rem;margin-bottom:1.25rem;opacity:.35;line-height:1}
+    h1{font-size:1.375rem;font-weight:600;margin-bottom:.625rem;letter-spacing:-.015em}
+    p{font-size:.9rem;color:#71717a;line-height:1.65}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">⬡</div>
+    <h1>Sandbox Not Found</h1>
+    <p>This sandbox does not exist, or the link may have expired.<br>
+       If you believe this is an error, please check the sandbox ID.</p>
+  </div>
+</body>
+</html>
+"""
+
+_HTML_STARTING = """\
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="refresh" content="5">
+  <title>Sandbox Starting</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#09090b;color:#e4e4e7;
+         font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+         display:flex;align-items:center;justify-content:center;min-height:100vh}
+    .card{text-align:center;max-width:440px;padding:3rem 2rem}
+    .spinner{width:36px;height:36px;border:3px solid #27272a;border-top-color:#3b82f6;
+             border-radius:50%;animation:spin .9s linear infinite;margin:0 auto 1.5rem}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    h1{font-size:1.375rem;font-weight:600;margin-bottom:.625rem;letter-spacing:-.015em}
+    p{font-size:.9rem;color:#71717a;line-height:1.65}
+    .hint{margin-top:.75rem;font-size:.8rem;color:#52525b}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="spinner"></div>
+    <h1>Sandbox Starting</h1>
+    <p>Your sandbox is warming up. Please wait a moment.</p>
+    <p class="hint">This page refreshes automatically every 5 seconds.</p>
+  </div>
+</body>
+</html>
+"""
+
+
+def _html_not_found() -> Response:
+    return Response(content=_HTML_NOT_FOUND, status_code=404, media_type="text/html; charset=utf-8")
+
+
+def _html_starting() -> Response:
+    return Response(content=_HTML_STARTING, status_code=200, media_type="text/html; charset=utf-8")
+
 
 def extract_sandbox_id(host: str, sandbox_domain: str, prefix: str = "sandbox-") -> str | None:
     host_no_port = host.split(":")[0].lower()
@@ -255,8 +325,8 @@ class SandboxSubdomainMiddleware:
             req = client.build_request(method=request.method, url=target_url, headers=outgoing, content=body)
             resp = await client.send(req, stream=True)
         except Exception:
-            error_resp = Response("Bad Gateway", status_code=502)
-            await error_resp(scope, receive, send)
+            logger.exception("Subdomain proxy failed for sandbox %s", sandbox.id)
+            await _html_starting()(scope, receive, send)
             return
 
         resp_headers = _filter_response_headers(resp.headers)
@@ -271,8 +341,7 @@ class SandboxSubdomainMiddleware:
         request = Request(scope, receive)
         sandbox = await self._load_sandbox(sandbox_id)
         if sandbox is None:
-            error_resp = Response("Sandbox not found.", status_code=404)
-            await error_resp(scope, receive, send)
+            await _html_not_found()(scope, receive, send)
             return
 
         if scope.get("path") == "/_treadstone/open":
@@ -288,8 +357,7 @@ class SandboxSubdomainMiddleware:
             return
 
         if sandbox.status != SandboxStatus.READY.value:
-            error_resp = Response("Sandbox is not ready.", status_code=409)
-            await error_resp(scope, receive, send)
+            await _html_starting()(scope, receive, send)
             return
 
         await self._proxy_http(request, scope, receive, send, sandbox)
