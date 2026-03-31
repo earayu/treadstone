@@ -153,14 +153,55 @@ jobs:
         env:
           PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
 
-  # ── CLI binaries → GitHub Release assets ──
+  # ── CLI Linux binary (manylinux_2_28 container → glibc ≥ 2.28 compatibility) ──
+  build-linux-binary:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux_2_28_x86_64
+    steps:
+      - name: Install git
+        run: yum install -y git
+
+      - uses: actions/checkout@v4
+
+      - name: Set versions from tag
+        run: python3 scripts/set_release_versions.py "${{ github.ref_name }}"
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install CLI dependencies + PyInstaller
+        working-directory: cli
+        run: |
+          uv python install 3.12
+          uv sync --frozen
+          uv pip install pyinstaller
+
+      - name: Build binary
+        working-directory: cli
+        run: |
+          uv run pyinstaller \
+            --onefile \
+            --name treadstone \
+            --copy-metadata treadstone-cli \
+            treadstone_cli/__main__.py
+
+      - name: Rename binary
+        run: mv cli/dist/treadstone cli/dist/treadstone-linux-amd64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: treadstone-linux-amd64
+          path: cli/dist/treadstone-linux-amd64
+
+  # ── CLI macOS / Windows binaries → GitHub Release assets ──
   build-binaries:
     needs: [lint, test]
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
-            artifact_name: treadstone-linux-amd64
           - os: macos-latest
             artifact_name: treadstone-darwin-arm64
           # macos-13 retired Dec 2025; Intel macOS builds use macos-15-intel (x86_64).
@@ -206,7 +247,7 @@ jobs:
 
   # ── GitHub Release ──
   github-release:
-    needs: [docker, docker-web, publish-cli, publish-sdk, build-binaries]
+    needs: [docker, docker-web, publish-cli, publish-sdk, build-linux-binary, build-binaries]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
