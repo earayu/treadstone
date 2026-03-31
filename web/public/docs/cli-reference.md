@@ -87,8 +87,8 @@ Browser handoff subgroup:
 
 | Command | What it does |
 |---------|--------------|
-| `treadstone skills` | List installed CLI skills. Skills are optional; core hosted usage does not depend on them. |
-| `treadstone skills install` | Install a CLI skill by name or URL. |
+| `treadstone skills` | Print the built-in agent guide to stdout (same content as `skills install` writes). Optional; core hosted usage does not depend on it. |
+| `treadstone skills install` | Write that guide to `SKILL.md` under a skills directory (`--target` or `--dir`). |
 
 ## Configuration Keys
 
