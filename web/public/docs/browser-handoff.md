@@ -9,6 +9,8 @@ Access is **always gated**:
 
 So this is not a public directory: either you use `web_url` with an **account session** (Console login) in the browser, or you use `open_link` as a deliberate, shareable entry.
 
+**See also:** [Sandbox endpoints](/docs/sandbox-endpoints.md) — control plane vs data plane and how **`urls.web`** relates to the Console **Web** row.
+
 ## What The Human Sees
 
 Opening the handoff gives a **full browser view into the container**: the in-sandbox browser, VS Code (including the integrated terminal), the file tree, Jupyter, and anything else running there — the same surfaces the agent can use.

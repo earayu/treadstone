@@ -242,7 +242,7 @@ function buildMarkdownComponents(headingIdPrefix: string | undefined, surfaceHea
       <blockquote className="mb-4 border-l-2 border-primary/40 pl-4 italic text-muted-foreground">{children}</blockquote>
     ),
     table: ({ children }) => (
-      <div className="mb-4 overflow-x-auto rounded border border-border/20">
+      <div className="mb-4 max-w-full min-w-0 overflow-x-auto rounded border border-border/20 [-webkit-overflow-scrolling:touch]">
         <table className="w-max min-w-full border-collapse text-sm">{children}</table>
       </div>
     ),
@@ -348,7 +348,7 @@ function MarkdownContent({ content }: { content: string }) {
   const segments = useMemo(() => splitSurfaceTabMarkdown(renderedContent), [renderedContent])
 
   return (
-    <div className="docs-prose">
+    <div className="docs-prose min-w-0">
       {segments.map((seg, i) => {
         if (seg.type === "markdown") {
           if (!seg.body.trim()) {

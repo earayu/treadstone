@@ -49,12 +49,15 @@ This is the same split as at the top of the page, in table form:
 
 Do **not** guess `urls.proxy`, `open_link`, or `web_url` — take them from API responses.
 
+In the **Console Sandboxes** table, **Web**, **MCP**, and **Proxy** map to **`urls.web`**, **`urls.mcp`**, and **`urls.proxy`** — see **[Sandbox endpoints](/docs/sandbox-endpoints.md)**.
+
 ### Discovering the contract
 
 The server exposes **OpenAPI** at **`/openapi.json`** (public, code-first spec). On the hosted control plane, open **[https://api.treadstone-ai.dev/docs](https://api.treadstone-ai.dev/docs)** for **Swagger UI** — browse and try the same routes interactively. Use the JSON spec to generate clients or to inspect schemas when something is ambiguous. The hosted product’s public routes match what the Python SDK is generated from.
 
 ## Read Next
 
+- [Sandbox endpoints](/docs/sandbox-endpoints.md)
 - [API Reference](/docs/api-reference.md)
 - [MCP in sandbox](/docs/mcp-sandbox.md) — MCP servers behind `urls.proxy`
 - [Error Reference](/docs/error-reference.md)

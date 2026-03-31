@@ -4,6 +4,8 @@
 
 Expose a **Model Context Protocol (MCP)** server that runs **inside** a Treadstone sandbox to external MCP clients (IDEs, desktop apps, scripts) using the platform’s **data-plane HTTP proxy** and optional **WebSocket proxy**. Treadstone terminates TLS and API-key auth at the edge; traffic is forwarded to the sandbox container’s HTTP listener (typically port **8080**).
 
+**See also:** [Sandbox endpoints](/docs/sandbox-endpoints.md) — how **Web**, **MCP**, and **Proxy** map to `urls.web`, `urls.mcp`, and `urls.proxy` in the Console.
+
 ## Use this when
 
 - You run an MCP server in the sandbox that listens on a path such as **`/mcp`** (or another path you choose).

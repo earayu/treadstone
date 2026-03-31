@@ -1,6 +1,18 @@
 import { useState, useMemo } from "react"
 import { Link, useNavigate } from "react-router"
-import { Plus, Search, ChevronLeft, ChevronRight, MoreHorizontal, Square, Play, Trash2, ExternalLink, HardDrive } from "lucide-react"
+import {
+  Plus,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  MoreHorizontal,
+  Square,
+  Play,
+  Trash2,
+  ExternalLink,
+  HardDrive,
+  Copy,
+} from "lucide-react"
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
 import * as Dialog from "@radix-ui/react-dialog"
 import { toast } from "sonner"
@@ -8,6 +20,7 @@ import { useSandboxes, useStartSandbox, useStopSandbox, useDeleteSandbox, type S
 import { cn } from "@/lib/utils"
 import { formatMinutes } from "@/lib/format-time"
 import { HelpIcon } from "@/components/ui/help-icon"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 const PAGE_SIZE = 8
 
@@ -63,42 +76,100 @@ function compactUrlDisplay(url: string): string {
   }
 }
 
-function EndpointLinkRow({
+const DOCS_SANDBOX_ENDPOINTS = "/docs?page=sandbox-endpoints"
+
+const ENDPOINT_TOOLTIP_WEB = `For humans: opens in your browser so you can use the built-in Chrome, VS Code, Terminal, Jupyter, and other tools inside the sandbox. Click opens this URL in a new tab. Full reference: ${DOCS_SANDBOX_ENDPOINTS}`
+
+const ENDPOINT_TOOLTIP_MCP = `For AI assistants: MCP clients connect here to work inside the sandbox—browser automation, VS Code, Share, and more. Click copies the URL so you can paste it into your MCP client. Full reference: ${DOCS_SANDBOX_ENDPOINTS}`
+
+const ENDPOINT_TOOLTIP_PROXY = `HTTP access to the sandbox runtime. Send requests with your API key. Click copies the URL. Full reference: ${DOCS_SANDBOX_ENDPOINTS}`
+
+async function copyEndpointUrl(url: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(url)
+    toast.success("Copied to clipboard.")
+  } catch {
+    toast.error("Could not copy to clipboard.")
+  }
+}
+
+function EndpointWebRow({ href, display }: { href: string; display: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={href}
+          className="group flex min-w-0 items-center gap-2 rounded-sm py-0.5 transition-colors [-webkit-tap-highlight-color:transparent] hover:bg-muted/25 active:-translate-y-px"
+        >
+          <span className="shrink-0 rounded border border-primary/35 bg-primary/5 px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-widest text-primary">
+            WEB
+          </span>
+          <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground transition-colors group-hover:text-foreground">
+            {display}
+          </span>
+          <ExternalLink
+            className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+            strokeWidth={1.5}
+            aria-hidden
+          />
+        </a>
+      </TooltipTrigger>
+      <TooltipContent side="left" className="max-w-[min(22rem,calc(100vw-2rem))] leading-relaxed">
+        <p>{ENDPOINT_TOOLTIP_WEB}</p>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+function EndpointCopyRow({
   kind,
-  href,
+  url,
   display,
+  tooltip,
   labelClassName,
 }: {
-  kind: "PROXY" | "WEB" | "MCP"
-  href: string
+  kind: "PROXY" | "MCP"
+  url: string
   display: string
+  tooltip: string
   labelClassName: string
 }) {
+  const label = kind === "MCP" ? "MCP" : "PROXY"
   return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      title={href}
-      className="group flex min-w-0 items-center gap-2 rounded-sm py-0.5 transition-colors [-webkit-tap-highlight-color:transparent] hover:bg-muted/25 active:-translate-y-px"
-    >
-      <span
-        className={cn(
-          "shrink-0 rounded border px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-widest",
-          labelClassName,
-        )}
-      >
-        {kind}
-      </span>
-      <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground transition-colors group-hover:text-foreground">
-        {display}
-      </span>
-      <ExternalLink
-        className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-        strokeWidth={1.5}
-        aria-hidden
-      />
-    </a>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={() => void copyEndpointUrl(url)}
+          title={url}
+          aria-label={`Copy ${label} URL`}
+          className="group flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-sm py-0.5 text-left transition-colors [-webkit-tap-highlight-color:transparent] hover:bg-muted/25 active:-translate-y-px"
+        >
+          <span
+            className={cn(
+              "shrink-0 rounded border px-1 py-px font-mono text-[9px] font-semibold uppercase tracking-widest",
+              labelClassName,
+            )}
+          >
+            {label}
+          </span>
+          <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground transition-colors group-hover:text-foreground">
+            {display}
+          </span>
+          <Copy
+            className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+            strokeWidth={1.5}
+            aria-hidden
+          />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="left" className="max-w-[min(22rem,calc(100vw-2rem))] leading-relaxed">
+        <p>{tooltip}</p>
+      </TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -107,37 +178,35 @@ function SandboxEndpointsCell({ sandbox }: { sandbox: Sandbox }) {
   if (!urls?.proxy) {
     return <span className="text-xs text-muted-foreground/40">—</span>
   }
+  const webDisplay = urls.web
+    ? (() => {
+        const w = urls.web
+        try {
+          return new URL(w).hostname
+        } catch {
+          return compactUrlDisplay(w)
+        }
+      })()
+    : null
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <EndpointLinkRow
-        kind="PROXY"
-        href={urls.proxy}
-        display={compactUrlDisplay(urls.proxy)}
-        labelClassName="border-border/50 bg-muted/15 text-muted-foreground"
-      />
-      {urls.web ? (
-        <EndpointLinkRow
-          kind="WEB"
-          href={urls.web}
-          display={(() => {
-            const w = urls.web
-            try {
-              return new URL(w).hostname
-            } catch {
-              return compactUrlDisplay(w)
-            }
-          })()}
-          labelClassName="border-primary/35 bg-primary/5 text-primary"
-        />
-      ) : null}
+      {urls.web ? <EndpointWebRow href={urls.web} display={webDisplay ?? compactUrlDisplay(urls.web)} /> : null}
       {urls.mcp ? (
-        <EndpointLinkRow
+        <EndpointCopyRow
           kind="MCP"
-          href={urls.mcp}
+          url={urls.mcp}
           display={compactUrlDisplay(urls.mcp)}
+          tooltip={ENDPOINT_TOOLTIP_MCP}
           labelClassName="border-slate-500/30 text-slate-500 dark:text-slate-400"
         />
       ) : null}
+      <EndpointCopyRow
+        kind="PROXY"
+        url={urls.proxy}
+        display={compactUrlDisplay(urls.proxy)}
+        tooltip={ENDPOINT_TOOLTIP_PROXY}
+        labelClassName="border-border/50 bg-muted/15 text-muted-foreground"
+      />
     </div>
   )
 }
@@ -166,7 +235,13 @@ Stopped: the sandbox has been paused and is not consuming compute.`,
     help: `Auto-stop: the sandbox is stopped automatically after this period of inactivity.
 Auto-delete: the sandbox is permanently deleted after this duration once stopped.`,
   },
-  { key: "web_url", label: "Endpoints", className: "w-[29%]" },
+  {
+    key: "web_url",
+    label: "Endpoints",
+    className: "w-[29%]",
+    help: `Web: opens the workspace in your browser. MCP: copy for MCP clients (AI tools). Proxy: copy the data-plane base URL for HTTP with your API key.`,
+    helpLink: { href: DOCS_SANDBOX_ENDPOINTS, label: "Sandbox endpoints" },
+  },
   { key: "actions", label: "", className: "w-[8%]" },
 ] as const
 
