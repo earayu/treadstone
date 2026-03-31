@@ -356,6 +356,7 @@ flowchart LR
 | 2026-03-31 | 定稿：合并会话审计结论；补充文档路径说明；与当前 `treadstone/` 中 DEBUG/INFO 实现及 `main.py` Integrity 处理对齐；附录 B 供按文件复查级别与文案。 |
 | 2026-03-31 | 增补第 9 节：记录已在仓库落地的日志与状态同步优化（含 K8s 同步告警增强）。 |
 | 2026-03-31 | 修订第 9.4：移除「GET 详情自愈合」描述——读路径静默纠偏会掩盖根因；以同步侧日志 + reconcile/watch 修复为准。 |
+| 2026-03-31 | 第 9.4：补充「GET 详情只读漂移 WARNING」——不写库，仅暴露 DB/K8s 不一致便于排障。 |
 
 ---
 
@@ -388,6 +389,7 @@ flowchart LR
 
 **刻意不在 `GET /v1/sandboxes/{id}` 上根据 K8s 实况回写 DB**：读路径静默把 `error` 改成 `ready` 会**掩盖** Watch/List/状态机上的真实缺陷，不利于根因分析。纠偏应发生在 **Watch / 周期性 reconcile** 等控制面同步路径（或经用户显式操作如 **Start**），而不是在详情查询里「偷偷修好」。
 
+- **只读漂移告警（可选）**：`GET /v1/sandboxes/{id}` 在返回前若 DB 为 **`error`** 且对 Sandbox CR 做一次 **GET** 后推导为 **`ready`**，仅打 **`WARNING`**（`status drift (GET detail, no DB write): …`），**不改库**；用于与 **`CR missing` / `Invalid transition` / `Unexpected DELETED`** 同一时间段对照，而不是在读路径纠偏。
 - **`k8s_sync` 告警上下文增强**（仍为 **WARNING**，便于 `grep` 与事后对照）：
   - **CR missing（reconcile List）**：含 `sandbox_id`、`db_status`、**`expected_cr_key`**、`ns`，并提示 list 快照缺 CR / 命名不一致 / 一致性延迟。
   - **Invalid transition（Watch）**：含 `sandbox_id`、db 与 K8s 推导状态、**`cr` ns/name、`rv`、CR `message`**。
@@ -402,7 +404,7 @@ flowchart LR
 
 ### 9.6 控制台检索建议（与第 4、5 节互补）
 
-除 **`CR missing` / `Invalid transition` / `Unexpected DELETED` / `Failed to scale`** 外，可搜 **`Sandbox … status … -> error`** / **`-> deleting`**（来自 `_record_status_change` 或 API 的显式状态迁移 **INFO**），用于对照同一时间段内的误标记路径。
+除 **`CR missing` / `Invalid transition` / `Unexpected DELETED` / `Failed to scale`** 外，可搜 **`status drift (GET detail, no DB write)`**（DB 仍 `error`、仅告警）、以及 **`Sandbox … status … -> error`** / **`-> deleting`**（来自 `_record_status_change` 或 API 的显式状态迁移 **INFO**），用于对照同一时间段内的误标记路径。
 
 ---
 

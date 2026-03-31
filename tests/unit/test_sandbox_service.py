@@ -368,3 +368,43 @@ class TestTemplateValidation:
             )
 
         session.delete.assert_called_once()
+
+
+def _ready_sandbox_cr(*, resource_version: str = "99") -> dict:
+    return {
+        "metadata": {"resourceVersion": resource_version},
+        "spec": {"replicas": 1},
+        "status": {"conditions": [{"type": "Ready", "status": "True", "message": "Running"}]},
+    }
+
+
+class TestSandboxServiceStatusDriftLog:
+    async def test_log_drift_emits_warning_when_db_error_k8s_ready(self, caplog):
+        import logging
+
+        from treadstone.services.sandbox_service import SandboxService
+
+        caplog.set_level(logging.WARNING)
+        sb = _make_sandbox(status=SandboxStatus.ERROR, version=2)
+        k8s = _mock_k8s_client()
+        k8s.get_sandbox = AsyncMock(return_value=_ready_sandbox_cr(resource_version="42"))
+        session = AsyncMock()
+        svc = SandboxService(session=session, k8s_client=k8s)
+
+        await svc.log_status_drift_error_vs_k8s_ready(sb)
+
+        k8s.get_sandbox.assert_awaited_once()
+        assert any("status drift (GET detail, no DB write)" in r.message for r in caplog.records)
+        session.execute.assert_not_called()
+
+    async def test_log_drift_silent_when_db_not_error(self):
+        from treadstone.services.sandbox_service import SandboxService
+
+        sb = _make_sandbox(status=SandboxStatus.READY)
+        k8s = _mock_k8s_client()
+        session = AsyncMock()
+        svc = SandboxService(session=session, k8s_client=k8s)
+
+        await svc.log_status_drift_error_vs_k8s_ready(sb)
+
+        k8s.get_sandbox.assert_not_called()

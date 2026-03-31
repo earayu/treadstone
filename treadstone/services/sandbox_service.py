@@ -289,6 +289,48 @@ class SandboxService:
         )
         return result.scalar_one_or_none()
 
+    async def log_status_drift_error_vs_k8s_ready(self, sandbox: Sandbox) -> None:
+        """If DB is ``error`` but the live Sandbox CR derives ``ready``, log WARNING only.
+
+        Does **not** mutate the database — avoids masking sync bugs while making drift visible
+        when operators hit ``GET /v1/sandboxes/{id}`` (e.g. to correlate with Watch/List logs).
+        """
+        if sandbox.status != SandboxStatus.ERROR:
+            return
+
+        k8s_name = sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.id
+        try:
+            cr = await self.k8s.get_sandbox(name=k8s_name, namespace=sandbox.k8s_namespace)
+        except Exception:
+            logger.debug(
+                "Drift check skipped: K8s GET failed for sandbox_id=%s name=%s ns=%s",
+                sandbox.id,
+                k8s_name,
+                sandbox.k8s_namespace,
+                exc_info=True,
+            )
+            return
+
+        if cr is None:
+            return
+
+        from treadstone.services.k8s_sync import derive_status_from_sandbox_cr
+
+        actual_status, msg = derive_status_from_sandbox_cr(cr)
+        if actual_status != SandboxStatus.READY:
+            return
+
+        cr_rv = cr.get("metadata", {}).get("resourceVersion")
+        logger.warning(
+            "status drift (GET detail, no DB write): sandbox_id=%s DB=error K8s_derived=ready "
+            "cr_name=%s ns=%s rv=%s k8s_message=%r — investigate k8s_sync Watch/reconcile/List",
+            sandbox.id,
+            k8s_name,
+            sandbox.k8s_namespace,
+            cr_rv,
+            msg,
+        )
+
     async def list_by_owner(self, owner_id: str, labels: dict | None = None) -> list[Sandbox]:
         stmt = select(Sandbox).where(Sandbox.owner_id == owner_id, Sandbox.gmt_deleted.is_(None))
         result = await self.session.execute(stmt)
