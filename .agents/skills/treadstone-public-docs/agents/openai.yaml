@@ -1,0 +1,4 @@
+interface:
+  display_name: "Treadstone Public Docs"
+  short_description: "Maintain Treadstone public docs, IA, and control/data plane copy"
+  default_prompt: "Use $treadstone-public-docs to maintain Treadstone public docs, manifest, llms/sitemap outputs, and agent-facing documentation contracts—including control plane vs data plane and OpenAPI/Swagger alignment."

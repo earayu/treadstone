@@ -1,4 +1,0 @@
-interface:
-  display_name: "Treadstone Docs"
-  short_description: "Maintain Treadstone public docs and IA"
-  default_prompt: "Use $treadstone-docs-maintenance to maintain Treadstone public docs, manifest, and agent-facing documentation contracts."
