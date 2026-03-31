@@ -1,3 +1,9 @@
+"""Shared helpers for Treadstone examples.
+
+Provides thin wrappers around the Treadstone SDK and agent-sandbox SDK so that
+each example file can stay focused on a single concept.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -7,360 +13,229 @@ import re
 import sys
 import time
 import uuid
-from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
 from typing import Any
-
-import httpx
 
 DEFAULT_BASE_URL = "https://api.treadstone-ai.dev"
 DEFAULT_TEMPLATE = "aio-sandbox-tiny"
-DEFAULT_TIMEOUT_SECONDS = 30.0
-READY_STATUS = "ready"
-FAILED_STATUSES = {"error", "failed", "deleted"}
+DEFAULT_POLL_INTERVAL = 5.0
+DEFAULT_READY_TIMEOUT = 600.0
 
 
-@dataclass(slots=True)
-class ExampleConfig:
-    base_url: str
-    template: str
-    email: str | None
-    password: str | None
-    api_key: str | None
-    keep_sandbox: bool
-    keep_keys: bool
-    name_prefix: str
+# ---------------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------------
 
 
-@dataclass(slots=True)
-class TemporaryApiKey:
-    id: str
-    key: str
-    label: str
-
-
-def parse_common_args(*, description: str, name_prefix: str) -> ExampleConfig:
+def parse_args(description: str, *, name_prefix: str = "example") -> argparse.Namespace:
+    """Parse common CLI arguments shared by all examples."""
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument(
         "--base-url",
         default=os.environ.get("TREADSTONE_BASE_URL", DEFAULT_BASE_URL),
-        help=f"Treadstone base URL. Defaults to {DEFAULT_BASE_URL}.",
-    )
-    parser.add_argument(
-        "--template",
-        default=os.environ.get("TREADSTONE_TEMPLATE", DEFAULT_TEMPLATE),
-        help=f"Sandbox template name. Defaults to {DEFAULT_TEMPLATE}.",
-    )
-    parser.add_argument(
-        "--email",
-        default=os.environ.get("TREADSTONE_EMAIL"),
-        help="Email used for register/login when --api-key is not provided.",
-    )
-    parser.add_argument(
-        "--password",
-        default=os.environ.get("TREADSTONE_PASSWORD"),
-        help="Password used for register/login when --api-key is not provided.",
+        help=f"Treadstone API base URL (default: {DEFAULT_BASE_URL}).",
     )
     parser.add_argument(
         "--api-key",
         default=os.environ.get("TREADSTONE_API_KEY"),
-        help="Existing control-plane API key. Skips register/login/bootstrap key creation.",
+        help="Control-plane API key (env: TREADSTONE_API_KEY).",
     )
     parser.add_argument(
-        "--keep-sandbox",
-        action="store_true",
-        help="Skip sandbox deletion during cleanup.",
+        "--template",
+        default=os.environ.get("TREADSTONE_TEMPLATE", DEFAULT_TEMPLATE),
+        help=f"Sandbox template name (default: {DEFAULT_TEMPLATE}).",
     )
     parser.add_argument(
-        "--keep-keys",
-        action="store_true",
-        help="Skip deletion of any temporary API keys created by the example.",
+        "--sandbox-id",
+        default=os.environ.get("TREADSTONE_SANDBOX_ID"),
+        help="Existing sandbox ID (skips creation where supported).",
     )
     args = parser.parse_args()
-
-    config = ExampleConfig(
-        base_url=normalize_url(args.base_url),
-        template=args.template,
-        email=args.email,
-        password=args.password,
-        api_key=args.api_key,
-        keep_sandbox=args.keep_sandbox,
-        keep_keys=args.keep_keys,
-        name_prefix=name_prefix,
-    )
-
-    if config.api_key is None and (not config.email or not config.password):
+    if not args.api_key:
         parser.error(
-            "Provide --api-key or set both --email and --password "
-            "(or TREADSTONE_API_KEY / TREADSTONE_EMAIL / TREADSTONE_PASSWORD)."
+            "An API key is required. Provide --api-key or set TREADSTONE_API_KEY."
         )
-
-    return config
-
-
-def normalize_url(url: str) -> str:
-    return url.rstrip("/")
+    args.base_url = args.base_url.rstrip("/")
+    return args
 
 
-def build_raw_data_plane_base(proxy_url: str) -> str:
-    return f"{normalize_url(proxy_url)}/v1"
-
-
-def build_sdk_data_plane_base(proxy_url: str) -> str:
-    return normalize_url(proxy_url)
-
-
-def make_sandbox_name(prefix: str) -> str:
+def make_sandbox_name(prefix: str = "example") -> str:
+    """Generate a unique, DNS-safe sandbox name."""
     sanitized = re.sub(r"[^a-z0-9-]+", "-", prefix.lower()).strip("-") or "example"
     timestamp = time.strftime("%m%d%H%M%S", time.gmtime())
-    suffix = uuid.uuid4().hex[:8]
-    raw_name = f"{sanitized}-{timestamp}-{suffix}"
-    return raw_name[:55].rstrip("-")
+    suffix = uuid.uuid4().hex[:6]
+    raw = f"{sanitized}-{timestamp}-{suffix}"
+    return raw[:55].rstrip("-")
 
 
-def print_header(title: str) -> None:
-    print(f"\n== {title} ==")
+# ---------------------------------------------------------------------------
+# Control-plane client
+# ---------------------------------------------------------------------------
 
 
-def print_step(message: str) -> None:
-    print(f"[step] {message}")
+def get_control_client(base_url: str, api_key: str) -> Any:
+    """Return an authenticated Treadstone SDK client for control-plane operations."""
+    try:
+        from treadstone_sdk import AuthenticatedClient
+    except ImportError:
+        _abort("treadstone-sdk is not installed. Run: pip install treadstone-sdk")
+    return AuthenticatedClient(base_url=base_url, token=api_key, follow_redirects=True)
 
 
-def print_note(message: str) -> None:
-    print(f"[info] {message}")
+# ---------------------------------------------------------------------------
+# Sandbox state helpers
+# ---------------------------------------------------------------------------
 
 
-def print_json(label: str, payload: Any) -> None:
+def wait_for_sandbox(
+    fetch_fn: Any,
+    target_status: str,
+    *,
+    timeout: float = DEFAULT_READY_TIMEOUT,
+    poll_interval: float = DEFAULT_POLL_INTERVAL,
+) -> Any:
+    """Poll *fetch_fn()* until ``status == target_status`` or timeout is reached.
+
+    Args:
+        fetch_fn: A zero-argument callable that returns a sandbox detail object.
+        target_status: The ``SandboxStatus`` string to wait for (e.g. ``"ready"``).
+        timeout: Maximum seconds to wait before raising ``TimeoutError``.
+        poll_interval: Seconds between polls.
+
+    Returns:
+        The sandbox detail object once it reaches *target_status*.
+    """
+    terminal_statuses = {"error", "deleted"}
+    deadline = time.monotonic() + timeout
+    while True:
+        detail = fetch_fn()
+        status = _get(detail, "status") or ""
+        sandbox_id = _get(detail, "id") or "?"
+        message = _get(detail, "status_message") or ""
+        print(f"  [poll] sandbox {sandbox_id}: status={status!r}" + (f" — {message}" if message else ""))
+        if status == target_status:
+            return detail
+        if status in terminal_statuses:
+            raise RuntimeError(
+                f"Sandbox {sandbox_id} reached terminal status {status!r}: {message}"
+            )
+        if time.monotonic() > deadline:
+            raise TimeoutError(
+                f"Timed out waiting for sandbox {sandbox_id} to reach {target_status!r}."
+            )
+        time.sleep(poll_interval)
+
+
+# ---------------------------------------------------------------------------
+# Data-plane helpers
+# ---------------------------------------------------------------------------
+
+
+def create_data_plane_key(control_client: Any, sandbox_id: str) -> tuple[str, str]:
+    """Create a sandbox-scoped data-plane API key and return ``(key_id, key_string)``.
+
+    The key grants access *only* to the specified sandbox's data plane.
+    Both the ID (for deletion) and the secret string (for auth) are returned.
+    """
+    try:
+        from treadstone_sdk.api.auth import auth_create_api_key
+        from treadstone_sdk.models.api_key_data_plane_mode import ApiKeyDataPlaneMode
+        from treadstone_sdk.models.api_key_data_plane_scope import ApiKeyDataPlaneScope
+        from treadstone_sdk.models.api_key_response import ApiKeyResponse
+        from treadstone_sdk.models.api_key_scope import ApiKeyScope
+        from treadstone_sdk.models.create_api_key_request import CreateApiKeyRequest
+    except ImportError:
+        _abort("treadstone-sdk is not installed. Run: pip install treadstone-sdk")
+
+    scope = ApiKeyScope(
+        control_plane=False,
+        data_plane=ApiKeyDataPlaneScope(
+            mode=ApiKeyDataPlaneMode.SELECTED,
+            sandbox_ids=[sandbox_id],
+        ),
+    )
+    result = auth_create_api_key.sync(
+        client=control_client,
+        body=CreateApiKeyRequest(name=f"example-dp-{sandbox_id[:8]}", scope=scope),
+    )
+    if not isinstance(result, ApiKeyResponse) or not result.key:
+        raise RuntimeError("Failed to create data-plane API key.")
+    return result.id, result.key
+
+
+def get_sandbox_client(proxy_url: str, data_plane_key: str) -> Any:
+    """Return an agent-sandbox ``Sandbox`` client pointed at the proxy URL.
+
+    The ``proxy_url`` comes from ``sandbox_detail.urls.proxy`` and acts as the
+    base URL for all sandbox-internal operations (shell, file, browser, etc.).
+
+    Args:
+        proxy_url: Value of ``sandbox_detail.urls.proxy``.
+        data_plane_key: A data-plane API key scoped to this sandbox.
+    """
+    try:
+        from agent_sandbox import Sandbox
+    except ImportError:
+        _abort("agent-sandbox is not installed. Run: pip install agent-sandbox")
+    return Sandbox(
+        base_url=proxy_url.rstrip("/"),
+        headers={"Authorization": f"Bearer {data_plane_key}"},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Output helpers
+# ---------------------------------------------------------------------------
+
+
+def print_section(title: str) -> None:
+    print(f"\n{'=' * 60}")
+    print(f"  {title}")
+    print(f"{'=' * 60}")
+
+
+def print_step(label: str) -> None:
+    print(f"\n--- {label} ---")
+
+
+def print_result(label: str, data: Any) -> None:
     print(f"{label}:")
-    print(json.dumps(to_serializable(payload), indent=2, sort_keys=True))
+    print(json.dumps(_to_serializable(data), indent=2, sort_keys=True))
 
 
-def to_serializable(value: Any) -> Any:
-    if value is None or isinstance(value, (str, int, float, bool)):
-        return value
-    if isinstance(value, Mapping):
-        return {str(key): to_serializable(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple, set)):
-        return [to_serializable(item) for item in value]
-
-    for method_name in ("to_dict", "dict", "model_dump"):
-        method = getattr(value, method_name, None)
-        if callable(method):
-            return to_serializable(method())
-
-    if hasattr(value, "__dict__"):
-        return {
-            key: to_serializable(item)
-            for key, item in vars(value).items()
-            if not key.startswith("_")
-        }
-
-    return repr(value)
+# ---------------------------------------------------------------------------
+# Internal utilities
+# ---------------------------------------------------------------------------
 
 
-def get_value(value: Any, *path: str) -> Any:
-    current = value
-    for key in path:
+def _get(obj: Any, *keys: str) -> Any:
+    """Traverse a chain of attribute or dict lookups, returning None on any miss."""
+    current = obj
+    for key in keys:
         if current is None:
             return None
-        if isinstance(current, Mapping):
+        if isinstance(current, dict):
             current = current.get(key)
-            continue
-        current = getattr(current, key, None)
+        else:
+            current = getattr(current, key, None)
     return current
 
 
-def ensure_template_exists(templates: Any, template_name: str) -> None:
-    items = get_value(templates, "items") or []
-    available = [get_value(item, "name") for item in items]
-    if template_name not in available:
-        joined = ", ".join(name for name in available if name)
-        raise RuntimeError(f"Template '{template_name}' is not available. Found: {joined or 'none'}")
+def _to_serializable(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(k): _to_serializable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_to_serializable(i) for i in value]
+    for method in ("to_dict", "dict", "model_dump"):
+        fn = getattr(value, method, None)
+        if callable(fn):
+            return _to_serializable(fn())
+    if hasattr(value, "__dict__"):
+        return {k: _to_serializable(v) for k, v in vars(value).items() if not k.startswith("_")}
+    return repr(value)
 
 
-def new_http_client(base_url: str, *, api_key: str | None = None) -> httpx.Client:
-    headers: dict[str, str] = {}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-    return httpx.Client(
-        base_url=normalize_url(base_url),
-        headers=headers,
-        timeout=DEFAULT_TIMEOUT_SECONDS,
-        follow_redirects=True,
-    )
-
-
-def request_json(
-    client: httpx.Client,
-    method: str,
-    url: str,
-    *,
-    label: str,
-    expected_statuses: int | Iterable[int],
-    quiet: bool = False,
-    **kwargs: Any,
-) -> Any:
-    expected = {expected_statuses} if isinstance(expected_statuses, int) else set(expected_statuses)
-    response = client.request(method, url, **kwargs)
-
-    if response.status_code not in expected:
-        detail = response.text[:1_200]
-        raise RuntimeError(
-            f"{label} failed with HTTP {response.status_code}.\n"
-            f"Expected one of {sorted(expected)}.\n"
-            f"Response body:\n{detail}"
-        )
-
-    if not quiet:
-        print_note(f"{label}: HTTP {response.status_code}")
-
-    if response.status_code == 204 or not response.content:
-        return None
-
-    try:
-        return response.json()
-    except ValueError as exc:
-        raise RuntimeError(f"{label} returned non-JSON content.") from exc
-
-
-def login_or_register(client: httpx.Client, config: ExampleConfig) -> None:
-    payload = {"email": config.email, "password": config.password}
-    if payload["email"] is None or payload["password"] is None:
-        raise RuntimeError("Email and password are required for register/login.")
-
-    print_step("Attempting login with email/password")
-    response = client.post("/v1/auth/login", json=payload)
-    if response.status_code == 200:
-        print_note("Login succeeded")
-        return
-
-    if response.status_code != 400:
-        raise RuntimeError(f"Login failed with HTTP {response.status_code}: {response.text[:1_200]}")
-
-    print_step("Login failed, attempting registration")
-    register_response = client.post("/v1/auth/register", json=payload)
-    if register_response.status_code == 201:
-        print_note("Registration succeeded")
-    elif register_response.status_code == 409:
-        raise RuntimeError(
-            "Login failed and registration hit a conflict. "
-            "Verify TREADSTONE_EMAIL/TREADSTONE_PASSWORD or provide TREADSTONE_API_KEY."
-        )
-    else:
-        raise RuntimeError(
-            f"Registration failed with HTTP {register_response.status_code}: {register_response.text[:1_200]}"
-        )
-
-    print_step("Logging in after registration")
-    follow_up = client.post("/v1/auth/login", json=payload)
-    if follow_up.status_code != 200:
-        detail = follow_up.text[:1_200]
-        raise RuntimeError(
-            f"Login after registration failed with HTTP {follow_up.status_code}: {detail}"
-        )
-    print_note("Login after registration succeeded")
-
-
-def create_api_key_http(
-    client: httpx.Client,
-    *,
-    name: str,
-    scope: Mapping[str, Any],
-) -> TemporaryApiKey:
-    payload = {"name": name, "scope": dict(scope)}
-    data = request_json(
-        client,
-        "POST",
-        "/v1/auth/api-keys",
-        label=f"Create API key '{name}'",
-        expected_statuses=201,
-        json=payload,
-    )
-    return TemporaryApiKey(id=data["id"], key=data["key"], label=name)
-
-
-def delete_api_key_http(client: httpx.Client, api_key_id: str) -> None:
-    request_json(
-        client,
-        "DELETE",
-        f"/v1/auth/api-keys/{api_key_id}",
-        label=f"Delete API key '{api_key_id}'",
-        expected_statuses=(204, 404),
-        quiet=True,
-    )
-
-
-def delete_sandbox_http(client: httpx.Client, sandbox_id: str) -> None:
-    request_json(
-        client,
-        "DELETE",
-        f"/v1/sandboxes/{sandbox_id}",
-        label=f"Delete sandbox '{sandbox_id}'",
-        expected_statuses=(204, 404),
-        quiet=True,
-    )
-
-
-def wait_for_sandbox_ready(
-    fetch_detail: Callable[[], Any],
-    *,
-    timeout_seconds: float = 600.0,
-    poll_interval_seconds: float = 5.0,
-) -> Any:
-    started_at = time.monotonic()
-    while True:
-        detail = fetch_detail()
-        status = get_value(detail, "status")
-        sandbox_id = get_value(detail, "id")
-        message = get_value(detail, "status_message")
-
-        print_note(f"Sandbox {sandbox_id}: status={status!r} message={message!r}")
-
-        if status == READY_STATUS:
-            return detail
-        if status in FAILED_STATUSES:
-            raise RuntimeError(f"Sandbox {sandbox_id} entered terminal status '{status}': {message}")
-        if time.monotonic() - started_at > timeout_seconds:
-            raise RuntimeError(f"Timed out waiting for sandbox {sandbox_id} to become ready.")
-
-        time.sleep(poll_interval_seconds)
-
-
-def best_effort(label: str, fn: Callable[[], None]) -> None:
-    try:
-        fn()
-        print_note(f"{label}: done")
-    except Exception as exc:  # pragma: no cover - best effort cleanup path
-        print_note(f"{label}: skipped ({exc})")
-
-
-def control_plane_none_scope() -> dict[str, Any]:
-    return {
-        "control_plane": True,
-        "data_plane": {
-            "mode": "none",
-            "sandbox_ids": [],
-        },
-    }
-
-
-def selected_data_plane_scope(sandbox_id: str) -> dict[str, Any]:
-    return {
-        "control_plane": False,
-        "data_plane": {
-            "mode": "selected",
-            "sandbox_ids": [sandbox_id],
-        },
-    }
-
-
-def unwrap_data_plane_response(response: Mapping[str, Any], *, label: str) -> Any:
-    if not response.get("success", False):
-        message = response.get("message", "Unknown error")
-        raise RuntimeError(f"{label} failed: {message}")
-    return response.get("data")
-
-
-def fail(message: str) -> int:
-    print(message, file=sys.stderr)
-    return 1
+def _abort(message: str) -> None:
+    print(f"ERROR: {message}", file=sys.stderr)
+    sys.exit(1)
