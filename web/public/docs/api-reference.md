@@ -107,26 +107,110 @@ So a sandbox route like `/v1/shell/exec` becomes:
 
 `/v1/sandboxes/{sandbox_id}/proxy/v1/shell/exec`
 
-In [Swagger UI](https://api.treadstone-ai.dev/docs) they appear under tags such as **`Sandbox: shell`**, **`Sandbox: sandbox`**, **`Sandbox: mcp`**, and so on — the same operations, with `sandbox_id` injected. Auth is **`Authorization: Bearer <api_key>`** with data-plane access, same as the generic proxy.
+In [Swagger UI](https://api.treadstone-ai.dev/docs) they appear under tags **`Sandbox: <name>`** (for example `Sandbox: shell`, `Sandbox: file`, `Sandbox: browser`) — the same operations as in `scripts/sandbox_openapi_base.json`, with `sandbox_id` injected. Auth is **`Authorization: Bearer <api_key>`** with data-plane access, same as the generic proxy.
 
-![Swagger UI: Sandbox shell routes merged under the data-plane proxy](/docs/images/api-reference-swagger-sandbox-shell.png)
+![Swagger UI: merged sandbox runtime routes (example: shell)](/docs/images/api-reference-swagger-sandbox-shell.png)
 
-#### Shell (representative)
+#### Sandbox runtime paths (from `sandbox_openapi_base.json`)
 
-| Method | Path after `/v1/sandboxes/{sandbox_id}/proxy` | Summary |
-|--------|-----------------------------------------------|---------|
+The tables below list **every path** in the bundled sandbox OpenAPI spec. Each row is the suffix after `/v1/sandboxes/{sandbox_id}/proxy`. If the spec changes, update this section from the same file or use **Swagger** / **`openapi.json`** as the source of truth.
+
+##### `browser` — in-VM browser automation
+
+| Method | Path suffix | Summary |
+|--------|-------------|---------|
+| `POST` | `/v1/browser/actions` | Execute action |
+| `POST` | `/v1/browser/config` | Set config |
+| `GET` | `/v1/browser/info` | Get browser info |
+| `GET` | `/v1/browser/screenshot` | Take screenshot |
+
+##### `code` — Python execution
+
+| Method | Path suffix | Summary |
+|--------|-------------|---------|
+| `POST` | `/v1/code/execute` | Execute code |
+| `GET` | `/v1/code/info` | Code info |
+
+##### `file` — filesystem
+
+| Method | Path suffix | Summary |
+|--------|-------------|---------|
+| `GET` | `/v1/file/download` | Download file |
+| `POST` | `/v1/file/find` | Find files |
+| `POST` | `/v1/file/list` | List path |
+| `POST` | `/v1/file/read` | Read file |
+| `POST` | `/v1/file/replace` | Replace in file |
+| `POST` | `/v1/file/search` | Search in file |
+| `POST` | `/v1/file/str_replace_editor` | Str replace editor |
+| `POST` | `/v1/file/upload` | Upload file |
+| `POST` | `/v1/file/write` | Write file |
+
+##### `jupyter`
+
+| Method | Path suffix | Summary |
+|--------|-------------|---------|
+| `POST` | `/v1/jupyter/execute` | Execute Jupyter code |
+| `GET` | `/v1/jupyter/info` | Jupyter info |
+| `GET` | `/v1/jupyter/sessions` | List sessions |
+| `DELETE` | `/v1/jupyter/sessions` | Cleanup all sessions |
+| `POST` | `/v1/jupyter/sessions/create` | Create Jupyter session |
+| `DELETE` | `/v1/jupyter/sessions/{session_id}` | Cleanup session |
+
+##### `mcp`
+
+| Method | Path suffix | Summary |
+|--------|-------------|---------|
+| `GET` | `/v1/mcp/servers` | List MCP servers |
+| `GET` | `/v1/mcp/{server_name}/tools` | List MCP tools |
+| `POST` | `/v1/mcp/{server_name}/tools/{tool_name}` | Execute MCP tool |
+
+##### `nodejs` — Node execution
+
+| Method | Path suffix | Summary |
+|--------|-------------|---------|
+| `POST` | `/v1/nodejs/execute` | Execute Node.js code |
+| `GET` | `/v1/nodejs/info` | Node.js info |
+
+##### `sandbox` — environment context
+
+| Method | Path suffix | Summary |
+|--------|-------------|---------|
+| `GET` | `/v1/sandbox` | Get sandbox context |
+| `GET` | `/v1/sandbox/packages/python` | Python packages |
+| `GET` | `/v1/sandbox/packages/nodejs` | Node.js packages |
+
+##### `shell`
+
+| Method | Path suffix | Summary |
+|--------|-------------|---------|
 | `POST` | `/v1/shell/exec` | Exec command (optional SSE via `Accept: text/event-stream`) |
-| `POST` | `/v1/shell/view` | View shell output |
+| `POST` | `/v1/shell/view` | View shell |
 | `POST` | `/v1/shell/wait` | Wait for process |
-| `POST` | `/v1/shell/write` | Write to process stdin |
+| `POST` | `/v1/shell/write` | Write to process |
 | `POST` | `/v1/shell/kill` | Kill process |
 | `POST` | `/v1/shell/sessions/create` | Create session |
 | `GET` | `/v1/shell/terminal-url` | Get terminal URL |
 | `GET` | `/v1/shell/sessions` | List sessions |
 | `DELETE` | `/v1/shell/sessions` | Cleanup all sessions |
-| `DELETE` | `/v1/shell/sessions/{session_id}` | Cleanup one session |
+| `DELETE` | `/v1/shell/sessions/{session_id}` | Cleanup session |
 
-For request/response bodies and any additional routes, use **Swagger** or the merged **`openapi.json`** — the table above is a **summary** only.
+##### `skills`
+
+| Method | Path suffix | Summary |
+|--------|-------------|---------|
+| `DELETE` | `/v1/skills` | Clear skills |
+| `GET` | `/v1/skills/metadatas` | List skills metadata |
+| `POST` | `/v1/skills/register` | Register skills |
+| `DELETE` | `/v1/skills/{name}` | Delete skill |
+| `GET` | `/v1/skills/{name}/content` | Get skill content |
+
+##### `util`
+
+| Method | Path suffix | Summary |
+|--------|-------------|---------|
+| `POST` | `/v1/util/convert_to_markdown` | Convert to Markdown |
+
+Request and response schemas for these operations are in **`sandbox_openapi_base.json`** and in the hosted **Swagger** / **`openapi.json`** — not duplicated here.
 
 ### Usage
 
