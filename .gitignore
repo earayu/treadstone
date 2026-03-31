@@ -36,3 +36,6 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# local scratch / browser session output
+xiaohongshu_feed_sample/

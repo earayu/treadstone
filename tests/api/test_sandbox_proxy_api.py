@@ -279,3 +279,170 @@ async def test_proxy_deleted_api_key_returns_401(auth_client):
 
     assert resp.status_code == 401
     assert resp.json()["error"]["code"] == "auth_invalid"
+
+
+async def test_proxy_forwards_query_string(auth_client):
+    """Query params must be forwarded to the sandbox so MCP SSE ?sessionId= works."""
+    create_resp = await auth_client.post(
+        "/v1/sandboxes",
+        json={"template": "aio-sandbox-tiny", "name": "proxy-qs-sb"},
+    )
+    sandbox_id = create_resp.json()["id"]
+
+    async with _test_session_factory() as session:
+        from treadstone.models.sandbox import Sandbox
+
+        sb = await session.get(Sandbox, sandbox_id)
+        sb.status = "ready"
+        session.add(sb)
+        await session.commit()
+
+    key_resp = await auth_client.post("/v1/auth/api-keys", json={"name": "proxy-qs"})
+    api_key = key_resp.json()["key"]
+
+    captured_paths: list[str] = []
+
+    async def capturing_proxy_http_request(*, method, sandbox_id, path, **kwargs):
+        captured_paths.append(path)
+        return 200, {"content-type": "text/plain"}, _mock_upstream(body=b"ok").send.return_value
+
+    with patch("treadstone.api.sandbox_proxy.proxy_http_request", side_effect=capturing_proxy_http_request):
+        resp = await auth_client.get(
+            f"/v1/sandboxes/{sandbox_id}/proxy/mcp?sessionId=abc123&stream=1",
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+
+    assert resp.status_code == 200
+    assert len(captured_paths) == 1
+    assert "sessionId=abc123" in captured_paths[0]
+    assert "stream=1" in captured_paths[0]
+
+
+def _make_ws_scope(path: str, headers: list[tuple[bytes, bytes]], query_string: bytes = b"") -> dict:
+    """Build a minimal ASGI WebSocket scope for direct ASGI dispatch in tests."""
+    return {
+        "type": "websocket",
+        "path": path,
+        "raw_path": path.encode(),
+        "root_path": "",
+        "scheme": "ws",
+        "query_string": query_string,
+        "headers": headers,
+        "subprotocols": [],
+        "extensions": {},
+        "state": {},
+    }
+
+
+async def _run_ws_asgi(scope: dict) -> list[dict]:
+    """Drive a WebSocket ASGI request and collect all sent messages."""
+    import asyncio
+
+    sends: list[dict] = []
+    connected = False
+
+    async def receive():
+        nonlocal connected
+        if not connected:
+            connected = True
+            return {"type": "websocket.connect"}
+        await asyncio.sleep(999)
+
+    async def send_fn(msg: dict) -> None:
+        sends.append(msg)
+
+    await app(scope, receive, send_fn)
+    return sends
+
+
+async def test_proxy_ws_no_auth_closes_1008(auth_client):
+    """WebSocket proxy must close with code 1008 when no API key is provided."""
+    create_resp = await auth_client.post(
+        "/v1/sandboxes",
+        json={"template": "aio-sandbox-tiny", "name": "proxy-ws-noauth"},
+    )
+    sandbox_id = create_resp.json()["id"]
+
+    scope = _make_ws_scope(f"/v1/sandboxes/{sandbox_id}/proxy/mcp", headers=[])
+    sends = await _run_ws_asgi(scope)
+
+    close_msgs = [m for m in sends if m.get("type") == "websocket.close"]
+    assert close_msgs, "Expected a websocket.close message"
+    assert close_msgs[0]["code"] == 1008
+
+
+async def test_proxy_ws_with_api_key_header_proxies(auth_client, monkeypatch):
+    """WebSocket proxy authenticates via Authorization header and calls proxy_websocket."""
+    # ws_proxy uses async_session directly, so patch to use the test DB factory.
+    monkeypatch.setattr("treadstone.api.sandbox_proxy.async_session", _test_session_factory)
+
+    create_resp = await auth_client.post(
+        "/v1/sandboxes",
+        json={"template": "aio-sandbox-tiny", "name": "proxy-ws-auth"},
+    )
+    sandbox_id = create_resp.json()["id"]
+
+    async with _test_session_factory() as session:
+        from treadstone.models.sandbox import Sandbox
+
+        sb = await session.get(Sandbox, sandbox_id)
+        sb.status = "ready"
+        session.add(sb)
+        await session.commit()
+
+    key_resp = await auth_client.post("/v1/auth/api-keys", json={"name": "proxy-ws-key"})
+    api_key = key_resp.json()["key"]
+
+    proxy_calls: list[dict] = []
+
+    async def capturing_proxy_websocket(**kwargs):
+        proxy_calls.append(kwargs)
+
+    headers = [(b"authorization", f"Bearer {api_key}".encode())]
+    scope = _make_ws_scope(f"/v1/sandboxes/{sandbox_id}/proxy/mcp", headers=headers)
+
+    with patch("treadstone.api.sandbox_proxy.proxy_websocket", side_effect=capturing_proxy_websocket):
+        await _run_ws_asgi(scope)
+
+    assert len(proxy_calls) == 1, f"proxy_websocket was called {len(proxy_calls)} times; expected 1"
+    assert proxy_calls[0]["path"] == "mcp"
+
+
+async def test_proxy_ws_token_param_auth(auth_client, monkeypatch):
+    """WebSocket proxy accepts API key via ?token= query param and strips it upstream."""
+    monkeypatch.setattr("treadstone.api.sandbox_proxy.async_session", _test_session_factory)
+
+    create_resp = await auth_client.post(
+        "/v1/sandboxes",
+        json={"template": "aio-sandbox-tiny", "name": "proxy-ws-token-param"},
+    )
+    sandbox_id = create_resp.json()["id"]
+
+    async with _test_session_factory() as session:
+        from treadstone.models.sandbox import Sandbox
+
+        sb = await session.get(Sandbox, sandbox_id)
+        sb.status = "ready"
+        session.add(sb)
+        await session.commit()
+
+    key_resp = await auth_client.post("/v1/auth/api-keys", json={"name": "proxy-ws-token"})
+    api_key = key_resp.json()["key"]
+
+    proxy_calls: list[dict] = []
+
+    async def capturing_proxy_websocket(**kwargs):
+        proxy_calls.append(kwargs)
+
+    qs = f"token={api_key}&sessionId=xyz".encode()
+    scope = _make_ws_scope(f"/v1/sandboxes/{sandbox_id}/proxy/mcp", headers=[], query_string=qs)
+
+    with patch("treadstone.api.sandbox_proxy.proxy_websocket", side_effect=capturing_proxy_websocket):
+        await _run_ws_asgi(scope)
+
+    assert len(proxy_calls) == 1, f"proxy_websocket was called {len(proxy_calls)} times; expected 1"
+    upstream_path = proxy_calls[0]["path"]
+    # token must not be forwarded to the upstream pod
+    assert "token=" not in upstream_path
+    # other query params must survive
+    assert "sessionId=xyz" in upstream_path

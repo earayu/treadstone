@@ -193,6 +193,47 @@ curl -s -X POST $BASE_URL/v1/sandboxes \
 
 After the Sandbox is running, you can reach its **Web UI** in a browser. The exact URL depends on your subdomain / DNS setup; with local Kind and Ingress, open `http://<sandbox-name>.sandbox.localhost/` (for example, `http://api-sb-1774074700.sandbox.localhost/`).
 
+### Exposing the Sandbox MCP Endpoint Publicly
+
+Each sandbox exposes its internal HTTP server (default port 8080) through two paths:
+
+| Path | Auth | Use for |
+|------|------|---------|
+| `https://api.<domain>/v1/sandboxes/{id}/proxy/mcp` | API Key (`Authorization: Bearer sk-…`) | MCP clients (Cursor, Claude Desktop, scripts) — HTTP/SSE and WebSocket both supported |
+| `https://sandbox-{id}.<sandbox_domain>/mcp` | Browser session cookie (with `/_treadstone/open` bootstrap) | Human-facing browser tools |
+
+For WebSocket-based MCP clients that cannot set HTTP headers, pass the key as a query param: `wss://api.<domain>/v1/sandboxes/{id}/proxy/mcp?token=sk-…`.
+
+### Using a Custom Domain for Sandbox Subdomains
+
+By default, sandbox subdomains use `sandbox-{id}.treadstone-ai.dev`. To switch to your own domain (e.g. `mycompany.com`), set these environment variables in your secrets file and redeploy:
+
+```bash
+TREADSTONE_SANDBOX_DOMAIN=mycompany.com
+TREADSTONE_APP_BASE_URL=https://app.mycompany.com
+```
+
+Then add the wildcard host to `deploy/treadstone/values-<env>.yaml`:
+
+```yaml
+ingress:
+  hosts:
+    - host: api.mycompany.com
+      paths:
+        - path: /
+          pathType: Prefix
+    - host: "*.mycompany.com"
+      paths:
+        - path: /
+          pathType: Prefix
+```
+
+You will also need:
+- A wildcard TLS certificate for `*.mycompany.com` (reference it via `ingress.tls` or the ALB `certificate-id` annotation).
+- A DNS wildcard record `*.mycompany.com → <load balancer>` at your DNS provider.
+
+> **Note:** `TREADSTONE_SANDBOX_DOMAIN` accepts a single domain. If you need both your custom domain and `treadstone-ai.dev` active simultaneously, add a CDN/reverse-proxy in front that rewrites the `Host` header to `sandbox-{id}.treadstone-ai.dev` for requests coming from your custom domain.
+
 ```bash
 # View K8s resources (replace treadstone-local with your namespace)
 kubectl -n treadstone-local get sandboxclaims,sandboxes,pods

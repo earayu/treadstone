@@ -68,7 +68,30 @@
 
 | Method | Path | What it does |
 |--------|------|--------------|
-| `GET/POST/PUT/PATCH/DELETE` | `/v1/sandboxes/{sandbox_id}/proxy/{path}` | Forward a request to the sandbox's internal HTTP server at `{path}`. Requires an API key; session cookies are not accepted. |
+| `GET/POST/PUT/PATCH/DELETE` | `/v1/sandboxes/{sandbox_id}/proxy/{path}` | Forward a request to the sandbox's internal HTTP server at `{path}`. Requires an API key; session cookies are not accepted. Query strings are forwarded to the sandbox unchanged. |
+| `WebSocket` | `/v1/sandboxes/{sandbox_id}/proxy/{path}` | Upgrade to a WebSocket connection proxied to the sandbox. Pass the API key as `Authorization: Bearer sk-…` header, or as a `?token=sk-…` query param for clients that cannot set WebSocket headers. |
+
+#### Using the Proxy with MCP
+
+The data-plane proxy is the recommended way to connect MCP clients (Cursor, Claude Desktop, scripts) to an MCP server running inside a sandbox.
+
+**HTTP / SSE transport** — use the standard HTTP proxy path:
+
+```
+GET https://api.treadstone-ai.dev/v1/sandboxes/{id}/proxy/mcp
+Authorization: Bearer sk-…
+```
+
+SSE session parameters (e.g. `?sessionId=abc`) are forwarded to the sandbox unchanged.
+
+**WebSocket transport** — use the same path with a WebSocket upgrade:
+
+```
+wss://api.treadstone-ai.dev/v1/sandboxes/{id}/proxy/mcp
+Authorization: Bearer sk-…
+```
+
+**Browser / subdomain access** — If the sandbox should be opened in a browser (e.g. for a web-based MCP client), use the `urls.web` field returned by the sandbox API. This URL (`https://sandbox-{id}.treadstone-ai.dev/mcp`) is authenticated via browser session cookie; use `POST /v1/sandboxes/{id}/web-link` to obtain a shareable `open_link`.
 
 ### Usage
 
