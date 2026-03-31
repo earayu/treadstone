@@ -47,13 +47,21 @@ const TERM_STEPS: TermStep[] = [
   { type: "sp" },
 
   { type: "think", text: "thinking: create a sandbox", tone: "zinc", speed: 36 },
-  { type: "cmd", text: "treadstone --json sandboxes create --name page-check", speed: 38 },
-  { type: "out", text: '{"id":"sb_3kx9m2p","status":"running","urls":{"proxy":"https://sb_3kx9m2p.proxy.treadstone-ai.dev"}}', pause: 380 },
+  { type: "cmd", text: "treadstone --json sandboxes create --template aio-sandbox-tiny --name page-check", speed: 38 },
+  {
+    type: "out",
+    text: '{"id":"sb_3kx9m2p","status":"running","urls":{"proxy":"https://api.treadstone-ai.dev/v1/sandboxes/sb_3kx9m2p/proxy","web":"https://sandbox-sb_3kx9m2p.treadstone-ai.dev/…"}}',
+    pause: 380,
+  },
   { type: "sp" },
 
   { type: "think", text: "thinking: prepare a browser session in case human review is needed", tone: "zinc", speed: 36 },
   { type: "cmd", text: "treadstone --json sandboxes web enable sb_3kx9m2p", speed: 38 },
-  { type: "out", text: '{"open_link":"https://sb_3kx9m2p.web.treadstone-ai.dev?token=...","expires_at":"2026-03-30T18:00:00Z"}', pause: 350 },
+  {
+    type: "out",
+    text: '{"open_link":"https://sandbox-sb_3kx9m2p.treadstone-ai.dev/_treadstone/open?token=...","expires_at":"2026-03-30T18:00:00Z"}',
+    pause: 350,
+  },
   { type: "sp" },
 
   { type: "think", text: "thinking: handoff is ready, stop the runtime", tone: "zinc", speed: 36 },
@@ -71,22 +79,22 @@ const HOW_STEPS = [
   {
     n: "01 — ORCHESTRATE",
     title: "Agents control the workflow",
-    desc: "Plan tasks, call Treadstone directly, and decide when to create, reuse, or stop a sandbox.",
+    desc: "Plan tasks, drive the CLI or API, and decide when to create, reuse, or stop a sandbox.",
   },
   {
     n: "02 — PROVISION",
     title: "Spin up a real environment",
-    desc: "Each sandbox gives agents isolated runtime, files, tools, and browser access—not just a stateless function call.",
+    desc: "Each sandbox returns a urls object with proxy (HTTP into the workload), MCP, and web—not a single stateless call.",
   },
   {
     n: "03 — EXECUTE",
     title: "Run code, browse, and use tools",
-    desc: "Agents work inside the sandbox directly: write code, open pages, inspect files, and keep long-running tasks moving.",
+    desc: "Send traffic through urls.proxy or MCP, or work on the filesystem—long-running work stays inside the sandbox.",
   },
   {
     n: "04 — HAND OFF",
     title: "Bring in a human only when needed",
-    desc: "Generate a secure browser session when an agent needs review, input, or a final decision.",
+    desc: "Issue a short-lived browser hand-off when an agent needs review, input, or a final decision.",
   },
 ]
 
@@ -194,13 +202,23 @@ const CLI_LINES: CodeLine[] = [
   [{ cls: pr, text: "$ " }, { cls: fg, text: "treadstone --json templates list" }],
   [{ cls: js, text: '{"items": [{"name": "aio-sandbox-tiny", "cpu": "0.25", "memory": "512Mi"}, ...]}' }],
   [],
-  [{ cls: cm, text: "# 4. Create a sandbox — read the ID from JSON output" }],
-  [{ cls: pr, text: "$ " }, { cls: fg, text: "treadstone --json sandboxes create --name agent-demo" }],
-  [{ cls: js, text: '{"id": "sb_3kx9m2p", "status": "running", "urls": {"proxy": "https://sb_3kx9m2p.proxy.treadstone-ai.dev"}}' }],
+  [{ cls: cm, text: "# 4. Create a sandbox — read id and urls from JSON" }],
+  [{ cls: pr, text: "$ " }, { cls: fg, text: "treadstone --json sandboxes create --template aio-sandbox-tiny --name agent-demo" }],
+  [
+    {
+      cls: js,
+      text: '{"id": "sb_3kx9m2p", "status": "running", "urls": {"proxy": "https://api.treadstone-ai.dev/v1/sandboxes/sb_3kx9m2p/proxy", "web": "https://sandbox-sb_3kx9m2p.treadstone-ai.dev/…"}}',
+    },
+  ],
   [],
   [{ cls: cm, text: "# 5. Hand the browser off to a human" }],
   [{ cls: pr, text: "$ " }, { cls: fg, text: "treadstone --json sandboxes web enable sb_3kx9m2p" }],
-  [{ cls: js, text: '{"open_link": "https://sb_3kx9m2p.web.treadstone-ai.dev?token=...", "expires_at": "2026-03-30T18:00:00Z"}' }],
+  [
+    {
+      cls: js,
+      text: '{"open_link": "https://sandbox-sb_3kx9m2p.treadstone-ai.dev/_treadstone/open?token=...", "expires_at": "2026-03-30T18:00:00Z"}',
+    },
+  ],
 ]
 
 const SDK_LINES: CodeLine[] = [
@@ -222,11 +240,22 @@ const SDK_LINES: CodeLine[] = [
   [{ cls: fg, text: "    )" }],
   [{ cls: fg, text: ")" }],
   [{ cls: fn, text: "print" }, { cls: fg, text: "(sandbox.id)            " }, { cls: cm, text: '# "sb_3kx9m2p"' }],
-  [{ cls: fn, text: "print" }, { cls: fg, text: "(sandbox.urls.proxy)    " }, { cls: cm, text: '# "https://sb_3kx9m2p.proxy.treadstone-ai.dev"' }],
+  [
+    { cls: fn, text: "print" },
+    { cls: fg, text: "(sandbox.urls.proxy)    " },
+    { cls: cm, text: '# "https://api.treadstone-ai.dev/v1/sandboxes/sb_3kx9m2p/proxy"' },
+  ],
   [],
   [{ cls: cm, text: "# Generate a browser hand-off URL for a human" }],
   [{ cls: fg, text: "session = sandboxes_create_sandbox_web_link." }, { cls: fn, text: "sync" }, { cls: fg, text: "(sandbox.id, client=client)" }],
-  [{ cls: fn, text: "print" }, { cls: fg, text: "(session.open_link)     " }, { cls: cm, text: '# "https://sb_3kx9m2p.web.treadstone-ai.dev?token=..."' }],
+  [
+    { cls: fn, text: "print" },
+    { cls: fg, text: "(session.open_link)     " },
+    {
+      cls: cm,
+      text: '# "https://sandbox-sb_3kx9m2p.treadstone-ai.dev/_treadstone/open?token=..."',
+    },
+  ],
 ]
 
 const REST_LINES: CodeLine[] = [
@@ -240,7 +269,20 @@ const REST_LINES: CodeLine[] = [
   [{ cls: js, text: '  "id": "sb_3kx9m2p",' }],
   [{ cls: js, text: '  "name": "agent-demo",' }],
   [{ cls: js, text: '  "status": "running",' }],
-  [{ cls: js, text: '  "urls": { "proxy": "https://sb_3kx9m2p.proxy.treadstone-ai.dev" }' }],
+  [{ cls: js, text: '  "urls": {' }],
+  [
+    {
+      cls: js,
+      text: '    "proxy": "https://api.treadstone-ai.dev/v1/sandboxes/sb_3kx9m2p/proxy",',
+    },
+  ],
+  [
+    {
+      cls: js,
+      text: '    "web": "https://sandbox-sb_3kx9m2p.treadstone-ai.dev/…"',
+    },
+  ],
+  [{ cls: js, text: "  }" }],
   [{ cls: js, text: "}" }],
   [],
   [{ cls: cm, text: "# Enable browser hand-off for a human" }],
@@ -248,7 +290,12 @@ const REST_LINES: CodeLine[] = [
   [{ cls: fg, text: "    -H " }, { cls: ok, text: '"Authorization: Bearer $TREADSTONE_API_KEY"' }],
   [],
   [{ cls: js, text: "{" }],
-  [{ cls: js, text: '  "open_link": "https://sb_3kx9m2p.web.treadstone-ai.dev?token=...",' }],
+  [
+    {
+      cls: js,
+      text: '  "open_link": "https://sandbox-sb_3kx9m2p.treadstone-ai.dev/_treadstone/open?token=...",',
+    },
+  ],
   [{ cls: js, text: '  "expires_at": "2026-03-30T18:00:00Z"' }],
   [{ cls: js, text: "}" }],
 ]
@@ -613,12 +660,39 @@ export function LandingPage() {
   const [waitlistTier, setWaitlistTier] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<"cli" | "sdk" | "rest">("cli")
 
-  const cliCode =
-    "# 1. Authenticate\n$ treadstone auth login --email agent@example.com --password ••••••••\n✓ Logged in as agent@example.com\n\n# 2. Install the agent skill (Cursor, Codex, …)\n$ treadstone skills install\nInstalled: ~/.agents/skills/treadstone-cli/SKILL.md\n\n# 3. Create a sandbox\n$ treadstone --json sandboxes create --name agent-demo\n{\"id\":\"sb_3kx9m2p\",\"status\":\"running\"}\n\n# 4. Hand the browser off\n$ treadstone --json sandboxes web enable sb_3kx9m2p\n{\"open_link\":\"https://sb_3kx9m2p.web.treadstone-ai.dev?token=...\"}"
+  const cliCode = [
+    "# 1. Authenticate (or set TREADSTONE_API_KEY in env)",
+    "$ treadstone auth login --email agent@example.com --password ••••••••",
+    "✓ Logged in as agent@example.com",
+    "",
+    "# 2. Install the agent skill (Cursor, Codex, …)",
+    "$ treadstone skills install",
+    "Installed: ~/.agents/skills/treadstone-cli/SKILL.md",
+    "",
+    "# 3. See available templates",
+    "$ treadstone --json templates list",
+    '{"items": [{"name": "aio-sandbox-tiny", "cpu": "0.25", "memory": "512Mi"}, ...]}',
+    "",
+    "# 4. Create a sandbox — read id and urls from JSON",
+    "$ treadstone --json sandboxes create --template aio-sandbox-tiny --name agent-demo",
+    '{"id":"sb_3kx9m2p","status":"running","urls":{"proxy":"https://api.treadstone-ai.dev/v1/sandboxes/sb_3kx9m2p/proxy","web":"https://sandbox-sb_3kx9m2p.treadstone-ai.dev/…"}}',
+    "",
+    "# 5. Hand the browser off to a human",
+    "$ treadstone --json sandboxes web enable sb_3kx9m2p",
+    '{"open_link":"https://sandbox-sb_3kx9m2p.treadstone-ai.dev/_treadstone/open?token=...","expires_at":"2026-03-30T18:00:00Z"}',
+  ].join("\n")
   const sdkCode =
-    "from treadstone_sdk import AuthenticatedClient\nfrom treadstone_sdk.api.sandboxes import sandboxes_create_sandbox, sandboxes_create_sandbox_web_link\nfrom treadstone_sdk.models.create_sandbox_request import CreateSandboxRequest\n\nclient = AuthenticatedClient(base_url=\"https://api.treadstone-ai.dev\", token=\"sk-...\")\nsandbox = sandboxes_create_sandbox.sync(client=client, body=CreateSandboxRequest(template=\"aio-sandbox-tiny\", name=\"agent-demo\"))\nsession = sandboxes_create_sandbox_web_link.sync(sandbox.id, client=client)\nprint(session.open_link)"
-  const restCode =
-    "curl -X POST https://api.treadstone-ai.dev/v1/sandboxes/sb_3kx9m2p/web-link \\\n  -H \"Authorization: Bearer $TREADSTONE_API_KEY\""
+    'from treadstone_sdk import AuthenticatedClient\nfrom treadstone_sdk.api.sandboxes import sandboxes_create_sandbox, sandboxes_create_sandbox_web_link\nfrom treadstone_sdk.models.create_sandbox_request import CreateSandboxRequest\n\nclient = AuthenticatedClient(base_url="https://api.treadstone-ai.dev", token="sk-...")\nsandbox = sandboxes_create_sandbox.sync(client=client, body=CreateSandboxRequest(template="aio-sandbox-tiny", name="agent-demo"))\nprint(sandbox.urls.proxy)  # https://api.treadstone-ai.dev/v1/sandboxes/sb_3kx9m2p/proxy\nsession = sandboxes_create_sandbox_web_link.sync(sandbox.id, client=client)\nprint(session.open_link)'
+  const restCode = [
+    "curl -X POST https://api.treadstone-ai.dev/v1/sandboxes \\",
+    '  -H "Authorization: Bearer $TREADSTONE_API_KEY" \\',
+    '  -H "Content-Type: application/json" \\',
+    "  -d '{\"name\": \"agent-demo\", \"template\": \"aio-sandbox-tiny\"}'",
+    "",
+    "# … then enable browser hand-off",
+    "curl -X POST https://api.treadstone-ai.dev/v1/sandboxes/sb_3kx9m2p/web-link \\",
+    '  -H "Authorization: Bearer $TREADSTONE_API_KEY"',
+  ].join("\n")
 
   const tabCopyText = { cli: cliCode, sdk: sdkCode, rest: restCode }
 
@@ -656,7 +730,7 @@ export function LandingPage() {
               testing, and long-running tasks.
             </p>
             <p className="text-[17px] leading-[1.65] text-muted-foreground">
-              Built so agents can use Treadstone directly—
+              Built so agents can drive Treadstone from the CLI, SDK, or API—
               <br />
               launching and managing sandboxes on their own.
             </p>
@@ -703,8 +777,9 @@ export function LandingPage() {
         <h2 className="mt-3 font-mono text-[clamp(1.75rem,3.5vw,2.75rem)] font-semibold leading-[1.1] tracking-[-0.04em]">
           Built for autonomous agent workflows.
         </h2>
-        <p className="mt-3 mb-12 max-w-[480px] text-base leading-[1.65] text-muted-foreground">
-          Agents can create sandboxes, run code, use browsers and tools, and hand work off to humans when needed—through the same control plane.
+        <p className="mt-3 mb-12 max-w-[520px] text-base leading-[1.65] text-muted-foreground">
+          One control plane for lifecycle and keys; each sandbox exposes <span className="font-mono text-[13px] text-foreground/80">urls</span> for
+          proxy, MCP, and browser access. Agents run work in the sandbox and hand off to humans when needed.
         </p>
 
         <div className="grid grid-cols-1 overflow-hidden rounded-xl border border-border/20 sm:grid-cols-2 lg:grid-cols-4">
@@ -732,9 +807,15 @@ export function LandingPage() {
           <h2 className="mt-3 font-mono text-[clamp(1.75rem,3.5vw,2.75rem)] font-semibold leading-[1.1] tracking-[-0.04em]">
             Three ways in.
           </h2>
-          <p className="mt-3 mb-6 max-w-[480px] text-base leading-[1.65] text-muted-foreground">
-            CLI for exploration, Python SDK for automation, REST API for integration. All returning the same consistent
-            JSON.
+          <p className="mt-3 mb-6 max-w-[560px] text-base leading-[1.65] text-muted-foreground">
+            CLI, Python SDK, or raw HTTP against the same control plane. Use{" "}
+            <code className="rounded-sm bg-white/[0.06] px-1.5 py-0.5 font-mono text-[13px]">--json</code> for stable CLI
+            output; sandbox detail includes <span className="font-mono text-[13px] text-foreground/80">urls</span> for the
+            data plane (
+            <Link to="/docs?page=sandbox-endpoints" className="text-primary underline underline-offset-2 hover:text-primary/90">
+              Sandbox endpoints
+            </Link>
+            ).
           </p>
 
           {/* Tab bar */}
@@ -781,8 +862,15 @@ export function LandingPage() {
           <h2 className="mt-3 font-mono text-[clamp(1.75rem,3.5vw,2.75rem)] font-semibold leading-[1.1] tracking-[-0.04em]">
             Up in seconds.
           </h2>
-          <p className="mt-3 mb-12 max-w-[480px] text-base leading-[1.65] text-muted-foreground">
-            Install the CLI on any platform. The SDK and REST API need nothing beyond an API key.
+          <p className="mt-3 mb-12 max-w-[560px] text-base leading-[1.65] text-muted-foreground">
+            Install the CLI with curl, PowerShell, or pip—the same commands as the{" "}
+            <Link to="/docs?page=quickstart" className="text-primary underline underline-offset-2 hover:text-primary/90">
+              Quickstart
+            </Link>
+            . Then run{" "}
+            <code className="rounded-sm bg-white/[0.06] px-1.5 py-0.5 font-mono text-[13px]">treadstone auth login</code> and
+            create an API key when you automate. The Python SDK and REST API only need{" "}
+            <code className="rounded-sm bg-white/[0.06] px-1.5 py-0.5 font-mono text-[13px]">TREADSTONE_API_KEY</code>.
           </p>
 
           <div className="mb-8 grid grid-cols-1 md:grid-cols-3 md:items-stretch">
