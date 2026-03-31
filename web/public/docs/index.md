@@ -1,33 +1,27 @@
 # Overview
 
-Treadstone is **agent-native sandbox infrastructure**: a hosted control plane so agents can spin up isolated environments, run code and tools, use the browser, and bring a human in only when the workflow needs one—without you hand-wiring auth, lifecycle, or routing for every run.
+Treadstone is **agent-native sandbox infrastructure**: a hosted service so you can spin up isolated environments for agents and teams, run tools and code inside them, and **bring a human in with one link** when judgement matters—without building your own control plane, identity, and routing for every project.
 
-That is the same bet as the product home page: sandboxes for agents that do not wait on humans for the mechanics—only for judgement when it matters. A raw container is not an agent platform. The runtime matters, but so does everything around it: stable interfaces, identity, lifecycle, scoped access, and plan limits. Treadstone packages that into a service so agents can call it directly and manage sandboxes on their own.
+The bet is simple: **sandboxes are for automation first.** Humans step in for review, approval, or decisions—not to babysit every create-and-teardown. A raw container is not an agent platform; what matters is stable interfaces around lifecycle, access, and limits so agents can run end-to-end reliably.
 
-Over HTTP there are **two surfaces**, not one: **control plane** calls (`/v1/...` on the API host) manage Treadstone itself; **data plane** calls use the per-sandbox **`urls.proxy`** link — a reverse proxy that strips the proxy routing prefix and forwards the request to the HTTP server **inside** the container. See [REST API Guide](/docs/rest-api-guide.md) for how this maps to paths, auth, and OpenAPI.
+## Why it matters
 
-## What The Platform Gives You
+- **One contract, three ways in** — CLI, REST API, and Python SDK share the same resources and shapes, so humans and agents do not diverge.
+- **Predictable operations** — Create, inspect, start, stop, and delete sandboxes on demand; templates match what your plan allows.
+- **Identity that fits automation** — Sessions and API keys with scoped access so operators and scripts can both work safely.
+- **Humans when needed** — Short-lived browser handoff links instead of embedding long-lived credentials in agent code.
+- **Room to grow** — Usage, quotas, and plan limits keep autonomous runs bounded.
 
-- **Three interfaces, one contract**: CLI, Python SDK, and REST API with consistent resources and JSON-shaped responses—so exploration, automation, and integrations stay aligned.
-- **Orchestration and lifecycle**: Create, inspect, start, stop, and delete sandboxes on demand; reuse or retire environments as the agent’s task changes.
-- **Templates that match your plan**: Discover CPU, memory, and persistence profiles (including ephemeral vs persistent shapes) the platform will actually accept before you commit to a template name.
-- **Browser handoff**: When a person must review, approve, or decide, mint a short-lived `open_link` instead of embedding long-lived credentials in agent code.
-- **Identity and scope**: Sign-in sessions, API keys, and layered access to control-plane APIs, sandbox proxies, and per-sandbox grants—least privilege for both operators and automation.
-- **Usage under your plan**: Remaining compute, storage quota, which templates you can use, concurrency caps, and max runtime—so autonomous runs stay predictable.
-- **MCP in sandbox**: Expose a Model Context Protocol server inside a sandbox through the data-plane proxy (`urls.proxy` + path, API key auth). See [MCP in sandbox](/docs/mcp-sandbox.md).
+## What you can build
 
-## Get Started
+- **Long-running agent tasks** in isolated runtimes with files, shell, and optional browser.
+- **Integrations** that call the same APIs from scripts, services, or the [Python SDK](/docs/python-sdk-guide.md).
+- **Human-in-the-loop** flows when something must be seen or approved in a real browser session.
 
-1. Create an account at [/auth/sign-up](/auth/sign-up).
-2. Follow [CLI Guide](/docs/cli-guide.md) to install the CLI and authenticate, then [Sandbox Lifecycle](/docs/sandbox-lifecycle.md) to create and run your first sandbox.
-3. Open **Integrate** when you need install and auth for one surface — each guide is self-contained: [CLI Guide](/docs/cli-guide.md), [REST API Guide](/docs/rest-api-guide.md), [Python SDK Guide](/docs/python-sdk-guide.md), [MCP in sandbox](/docs/mcp-sandbox.md). For the hosted control plane, interactive REST documentation (Swagger UI) is at [https://api.treadstone-ai.dev/docs](https://api.treadstone-ai.dev/docs).
-4. Use **Core Workflows** for task-focused pages. Where it helps, the same workflow is shown for **CLI**, **REST API**, and **Python SDK** in parallel (on the website you can switch tabs; the raw Markdown file always contains all three).
+When you are ready to run commands, go to [Quickstart](/docs/quickstart.md), then **Core Workflows** for task-focused guides (sandboxes, auth, browser handoff, limits). **Integrate** holds per-surface install and usage (CLI, REST, SDK, MCP).
 
-> For automation: use `sandbox_id`, not `name`. Read `urls.proxy`, `web_url`, and `open_link` from platform output. Do not construct them yourself. Share **`open_link`** for handoffs; **`web_url`** is not a bearer link — it needs a Console session.
+## Read next
 
-## Read Next
-
-- [CLI Guide](/docs/cli-guide.md)
+- [Quickstart](/docs/quickstart.md)
 - [Sandbox Lifecycle](/docs/sandbox-lifecycle.md)
-- [Browser Handoff](/docs/browser-handoff.md)
-- [Usage & Limits](/docs/usage-limits.md)
+- [CLI Guide](/docs/cli-guide.md)

@@ -279,6 +279,30 @@ class TestReconcile:
         rv = await reconcile("treadstone-local", k8s, session_factory)
         assert rv.isdigit()
 
+    async def test_reconcile_stale_cr_does_not_overwrite_db(self, session_factory):
+        """LIST can return an old CR; do not downgrade READY to ERROR from stale ReconcilerError."""
+        await _create_sandbox(
+            session_factory,
+            status=SandboxStatus.READY,
+            version=2,
+            k8s_resource_version="1000",
+        )
+        k8s = FakeK8sClient()
+        await k8s.create_sandbox_claim("test-sb", "aio-sandbox-tiny", "treadstone-local")
+        k8s.simulate_sandbox_ready("test-sb", "treadstone-local")
+        stale = k8s._sandboxes["treadstone-local/test-sb"]
+        stale["metadata"]["resourceVersion"] = "10"
+        stale["status"]["conditions"] = [
+            {"type": "Ready", "status": "False", "reason": "ReconcilerError", "message": "stale failure"},
+        ]
+
+        await reconcile("treadstone-local", k8s, session_factory)
+
+        async with session_factory() as session:
+            sb = await session.get(Sandbox, "sb00000000test1234")
+            assert sb.status == SandboxStatus.READY
+            assert sb.k8s_resource_version == "1000"
+
 
 class TestWatchLoop:
     async def test_watch_event_updates_db(self, session_factory):
