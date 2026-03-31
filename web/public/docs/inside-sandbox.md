@@ -50,6 +50,119 @@ curl -sS "$PROXY_BASE/health" \
   -H "Authorization: Bearer $TREADSTONE_API_KEY"
 ```
 
+## Hands-on examples
+
+These are **multi-step** flows against the same **`$PROXY_BASE`** and **`Authorization: Bearer`**. Routes are the real sandbox runtime paths under `/v1/shell/…`, `/v1/file/…`, `/v1/browser/…` (see [API Reference](/docs/api-reference.md)). Replace placeholders with your sandbox’s **`urls.proxy`** and a key that can reach this sandbox.
+
+### 1) “Trip souvenir”: download a photo, list it, pull it to your laptop
+
+**Goal:** Inside the sandbox, save an image with `curl`, confirm it exists, then copy the file **out** to your machine with the file API (same idea as logs, build artifacts, or checkpoints).
+
+**Step 1 — Create a folder and download an image (shell)**
+
+```bash
+curl -sS -X POST "$PROXY_BASE/v1/shell/exec" \
+  -H "Authorization: Bearer $TREADSTONE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"command":"mkdir -p /tmp/treadstone-demo && curl -fsSL https://picsum.photos/400/300 -o /tmp/treadstone-demo/souvenir.jpg && ls -la /tmp/treadstone-demo","exec_dir":"/tmp"}'
+```
+
+**Step 2 — List the directory (file)**
+
+```bash
+curl -sS -X POST "$PROXY_BASE/v1/file/list" \
+  -H "Authorization: Bearer $TREADSTONE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"path":"/tmp/treadstone-demo"}'
+```
+
+**Step 3 — Download the file to your current directory**
+
+```bash
+curl -fsS -G "$PROXY_BASE/v1/file/download" \
+  --data-urlencode "path=/tmp/treadstone-demo/souvenir.jpg" \
+  -H "Authorization: Bearer $TREADSTONE_API_KEY" \
+  -o ./souvenir.jpg
+```
+
+Use an **absolute** `path` query parameter; `--data-urlencode` avoids mistakes with `/` characters.
+
+### 2) Screenshot the desktop
+
+**Goal:** Capture what is on the **sandbox display** (for example after you opened the workspace in a browser via `urls.web`, or after other desktop activity).
+
+```bash
+curl -fsS "$PROXY_BASE/v1/browser/screenshot" \
+  -H "Authorization: Bearer $TREADSTONE_API_KEY" \
+  -o ./desktop.png
+```
+
+The body is a PNG (`image/png`). Response headers such as `x-image-width` / `x-image-height` describe the capture.
+
+### 3) Open a URL in the desktop browser, wait, then screenshot
+
+The browser HTTP API exposes **mouse/keyboard** actions, not a dedicated “go to URL” call. On a typical Linux desktop image you can **launch** the system browser from the shell, wait for the page to load, then **screenshot**.
+
+```bash
+curl -sS -X POST "$PROXY_BASE/v1/shell/exec" \
+  -H "Authorization: Bearer $TREADSTONE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"command":"xdg-open https://example.com 2>/dev/null || sensible-browser https://example.com 2>/dev/null || echo \"no desktop browser helper in PATH\"","exec_dir":"/tmp"}'
+
+curl -sS -X POST "$PROXY_BASE/v1/shell/exec" \
+  -H "Authorization: Bearer $TREADSTONE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"command":"sleep 3","exec_dir":"/tmp"}'
+
+curl -fsS "$PROXY_BASE/v1/browser/screenshot" \
+  -H "Authorization: Bearer $TREADSTONE_API_KEY" \
+  -o ./after-open-url.png
+```
+
+Whether `xdg-open` / `sensible-browser` exists depends on your **template image**. If they are missing, use **example 1** (`curl` inside the sandbox) to fetch assets without a GUI.
+
+### 4) “Keyboard macro”: type into the focused window, wait, screenshot
+
+**Goal:** After focus is in the right place (for example you clicked into a terminal via [Browser Handoff](/docs/browser-handoff.md) or a `CLICK` action), send text and capture the result.
+
+```bash
+curl -sS -X POST "$PROXY_BASE/v1/browser/actions" \
+  -H "Authorization: Bearer $TREADSTONE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"action_type":"TYPING","text":"echo hello from Treadstone\n"}'
+
+curl -sS -X POST "$PROXY_BASE/v1/browser/actions" \
+  -H "Authorization: Bearer $TREADSTONE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"action_type":"WAIT","duration":0.5}'
+
+curl -fsS "$PROXY_BASE/v1/browser/screenshot" \
+  -H "Authorization: Bearer $TREADSTONE_API_KEY" \
+  -o ./after-typing.png
+```
+
+Focus matters: if the wrong window is active, keystrokes go elsewhere. See `POST /v1/browser/actions` in the merged Swagger spec for `CLICK`, `SCROLL`, `HOTKEY`, etc.
+
+### 5) Run a longer CLI (install tools, agents, or one-shot scripts)
+
+**Goal:** Use the sandbox like a remote machine: chain installs or run CLIs, with enough **time** budget.
+
+`POST /v1/shell/exec` accepts an optional **`timeout`** (seconds) for slow commands. What is installed (`node`, `pip`, vendor CLIs) depends on your **image** — check your template or run `which node`, `python3 --version`, and so on first.
+
+```bash
+curl -sS -X POST "$PROXY_BASE/v1/shell/exec" \
+  -H "Authorization: Bearer $TREADSTONE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"command":"python3 -c \"print(sum(range(1,101)))\"","exec_dir":"/tmp"}'
+
+curl -sS -X POST "$PROXY_BASE/v1/shell/exec" \
+  -H "Authorization: Bearer $TREADSTONE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"command":"command -v npx >/dev/null && npx -y cowsay@1.5.0 \"Shipped from the sandbox\" || echo \"npx not available in this image\"","exec_dir":"/tmp","timeout":120}'
+```
+
+For products like **Claude Code** or other vendor CLIs, follow their official install steps **inside** the same shell (often `npm install -g …` or a curl installer), set **`timeout`** generously, then invoke the binary from a **subsequent** `exec` once `PATH` is updated. Do not pipe `curl | bash` from docs you do not trust.
+
 Rules that do not change:
 
 - **Only** `Authorization: Bearer <api_key>` — **not** a Console session cookie.
