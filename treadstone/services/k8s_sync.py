@@ -116,7 +116,14 @@ async def handle_watch_event(
                 )
                 await _delete_sandbox_row(session, sandbox.id)
             else:
-                logger.warning("Unexpected DELETED event for %s (status=%s), marking error", sandbox.id, sandbox.status)
+                logger.warning(
+                    "Unexpected DELETED (Watch): sandbox_id=%s db_status=%s cr=%s/%s rv=%s — marking error",
+                    sandbox.id,
+                    sandbox.status,
+                    cr_namespace,
+                    cr_name,
+                    cr_rv,
+                )
                 rows = await _optimistic_update(
                     session, sandbox.id, sandbox.version, SandboxStatus.ERROR, resource_version=cr_rv
                 )
@@ -157,10 +164,15 @@ async def handle_watch_event(
 
             if not is_valid_transition(sandbox.status, new_status):
                 logger.warning(
-                    "Invalid transition %s -> %s for %s from Watch, skipping",
+                    "Invalid transition (Watch): sandbox_id=%s db_status=%s -> k8s_derived=%s cr=%s/%s rv=%s "
+                    "cr_message=%r — skipping (state machine)",
+                    sandbox.id,
                     sandbox.status,
                     new_status,
-                    sandbox.id,
+                    cr_namespace,
+                    cr_name,
+                    cr_rv,
+                    message,
                 )
                 return
 
@@ -228,7 +240,14 @@ async def reconcile(
                     )
                     await _delete_sandbox_row(session, sandbox.id)
                 elif sandbox.status != SandboxStatus.CREATING:
-                    logger.warning("CR missing for %s (status=%s), marking error", sandbox.id, sandbox.status)
+                    logger.warning(
+                        "CR missing (reconcile List): sandbox_id=%s db_status=%s expected_cr_key=%s ns=%s; "
+                        "CR not in list snapshot (lag, name mismatch, or consistency) — marking error",
+                        sandbox.id,
+                        sandbox.status,
+                        cr_key,
+                        sandbox.k8s_namespace,
+                    )
                     old_status = sandbox.status
                     await _optimistic_update(session, sandbox.id, sandbox.version, SandboxStatus.ERROR)
                     await _record_status_change(

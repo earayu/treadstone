@@ -368,3 +368,74 @@ class TestTemplateValidation:
             )
 
         session.delete.assert_called_once()
+
+
+def _ready_sandbox_cr(*, resource_version: str = "99") -> dict:
+    return {
+        "metadata": {"resourceVersion": resource_version},
+        "spec": {"replicas": 1},
+        "status": {"conditions": [{"type": "Ready", "status": "True", "message": "Running"}]},
+    }
+
+
+class TestSandboxServiceHealError:
+    async def test_heal_noop_when_not_error(self):
+        from treadstone.services.sandbox_service import SandboxService
+
+        sb = _make_sandbox(status=SandboxStatus.READY)
+        k8s = _mock_k8s_client()
+        session = AsyncMock()
+        svc = SandboxService(session=session, k8s_client=k8s)
+        out = await svc.heal_error_if_k8s_ready(sb)
+        assert out is sb
+        k8s.get_sandbox.assert_not_called()
+
+    async def test_heal_updates_when_k8s_ready(self, monkeypatch):
+        from treadstone.services.sandbox_service import SandboxService
+
+        sb = _make_sandbox(status=SandboxStatus.ERROR, version=2)
+        k8s = _mock_k8s_client()
+        k8s.get_sandbox = AsyncMock(return_value=_ready_sandbox_cr())
+
+        session = AsyncMock()
+        upd_result = MagicMock()
+        upd_result.rowcount = 1
+        session.execute = AsyncMock(return_value=upd_result)
+        session.commit = AsyncMock()
+        session.refresh = AsyncMock()
+
+        audit_mock = AsyncMock()
+        monkeypatch.setattr("treadstone.services.sandbox_service.record_audit_event", audit_mock)
+
+        svc = SandboxService(session=session, k8s_client=k8s, metering=None)
+        await svc.heal_error_if_k8s_ready(sb)
+
+        k8s.get_sandbox.assert_awaited_once()
+        session.commit.assert_awaited_once()
+        session.refresh.assert_awaited_once()
+        audit_mock.assert_awaited_once()
+        assert audit_mock.await_args.kwargs["action"] == "sandbox.status.self_heal"
+
+    async def test_heal_skips_when_optimistic_conflict(self, monkeypatch):
+        from treadstone.services.sandbox_service import SandboxService
+
+        sb = _make_sandbox(status=SandboxStatus.ERROR, version=2)
+        k8s = _mock_k8s_client()
+        k8s.get_sandbox = AsyncMock(return_value=_ready_sandbox_cr())
+
+        session = AsyncMock()
+        upd_result = MagicMock()
+        upd_result.rowcount = 0
+        session.execute = AsyncMock(return_value=upd_result)
+        session.commit = AsyncMock()
+        session.refresh = AsyncMock()
+
+        audit_mock = AsyncMock()
+        monkeypatch.setattr("treadstone.services.sandbox_service.record_audit_event", audit_mock)
+
+        svc = SandboxService(session=session, k8s_client=k8s, metering=None)
+        await svc.heal_error_if_k8s_ready(sb)
+
+        audit_mock.assert_not_called()
+        session.commit.assert_not_called()
+        session.refresh.assert_awaited_once()
