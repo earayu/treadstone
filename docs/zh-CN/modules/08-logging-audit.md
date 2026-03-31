@@ -304,14 +304,14 @@ flowchart LR
 
 | 级别 | 消息要点 / 上下文 |
 |------|-------------------|
-| info | 模板 spec 同步到运行时缓存的数量 |
+| debug | 模板 spec 同步到运行时缓存的数量 |
 | warning | 模板 spec 校验告警 |
 
 ### `treadstone/services/metering_tasks.py`
 
 | 级别 | 消息要点 / 上下文 |
 |------|-------------------|
-| warning | ComputeSession 乐观锁冲突、跳过本 tick |
+| debug | ComputeSession 乐观锁冲突、跳过本 tick |
 | exception | grace 强制停 sandbox 失败、metering tick 某 step 失败 |
 
 ### `treadstone/services/sandbox_lifecycle_tasks.py`
@@ -345,7 +345,7 @@ flowchart LR
 
 ### `treadstone/api/cli_auth.py`
 
-- 定义了 `logger` 但**当前无 `logger.*` 调用**（见第 5 节「死代码」）。
+- **已清理**：此前未使用的 `logger` 已移除（见第 9 节落地记录）。
 
 ---
 
@@ -354,6 +354,58 @@ flowchart LR
 | 日期 | 说明 |
 |------|------|
 | 2026-03-31 | 定稿：合并会话审计结论；补充文档路径说明；与当前 `treadstone/` 中 DEBUG/INFO 实现及 `main.py` Integrity 处理对齐；附录 B 供按文件复查级别与文案。 |
+| 2026-03-31 | 增补第 9 节：记录已在仓库落地的日志与状态同步优化（含 GET 自愈合与 K8s 同步告警增强）。 |
+
+---
+
+## 9. 已落地的代码优化（实施记录）
+
+以下为在审计文档定稿之后**已合并到开发分支并准备发版**的改动摘要，便于对照控制台现象与排障关键词。
+
+### 9.1 日志级别与命名空间（`treadstone/main.py`）
+
+- **`logging.basicConfig`**：非 debug 时根级别仍为 **`WARNING`**，压低第三方库噪音。
+- **`logging.getLogger("treadstone").setLevel(...)`**：`TREADSTONE_DEBUG` 时为 **`DEBUG`**，否则为 **`INFO`**，保证包内 **`logger.info`** 在生产默认可见，与第 1 节描述一致。
+- **`IntegrityError` 全局处理**：改为 **`logger.exception`**，保留堆栈。
+
+### 9.2 降噪（DEBUG 迁移）
+
+- **`treadstone/services/k8s_client.py`**：单次 REST（POST/DELETE/PATCH）、Watch 流启动、Kr8s 单例提示 → **DEBUG**。
+- **`treadstone/middleware/sandbox_subdomain.py`**、**`treadstone/services/sandbox_proxy.py`**：子域 / API 代理「转发目标」类日志 → **DEBUG**（与 `treadstone.request` JSON 访问日志去重）。
+- **`treadstone/services/k8s_sync.py`**：Watch 循环心跳（起止、410、重连）→ **DEBUG**；**对账开始/结束**仍为 **INFO**。
+- **`treadstone/services/metering_tasks.py`**：ComputeSession 乐观锁冲突跳过本 tick → **DEBUG**。
+- **`treadstone/services/metering_helpers.py`**：模板 spec 同步条数 → **DEBUG**。
+
+### 9.3 Sandbox 异常状态与删除（必选 INFO）
+
+- **`k8s_sync._record_status_change`**：当 `to_status` 为 **`error` / `deleting` / `deleted`** 时，在写审计后追加 **`logger.info`**（`sandbox_id`、`from_status`、`source`、可选 `message`）。
+- **`sandbox_service`**：API 创建失败进 **error**、用户删除进 **deleting**、删除或启停 K8s 失败进 **error** 等路径，持久化后打 **INFO**（与 **`logger.exception`** 互补）。
+- **`sync_supervisor._k8s_delete_sandbox`**：在 **K8s 删除 API 成功返回后** 再打 **deleting**（避免失败回滚仍误报）。
+- **`sandbox_lifecycle_tasks._db_only_delete`**：DB 兜底进入 **deleting** 时打 **INFO**。
+
+### 9.4 「K8s 健康但 DB 误 Error」：同步侧日志 + GET 纠偏
+
+- **`k8s_sync` 告警上下文增强**（仍为 **WARNING**，便于 `grep`）：
+  - **CR missing（reconcile List）**：含 `sandbox_id`、`db_status`、**`expected_cr_key`**、`ns`，并提示 list 快照缺 CR / 命名不一致 / 一致性延迟。
+  - **Invalid transition（Watch）**：含 `sandbox_id`、db 与 K8s 推导状态、**`cr` ns/name、`rv`、CR `message`**。
+  - **Unexpected DELETED（Watch）**：含 `sandbox_id`、`db_status`、**`cr` ns/name、`rv`**。
+- **`SandboxService.heal_error_if_k8s_ready`**：当 DB 为 **`error`** 且 live Sandbox CR **`derive_status_from_sandbox_cr` 为 ready** 时，**乐观锁 UPDATE**、审计动作 **`sandbox.status.self_heal`**、在启用 metering 时 **`open_compute_session`**，然后 **`commit`/`refresh`**。
+- **`GET /v1/sandboxes/{id}`**：使用带 **`metering`** 的 `SandboxService`，在返回详情前调用 **`heal_error_if_k8s_ready`**（减少对 5 分钟对账与手动 Start 的依赖）。
+- **单测**：**`tests/unit/test_sandbox_service.py`** 中 `TestSandboxServiceHealError` 覆盖自愈合路径。
+
+### 9.5 工程与运维辅助（同批本地改动，可选纳入同一 PR）
+
+- **`.gitignore`**：忽略 **`logs/`**（本地 kubectl 日志导出目录）。
+- **`scripts/export-k8s-logs.sh`**：将命名空间内 Pod 日志导出到 **`logs/k8s-export/<时间戳>/`**，便于离线检索。
+- **`docs/README.md`**：指向中文审计文档与 `docs/zh-CN` 索引。
+- 其它与日志无关的仓库改动（如 **`web/`**、**`deploy/sandbox-runtime/values-prod.yaml`**）以当次 PR 的 `git` 变更为准。
+
+### 9.6 控制台检索建议（与第 4、5 节互补）
+
+除 **`CR missing` / `Invalid transition` / `Unexpected DELETED` / `Failed to scale`** 外，可搜：
+
+- **`self-heal applied`** / **`self-heal skipped`**：GET 纠偏是否触发、是否因无 CR 或非 Ready 跳过。
+- **`Sandbox … status … -> error`** / **`-> deleting`**：来自 `_record_status_change` 或 API 的显式状态迁移 **INFO**。
 
 ---
 
