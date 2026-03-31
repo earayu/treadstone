@@ -56,6 +56,7 @@ The server exposes **OpenAPI** at **`/openapi.json`** (public, code-first spec).
 ## Read Next
 
 - [API Reference](/docs/api-reference.md)
+- [MCP in sandbox](/docs/mcp-sandbox.md) — MCP servers behind `urls.proxy`
 - [Error Reference](/docs/error-reference.md)
 - [Python SDK Guide](/docs/python-sdk-guide.md)
 - [Sandbox Lifecycle](/docs/sandbox-lifecycle.md)

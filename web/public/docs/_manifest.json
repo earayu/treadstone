@@ -94,6 +94,19 @@
     ]
   },
   {
+    "slug": "mcp-sandbox",
+    "title": "MCP in sandbox",
+    "section": "Integrate",
+    "order": 25,
+    "summary": "Expose an MCP server inside a sandbox via the data-plane proxy: urls.proxy + /mcp, API key auth, HTTP/SSE and WebSocket transports, query forwarding, and when to use subdomain browser URLs.",
+    "default": false,
+    "llm_priority": 100,
+    "aliases": [
+      "mcp",
+      "model-context-protocol"
+    ]
+  },
+  {
     "slug": "python-sdk-guide",
     "title": "Python SDK Guide",
     "section": "Integrate",

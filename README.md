@@ -92,6 +92,11 @@ Treat `name` as a human-readable label only. Follow-up operations use `sandbox_i
 - **Flexible execution modes**: ephemeral or persistent sandboxes
 - **Production control plane**: auth, API keys, RBAC, rate limiting, and multi-tenancy
 - **Open deployment model**: self-host today, managed path planned
+- **MCP over the data plane**: connect MCP clients to a server running inside a sandbox via **`urls.proxy`** (HTTP/SSE and WebSocket); see [MCP in sandbox](https://treadstone-ai.dev/docs/mcp-sandbox) in the public docs and the **Proxy** section of [API Reference](https://treadstone-ai.dev/docs/api-reference).
+
+## MCP (Model Context Protocol)
+
+If your sandbox runs an MCP server on a path such as `/mcp`, expose it to tools like Cursor or Claude Desktop using the **data-plane** URL from the API — **`{urls.proxy}/mcp`** with your **API key** (`Authorization: Bearer sk-…`). Query strings (for SSE) and WebSocket upgrades are supported. Do not hand-build hostnames: read **`urls.proxy`** from `GET /v1/sandboxes/{id}`. Full URLs, auth split, and self-hosted DNS notes: [MCP in sandbox](https://treadstone-ai.dev/docs/mcp-sandbox) · [deploy/README.md](deploy/README.md) (Exposing the Sandbox MCP Endpoint).
 
 ## Python SDK
 
@@ -176,7 +181,7 @@ What works today:
 
 - User auth, API keys, RBAC, and invitations
 - Sandbox CRUD and lifecycle management
-- Kubernetes sync, HTTP proxy, and browser hand-off flow
+- Kubernetes sync, HTTP and WebSocket data-plane proxy (including MCP), and browser hand-off flow
 - CLI and Python SDK for agent-facing usage
 
 What is planned next:
