@@ -271,6 +271,7 @@ async def get_sandbox(
     user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
 ):
+    """Return DB-backed sandbox detail. K8s state is synced by Watch/reconcile only (no read-path K8s API calls)."""
     service = SandboxService(session=session)
     sandbox = await service.get(sandbox_id=sandbox_id, owner_id=user.id)
     if sandbox is None:
