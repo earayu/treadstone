@@ -128,7 +128,7 @@ image-api: ## Build API Docker image
 	docker build -t treadstone:latest .
 
 image-web: ## Build frontend Docker image
-	docker build -t treadstone-web:latest web/
+	docker build -f web/Dockerfile -t treadstone-web:latest .
 
 clean: clean-py clean-web ## Remove build artifacts and caches
 

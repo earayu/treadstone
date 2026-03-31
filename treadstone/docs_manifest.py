@@ -197,8 +197,8 @@ def render_llms_txt(entries: Iterable[DocManifestEntry]) -> str:
     lines = [
         "# Treadstone",
         "",
-        "> Hosted sandbox platform for AI teams. Create sandboxes, control lifecycle, expose a data plane, "
-        "and hand browser sessions to humans when the workflow demands it.",
+        "> Agent-native sandbox infrastructure. Create sandboxes, control lifecycle, use the data plane, "
+        "and hand browser sessions to humans when the workflow needs it.",
         "",
         "## Primary Docs",
         "",
@@ -212,11 +212,11 @@ def render_llms_txt(entries: Iterable[DocManifestEntry]) -> str:
             "",
             "## Task Map",
             "",
-            "- Start fast: [/docs/quickstart.md](/docs/quickstart.md), "
+            "- Start fast: [/docs/index.md](/docs/index.md), "
             "[/docs/cli-guide.md](/docs/cli-guide.md), "
             "[/docs/rest-api-guide.md](/docs/rest-api-guide.md)",
-            "- Create a sandbox: [/docs/create-sandbox.md](/docs/create-sandbox.md), "
-            "[/docs/quickstart.md](/docs/quickstart.md)",
+            "- Sandbox lifecycle: [/docs/sandbox-lifecycle.md](/docs/sandbox-lifecycle.md), "
+            "[/docs/api-keys-auth.md](/docs/api-keys-auth.md)",
             "- Hand a browser to a human: [/docs/browser-handoff.md](/docs/browser-handoff.md), "
             "[/docs/api-reference.md](/docs/api-reference.md)",
             "- Understand auth and scope boundaries: [/docs/api-keys-auth.md](/docs/api-keys-auth.md), "
@@ -230,6 +230,7 @@ def render_llms_txt(entries: Iterable[DocManifestEntry]) -> str:
             "",
             "- [Documentation Sitemap](/docs/sitemap.md): Full hierarchical index",
             "- [OpenAPI Spec](/openapi.json): Machine-readable control-plane API schema",
+            "- Hosted Swagger UI: https://api.treadstone-ai.dev/docs",
             "",
         ]
     )

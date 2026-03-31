@@ -4,7 +4,7 @@
     "title": "Overview",
     "section": "Get Started",
     "order": 10,
-    "summary": "What Treadstone is, who it is for, and how to choose between the Console, CLI, REST API, and Python SDK.",
+    "summary": "Agent-native sandbox infrastructure: interfaces, lifecycle, templates, browser handoff, identity, and plan limits—plus how Integrate guides and Core Workflows map to CLI, REST API, and Python SDK.",
     "default": true,
     "llm_priority": 100,
     "aliases": [
@@ -12,32 +12,23 @@
       "core-concepts",
       "self-hosting",
       "local-development",
-      "production-deployment"
-    ]
-  },
-  {
-    "slug": "quickstart",
-    "title": "Quickstart",
-    "section": "Get Started",
-    "order": 20,
-    "summary": "The fastest hosted path from account creation to a running sandbox and a shareable browser handoff URL.",
-    "default": false,
-    "llm_priority": 100,
-    "aliases": [
+      "production-deployment",
+      "quickstart",
       "quickstart-human",
       "ai-index"
     ]
   },
   {
-    "slug": "create-sandbox",
-    "title": "Create a Sandbox",
+    "slug": "sandbox-lifecycle",
+    "title": "Sandbox Lifecycle",
     "section": "Core Workflows",
     "order": 10,
-    "summary": "Choose a template, set lifecycle controls, attach storage when needed, and capture the fields you will use next.",
+    "summary": "Create, list, inspect, stop, start, and delete sandboxes. Sandboxes only consume Compute Units while running.",
     "default": false,
     "llm_priority": 95,
     "aliases": [
-      "guide-sandboxes"
+      "guide-sandboxes",
+      "create-sandbox"
     ]
   },
   {
@@ -45,7 +36,7 @@
     "title": "Browser Handoff",
     "section": "Core Workflows",
     "order": 20,
-    "summary": "Generate, inspect, and revoke browser handoff URLs without inventing tokens or guessing subdomain URLs.",
+    "summary": "Let humans enter the sandbox in a browser: authenticated session or owner-shared JWT link; full workspace view and human-in-the-loop control.",
     "default": false,
     "llm_priority": 100,
     "aliases": [
@@ -57,7 +48,7 @@
     "title": "API Keys & Auth",
     "section": "Core Workflows",
     "order": 30,
-    "summary": "Understand session login, API keys, control-plane access, data-plane access, and selected sandbox grants.",
+    "summary": "Sign up via CLI or Console OAuth (Google/GitHub), then session login, API keys, control-plane vs data-plane access, and selected sandbox grants.",
     "default": false,
     "llm_priority": 100,
     "aliases": [
@@ -83,7 +74,7 @@
     "title": "CLI Guide",
     "section": "Integrate",
     "order": 10,
-    "summary": "Use the hosted CLI for login, sandbox lifecycle, browser handoff, and API key management with machine-safe JSON output.",
+    "summary": "Install the CLI and core behavior: global flags, credential precedence, JSON vs human output, --help, skills, defaults, and local config.",
     "default": false,
     "llm_priority": 100,
     "aliases": [
@@ -95,7 +86,7 @@
     "title": "REST API Guide",
     "section": "Integrate",
     "order": 20,
-    "summary": "Call the hosted control plane directly with API keys to create sandboxes, issue browser handoff links, and inspect usage.",
+    "summary": "REST shape: base URL, /v1 and /health, headers, JSON, errors, OpenAPI, control vs data plane — not duplicate workflows.",
     "default": false,
     "llm_priority": 95,
     "aliases": [
@@ -107,7 +98,7 @@
     "title": "Python SDK Guide",
     "section": "Integrate",
     "order": 30,
-    "summary": "Use the generated Python SDK with AuthenticatedClient and typed request models for the hosted API.",
+    "summary": "Install treadstone-sdk, AuthenticatedClient, module layout, sync vs detailed vs asyncio, errors, regeneration — not duplicate workflows.",
     "default": false,
     "llm_priority": 90,
     "aliases": [

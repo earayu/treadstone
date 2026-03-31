@@ -3,16 +3,21 @@ import { Link } from "react-router"
 import { useCurrentUser } from "@/hooks/use-auth"
 import { useSubmitWaitlistApplication } from "@/api/admin"
 import { TreadstoneSymbol } from "@/components/brand/logo"
+import { CodeBlockFrame } from "@/components/code/code-block-frame"
+import { CopyButton } from "@/components/code/copy-button"
+import { INTEGRATION_SURFACE_CODE_FRAME_HEADERS } from "@/lib/integration-surface-code-frame-headers"
 
 const GITHUB_URL = "https://github.com/earayu/treadstone"
+const DISCORD_URL = "https://discord.gg/ygSP9tT5RB"
+const TWITTER_X_URL = "https://x.com/treadstone_ai"
 /** Sign-in then return to repo root (for Star CTA). */
 const GITHUB_STAR_LOGIN_URL = `https://github.com/login?return_to=${encodeURIComponent(GITHUB_URL)}`
 const RELEASES_URL = "https://github.com/earayu/treadstone/releases"
 const PYPI_CLI_URL = "https://pypi.org/project/treadstone-cli/"
 const SUPPORT_EMAIL = "support@treadstone-ai.dev"
 
-const INSTALL_SH = "curl -fsSL https://github.com/earayu/treadstone/releases/latest/download/install.sh | sh"
-const INSTALL_PS = "irm https://github.com/earayu/treadstone/releases/latest/download/install.ps1 | iex"
+const INSTALL_SH = "curl -fsSL https://treadstone-ai.dev/install.sh | sh"
+const INSTALL_PS = "irm https://treadstone-ai.dev/install.ps1 | iex"
 const INSTALL_PIP = "pip install treadstone-cli"
 
 // ── Terminal animation data ──────────────────────────────────────────────────
@@ -175,31 +180,7 @@ const PLANS = [
 
 // ── Code tab content (syntax-highlighted via spans) ──────────────────────────
 
-type CodeLine = { cls: string; text: string }[]
-
-function CodeLines({ lines }: { lines: CodeLine[] }) {
-  return (
-    <pre className="overflow-x-auto px-6 py-5 font-mono text-[12.5px] leading-[1.75]">
-      {lines.map((segments, i) => (
-        <div key={i}>
-          {segments.map((seg, j) => (
-            <span key={j} className={seg.cls}>
-              {seg.text}
-            </span>
-          ))}
-        </div>
-      ))}
-    </pre>
-  )
-}
-
-const cm = "text-muted-foreground/50"
-const pr = "text-primary"
-const fg = "text-foreground"
-const ok = "text-emerald-400"
-const js = "text-sky-300"
-const kw = "text-purple-400"
-const fn = "text-sky-300"
+import { CodeLines, cm, pr, fg, ok, js, kw, fn, type CodeLine } from "@/components/code/code-lines"
 const CLI_LINES: CodeLine[] = [
   [{ cls: cm, text: "# 1. Authenticate (or set TREADSTONE_API_KEY in env)" }],
   [{ cls: pr, text: "$ " }, { cls: fg, text: "treadstone auth login --email agent@example.com --password ••••••••" }],
@@ -448,44 +429,6 @@ function WaitlistDialog({ tier, onClose }: WaitlistDialogProps) {
   )
 }
 
-function CopyButton({
-  text,
-  copied,
-  onCopy,
-  className,
-}: {
-  text?: string
-  copied?: boolean
-  onCopy?: () => void
-  className?: string
-}) {
-  const [internalCopied, setInternalCopied] = useState(false)
-  const isControlled = copied !== undefined && onCopy !== undefined
-  const active = isControlled ? copied : internalCopied
-
-  const handleClick = () => {
-    if (isControlled) {
-      onCopy!()
-    } else {
-      navigator.clipboard.writeText(text ?? "").catch(() => {})
-      setInternalCopied(true)
-      setTimeout(() => setInternalCopied(false), 1600)
-    }
-  }
-
-  return (
-    <button
-      onClick={handleClick}
-      className={
-        className ??
-        "inline-flex w-[52px] shrink-0 items-center justify-center rounded border border-border/25 bg-white/[0.04] py-1 font-mono text-[10px] font-medium tracking-wide text-muted-foreground/60 transition-all hover:border-border/50 hover:bg-white/[0.08] hover:text-muted-foreground"
-      }
-    >
-      {active ? "✓ done" : "copy"}
-    </button>
-  )
-}
-
 function InstallCard({ os, hint, cmd, first }: { os: string; hint: string; cmd: string; first: boolean }) {
   const [copied, setCopied] = useState(false)
 
@@ -620,7 +563,7 @@ function AnimatedTerminal() {
         <span className="size-3 rounded-full bg-[#ff5f56]" />
         <span className="size-3 rounded-full bg-[#ffbd2e]" />
         <span className="size-3 rounded-full bg-[#27c93f]" />
-        <span className="ml-2 font-mono text-[10.5px] text-muted-foreground/30">bash — treadstone quickstart</span>
+        <span className="ml-2 font-mono text-[10.5px] text-muted-foreground/30">bash — treadstone getting started</span>
       </div>
       {/* Body */}
       <div className="min-h-[260px] px-5 py-5 font-mono text-[12.5px] leading-[1.75]">
@@ -820,20 +763,14 @@ export function LandingPage() {
             ))}
           </div>
 
-          {/* Code block */}
-          <div className="overflow-hidden rounded-xl border border-border/20 bg-background">
-            <div className="flex items-center justify-between border-b border-border/20 bg-white/[0.03] px-5 py-2.5">
-              <span className="font-mono text-[11px] text-muted-foreground/50">
-                {activeTab === "cli" && "bash"}
-                {activeTab === "sdk" && "python — pip install treadstone-sdk"}
-                {activeTab === "rest" && "bash — REST API"}
-              </span>
-              <CopyButton text={tabCopyText[activeTab]} />
-            </div>
+          <CodeBlockFrame
+            headerLabel={INTEGRATION_SURFACE_CODE_FRAME_HEADERS[activeTab]}
+            headerRight={<CopyButton text={tabCopyText[activeTab]} />}
+          >
             {activeTab === "cli" && <CliCode />}
             {activeTab === "sdk" && <SdkCode />}
             {activeTab === "rest" && <RestCode />}
-          </div>
+          </CodeBlockFrame>
         </div>
       </div>
 
@@ -862,6 +799,8 @@ export function LandingPage() {
             <div className="flex gap-5">
               {[
                 { label: "GitHub →", href: GITHUB_URL, external: true },
+                { label: "Discord →", href: DISCORD_URL, external: true },
+                { label: "X →", href: TWITTER_X_URL, external: true },
                 { label: "Releases →", href: RELEASES_URL, external: true },
                 { label: "PyPI →", href: PYPI_CLI_URL, external: true },
               ].map((link) => (
@@ -999,7 +938,6 @@ export function LandingPage() {
               <ul className="mt-3.5 flex flex-col gap-2.5">
                 {[
                   { label: "Docs Overview", href: "/docs" },
-                  { label: "Quickstart", href: "/docs?page=quickstart" },
                   { label: "Install CLI", href: "#install" },
                   { label: "CLI Guide", href: "/docs?page=cli-guide" },
                   { label: "REST API Guide", href: "/docs?page=rest-api-guide" },
@@ -1025,7 +963,11 @@ export function LandingPage() {
             <div>
               <span className="font-mono text-[10px] tracking-[0.1em] text-muted-foreground/40">COMMUNITY</span>
               <ul className="mt-3.5 flex flex-col gap-2.5">
-                {[{ label: "Star on GitHub ★", href: GITHUB_STAR_LOGIN_URL }].map((l) => (
+                {[
+                  { label: "Star on GitHub ★", href: GITHUB_STAR_LOGIN_URL },
+                  { label: "Discord", href: DISCORD_URL },
+                  { label: "X (Twitter)", href: TWITTER_X_URL },
+                ].map((l) => (
                   <li key={l.label}>
                     <a
                       href={l.href}

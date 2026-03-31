@@ -41,7 +41,7 @@ async def test_alias_slug_serves_canonical_content_and_redirect(client):
     browser_response = await client.get("/docs/quickstart-human", follow_redirects=False)
 
     assert markdown_response.status_code == 200
-    assert markdown_response.headers["content-location"] == "/docs/quickstart"
-    assert "# Quickstart" in markdown_response.text
+    assert markdown_response.headers["content-location"] == "/docs/index"
+    assert "# Overview" in markdown_response.text
     assert browser_response.status_code == 302
-    assert browser_response.headers["location"] == "/docs?page=quickstart"
+    assert browser_response.headers["location"] == "/docs?page=index"

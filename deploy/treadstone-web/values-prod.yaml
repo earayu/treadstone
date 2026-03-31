@@ -34,6 +34,10 @@ ingress:
     alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
     alb.ingress.kubernetes.io/healthcheck-httpcode: http_2xx
   hosts:
+    - host: treadstone-ai.dev
+      paths:
+        - path: /
+          pathType: Prefix
     - host: app.treadstone-ai.dev
       paths:
         - path: /

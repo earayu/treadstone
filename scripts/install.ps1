@@ -1,5 +1,6 @@
 # Treadstone CLI installer for Windows
 # Usage (PowerShell):
+#   irm https://treadstone-ai.dev/install.ps1 | iex
 #   irm https://github.com/earayu/treadstone/releases/latest/download/install.ps1 | iex
 #
 # Environment variables:

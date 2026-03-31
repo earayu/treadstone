@@ -4,6 +4,15 @@ server {
     root         /usr/share/nginx/html;
     index        index.html;
 
+    # Install scripts — avoid stale intermediates when the SPA image updates
+    location = /install.sh {
+        add_header Cache-Control "no-store" always;
+    }
+
+    location = /install.ps1 {
+        add_header Cache-Control "no-store" always;
+    }
+
     # SPA fallback — all non-file, non-API routes serve index.html
     location / {
         try_files $uri $uri/ /index.html;

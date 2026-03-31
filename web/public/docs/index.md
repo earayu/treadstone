@@ -1,52 +1,32 @@
 # Overview
 
-Treadstone is the hosted control plane for agent sandboxes. You create a sandbox, route work into it, and hand the browser to a human only when the workflow actually needs a human.
+Treadstone is **agent-native sandbox infrastructure**: a hosted control plane so agents can spin up isolated environments, run code and tools, use the browser, and bring a human in only when the workflow needs one—without you hand-wiring auth, lifecycle, or routing for every run.
 
-It is for teams building agents that need a real runtime: files, tools, long-running state, and a browser that can be shared without improvising auth, URLs, or lifecycle rules.
+That is the same bet as the product home page: sandboxes for agents that do not wait on humans for the mechanics—only for judgement when it matters. A raw container is not an agent platform. The runtime matters, but so does everything around it: stable interfaces, identity, lifecycle, scoped access, and plan limits. Treadstone packages that into a service so agents can call it directly and manage sandboxes on their own.
 
-## Choose Your Interface
+Over HTTP there are **two surfaces**, not one: **control plane** calls (`/v1/...` on the API host) manage Treadstone itself; **data plane** calls use the per-sandbox **`urls.proxy`** link — a reverse proxy that strips the proxy routing prefix and forwards the request to the HTTP server **inside** the container. See [REST API Guide](/docs/rest-api-guide.md) for how this maps to paths, auth, and OpenAPI.
 
-### Console
+## What The Platform Gives You
 
-Best when you are getting started by hand, checking plan limits, or managing a hosted account.
-
-### CLI
-
-Best when you want the shortest path, repeatable commands, and machine-safe JSON output.
-
-### REST API
-
-Best when another service needs direct control-plane access.
-
-### Python SDK
-
-Best when you already live in Python and want generated request and response models.
+- **Three interfaces, one contract**: CLI, Python SDK, and REST API with consistent resources and JSON-shaped responses—so exploration, automation, and integrations stay aligned.
+- **Orchestration and lifecycle**: Create, inspect, start, stop, and delete sandboxes on demand; reuse or retire environments as the agent’s task changes.
+- **Templates that match your plan**: Discover CPU, memory, and persistence profiles (including ephemeral vs persistent shapes) the platform will actually accept before you commit to a template name.
+- **Browser handoff**: When a person must review, approve, or decide, mint a short-lived `open_link` instead of embedding long-lived credentials in agent code.
+- **Identity and scope**: Sign-in sessions, API keys, and layered access to control-plane APIs, sandbox proxies, and per-sandbox grants—least privilege for both operators and automation.
+- **Usage under your plan**: Remaining compute, storage quota, which templates you can use, concurrency caps, and max runtime—so autonomous runs stay predictable.
 
 ## Get Started
 
 1. Create an account at [/auth/sign-up](/auth/sign-up).
-2. Read [Quickstart](/docs/quickstart.md).
-3. Then continue with [CLI Guide](/docs/cli-guide.md), [REST API Guide](/docs/rest-api-guide.md), or [Python SDK Guide](/docs/python-sdk-guide.md).
+2. Follow [CLI Guide](/docs/cli-guide.md) to install the CLI and authenticate, then [Sandbox Lifecycle](/docs/sandbox-lifecycle.md) to create and run your first sandbox.
+3. Open **Integrate** when you need install and auth for one surface — each guide is self-contained: [CLI Guide](/docs/cli-guide.md), [REST API Guide](/docs/rest-api-guide.md), [Python SDK Guide](/docs/python-sdk-guide.md). For the hosted control plane, interactive REST documentation (Swagger UI) is at [https://api.treadstone-ai.dev/docs](https://api.treadstone-ai.dev/docs).
+4. Use **Core Workflows** for task-focused pages. Where it helps, the same workflow is shown for **CLI**, **REST API**, and **Python SDK** in parallel (on the website you can switch tabs; the raw Markdown file always contains all three).
 
-## What You Actually Get
-
-- Sandbox lifecycle: create, inspect, start, stop, and delete.
-- Template discovery: read the runtime shapes the platform will actually accept.
-- Browser handoff: issue an `open_link` when a human needs to review or decide.
-- Auth and scope control: sessions, API keys, control-plane access, data-plane access, and selected sandbox grants.
-- Usage and limits: remaining compute, storage quota, template access, concurrency, and max runtime duration.
-
-## Why This Exists
-
-Treadstone is not just a runtime rental API. The runtime matters, but the control plane around the runtime matters just as much: identity, lifecycle, scope, browser review, and plan limits.
-
-If a human still has to babysit auth, sandbox state, routing, and browser access, the agent is not really autonomous. Treadstone closes that gap.
-
-> For automation: use `sandbox_id`, not `name`. Read `urls.proxy`, `web_url`, and `open_link` from platform output. Do not construct them yourself.
+> For automation: use `sandbox_id`, not `name`. Read `urls.proxy`, `web_url`, and `open_link` from platform output. Do not construct them yourself. Share **`open_link`** for handoffs; **`web_url`** is not a bearer link — it needs a Console session.
 
 ## Read Next
 
-- [Quickstart](/docs/quickstart.md)
-- [Create a Sandbox](/docs/create-sandbox.md)
+- [CLI Guide](/docs/cli-guide.md)
+- [Sandbox Lifecycle](/docs/sandbox-lifecycle.md)
 - [Browser Handoff](/docs/browser-handoff.md)
 - [Usage & Limits](/docs/usage-limits.md)

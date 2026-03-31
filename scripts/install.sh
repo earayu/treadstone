@@ -1,6 +1,7 @@
 #!/bin/sh
 # Treadstone CLI installer for macOS and Linux
 # Usage:
+#   curl -fsSL https://treadstone-ai.dev/install.sh | sh
 #   curl -fsSL https://github.com/earayu/treadstone/releases/latest/download/install.sh | sh
 #
 # Environment variables:
@@ -34,7 +35,7 @@ case "$OS" in
   *)
     echo "Unsupported OS: $OS" >&2
     echo "For Windows, run in PowerShell:" >&2
-    echo "  irm https://github.com/$REPO/releases/latest/download/install.ps1 | iex" >&2
+    echo "  irm https://treadstone-ai.dev/install.ps1 | iex" >&2
     exit 1
     ;;
 esac
