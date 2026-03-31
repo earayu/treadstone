@@ -62,6 +62,7 @@ The data plane is traffic into a running sandbox: `urls.proxy` and `urls.mcp` si
 
 ## Read next
 
+- [Using the data plane](/docs/data-plane.md)
 - [REST API Guide](/docs/rest-api-guide.md)
 - [API Keys & Auth](/docs/api-keys-auth.md)
 - [MCP in sandbox](/docs/mcp-sandbox.md)

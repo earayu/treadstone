@@ -130,6 +130,7 @@ The scope model has three fields:
 
 ## Read Next
 
+- [Using the data plane](/docs/data-plane.md)
 - [CLI Guide](/docs/cli-guide.md)
 - [REST API Guide](/docs/rest-api-guide.md)
 - [API Reference](/docs/api-reference.md)
