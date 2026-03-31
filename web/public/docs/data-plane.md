@@ -57,6 +57,6 @@ The hosted [Swagger UI](https://api.treadstone-ai.dev/docs) includes **merged** 
 
 - [REST API Guide](/docs/rest-api-guide.md) — headers, errors, `curl`/httpx
 - [MCP in sandbox](/docs/mcp-sandbox.md) — MCP-specific setup
-- [API Reference](/docs/api-reference.md) — Proxy section and route tables
+- [API Reference](/docs/api-reference.md) — Proxy, **Sandbox runtime (shell, …)**, and route tables
 - [Sandbox endpoints](/docs/sandbox-endpoints.md) — Web / MCP / Proxy in the Console
 - [API Keys & Auth](/docs/api-keys-auth.md) — scope and least privilege

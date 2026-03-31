@@ -26,7 +26,7 @@ Read [`/docs/index.md`](/docs/index.md) first if you are new.
 
 ## Reference
 
-- [API Reference](/docs/api-reference.md): Handwritten route tables for control and data plane; hosted Swagger/OpenAPI also merges sandbox-runtime REST paths under the proxy.
+- [API Reference](/docs/api-reference.md): Control-plane route tables, generic proxy row, and a shell-path summary; full merged sandbox runtime API is in Swagger and openapi.json.
 - [CLI Reference](/docs/cli-reference.md): Root options, command groups, auth precedence, JSON mode, config keys, and the exact hosted CLI surface.
 - [Python SDK Reference](/docs/python-sdk-reference.md): Real import paths, generated endpoint modules, request and response models, and sync or async call shapes.
 - [Error Reference](/docs/error-reference.md): The stable JSON error envelope, common public error codes, and the recovery step that matches each failure.

@@ -163,7 +163,7 @@
     "title": "API Reference",
     "section": "Reference",
     "order": 10,
-    "summary": "Handwritten route tables for control and data plane; hosted Swagger/OpenAPI also merges sandbox-runtime REST paths under the proxy.",
+    "summary": "Control-plane route tables, generic proxy row, and a shell-path summary; full merged sandbox runtime API is in Swagger and openapi.json.",
     "default": false,
     "llm_priority": 100,
     "aliases": [

@@ -95,6 +95,39 @@ Authorization: Bearer sk-…
 
 **Browser / subdomain access** — For a human or browser session in the workspace UI, use **`urls.web`** from the API (host and path come from server config; do not hard-code). Authentication is via Console session cookie or a shareable **`open_link`** from `POST /v1/sandboxes/{id}/web-link`. That surface is different from **`urls.mcp`**: MCP automation should use the proxy URL and API keys, not `urls.web`, unless your client explicitly supports the browser flow.
 
+### Sandbox runtime APIs (merged data plane)
+
+The route tables **above** list **Treadstone control-plane** endpoints and **one generic** proxy row. They do **not** enumerate every HTTP route that runs **inside** the sandbox.
+
+Those workloads are described by a separate OpenAPI document bundled with the server (`scripts/sandbox_openapi_base.json` in the repository). At runtime, Treadstone **merges** it under:
+
+`/v1/sandboxes/{sandbox_id}/proxy` + **`<path from the sandbox spec>`**
+
+So a sandbox route like `/v1/shell/exec` becomes:
+
+`/v1/sandboxes/{sandbox_id}/proxy/v1/shell/exec`
+
+In [Swagger UI](https://api.treadstone-ai.dev/docs) they appear under tags such as **`Sandbox: shell`**, **`Sandbox: sandbox`**, **`Sandbox: mcp`**, and so on — the same operations, with `sandbox_id` injected. Auth is **`Authorization: Bearer <api_key>`** with data-plane access, same as the generic proxy.
+
+![Swagger UI: Sandbox shell routes merged under the data-plane proxy](/docs/images/api-reference-swagger-sandbox-shell.png)
+
+#### Shell (representative)
+
+| Method | Path after `/v1/sandboxes/{sandbox_id}/proxy` | Summary |
+|--------|-----------------------------------------------|---------|
+| `POST` | `/v1/shell/exec` | Exec command (optional SSE via `Accept: text/event-stream`) |
+| `POST` | `/v1/shell/view` | View shell output |
+| `POST` | `/v1/shell/wait` | Wait for process |
+| `POST` | `/v1/shell/write` | Write to process stdin |
+| `POST` | `/v1/shell/kill` | Kill process |
+| `POST` | `/v1/shell/sessions/create` | Create session |
+| `GET` | `/v1/shell/terminal-url` | Get terminal URL |
+| `GET` | `/v1/shell/sessions` | List sessions |
+| `DELETE` | `/v1/shell/sessions` | Cleanup all sessions |
+| `DELETE` | `/v1/shell/sessions/{session_id}` | Cleanup one session |
+
+For request/response bodies and any additional routes, use **Swagger** or the merged **`openapi.json`** — the table above is a **summary** only.
+
 ### Usage
 
 | Method | Path | What it does |
