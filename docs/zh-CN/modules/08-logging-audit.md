@@ -354,7 +354,8 @@ flowchart LR
 | 日期 | 说明 |
 |------|------|
 | 2026-03-31 | 定稿：合并会话审计结论；补充文档路径说明；与当前 `treadstone/` 中 DEBUG/INFO 实现及 `main.py` Integrity 处理对齐；附录 B 供按文件复查级别与文案。 |
-| 2026-03-31 | 增补第 9 节：记录已在仓库落地的日志与状态同步优化（含 GET 自愈合与 K8s 同步告警增强）。 |
+| 2026-03-31 | 增补第 9 节：记录已在仓库落地的日志与状态同步优化（含 K8s 同步告警增强）。 |
+| 2026-03-31 | 修订第 9.4：移除「GET 详情自愈合」描述——读路径静默纠偏会掩盖根因；以同步侧日志 + reconcile/watch 修复为准。 |
 
 ---
 
@@ -383,15 +384,14 @@ flowchart LR
 - **`sync_supervisor._k8s_delete_sandbox`**：在 **K8s 删除 API 成功返回后** 再打 **deleting**（避免失败回滚仍误报）。
 - **`sandbox_lifecycle_tasks._db_only_delete`**：DB 兜底进入 **deleting** 时打 **INFO**。
 
-### 9.4 「K8s 健康但 DB 误 Error」：同步侧日志 + GET 纠偏
+### 9.4 「K8s 健康但 DB 误 Error」：仅同步侧可观测性（不掩盖问题）
 
-- **`k8s_sync` 告警上下文增强**（仍为 **WARNING**，便于 `grep`）：
+**刻意不在 `GET /v1/sandboxes/{id}` 上根据 K8s 实况回写 DB**：读路径静默把 `error` 改成 `ready` 会**掩盖** Watch/List/状态机上的真实缺陷，不利于根因分析。纠偏应发生在 **Watch / 周期性 reconcile** 等控制面同步路径（或经用户显式操作如 **Start**），而不是在详情查询里「偷偷修好」。
+
+- **`k8s_sync` 告警上下文增强**（仍为 **WARNING**，便于 `grep` 与事后对照）：
   - **CR missing（reconcile List）**：含 `sandbox_id`、`db_status`、**`expected_cr_key`**、`ns`，并提示 list 快照缺 CR / 命名不一致 / 一致性延迟。
   - **Invalid transition（Watch）**：含 `sandbox_id`、db 与 K8s 推导状态、**`cr` ns/name、`rv`、CR `message`**。
   - **Unexpected DELETED（Watch）**：含 `sandbox_id`、`db_status`、**`cr` ns/name、`rv`**。
-- **`SandboxService.heal_error_if_k8s_ready`**：当 DB 为 **`error`** 且 live Sandbox CR **`derive_status_from_sandbox_cr` 为 ready** 时，**乐观锁 UPDATE**、审计动作 **`sandbox.status.self_heal`**、在启用 metering 时 **`open_compute_session`**，然后 **`commit`/`refresh`**。
-- **`GET /v1/sandboxes/{id}`**：使用带 **`metering`** 的 `SandboxService`，在返回详情前调用 **`heal_error_if_k8s_ready`**（减少对 5 分钟对账与手动 Start 的依赖）。
-- **单测**：**`tests/unit/test_sandbox_service.py`** 中 `TestSandboxServiceHealError` 覆盖自愈合路径。
 
 ### 9.5 工程与运维辅助（同批本地改动，可选纳入同一 PR）
 
@@ -402,10 +402,7 @@ flowchart LR
 
 ### 9.6 控制台检索建议（与第 4、5 节互补）
 
-除 **`CR missing` / `Invalid transition` / `Unexpected DELETED` / `Failed to scale`** 外，可搜：
-
-- **`self-heal applied`** / **`self-heal skipped`**：GET 纠偏是否触发、是否因无 CR 或非 Ready 跳过。
-- **`Sandbox … status … -> error`** / **`-> deleting`**：来自 `_record_status_change` 或 API 的显式状态迁移 **INFO**。
+除 **`CR missing` / `Invalid transition` / `Unexpected DELETED` / `Failed to scale`** 外，可搜 **`Sandbox … status … -> error`** / **`-> deleting`**（来自 `_record_status_change` 或 API 的显式状态迁移 **INFO**），用于对照同一时间段内的误标记路径。
 
 ---
 
