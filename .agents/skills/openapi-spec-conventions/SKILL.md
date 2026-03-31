@@ -193,7 +193,7 @@ The Treadstone Python SDK intentionally does **not** include data-plane methods.
 Users connect the two planes by extracting `sandbox_detail.urls.proxy` from the
 control plane and passing it as `base_url` to `agent_sandbox.Sandbox`.
 
-See `examples/04_data_plane.py` for the authoritative connection pattern.
+See `examples/data_plane/01_agent_sandbox_runtime.py` for the authoritative connection pattern.
 
 ---
 

@@ -1,32 +1,33 @@
-"""Example 01 — Create a Sandbox
+"""Create a sandbox (control plane) — Quickstart / Sandbox Lifecycle.
 
-This example demonstrates the control-plane workflow for creating a sandbox:
+Steps:
+  1. List sandbox templates.
+  2. Create a sandbox from a template.
+  3. Poll until status is ``ready``.
+  4. Print detail including ``urls.proxy`` for the data plane.
 
-  1. List available sandbox templates.
-  2. Create a new sandbox from a chosen template.
-  3. Poll until the sandbox reaches "ready" status.
-  4. Print the sandbox detail, including the proxy URL used to access the data plane.
+Public docs: ``web/public/docs/quickstart.md``, ``sandbox-lifecycle.md``.
 
 Usage:
   pip install treadstone-sdk
-  python examples/01_create.py --api-key <key> [--template aio-sandbox-tiny]
+  python examples/control_plane/01_create_sandbox.py --api-key <key> [--template aio-sandbox-tiny]
 
-The sandbox will be deleted automatically when the script finishes unless you
-pass --keep to leave it running.
+The sandbox is deleted when the script exits unless you pass ``--keep``.
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
-# Add examples/ to path so _shared is importable when run directly.
-sys.path.insert(0, __file__.rsplit("/", 1)[0])
+_EXAMPLES_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_EXAMPLES_ROOT))
 
-from _shared import (
+from _shared import (  # noqa: E402
     get_control_client,
     make_sandbox_name,
-    parse_args,
+    parse_base_args,
     print_result,
     print_section,
     print_step,
@@ -35,15 +36,18 @@ from _shared import (
 
 
 def main() -> int:
-    # --- Parse arguments ---
-    base_args = parse_args("Create a Treadstone sandbox and wait for it to be ready.")
+    base_args, rest = parse_base_args("Create a Treadstone sandbox and wait for it to be ready.")
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--keep", action="store_true", help="Do not delete the sandbox after creation.")
-    extra, _ = parser.parse_known_args()
+    extra = parser.parse_args(rest)
 
     try:
         from treadstone_sdk.api.sandbox_templates import sandbox_templates_list_sandbox_templates
-        from treadstone_sdk.api.sandboxes import sandboxes_create_sandbox, sandboxes_delete_sandbox, sandboxes_get_sandbox
+        from treadstone_sdk.api.sandboxes import (
+            sandboxes_create_sandbox,
+            sandboxes_delete_sandbox,
+            sandboxes_get_sandbox,
+        )
         from treadstone_sdk.models.create_sandbox_request import CreateSandboxRequest
         from treadstone_sdk.models.sandbox_detail_response import SandboxDetailResponse
         from treadstone_sdk.models.sandbox_response import SandboxResponse
@@ -52,16 +56,12 @@ def main() -> int:
         print("ERROR: treadstone-sdk is not installed. Run: pip install treadstone-sdk", file=sys.stderr)
         return 1
 
-    # --- Step 1: Connect to the control plane ---
     print_section("Create Sandbox")
     print_step("Step 1: Connect to the control plane")
-    # control plane: manages sandbox lifecycle (create, list, start, stop, delete)
     client = get_control_client(base_args.base_url, base_args.api_key)
     print(f"  Connected to {base_args.base_url}")
 
-    # --- Step 2: List available templates ---
     print_step("Step 2: List available sandbox templates")
-    # Each template defines the OS image, pre-installed tools, and resource limits.
     templates = sandbox_templates_list_sandbox_templates.sync(client=client)
     if not isinstance(templates, SandboxTemplateListResponse):
         print("ERROR: Failed to list templates.", file=sys.stderr)
@@ -74,13 +74,11 @@ def main() -> int:
         print(f"ERROR: Template '{base_args.template}' not found.", file=sys.stderr)
         return 1
 
-    # --- Step 3: Create the sandbox ---
     print_step("Step 3: Create the sandbox")
-    name = make_sandbox_name("example-01")
+    name = make_sandbox_name("example-create")
     print(f"  Sandbox name : {name}")
     print(f"  Template     : {base_args.template}")
 
-    # control plane: POST /v1/sandboxes — returns immediately with status "creating"
     created = sandboxes_create_sandbox.sync(
         client=client,
         body=CreateSandboxRequest(template=base_args.template, name=name),
@@ -91,11 +89,9 @@ def main() -> int:
 
     sandbox_id = created.id
     print(f"  Sandbox ID   : {sandbox_id}")
-    print(f"  Status       : {created.status}  (will transition to 'ready')")
+    print(f"  Status       : {created.status}")
 
-    # --- Step 4: Wait until ready ---
     print_step("Step 4: Poll until status = 'ready'")
-    # control plane: GET /v1/sandboxes/{sandbox_id}
     detail = wait_for_sandbox(
         fetch_fn=lambda: sandboxes_get_sandbox.sync(sandbox_id=sandbox_id, client=client),
         target_status="ready",
@@ -104,21 +100,16 @@ def main() -> int:
         print("ERROR: Unexpected response type while polling.", file=sys.stderr)
         return 1
 
-    # --- Step 5: Inspect the result ---
     print_step("Step 5: Sandbox is ready")
     print_result("Sandbox detail", detail)
 
-    # The proxy URL is the gateway to all data-plane operations.
-    # Pass it as base_url to agent_sandbox.Sandbox() in your data-plane code.
     proxy_url = getattr(getattr(detail, "urls", None), "proxy", None)
     if proxy_url:
         print(f"\n  Data-plane proxy URL: {proxy_url}")
-        print("  → Pass this URL to agent_sandbox.Sandbox(base_url=...) to run shell/file/browser commands.")
+        print("  → Use this as base_url for agent_sandbox.Sandbox or httpx (see examples/data_plane/).")
 
-    # --- Cleanup ---
     if not extra.keep:
         print_step("Cleanup: deleting sandbox")
-        # control plane: DELETE /v1/sandboxes/{sandbox_id}
         sandboxes_delete_sandbox.sync(sandbox_id=sandbox_id, client=client)
         print(f"  Sandbox {sandbox_id} deleted.")
     else:

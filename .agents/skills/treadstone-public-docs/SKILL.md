@@ -71,7 +71,7 @@ Treadstone is **two planes** with different auth and clients:
 When adding or rewriting public docs on runtime work inside sandboxes, **ground copy in**:
 
 - **[examples/README.md](examples/README.md)** — architecture diagram, `treadstone_sdk` vs `agent_sandbox.Sandbox`, `urls.proxy` wiring.
-- **[examples/04_data_plane.py](examples/04_data_plane.py)** — shell, file, browser, Jupyter; data-plane key usage.
+- **[examples/data_plane/01_agent_sandbox_runtime.py](examples/data_plane/01_agent_sandbox_runtime.py)** — shell, file, browser, Jupyter; data-plane key usage.
 
 **OpenAPI / Swagger (production):** Full HTTP contract including sandbox runtime paths merged under the proxy prefix lives in the **full** OpenAPI served by the API (e.g. `GET https://api.treadstone-ai.dev/openapi.json`, interactive `https://api.treadstone-ai.dev/docs`). Implementation: `merge_sandbox_paths` in [`treadstone/openapi_spec.py`](treadstone/openapi_spec.py). Swagger groups many operations under **Sandbox: …** tags.
 

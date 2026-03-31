@@ -26,8 +26,12 @@ DEFAULT_READY_TIMEOUT = 600.0
 # ---------------------------------------------------------------------------
 
 
-def parse_args(description: str, *, name_prefix: str = "example") -> argparse.Namespace:
-    """Parse common CLI arguments shared by all examples."""
+def parse_base_args(description: str) -> tuple[argparse.Namespace, list[str]]:
+    """Parse shared flags and return ``(args, remaining_argv)`` for script-specific flags.
+
+    Uses ``parse_known_args`` so per-script options such as ``--keep`` or ``--status``
+    can be parsed in a second step without conflicting with the base parser.
+    """
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument(
         "--base-url",
@@ -49,12 +53,18 @@ def parse_args(description: str, *, name_prefix: str = "example") -> argparse.Na
         default=os.environ.get("TREADSTONE_SANDBOX_ID"),
         help="Existing sandbox ID (skips creation where supported).",
     )
-    args = parser.parse_args()
+    args, rest = parser.parse_known_args()
     if not args.api_key:
-        parser.error(
-            "An API key is required. Provide --api-key or set TREADSTONE_API_KEY."
-        )
+        parser.error("An API key is required. Provide --api-key or set TREADSTONE_API_KEY.")
     args.base_url = args.base_url.rstrip("/")
+    return args, rest
+
+
+def parse_args(description: str, *, name_prefix: str = "example") -> argparse.Namespace:
+    """Parse only shared CLI arguments; error if unknown flags are present."""
+    args, rest = parse_base_args(description)
+    if rest:
+        raise SystemExit(f"error: unrecognized arguments: {' '.join(rest)}")
     return args
 
 
@@ -115,13 +125,9 @@ def wait_for_sandbox(
         if status == target_status:
             return detail
         if status in terminal_statuses:
-            raise RuntimeError(
-                f"Sandbox {sandbox_id} reached terminal status {status!r}: {message}"
-            )
+            raise RuntimeError(f"Sandbox {sandbox_id} reached terminal status {status!r}: {message}")
         if time.monotonic() > deadline:
-            raise TimeoutError(
-                f"Timed out waiting for sandbox {sandbox_id} to reach {target_status!r}."
-            )
+            raise TimeoutError(f"Timed out waiting for sandbox {sandbox_id} to reach {target_status!r}.")
         time.sleep(poll_interval)
 
 
@@ -160,6 +166,11 @@ def create_data_plane_key(control_client: Any, sandbox_id: str) -> tuple[str, st
     if not isinstance(result, ApiKeyResponse) or not result.key:
         raise RuntimeError("Failed to create data-plane API key.")
     return result.id, result.key
+
+
+def proxy_url_from_detail(detail: Any) -> str | None:
+    """Return ``urls.proxy`` from a sandbox detail object, or ``None``."""
+    return _get(detail, "urls", "proxy")
 
 
 def get_sandbox_client(proxy_url: str, data_plane_key: str) -> Any:
