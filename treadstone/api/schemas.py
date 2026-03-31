@@ -99,6 +99,14 @@ class CreateSandboxRequest(BaseModel):
 
 class SandboxUrls(BaseModel):
     proxy: str = Field(..., examples=["http://localhost/v1/sandboxes/sb-abc123def456/proxy"])
+    mcp: str = Field(
+        ...,
+        examples=["http://localhost/v1/sandboxes/sb-abc123def456/proxy/mcp"],
+        description=(
+            "MCP server endpoint. Connect MCP clients (Cursor, Claude Desktop, scripts) directly to this URL. "
+            "Authenticates via API key header."
+        ),
+    )
     web: str | None = Field(
         default=None,
         examples=["http://sandbox-sbabc123def456.sandbox.localhost/_treadstone/open?token=swlabc123"],

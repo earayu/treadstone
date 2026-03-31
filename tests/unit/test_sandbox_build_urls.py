@@ -38,6 +38,7 @@ def test_build_urls_web_omits_port_for_plain_localhost(monkeypatch) -> None:
     urls = _build_urls(sb, "http://localhost/")
     assert urls["web"] == "http://sandbox-sb123.sandbox.localhost"
     assert urls["proxy"] == "http://localhost/v1/sandboxes/sb123/proxy"
+    assert urls["mcp"] == "http://localhost/v1/sandboxes/sb123/proxy/mcp"
 
 
 def test_build_urls_web_includes_port_for_dev_server(monkeypatch) -> None:
@@ -45,6 +46,7 @@ def test_build_urls_web_includes_port_for_dev_server(monkeypatch) -> None:
     sb = SimpleNamespace(id="sb123", name="sbx")
     urls = _build_urls(sb, "http://localhost:8000/")
     assert urls["web"] == "http://sandbox-sb123.sandbox.localhost:8000"
+    assert urls["mcp"] == "http://localhost:8000/v1/sandboxes/sb123/proxy/mcp"
 
 
 def test_build_urls_web_includes_port_for_port_forward(monkeypatch) -> None:
@@ -52,6 +54,7 @@ def test_build_urls_web_includes_port_for_port_forward(monkeypatch) -> None:
     sb = SimpleNamespace(id="sb123", name="sbx")
     urls = _build_urls(sb, "http://127.0.0.1:12345/")
     assert urls["web"] == "http://sandbox-sb123.sandbox.localhost:12345"
+    assert urls["mcp"] == "http://127.0.0.1:12345/v1/sandboxes/sb123/proxy/mcp"
 
 
 def test_build_urls_prod_domain(monkeypatch) -> None:
@@ -60,6 +63,7 @@ def test_build_urls_prod_domain(monkeypatch) -> None:
     urls = _build_urls(sb, "https://api.treadstone-ai.dev/")
     assert urls["web"] == "https://sandbox-sb123.treadstone-ai.dev"
     assert urls["proxy"] == "https://api.treadstone-ai.dev/v1/sandboxes/sb123/proxy"
+    assert urls["mcp"] == "https://api.treadstone-ai.dev/v1/sandboxes/sb123/proxy/mcp"
 
 
 def test_build_urls_web_none_when_domain_empty(monkeypatch) -> None:
@@ -67,3 +71,4 @@ def test_build_urls_web_none_when_domain_empty(monkeypatch) -> None:
     sb = SimpleNamespace(id="sb123", name="sbx")
     urls = _build_urls(sb, "http://localhost/")
     assert urls["web"] is None
+    assert urls["mcp"] == "http://localhost/v1/sandboxes/sb123/proxy/mcp"

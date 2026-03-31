@@ -2163,6 +2163,12 @@ export interface components {
              */
             proxy: string;
             /**
+             * Mcp
+             * @description MCP server endpoint. Connect MCP clients to this URL; authenticates via API key header.
+             * @example http://localhost/v1/sandboxes/sb-abc123def456/proxy/mcp
+             */
+            mcp: string;
+            /**
              * Web
              * @description Recommended browser entry URL. When a sandbox web link is enabled, this is the shareable hand-off URL.
              * @example http://sandbox-sbabc123def456.sandbox.localhost/_treadstone/open?token=swlabc123

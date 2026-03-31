@@ -322,7 +322,13 @@ def test_sandboxes_create_supports_auto_intervals(
         assert request["json"]["auto_stop_interval"] == 30
         assert request["json"]["auto_delete_interval"] == 90
         assert request["json"]["labels"] == {"env": "dev"}
-        return FakeResponse({"id": "sb-1", "name": "demo", "urls": {"proxy": "http://proxy", "web": None}})
+        return FakeResponse(
+            {
+                "id": "sb-1",
+                "name": "demo",
+                "urls": {"proxy": "http://proxy", "mcp": "http://proxy/mcp", "web": None},
+            }
+        )
 
     routes = {
         ("POST", "/v1/sandboxes"): create_handler,
