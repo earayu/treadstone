@@ -194,18 +194,8 @@ class TestReconcile:
             assert sb.status == SandboxStatus.READY
         assert rv != ""
 
-    async def test_reconcile_missing_cr_marks_error(self, session_factory):
-        await _create_sandbox(session_factory, status=SandboxStatus.READY)
-        k8s = FakeK8sClient()
-
-        await reconcile("treadstone-local", k8s, session_factory)
-
-        async with session_factory() as session:
-            sb = await session.get(Sandbox, "sb00000000test1234")
-            assert sb.status == SandboxStatus.ERROR
-
     async def test_reconcile_missing_cr_stopped_stays_stopped(self, session_factory):
-        """Empty List must not promote STOPPED to ERROR (mirrors production stopped<->error oscillation fix)."""
+        """Empty List must not promote STOPPED to ERROR (policy=warn_only)."""
         await _create_sandbox(session_factory, status=SandboxStatus.STOPPED, k8s_resource_version="1")
         k8s = FakeK8sClient()
 
@@ -214,6 +204,29 @@ class TestReconcile:
         async with session_factory() as session:
             sb = await session.get(Sandbox, "sb00000000test1234")
             assert sb.status == SandboxStatus.STOPPED
+
+    async def test_reconcile_missing_cr_ready_stays_ready(self, session_factory):
+        """Empty List must not demote READY to ERROR (policy=warn_only)."""
+        await _create_sandbox(session_factory, status=SandboxStatus.READY, k8s_resource_version="1")
+        k8s = FakeK8sClient()
+
+        await reconcile("treadstone-local", k8s, session_factory)
+
+        async with session_factory() as session:
+            sb = await session.get(Sandbox, "sb00000000test1234")
+            assert sb.status == SandboxStatus.READY
+
+    async def test_reconcile_missing_cr_error_stays_error(self, session_factory):
+        """Empty List must not re-mark ERROR (policy=warn_only, idempotent)."""
+        await _create_sandbox(session_factory, status=SandboxStatus.ERROR, k8s_resource_version="1")
+        k8s = FakeK8sClient()
+
+        await reconcile("treadstone-local", k8s, session_factory)
+
+        async with session_factory() as session:
+            sb = await session.get(Sandbox, "sb00000000test1234")
+            assert sb.status == SandboxStatus.ERROR
+            assert sb.version == 1
 
     async def test_reconcile_missing_cr_deleting_marks_deleted(self, session_factory):
         await _create_sandbox(session_factory, status=SandboxStatus.DELETING)

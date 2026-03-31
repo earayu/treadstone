@@ -34,6 +34,23 @@ _metering = MeteringService()
 RECONCILE_INTERVAL = 300  # 5 minutes
 WATCH_RESTART_BACKOFF = 5  # seconds to wait before restarting Watch after unexpected failure
 
+# ── CR-missing policy for reconcile ──────────────────────────────────────────
+# When the periodic reconcile List snapshot does not contain a sandbox's CR,
+# the policy table below determines what action to take based on the DB status.
+#
+# "delete"     — sandbox is DELETING; finalize the row as DELETED
+# "skip"       — sandbox is CREATING; CR may not exist yet, no action needed
+# "warn_only"  — CR likely exists but was missed by the List snapshot (lag,
+#                 consistency, or timing); log at INFO but do NOT change status
+# "mark_error" — default for any unlisted status; mark sandbox as ERROR
+_CR_MISSING_POLICY: dict[str, str] = {
+    SandboxStatus.DELETING: "delete",
+    SandboxStatus.CREATING: "skip",
+    SandboxStatus.STOPPED: "warn_only",
+    SandboxStatus.READY: "warn_only",
+    SandboxStatus.ERROR: "warn_only",
+}
+
 
 def _reconcile_tried_cr_keys(sandbox: Sandbox) -> str:
     """Build a comma-separated list of CR name candidates for logging (List snapshot lookup)."""
@@ -138,7 +155,7 @@ async def handle_watch_event(
                     to_status="deleted",
                     source="k8s_watch",
                 )
-                await _delete_sandbox_row(session, sandbox.id)
+                await _delete_sandbox_row(session, sandbox.id, sandbox=sandbox)
             else:
                 logger.warning(
                     "Unexpected DELETED (Watch): sandbox_id=%s db_status=%s cr=%s/%s rv=%s — marking error",
@@ -183,7 +200,8 @@ async def handle_watch_event(
 
             if sandbox.status == new_status:
                 if sandbox.k8s_resource_version != cr_rv:
-                    await _update_sync_metadata(session, sandbox.id, cr_rv, message)
+                    await _update_sync_metadata(session, sandbox.id, cr_rv)
+                    await session.commit()
                 return
 
             if not is_valid_transition(sandbox.status, new_status):
@@ -251,7 +269,9 @@ async def reconcile(
             tried_keys = _reconcile_tried_cr_keys(sandbox)
 
             if cr is None:
-                if sandbox.status == SandboxStatus.DELETING:
+                policy = _CR_MISSING_POLICY.get(sandbox.status, "mark_error")
+
+                if policy == "delete":
                     await _try_close_compute_session(session, sandbox.id)
                     if sandbox.persist:
                         await _try_release_storage_ledger(session, sandbox.id)
@@ -262,20 +282,22 @@ async def reconcile(
                         to_status="deleted",
                         source="k8s_reconcile",
                     )
-                    await _delete_sandbox_row(session, sandbox.id)
-                elif sandbox.status == SandboxStatus.STOPPED:
-                    logger.warning(
-                        "CR missing (reconcile List): sandbox_id=%s db_status=stopped tried_cr_keys=%s ns=%s; "
-                        "not marking error — list snapshot may be incomplete; if CR was actually deleted, "
-                        "see this warning in logs/metrics",
+                    await _delete_sandbox_row(session, sandbox.id, sandbox=sandbox)
+                elif policy == "skip":
+                    pass
+                elif policy == "warn_only":
+                    logger.info(
+                        "CR missing (reconcile): sandbox_id=%s db_status=%s tried_cr_keys=%s ns=%s; "
+                        "list snapshot may be incomplete — not changing status (policy=warn_only)",
                         sandbox.id,
+                        sandbox.status,
                         tried_keys,
                         sandbox.k8s_namespace,
                     )
-                elif sandbox.status != SandboxStatus.CREATING:
+                else:
                     logger.warning(
-                        "CR missing (reconcile List): sandbox_id=%s db_status=%s tried_cr_keys=%s ns=%s; "
-                        "CR not in list snapshot (lag, name mismatch, or consistency) — marking error",
+                        "CR missing (reconcile): sandbox_id=%s db_status=%s tried_cr_keys=%s ns=%s; "
+                        "marking error (policy=mark_error)",
                         sandbox.id,
                         sandbox.status,
                         tried_keys,
@@ -335,7 +357,8 @@ async def reconcile(
                     await _apply_metering_on_transition(session, sandbox, old_status, new_status)
                     await session.commit()
             elif cr_rv != sandbox.k8s_resource_version:
-                await _update_sync_metadata(session, sandbox.id, cr_rv, message)
+                await _update_sync_metadata(session, sandbox.id, cr_rv)
+                await session.commit()
 
     # ── Metering reconciliation: fix mismatches between sessions/ledgers and sandbox state ──
     try:
@@ -440,7 +463,11 @@ async def _optimistic_update(
     resource_version: str | None = None,
     message: str | None = None,
 ) -> int:
-    """Update sandbox status with optimistic locking. Returns number of rows affected."""
+    """Update sandbox status with optimistic locking. Returns number of rows affected.
+
+    Does NOT commit — callers are responsible for committing so that the status
+    update, audit event, and metering changes land in a single transaction.
+    """
     now = datetime.now(UTC)
     values: dict = {
         "status": new_status,
@@ -458,25 +485,35 @@ async def _optimistic_update(
     result = await session.execute(
         update(Sandbox).where(Sandbox.id == sandbox_id, Sandbox.version == expected_version).values(**values)
     )
-    await session.commit()
     return result.rowcount
 
 
-async def _update_sync_metadata(
-    session: AsyncSession, sandbox_id: str, resource_version: str, message: str | None = None
-) -> None:
-    """Update only sync metadata without changing status."""
+async def _update_sync_metadata(session: AsyncSession, sandbox_id: str, resource_version: str) -> None:
+    """Update only sync metadata (resource version + timestamp) without changing status.
+
+    Deliberately does NOT touch ``status_message`` — that field should only be
+    written together with a ``status`` change so the two never contradict each other.
+
+    Does NOT commit — callers are responsible for committing.
+    """
     values: dict = {"k8s_resource_version": resource_version, "last_synced_at": datetime.now(UTC)}
-    if message is not None:
-        values["status_message"] = message
     await session.execute(update(Sandbox).where(Sandbox.id == sandbox_id).values(**values))
-    await session.commit()
 
 
-async def _delete_sandbox_row(session: AsyncSession, sandbox_id: str) -> None:
+async def _delete_sandbox_row(
+    session: AsyncSession,
+    sandbox_id: str,
+    sandbox: Sandbox | None = None,
+) -> None:
+    """Soft-delete a sandbox row by marking it DELETED.
+
+    Pass the already-loaded ``sandbox`` object to avoid a redundant DB fetch;
+    if omitted, the row is fetched fresh from the session.
+    """
     from treadstone.models.user import utc_now
 
-    sandbox = await session.get(Sandbox, sandbox_id)
+    if sandbox is None:
+        sandbox = await session.get(Sandbox, sandbox_id)
     if sandbox is None:
         return
     sandbox.status = SandboxStatus.DELETED

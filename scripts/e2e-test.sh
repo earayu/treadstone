@@ -4,14 +4,14 @@
 # run in parallel with no ordering dependencies.
 #
 # Usage:
-#   make test-e2e                                  # run all tests
+#   make test-e2e                                  # run all tests (default: Kind Ingress API host)
 #   make test-e2e FILE=08-metering-admin.hurl      # run a single test file
-#   make test-e2e BASE_URL=http://localhost:8000   # custom base URL
-#   BASE_URL=http://localhost bash scripts/e2e-test.sh [file.hurl]
+#   make test-e2e BASE_URL=http://localhost:8000   # port-forward API instead of Ingress
+#   BASE_URL=http://api.localhost bash scripts/e2e-test.sh [file.hurl]
 
 set -euo pipefail
 
-BASE_URL="${BASE_URL:-http://localhost}"
+BASE_URL="${BASE_URL:-http://api.localhost}"
 # Optional: pass a single filename (e.g. "08-metering-admin.hurl") to run only that file.
 TARGET_FILE="${1:-}"
 UNIQUE=$(head -c 8 /dev/urandom | xxd -p | head -c 8)

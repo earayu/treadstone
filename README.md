@@ -1,30 +1,26 @@
 # Treadstone
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/earayu/treadstone)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-**Agent-native sandbox platform for AI agents.** Run code, install dependencies, execute tests, build software, and hand off a browser session from isolated environments.
+**Agent-native sandbox infrastructure.** Create sandboxes, manage lifecycle, use the HTTP/WebSocket data plane (including MCP), and hand browser sessions to humans when the workflow needs it—all from a consistent CLI, Python SDK, and REST API.
 
 Open source and self-hostable. Built for two readers at once:
 
 - **Developers** who want a sandbox control plane without building the whole platform themselves
-- **AI agents** that need a predictable CLI, SDK, and API they can operate autonomously
-
-> [!NOTE]
-> Treadstone is in early development. The commands below reflect what works today.
+- **AI agents** that need predictable, machine-readable interfaces they can run autonomously
 
 ## Why Treadstone?
 
-Autonomous software work needs more than a raw container.
+Autonomous software work needs more than a raw container: authentication, API keys, multi-tenant lifecycle, structured output, optional persistence, and **browser hand-off** when a human must step in.
 
-Agents also need authentication, API keys, multi-tenant sandbox lifecycle management, machine-readable output, browser hand-off for humans, and persistent storage when work needs to survive restarts.
+Treadstone packages that into an **agent-native control plane** so you do not have to assemble auth, routing, and Kubernetes wiring from scratch for every project.
 
-Treadstone packages that into an **agent-native sandbox service** instead of making every team assemble it from scratch on top of Kubernetes.
-
-## Quick Start
+## Quick start
 
 ### Install the CLI
 
-Use the release installer script. It downloads the right binary for your platform and verifies checksums when available.
+Use the release installer (checksums when available) or PyPI:
 
 ```bash
 curl -fsSL https://treadstone-ai.dev/install.sh | sh
@@ -42,11 +38,11 @@ Alternative:
 pip install treadstone-cli
 ```
 
-### Human Workflow
+### Human workflow
 
 ```bash
-# Optional: point the CLI at your own deployment
-export TREADSTONE_BASE_URL="http://localhost"
+# Optional: point the CLI at your own deployment (after make up / make deploy-all ENV=local, API Ingress is http://api.localhost — see deploy/README.md)
+export TREADSTONE_BASE_URL="http://api.localhost"
 
 treadstone system health
 treadstone auth register
@@ -58,13 +54,13 @@ treadstone sandboxes list
 treadstone sandboxes web enable <sandbox_id>
 ```
 
-The command returns a browser link. Opening it gives a full live view into the sandbox — the agent's in-sandbox browser, VS Code, terminal, and file tree:
+The command returns a browser link. Opening it shows a live view into the sandbox—the in-sandbox browser, editor, terminal, and file tree:
 
 ![Sandbox browser handoff](docs/assets/image/sandbox.png)
 
-### Agent Workflow
+### Agent workflow
 
-For automation, prefer JSON output and capture returned IDs from command output.
+Prefer `--json` and capture IDs from command output.
 
 ```bash
 treadstone --json system health
@@ -81,32 +77,50 @@ treadstone guide agent
 treadstone --skills
 ```
 
-Treat `name` as a human-readable label only. Follow-up operations use `sandbox_id`, and browser URLs should be read from command output instead of constructed from the sandbox name.
+Treat `name` as a human-readable label only. Follow-up operations use `sandbox_id`. Read `urls.proxy`, `web_url`, and `open_link` from platform output—do not construct URLs from the sandbox name.
 
-## What Treadstone Gives You
+## Documentation
 
-- **Agent-ready interfaces**: CLI, Python SDK, and REST API
-- **Machine-readable workflows**: `--json` output and a built-in agent guide
-- **Sandbox lifecycle management**: create, inspect, start, stop, delete
-- **Human hand-off**: generate browser entry links for live sandboxes
-- **Flexible execution modes**: ephemeral or persistent sandboxes
-- **Production control plane**: auth, API keys, RBAC, rate limiting, and multi-tenancy
-- **Open deployment model**: self-host today, managed path planned
-- **MCP over the data plane**: connect MCP clients to a server running inside a sandbox via **`urls.proxy`** (HTTP/SSE and WebSocket); see [MCP in sandbox](https://treadstone-ai.dev/docs/mcp-sandbox) in the public docs and the **Proxy** section of [API Reference](https://treadstone-ai.dev/docs/api-reference).
+Hosted docs on **[treadstone-ai.dev](https://treadstone-ai.dev/)** are the source of truth for contracts, commands, and limits. Start here:
+
+| Topic | Link |
+| --- | --- |
+| Overview | [Overview](https://treadstone-ai.dev/docs/index) |
+| Install & CLI behavior | [CLI Guide](https://treadstone-ai.dev/docs/cli-guide) |
+| Sessions, API keys, OAuth, scopes | [API Keys & Auth](https://treadstone-ai.dev/docs/api-keys-auth) |
+| REST shape & control vs data plane | [REST API Guide](https://treadstone-ai.dev/docs/rest-api-guide) |
+| Create, stop, start, delete sandboxes | [Sandbox Lifecycle](https://treadstone-ai.dev/docs/sandbox-lifecycle) |
+| Human browser entry & links | [Browser Handoff](https://treadstone-ai.dev/docs/browser-handoff) |
+| Plans, compute, storage, concurrency | [Usage & Limits](https://treadstone-ai.dev/docs/usage-limits) |
+| Stable error envelope & codes | [Error Reference](https://treadstone-ai.dev/docs/error-reference) |
+| Full doc index | [Documentation Sitemap](https://treadstone-ai.dev/docs/sitemap) |
+
+**Machine-readable API:** [OpenAPI JSON](https://treadstone-ai.dev/openapi.json) · **Interactive docs (Swagger):** [api.treadstone-ai.dev/docs](https://api.treadstone-ai.dev/docs)
+
+## What you get
+
+- **Three interfaces, one contract**: CLI, [Python SDK](https://treadstone-ai.dev/docs/python-sdk-guide), and REST API
+- **Agent-oriented UX**: `--json`, `treadstone guide agent`, and `treadstone --skills`
+- **Sandbox lifecycle**: create, inspect, start, stop, delete; ephemeral or persistent storage
+- **Data-plane proxy**: HTTP and WebSocket to workloads inside the sandbox (including MCP paths)
+- **Browser hand-off**: mint links for humans without embedding long-lived credentials in agent code
+- **Identity & scope**: sessions, API keys, RBAC, and per-sandbox grants
+- **Usage & plan limits**: compute and storage accounting, remaining quota, and enforcement—see [Usage & Limits](https://treadstone-ai.dev/docs/usage-limits)
+- **Self-hosting**: deploy your own stack; see [deploy/README.md](deploy/README.md)
 
 ## MCP (Model Context Protocol)
 
-If your sandbox runs an MCP server on a path such as `/mcp`, expose it to tools like Cursor or Claude Desktop using the **data-plane** URL from the API — **`{urls.proxy}/mcp`** with your **API key** (`Authorization: Bearer sk-…`). Query strings (for SSE) and WebSocket upgrades are supported. Do not hand-build hostnames: read **`urls.proxy`** from `GET /v1/sandboxes/{id}`. Full URLs, auth split, and self-hosted DNS notes: [MCP in sandbox](https://treadstone-ai.dev/docs/mcp-sandbox) · [deploy/README.md](deploy/README.md) (Exposing the Sandbox MCP Endpoint).
+If the sandbox runs an MCP server (for example on `/mcp`), expose it through the **data plane** using **`{urls.proxy}/mcp`** and your API key (`Authorization: Bearer sk-…`). Read **`urls.proxy`** from `GET /v1/sandboxes/{id}`—do not hand-build hostnames. HTTP/SSE and WebSocket are supported.
+
+Details: [MCP in sandbox](https://treadstone-ai.dev/docs/mcp-sandbox) · Proxy contract: [API Reference](https://treadstone-ai.dev/docs/api-reference) · Self-hosted DNS: [deploy/README.md](deploy/README.md)
 
 ## Python SDK
-
-Install:
 
 ```bash
 pip install treadstone-sdk
 ```
 
-Example:
+Minimal example (use `sandbox.id` for follow-up calls):
 
 ```python
 from treadstone_sdk import AuthenticatedClient
@@ -114,83 +128,74 @@ from treadstone_sdk.api.sandbox_templates import sandbox_templates_list_sandbox_
 from treadstone_sdk.api.sandboxes import sandboxes_create_sandbox
 from treadstone_sdk.models.create_sandbox_request import CreateSandboxRequest
 
-client = AuthenticatedClient(
-    base_url="http://localhost",
-    token="sk_your_api_key",
-)
-
+client = AuthenticatedClient(base_url="http://api.localhost", token="sk_your_api_key")
 templates = sandbox_templates_list_sandbox_templates.sync(client=client)
-
 sandbox = sandboxes_create_sandbox.sync(
     client=client,
     body=CreateSandboxRequest(template=templates.items[0].name, name="demo"),
 )
-
 print(sandbox.id)
 ```
 
-Use the SDK when you want typed API access from Python. As with the CLI, use `sandbox.id` for follow-up operations.
+Full guide: [Python SDK Guide](https://treadstone-ai.dev/docs/python-sdk-guide)
 
-## Built-in Templates
+## Built-in templates
 
-Treadstone ships with five built-in size tiers powered by the same AIO sandbox image.
+Five tiers share the same AIO sandbox image.
 
-| Template | CPU | Memory | Use Case |
-|---|---|---|---|
-| `aio-sandbox-tiny` | 0.25 core | 512 Mi | Code execution, scripts, lightweight tasks |
-| `aio-sandbox-small` | 0.5 core | 1 Gi | Simple development tasks |
-| `aio-sandbox-medium` | 1 core | 2 Gi | General-purpose development |
-| `aio-sandbox-large` | 2 cores | 4 Gi | Full-featured development and browser automation |
+| Template | CPU | Memory | Use case |
+| --- | --- | --- | --- |
+| `aio-sandbox-tiny` | 0.25 core | 512 Mi | Scripts, lightweight tasks |
+| `aio-sandbox-small` | 0.5 core | 1 Gi | Simple development |
+| `aio-sandbox-medium` | 1 core | 2 Gi | General development |
+| `aio-sandbox-large` | 2 cores | 4 Gi | Full dev and browser automation |
 | `aio-sandbox-xlarge` | 4 cores | 8 Gi | Heavy workloads |
 
-Examples:
-
 ```bash
-# Lightweight sandbox
 treadstone sandboxes create --template aio-sandbox-tiny --name quick-demo
-
-# Persistent development environment
 treadstone sandboxes create --template aio-sandbox-large --name dev-box --persist --storage-size 5Gi
 ```
 
-Persistent sandbox storage uses preset workspace tiers today: `5Gi`, `10Gi`, and `20Gi`.
+Persistent storage presets: `5Gi`, `10Gi`, and `20Gi`.
 
 ## Architecture
 
-Treadstone is organized as three layers:
+Three layers:
 
-- **Platform service layer**: authentication, API keys, RBAC, rate limiting, billing hooks, and multi-tenancy
-- **Orchestration layer**: Kubernetes plus [agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) CRDs and warm pool support
+- **Platform service layer**: authentication, API keys, RBAC, rate limits, usage metering, plan limits, and multi-tenancy
+- **Orchestration layer**: Kubernetes and [agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) CRDs (including warm pool support)
 - **Sandbox runtime layer**: isolated containers with [gVisor](https://gvisor.dev/) and optional persistent volumes
 
-## Tech Stack
+## Tech stack
 
 | Component | Technology |
-|---|---|
+| --- | --- |
 | Backend | Python 3.12+, FastAPI, SQLAlchemy (async), asyncpg |
 | Database | [Neon](https://neon.tech) Serverless PostgreSQL |
 | Orchestration | Kubernetes, [agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) CRD |
 | Isolation | [gVisor](https://gvisor.dev/) |
 | Runtime | [agent-infra/sandbox](https://github.com/agent-infra/sandbox) |
 | Package manager | [uv](https://github.com/astral-sh/uv) |
-| CI/CD | GitHub Actions -> GHCR |
+| CI/CD | GitHub Actions → GHCR |
 
-## Status
+## Project status
 
-What works today:
+**Shipped today**
 
-- User auth, API keys, RBAC, and invitations
-- Sandbox CRUD and lifecycle management
-- Kubernetes sync, HTTP and WebSocket data-plane proxy (including MCP), and browser hand-off flow
-- CLI and Python SDK for agent-facing usage
+- User authentication, API keys, RBAC, and invitations
+- Sandbox CRUD and lifecycle; Kubernetes sync
+- HTTP/WebSocket data-plane proxy (including MCP) and browser hand-off
+- CLI and Python SDK for control-plane automation
+- Usage metering, user plans, and plan limits (`GET /v1/usage` and related endpoints); see [Usage & Limits](https://treadstone-ai.dev/docs/usage-limits)
 
-What is planned next:
+**On the roadmap**
 
-- Usage metering and billing
-- Managed hosting
-- More production hardening and monitoring
+- Managed hosting as a first-class offering
+- Deeper production hardening, billing integrations, and observability (iterative)
 
-Current Chinese module documentation is available in [docs/zh-CN/README.md](docs/zh-CN/README.md).
+Paid checkout, invoicing, and similar payment-closed-loop features are **not** represented as shipped; self-serve billing may arrive later.
+
+**Chinese documentation** (module-based, code-first): [docs/zh-CN/README.md](docs/zh-CN/README.md)
 
 ## Development
 
@@ -210,7 +215,7 @@ make up               # Spin up local Kind cluster + deploy
 make down             # Tear down local environment
 ```
 
-For local Kubernetes deployment and smoke testing, see [deploy/README.md](deploy/README.md).
+Local Kubernetes and smoke tests: [deploy/README.md](deploy/README.md)
 
 ## Community
 
