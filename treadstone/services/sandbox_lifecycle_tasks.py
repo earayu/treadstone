@@ -182,7 +182,13 @@ async def _db_only_stop(session: AsyncSession, sandbox: Sandbox) -> None:
 
 async def _db_only_delete(session: AsyncSession, sandbox: Sandbox) -> None:
     """Fallback delete when no K8s callback is available."""
+    prev_status = sandbox.status
     sandbox.status = SandboxStatus.DELETING
     sandbox.gmt_deleted = utc_now()
     sandbox.version += 1
     session.add(sandbox)
+    logger.info(
+        "Sandbox %s status %s -> deleting (source=lifecycle_db_only_delete)",
+        sandbox.id,
+        prev_status,
+    )

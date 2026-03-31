@@ -301,7 +301,7 @@ async def watch_loop(
     resource_version: str,
 ) -> None:
     """Consume Watch events and update DB in real time. Raises WatchExpiredError on 410."""
-    logger.info("Watch loop starting from rv=%s", resource_version)
+    logger.debug("Watch loop starting from rv=%s", resource_version)
     async for event_type, cr_object in k8s_client.watch_sandboxes(namespace, resource_version):
         try:
             await handle_watch_event(event_type, cr_object, session_factory)
@@ -310,7 +310,7 @@ async def watch_loop(
         rv = cr_object.get("metadata", {}).get("resourceVersion", "")
         if rv:
             resource_version = rv
-    logger.info("Watch stream ended (server closed connection)")
+    logger.debug("Watch stream ended (server closed connection)")
 
 
 async def _periodic_reconcile(
@@ -351,9 +351,9 @@ async def start_sync_loop(
             try:
                 await watch_loop(namespace, k8s_client, session_factory, list_rv)
                 # Watch stream ended normally (server timeout) — restart
-                logger.info("Watch stream ended, restarting")
+                logger.debug("Watch stream ended, restarting")
             except WatchExpiredError:
-                logger.info("Watch resourceVersion expired (410), re-listing")
+                logger.debug("Watch resourceVersion expired (410), re-listing")
             except Exception:
                 logger.exception("Watch loop failed, restarting in %ds", WATCH_RESTART_BACKOFF)
                 await asyncio.sleep(WATCH_RESTART_BACKOFF)
@@ -606,12 +606,19 @@ async def reconcile_storage_metering(
         await session.commit()
 
 
+def _sandbox_status_log_value(to_status: str | SandboxStatus) -> str:
+    return to_status.value if isinstance(to_status, SandboxStatus) else to_status
+
+
+_LOGGED_SANDBOX_TRANSITIONS = frozenset({SandboxStatus.ERROR.value, SandboxStatus.DELETING.value, "deleted"})
+
+
 async def _record_status_change(
     session: AsyncSession,
     *,
     sandbox_id: str,
     from_status: str,
-    to_status: str,
+    to_status: str | SandboxStatus,
     source: str,
     message: str | None = None,
 ) -> None:
@@ -621,5 +628,14 @@ async def _record_status_change(
         target_type="sandbox",
         target_id=sandbox_id,
         actor_type=AuditActorType.SYSTEM.value,
-        metadata={"from_status": from_status, "to_status": to_status, "source": source, "message": message},
+        metadata={
+            "from_status": from_status,
+            "to_status": _sandbox_status_log_value(to_status),
+            "source": source,
+            "message": message,
+        },
     )
+    ts = _sandbox_status_log_value(to_status)
+    if ts in _LOGGED_SANDBOX_TRANSITIONS:
+        msg_suffix = f" message={message!r}" if message else ""
+        logger.info("Sandbox %s status %s -> %s (source=%s)%s", sandbox_id, from_status, ts, source, msg_suffix)

@@ -316,7 +316,7 @@ class SandboxSubdomainMiddleware:
             sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.id,
             full_path,
         )
-        logger.info("Subdomain proxy %s %s → %s", request.method, sandbox.name, target_url)
+        logger.debug("Subdomain proxy %s %s → %s", request.method, sandbox.name, target_url)
 
         client = await get_http_client()
         outgoing = _strip_internal_auth(headers)
@@ -380,7 +380,7 @@ class SandboxSubdomainMiddleware:
         query_string = scope.get("query_string", b"").decode("latin-1")
         if query_string:
             path = f"{path}?{query_string}"
-        logger.info("Subdomain WS proxy %s → %s", sandbox.name, path)
+        logger.debug("Subdomain WS proxy %s → %s", sandbox.name, path)
 
         await websocket.accept()
         try:

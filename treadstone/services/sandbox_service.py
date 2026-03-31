@@ -170,6 +170,11 @@ class SandboxService:
             sandbox.version += 1
             self.session.add(sandbox)
             await self.session.commit()
+            logger.info(
+                "Sandbox %s status creating -> error (source=api_create) message=%r",
+                sandbox_id,
+                sandbox.status_message,
+            )
 
         # ── Metering: record storage allocation for persistent sandboxes (best-effort) ──
         if self._metering is not None and persist and sandbox.status != SandboxStatus.ERROR:
@@ -302,6 +307,7 @@ class SandboxService:
         if not is_valid_transition(sandbox.status, SandboxStatus.DELETING):
             raise InvalidTransitionError(sandbox_id, sandbox.status, "deleting")
 
+        prev_status = sandbox.status
         sandbox.status = SandboxStatus.DELETING
         sandbox.version += 1
         self.session.add(sandbox)
@@ -318,6 +324,11 @@ class SandboxService:
             link.gmt_updated = utc_now()
             self.session.add(link)
         await self.session.commit()
+        logger.info(
+            "Sandbox %s status %s -> deleting (source=user_api_delete)",
+            sandbox_id,
+            prev_status,
+        )
 
         try:
             if sandbox.provision_mode == "direct":
@@ -335,6 +346,11 @@ class SandboxService:
             sandbox.version += 1
             self.session.add(sandbox)
             await self.session.commit()
+            logger.info(
+                "Sandbox %s status deleting -> error (source=user_api_delete_k8s_failure) message=%r",
+                sandbox_id,
+                sandbox.status_message,
+            )
 
     async def start(self, sandbox_id: str, owner_id: str) -> Sandbox:
         sandbox = await self.get(sandbox_id, owner_id)
@@ -373,6 +389,11 @@ class SandboxService:
             sandbox.version += 1
             self.session.add(sandbox)
             await self.session.commit()
+            logger.info(
+                "Sandbox %s status creating -> error (source=user_api_start_k8s_failure) message=%r",
+                sandbox_id,
+                sandbox.status_message,
+            )
             return sandbox
 
         # The sandbox may already be READY in K8s (e.g. it auto-recovered from ERROR
@@ -429,6 +450,11 @@ class SandboxService:
             sandbox.version += 1
             self.session.add(sandbox)
             await self.session.commit()
+            logger.info(
+                "Sandbox %s status stopped -> error (source=user_api_stop_k8s_failure) message=%r",
+                sandbox_id,
+                sandbox.status_message,
+            )
 
         return sandbox
 

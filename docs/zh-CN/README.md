@@ -21,6 +21,7 @@
 ### 补充设计文档
 
 - [CU 加权公式与 Sandbox 模板资源方案 C](./modules/07-compute-unit-template-resources-plan-c.md) — 计费公式（加权累加）与五档模板 request/limit 的设计与实施对齐说明
+- [服务端日志打印审计](./modules/08-logging-audit.md) — 日志位置与级别评估、Debug/Info/Warning/Error 分级准则、重复与关联字段缺口
 
 ## 这次重组覆盖了什么
 

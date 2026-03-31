@@ -95,7 +95,7 @@ async def tick_metering(session: AsyncSession) -> int:
                 if rows.rowcount == 0:
                     raise _OptimisticLockConflict()
         except _OptimisticLockConflict:
-            logger.warning(
+            logger.debug(
                 "Optimistic lock conflict for ComputeSession %s, skipping this tick",
                 cs.id,
             )

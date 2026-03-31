@@ -52,6 +52,7 @@ async def _k8s_delete_sandbox(session, sandbox) -> None:
         link.gmt_updated = utc_now()
         session.add(link)
 
+    prev_status = sandbox.status
     sandbox.status = SandboxStatus.DELETING
     sandbox.gmt_deleted = utc_now()
     sandbox.version += 1
@@ -65,6 +66,11 @@ async def _k8s_delete_sandbox(session, sandbox) -> None:
         else:
             name = sandbox.k8s_sandbox_claim_name or sandbox.id
             await k8s.delete_sandbox_claim(name=name, namespace=sandbox.k8s_namespace)
+        logger.info(
+            "Sandbox %s status %s -> deleting (source=lifecycle_auto_delete)",
+            sandbox.id,
+            prev_status,
+        )
     except Exception:
         sandbox.status = SandboxStatus.STOPPED
         sandbox.gmt_deleted = None

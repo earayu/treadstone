@@ -133,6 +133,9 @@ async def lifespan(app: FastAPI):
 
 
 logging.basicConfig(level=logging.DEBUG if settings.debug else logging.WARNING)
+# Keep third-party noise low (root WARNING) while still emitting INFO from our package.
+_treadstone_log = logging.getLogger("treadstone")
+_treadstone_log.setLevel(logging.DEBUG if settings.debug else logging.INFO)
 
 validate_runtime_settings(settings)
 
@@ -171,7 +174,7 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
 @app.exception_handler(IntegrityError)
 async def integrity_error_handler(request: Request, exc: IntegrityError):
     request.state.error_code = "conflict"
-    logger.error("Unhandled IntegrityError: %s", exc)
+    logger.exception("Unhandled IntegrityError: %s", exc)
     body = {
         "error": {
             "code": "conflict",

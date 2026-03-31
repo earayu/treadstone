@@ -121,7 +121,7 @@ def sync_template_specs_from_k8s(k8s_templates: list[dict]) -> int:
         if vcpu > 0 and mem > 0:
             new_cache[t["name"]] = {"vcpu": vcpu, "memory_gib": mem}
     _template_specs_cache = new_cache
-    logger.info("Synced %d template specs from K8s into runtime cache", len(new_cache))
+    logger.debug("Synced %d template specs from K8s into runtime cache", len(new_cache))
     return len(new_cache)
 
 
