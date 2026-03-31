@@ -91,7 +91,7 @@ wss://api.treadstone-ai.dev/v1/sandboxes/{id}/proxy/mcp
 Authorization: Bearer sk-…
 ```
 
-**Browser / subdomain access** — If the sandbox should be opened in a browser (e.g. for a web-based MCP client), use the `urls.web` field returned by the sandbox API. This URL (`https://sandbox-{id}.treadstone-ai.dev/mcp`) is authenticated via browser session cookie; use `POST /v1/sandboxes/{id}/web-link` to obtain a shareable `open_link`.
+**Browser / subdomain access** — For a human or browser session in the workspace UI, use **`urls.web`** from the API (host and path come from server config; do not hard-code). Authentication is via Console session cookie or a shareable **`open_link`** from `POST /v1/sandboxes/{id}/web-link`. That surface is different from **`urls.mcp`**: MCP automation should use the proxy URL and API keys, not `urls.web`, unless your client explicitly supports the browser flow.
 
 ### Usage
 
@@ -112,8 +112,9 @@ Authorization: Bearer sk-…
 | `id` | The machine identifier for this sandbox. Use it for every subsequent operation. |
 | `name` | The human label. Not a stable identifier; use `id` for programmatic access. |
 | `status` | Current lifecycle state: `creating`, `stopped`, `running`, `error`, etc. |
-| `urls.proxy` | The data-plane URL for proxying requests into this sandbox. |
-| `urls.web` | The browser entry point, accessible once a web link is enabled. |
+| `urls.proxy` | The data-plane base for HTTP/WebSocket into this sandbox (`…/v1/sandboxes/{id}/proxy`). |
+| `urls.mcp` | The MCP endpoint URL (`urls.proxy` + `/mcp`). Prefer this for MCP clients instead of constructing paths. |
+| `urls.web` | Browser workspace entry (subdomain URL when configured; may include a handoff token when a web link is active). |
 
 ### Browser handoff create (`POST /web-link`)
 

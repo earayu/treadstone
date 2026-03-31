@@ -5,7 +5,7 @@ Read [`/docs/index.md`](/docs/index.md) first if you are new.
 
 ## Get Started
 
-- [Overview](/docs/index.md): What Treadstone is and what you can build—agent sandboxes, CLI/REST/SDK, handoff, quotas; defers control/data-plane URLs to Sandbox endpoints.
+- [Overview](/docs/index.md): What Treadstone is and what you can build; introduces control plane vs data plane in plain language, then points to Sandbox endpoints for URLs.
 - [Quickstart](/docs/quickstart.md): Install the CLI, sign in, optional API key, and create your first sandbox—bridge to Core Workflows.
 - [Sandbox endpoints](/docs/sandbox-endpoints.md): Control plane vs data plane, CLI/SDK/HTTP vs Web and proxy, Web/MCP/Proxy URLs in the Console, and API key use on the data plane.
 

@@ -79,7 +79,7 @@ Browser handoff subgroup:
 | Command | What it does |
 |---------|--------------|
 | `treadstone config set` | Set a config key-value pair in the local config file. |
-| `treadstone config get` | Read a config value by key. |
+| `treadstone config get` | With no key: print all configured keys (secrets masked). With a key: print that value only. |
 | `treadstone config unset` | Remove a config key. |
 | `treadstone config path` | Print the path to the config file on disk. |
 

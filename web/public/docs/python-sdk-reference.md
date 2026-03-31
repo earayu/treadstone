@@ -68,7 +68,7 @@ treadstone_sdk.types                         # shared types and enums
 | Model | Returned by | Key fields |
 |-------|-------------|------------|
 | `SandboxResponse` | List operations | `id`, `name`, `status` |
-| `SandboxDetailResponse` | `sandboxes_get_sandbox` | `id`, `name`, `status`, `urls.proxy`, `urls.web` |
+| `SandboxDetailResponse` | `sandboxes_get_sandbox` | `id`, `name`, `status`, `urls.proxy`, `urls.mcp`, `urls.web` |
 | `SandboxWebLinkResponse` | `sandboxes_create_sandbox_web_link` | `open_link`, `web_url`, `expires_at` |
 | `SandboxWebLinkStatusResponse` | `sandboxes_get_sandbox_web_link` | `enabled`, `web_url`, `expires_at`, `last_used_at` |
 | `ApiKeyResponse` | `auth_create_api_key` | Full key value (shown once only), `id`, `name`, scope |

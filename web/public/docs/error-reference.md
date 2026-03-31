@@ -2,6 +2,8 @@
 
 Every error response from the Treadstone API has the same shape. Build retry and recovery logic around `error.code` — it is stable. Do not parse `message`; it is human-readable prose and may change.
 
+This page lists **common** public codes integrators see most often. Additional codes exist (for example `template_not_allowed`, `sandbox_unreachable`, `sandbox_timeout`, `invalid_transition`, `email_verification_token_invalid`, `email_already_verified`, `conflict`, `bad_request`, `not_found`). The authoritative set is implemented in `treadstone/core/errors.py` in the repository; cross-check there when handling a new code.
+
 ## Error Envelope
 
 ```json
@@ -46,6 +48,12 @@ The template name does not exist on the server.
 
 Next step: list templates again and retry with a valid name.
 
+### `template_not_allowed`
+
+The template exists but is not allowed on the current plan tier.
+
+Next step: pick a template from `limits.allowed_templates` in usage responses, or upgrade the plan.
+
 ### `sandbox_name_conflict`
 
 Your account already owns a sandbox with that name.
@@ -63,6 +71,24 @@ Next step: re-check `sandbox_id`, ownership, and deletion state.
 The sandbox exists but is not ready for that action yet.
 
 Next step: inspect current status, wait, or recover the lifecycle state first.
+
+### `sandbox_unreachable`
+
+The platform could not reach the sandbox workload (upstream connectivity failure).
+
+Next step: retry; if it persists, inspect sandbox status and platform health.
+
+### `sandbox_timeout`
+
+The sandbox did not respond within the platform timeout.
+
+Next step: retry; reduce load or inspect the workload inside the sandbox.
+
+### `invalid_transition`
+
+The requested lifecycle change is not valid from the sandbox’s current state.
+
+Next step: read current `status` and use an allowed transition (see [Sandbox Lifecycle](/docs/sandbox-lifecycle.md)).
 
 ### `compute_quota_exceeded`
 

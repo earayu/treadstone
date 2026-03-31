@@ -4,7 +4,7 @@
 
 ## Primary Docs
 
-- [Overview](/docs/index.md): What Treadstone is and what you can build—agent sandboxes, CLI/REST/SDK, handoff, quotas; defers control/data-plane URLs to Sandbox endpoints.
+- [Overview](/docs/index.md): What Treadstone is and what you can build; introduces control plane vs data plane in plain language, then points to Sandbox endpoints for URLs.
 - [Browser Handoff](/docs/browser-handoff.md): Let humans enter the sandbox in a browser: authenticated session or owner-shared JWT link; full workspace view and human-in-the-loop control.
 - [API Keys & Auth](/docs/api-keys-auth.md): Sign up via CLI or Console OAuth (Google/GitHub), then session login, API keys, control-plane vs data-plane access, and selected sandbox grants.
 - [CLI Guide](/docs/cli-guide.md): Install the CLI and core behavior: global flags, credential precedence, JSON vs human output, --help, skills, defaults, and local config.
