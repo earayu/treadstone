@@ -18,6 +18,7 @@ from treadstone.core.errors import (
     SandboxUnreachableError,
     ValidationError,
 )
+from treadstone.core.request_context import set_scope_context
 from treadstone.models.api_key import ApiKeyDataPlaneMode, ApiKeySandboxGrant
 from treadstone.models.sandbox import Sandbox, SandboxStatus
 from treadstone.models.user import User, utc_now
@@ -105,14 +106,19 @@ async def ws_proxy(
     The key may be supplied as:
     - ``Authorization: Bearer sk-…`` header (preferred)
     - ``?token=sk-…`` query param (for clients that cannot set WS headers)
+
+    X-Sandbox-Namespace and X-Sandbox-Port headers are honoured for routing,
+    matching the behaviour of the HTTP proxy.
     """
     auth_header = websocket.headers.get("authorization", "")
     token_param = websocket.query_params.get("token", "")
 
     secret: str | None = None
     if auth_header.lower().startswith("bearer "):
-        secret = auth_header[7:]
-    elif token_param.startswith("sk-"):
+        candidate = auth_header[7:]
+        if candidate.startswith("sk-"):
+            secret = candidate
+    if secret is None and token_param.startswith("sk-"):
         secret = token_param
 
     if not secret:
@@ -161,6 +167,16 @@ async def ws_proxy(
         session.add(sandbox)
         await session.commit()
 
+    # Populate structured request context for audit logging (mirrors HTTP proxy).
+    set_scope_context(
+        websocket.scope,
+        credential_type="api_key",
+        actor_user_id=user.id,
+        actor_api_key_id=api_key.id,
+        sandbox_id=sandbox_id,
+        route_kind="ws_proxy",
+    )
+
     await websocket.accept()
 
     # Build upstream path; strip the token param we consumed for auth.
@@ -171,12 +187,23 @@ async def ws_proxy(
     else:
         full_path = f"{path}?{query_string}" if query_string else path
 
+    # Resolve namespace / port overrides from WS headers (same as HTTP proxy).
+    ws_headers = dict(websocket.headers)
     k8s_id = sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.id
+    try:
+        routing = resolve_routing(ws_headers, path_sandbox_id=k8s_id)
+    except ValueError as exc:
+        logger.warning("WebSocket routing error for sandbox %s: %s", sandbox_id, exc)
+        await websocket.close(code=1008, reason=str(exc))
+        return
+
     try:
         await proxy_websocket(
             client_ws=websocket,
-            sandbox_id=k8s_id,
+            sandbox_id=routing["sandbox_id"],
             path=full_path,
+            namespace=routing["namespace"],
+            port=routing["port"],
         )
     except Exception:
         logger.exception("WebSocket proxy failed for sandbox %s", sandbox_id)
