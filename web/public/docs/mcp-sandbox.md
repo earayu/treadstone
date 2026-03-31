@@ -17,12 +17,10 @@ For how Web, MCP, and Proxy relate to `urls.web`, `urls.mcp`, and `urls.proxy` i
 ## Shortest path
 
 1. Create a sandbox and wait until `status` is `ready` ([Sandbox Lifecycle](/docs/sandbox-lifecycle.md)).
-2. Call `GET /v1/sandboxes/{sandbox_id}` and read `urls.proxy` from the response (do not construct this URL by hand).
-3. Append your MCP path, usually `mcp`, so the full data-plane URL on the hosted cloud is:
+2. Call `GET /v1/sandboxes/{sandbox_id}` and read **`urls.mcp`** from the JSON (`urls` is an object; `mcp` is the full MCP URL, same as `urls.proxy` with `/mcp` appended). Do not construct hostnames or paths by hand.
+3. Send requests with `Authorization: Bearer sk-…` using an API key that has data-plane access ([API Keys & Auth](/docs/api-keys-auth.md)).
 
-   `https://api.treadstone-ai.dev/v1/sandboxes/{sandbox_id}/proxy/mcp` (self-hosted: use your API origin)
-
-4. Send requests with `Authorization: Bearer sk-…` using an API key that has data-plane access ([API Keys & Auth](/docs/api-keys-auth.md)).
+On the hosted cloud, `urls.mcp` looks like `https://api.treadstone-ai.dev/v1/sandboxes/{sandbox_id}/proxy/mcp` (self-hosted: same path under your API origin). If your server listens on a different path under the proxy, start from **`urls.proxy`** and append that path instead.
 
 For query forwarding, WebSocket, `?token=`, and subdomain browser URLs, see the Proxy section in [API Reference](/docs/api-reference.md).
 
@@ -61,7 +59,7 @@ Some clients use different keys (`env` for secrets, or a UI instead of a file). 
 
 | Piece | Role |
 | --- | --- |
-| Control plane | Create sandboxes, issue API keys, read `urls.proxy` / `urls.web` |
+| Control plane | Create sandboxes, issue API keys, read `urls.proxy` / `urls.mcp` / `urls.web` |
 | Data plane (`/v1/sandboxes/{id}/proxy/{path}`) | Reverse proxy into the sandbox; your MCP server sees `{path}` and the query string |
 | Sandbox runtime | Runs your MCP process bound to the container HTTP port (default 8080 in sandbox templates) |
 
@@ -71,7 +69,7 @@ Self-hosted operators: wildcard DNS, Ingress, and TLS for sandbox subdomains are
 
 - Stable pattern on the hosted product: `https://api.treadstone-ai.dev/v1/sandboxes/{sandbox_id}/proxy/{mcp_path}` (or `{your_api_origin}/v1/...` when self-hosted); `mcp_path` is often literally `mcp`.
 - Auth header: `Authorization: Bearer <sk-…>` on every request and WebSocket handshake.
-- Discover URLs from `GET /v1/sandboxes/{id}` → `urls.proxy`; append `/mcp` (or the path your server uses).
+- Discover URLs from `GET /v1/sandboxes/{id}` → prefer **`urls.mcp`**; use **`urls.proxy`** only if you need a non-default path under the proxy.
 - Do not use subdomain `urls.web` for unattended MCP unless the client supports cookie or bootstrap flows documented in [API Reference](/docs/api-reference.md).
 
 ## Read next
