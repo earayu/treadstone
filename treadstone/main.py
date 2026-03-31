@@ -29,7 +29,7 @@ from treadstone.config import settings, validate_runtime_settings
 from treadstone.core.errors import TreadstoneError
 from treadstone.middleware.request_logging import RequestLoggingMiddleware
 from treadstone.middleware.sandbox_subdomain import SandboxSubdomainMiddleware
-from treadstone.openapi_spec import build_full_openapi_spec, filter_public_openapi
+from treadstone.openapi_spec import build_full_openapi_spec, filter_public_openapi, merge_sandbox_paths
 from treadstone.services.sandbox_proxy import close_http_client
 
 logger = logging.getLogger(__name__)
@@ -232,11 +232,20 @@ async def health():
 
 
 def _public_openapi() -> dict[str, Any]:
-    """Serve OpenAPI without `/v1/admin` or `/v1/audit` paths (matches public SDK and docs)."""
+    """Serve OpenAPI for Swagger UI: public control-plane paths + sandbox runtime proxy paths.
+
+    Admin and audit paths are excluded (matching the public SDK).  Sandbox internal
+    paths are merged in so the docs show how to reach sandbox operations through the
+    ``/v1/sandboxes/{sandbox_id}/proxy/...`` endpoint.
+
+    NOTE: ``export_openapi.py`` does NOT call ``merge_sandbox_paths``, so the Python
+    SDK (generated from ``openapi-public.json``) is unaffected.
+    """
     if app.openapi_schema is not None:
         return app.openapi_schema
     full = build_full_openapi_spec(app)
-    app.openapi_schema = filter_public_openapi(full)
+    public = filter_public_openapi(full)
+    app.openapi_schema = merge_sandbox_paths(public)
     return app.openapi_schema
 
 
