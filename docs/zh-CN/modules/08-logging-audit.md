@@ -355,13 +355,14 @@ flowchart LR
 |------|------|
 | 2026-03-31 | 定稿：合并会话审计结论；补充文档路径说明；与当前 `treadstone/` 中 DEBUG/INFO 实现及 `main.py` Integrity 处理对齐；附录 B 供按文件复查级别与文案。 |
 | 2026-03-31 | 增补第 9 节：记录已在仓库落地的日志与状态同步优化（含 K8s 同步告警增强）。 |
-| 2026-03-31 | 修订第 9.4：移除「GET 详情自愈合」描述——读路径静默纠偏会掩盖根因；以同步侧日志 + reconcile/watch 修复为准。 |
+| 2026-03-31 | 修订第 9.4：移除「GET 详情自愈合」与后续「GET 只读漂移」——读路径不查 K8s；根因仅靠同步侧日志并在 Watch/reconcile 修复。 |
+| 2026-03-31 | 修订第 9 节措辞与列表格式；与「读路径不探测 K8s」的代码注释对齐。 |
 
 ---
 
 ## 9. 已落地的代码优化（实施记录）
 
-以下为在审计文档定稿之后**已合并到开发分支并准备发版**的改动摘要，便于对照控制台现象与排障关键词。
+以下为审计定稿之后**随主分支演进已合并**的日志与同步相关改动摘要，便于对照控制台现象与排障关键词（具体以当次合并为准）。
 
 ### 9.1 日志级别与命名空间（`treadstone/main.py`）
 
@@ -384,25 +385,25 @@ flowchart LR
 - **`sync_supervisor._k8s_delete_sandbox`**：在 **K8s 删除 API 成功返回后** 再打 **deleting**（避免失败回滚仍误报）。
 - **`sandbox_lifecycle_tasks._db_only_delete`**：DB 兜底进入 **deleting** 时打 **INFO**。
 
-### 9.4 「K8s 健康但 DB 误 Error」：仅同步侧可观测性（不掩盖问题）
+### 9.4 「K8s 健康但 DB 误 Error」：只在同步侧观测与纠偏（不在 GET 上动手脚）
 
-**刻意不在 `GET /v1/sandboxes/{id}` 上根据 K8s 实况回写 DB**：读路径静默把 `error` 改成 `ready` 会**掩盖** Watch/List/状态机上的真实缺陷，不利于根因分析。纠偏应发生在 **Watch / 周期性 reconcile** 等控制面同步路径（或经用户显式操作如 **Start**），而不是在详情查询里「偷偷修好」。
+**不在 `GET /v1/sandboxes/{id}` 上根据 K8s 做任何事**（既不回写 DB，也不为了打日志而额外 **GET** Sandbox CR）。读路径上的「纠偏」或「对照日志」容易让人误以为问题已消失，或引入与 Watch/List 不一致的观测维度；根因应在 **Watch / 周期性 reconcile** 与已有 **WARNING** 日志中定位并修复。
 
-- **`k8s_sync` 告警上下文增强**（仍为 **WARNING**，便于 `grep` 与事后对照）：
-  - **CR missing（reconcile List）**：含 `sandbox_id`、`db_status`、**`expected_cr_key`**、`ns`，并提示 list 快照缺 CR / 命名不一致 / 一致性延迟。
-  - **Invalid transition（Watch）**：含 `sandbox_id`、db 与 K8s 推导状态、**`cr` ns/name、`rv`、CR `message`**。
-  - **Unexpected DELETED（Watch）**：含 `sandbox_id`、`db_status`、**`cr` ns/name、`rv`**。
+**依赖的同步侧日志**（仍为 **WARNING**，便于 `grep` 与事后对照）：
 
-### 9.5 工程与运维辅助（同批本地改动，可选纳入同一 PR）
+- **CR missing（reconcile List）**：含 `sandbox_id`、`db_status`、**`expected_cr_key`**、`ns`，并提示 list 快照缺 CR / 命名不一致 / 一致性延迟。
+- **Invalid transition（Watch）**：含 `sandbox_id`、db 与 K8s 推导状态、**`cr` ns/name、`rv`、CR `message`**。
+- **Unexpected DELETED（Watch）**：含 `sandbox_id`、`db_status`、**`cr` ns/name、`rv`**。
+
+### 9.5 工程与运维辅助
 
 - **`.gitignore`**：忽略 **`logs/`**（本地 kubectl 日志导出目录）。
 - **`scripts/export-k8s-logs.sh`**：将命名空间内 Pod 日志导出到 **`logs/k8s-export/<时间戳>/`**，便于离线检索。
 - **`docs/README.md`**：指向中文审计文档与 `docs/zh-CN` 索引。
-- 其它与日志无关的仓库改动（如 **`web/`**、**`deploy/sandbox-runtime/values-prod.yaml`**）以当次 PR 的 `git` 变更为准。
 
 ### 9.6 控制台检索建议（与第 4、5 节互补）
 
-除 **`CR missing` / `Invalid transition` / `Unexpected DELETED` / `Failed to scale`** 外，可搜 **`Sandbox … status … -> error`** / **`-> deleting`**（来自 `_record_status_change` 或 API 的显式状态迁移 **INFO**），用于对照同一时间段内的误标记路径。
+除 **`CR missing` / `Invalid transition` / `Unexpected DELETED` / `Failed to scale`** 外，可搜 **`Sandbox … status … -> error`** / **`-> deleting`**（来自 `_record_status_change` 或 API 的显式状态迁移 **INFO**），用于对照同一时间段内的状态变更。
 
 ---
 
