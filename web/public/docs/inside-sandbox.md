@@ -21,7 +21,22 @@ treadstone --json sandboxes get SANDBOX_ID
 #       -H "Authorization: Bearer $TREADSTONE_API_KEY"
 ```
 
-From the JSON, read **`urls.proxy`** (HTTP prefix into the sandbox) and, if you use MCP, **`urls.mcp`**. Those strings are authoritative; copy them from the response or from the Console Endpoints row ([Sandbox endpoints](/docs/sandbox-endpoints.md)).
+Example shape (fields vary; `urls` is what you need here):
+
+```json
+{
+  "id": "sb_docexample01",
+  "name": "demo",
+  "status": "running",
+  "urls": {
+    "proxy": "https://api.treadstone-ai.dev/v1/sandboxes/sb_docexample01/proxy",
+    "mcp": "https://api.treadstone-ai.dev/v1/sandboxes/sb_docexample01/proxy/mcp",
+    "web": "https://sandbox-sb_docexample01.treadstone-ai.dev/_treadstone/open?token=swl…"
+  }
+}
+```
+
+From that JSON, read **`urls.proxy`** (HTTP prefix into the sandbox) and, if you use MCP, **`urls.mcp`**. Those strings are authoritative; copy them from the response or from the Console Endpoints row ([Sandbox endpoints](/docs/sandbox-endpoints.md)).
 
 ## Call HTTP into the workload
 
