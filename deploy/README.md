@@ -90,6 +90,8 @@ kubectl config use-context "$TREADSTONE_PROD_CONTEXT"
 make prod
 ```
 
+**Image tags:** `deploy/treadstone/values-prod.yaml` and `deploy/treadstone-web/values-prod.yaml` are updated when you run the **Release** workflow in GitHub Actions (**Actions** → **Release** → **Run workflow**, version `x.y.z` without `v`). After Release succeeds, **Update Prod Image** may still run; it often produces no extra commit if the Release job already aligned those files. Wait for it to finish before `make prod` if your process requires a clean `main`.
+
 ### Demo or other remote environments
 
 There is no `make demo` wrapper. After **explicitly** switching `kubectl` to the intended cluster, use the [advanced layer targets](#advanced-incremental-layer-deployment) with the right `ENV` and `CLUSTER_PROFILE` (e.g. `make deploy-all ENV=demo CLUSTER_PROFILE=ack`). Double-check `kubectl config current-context` first—there is no automatic guard like `make prod`.

@@ -9,7 +9,7 @@ Use the matching local skill before you act:
 | If you need to... | Use |
 |-------|-------------|
 | Set up this repo for the first time | `dev-setup` |
-| Ship code, PRs, merges, version bumps, releases, or prod deploy | `dev-lifecycle` |
+| Ship code, PRs, merges, releases (GitHub Actions), or prod deploy | `dev-lifecycle` |
 | Add or change SQLAlchemy models / Alembic migrations | `database-migration` |
 | Answer Neon-specific questions or plan Neon usage | `neon-postgres` |
 | Audit a subsystem against the current code and write a detailed report | `system-audit-report` |
@@ -60,7 +60,7 @@ scripts/           # Helper scripts (release, install, deploy, E2E)
 | Skill | When to use |
 |-------|-------------|
 | `dev-setup` | First-time environment setup (once per clone) |
-| `dev-lifecycle` | Feature/fix: branch, TDD, ship, PR, merge; bump, tag, release; agreed codewords (合并代码 / 发版本 / 发生产); see skill |
+| `dev-lifecycle` | Feature/fix: branch, TDD, ship, PR, merge; release via Actions; agreed codewords (合并代码 / 发版本 / 发生产); see skill |
 | `database-migration` | Adding/modifying SQLAlchemy models and Alembic migrations |
 | `neon-postgres` | Neon-specific questions (branching, connection methods, SDKs) |
 | `system-audit-report` | First-pass or general subsystem audits grounded in the current code |
@@ -144,12 +144,12 @@ Rules:
 **Agents must follow** [`.agents/skills/dev-lifecycle/SKILL.md`](.agents/skills/dev-lifecycle/SKILL.md) for:
 
 - PRs, CI, merges, and `make ship`
-- Version bumps (`make bump`), tagged releases (`make release`), and waiting for the Release workflow
+- **Releases:** GitHub **Actions** → **Release** workflow → **Run workflow** with **version** `x.y.z` (no `v` prefix); wait for the Release workflow to finish
 - Production deploy (`make prod`) and the **发生产** path (including Update Prod Image)
 
 That skill is the single source of truth for step order and the agreed codewords (**合并代码**, **发版本**, **发生产**). Do not improvise a parallel release checklist.
 
-**Guardrail:** Use `make bump` / `make release` as implemented in the Makefile. Do not hand-craft `git tag` / `git push origin v…` or `gh release create` unless fixing a broken release.
+**Guardrail:** Cut releases only via the **Release** workflow (`workflow_dispatch`). Do not hand-craft `git tag` / `git push origin v…` or `gh release create` unless fixing a broken release.
 
 ## Automation
 
@@ -157,7 +157,7 @@ That skill is the single source of truth for step order and the agreed codewords
 - **pre-push hook**: blocks direct push to main.
 - **CI** (GitHub Actions): lint + test + openapi + build on pushes/PRs, plus integration on PRs. Any failure blocks merge.
 - **CD** (`.github/workflows/cd.yml`): pushes the `main` image to GHCR on changes to deployable server files.
-- **Release** (`.github/workflows/release.yml`): publishes tagged releases and GitHub Release assets on `v*` tags. Agent steps: `dev-lifecycle` skill.
+- **Release** (`.github/workflows/release.yml`): manual **Run workflow** with version `x.y.z`; bumps versions, tags, publishes images and GitHub Release assets. Agent steps: `dev-lifecycle` skill.
 - **Update Prod Image** (`.github/workflows/update-prod-image.yml`): after Release succeeds, updates `values-prod.yaml` on `main`. Wait for this before **发生产** deploy; see `dev-lifecycle` skill.
 
 ## Quick Command Reference
@@ -180,5 +180,4 @@ Run `make help` for the full list. Key commands:
 | `make gen-sdk-python` | Generate `sdk/python` from `openapi-public.json` (admin and audit excluded) |
 | `make local` / `make destroy-local` / `make prod` | Local Kind up/down and prod deploy (`TREADSTONE_PROD_CONTEXT` for `make prod`; see `deploy/README.md`) |
 | `make ship MSG=x` | git add + commit + push (feature branches only) |
-| `make bump V=x.y.z` | Bump version files, commit + push (feature branches only) |
-| `make release V=x.y.z` | Tag `vx.y.z` on `main` and push tag (triggers full release pipeline) |
+| Release | GitHub → **Actions** → **Release** → **Run workflow** → version `x.y.z` (no `v`; matches image tags) |
