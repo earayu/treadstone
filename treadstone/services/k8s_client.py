@@ -39,20 +39,71 @@ SANDBOX_UID = 1000
 SANDBOX_GID = 1000
 
 
+def _parse_sandbox_pod_tolerations_json(raw: str) -> list[dict[str, Any]]:
+    """Parse TREADSTONE_SANDBOX_POD_TOLERATIONS_JSON; invalid input yields []."""
+    if not raw.strip():
+        return []
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        logger.warning("Invalid TREADSTONE_SANDBOX_POD_TOLERATIONS_JSON: %s", e)
+        return []
+    if not isinstance(data, list):
+        logger.warning(
+            "TREADSTONE_SANDBOX_POD_TOLERATIONS_JSON must be a JSON array, got %s",
+            type(data).__name__,
+        )
+        return []
+    out: list[dict[str, Any]] = []
+    for i, item in enumerate(data):
+        if isinstance(item, dict):
+            out.append(item)
+        else:
+            logger.warning(
+                "TREADSTONE_SANDBOX_POD_TOLERATIONS_JSON[%d] must be an object, skipping",
+                i,
+            )
+    return out
+
+
+def _parse_sandbox_pod_extra_labels_json(raw: str) -> dict[str, str]:
+    """Parse TREADSTONE_SANDBOX_POD_EXTRA_LABELS_JSON; invalid input yields {}."""
+    if not raw.strip():
+        return {}
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        logger.warning("Invalid TREADSTONE_SANDBOX_POD_EXTRA_LABELS_JSON: %s", e)
+        return {}
+    if not isinstance(data, dict):
+        logger.warning(
+            "TREADSTONE_SANDBOX_POD_EXTRA_LABELS_JSON must be a JSON object, got %s",
+            type(data).__name__,
+        )
+        return {}
+    out: dict[str, str] = {}
+    for k, v in data.items():
+        if not isinstance(k, str):
+            logger.warning(
+                "TREADSTONE_SANDBOX_POD_EXTRA_LABELS_JSON keys must be strings, skipping key %r",
+                k,
+            )
+            continue
+        out[k] = str(v) if v is not None else ""
+    return out
+
+
 def _pod_scheduling_fields() -> tuple[list[dict[str, Any]], dict[str, str]]:
     """Return (extra_tolerations, extra_labels) from current settings.
 
     Both are empty by default; populated when ACS overflow is configured via
     TREADSTONE_SANDBOX_POD_TOLERATIONS_JSON / TREADSTONE_SANDBOX_POD_EXTRA_LABELS_JSON.
-    Applied to every direct-path Sandbox CR's podTemplate so that ResourcePolicy can
-    route pods to ECS first and overflow to ACS virtual nodes when ECS is full.
+    Applied to direct Sandbox CRs (agents.x-k8s.io) from ``create_sandbox``, not
+    SandboxClaim (cluster SandboxTemplates come from Helm).
+    When set, ResourcePolicy can route pods to ECS first and overflow to ACS virtual nodes.
     """
-    tolerations: list[dict[str, Any]] = []
-    extra_labels: dict[str, str] = {}
-    if settings.sandbox_pod_tolerations_json:
-        tolerations = json.loads(settings.sandbox_pod_tolerations_json)
-    if settings.sandbox_pod_extra_labels_json:
-        extra_labels = json.loads(settings.sandbox_pod_extra_labels_json)
+    tolerations = _parse_sandbox_pod_tolerations_json(settings.sandbox_pod_tolerations_json)
+    extra_labels = _parse_sandbox_pod_extra_labels_json(settings.sandbox_pod_extra_labels_json)
     return tolerations, extra_labels
 
 

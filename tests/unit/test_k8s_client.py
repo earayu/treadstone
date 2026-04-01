@@ -407,6 +407,88 @@ async def test_create_sandbox_no_scheduling_fields_when_config_empty(monkeypatch
     assert "metadata" not in sb["spec"]["podTemplate"], "no extra labels when config is empty"
 
 
+async def test_create_sandbox_invalid_tolerations_json_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "sandbox_pod_tolerations_json", "not valid json")
+    monkeypatch.setattr(settings, "sandbox_pod_extra_labels_json", "")
+
+    client = FakeK8sClient()
+    sb = await client.create_sandbox(
+        name="bad-tol-sb",
+        namespace="treadstone-local",
+        image="ghcr.io/agent-infra/sandbox:latest",
+        container_port=8080,
+        resources={"requests": {"cpu": "250m"}},
+    )
+    pod_spec = sb["spec"]["podTemplate"]["spec"]
+    assert "tolerations" not in pod_spec
+
+
+async def test_create_sandbox_tolerations_not_array_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "sandbox_pod_tolerations_json", "{}")
+    monkeypatch.setattr(settings, "sandbox_pod_extra_labels_json", "")
+
+    client = FakeK8sClient()
+    sb = await client.create_sandbox(
+        name="bad-tol-shape-sb",
+        namespace="treadstone-local",
+        image="ghcr.io/agent-infra/sandbox:latest",
+        container_port=8080,
+        resources={"requests": {"cpu": "250m"}},
+    )
+    pod_spec = sb["spec"]["podTemplate"]["spec"]
+    assert "tolerations" not in pod_spec
+
+
+async def test_create_sandbox_tolerations_array_skips_non_objects(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        settings,
+        "sandbox_pod_tolerations_json",
+        '[{"key":"k","operator":"Exists"}, "skip-me"]',
+    )
+    monkeypatch.setattr(settings, "sandbox_pod_extra_labels_json", "")
+
+    client = FakeK8sClient()
+    sb = await client.create_sandbox(
+        name="partial-tol-sb",
+        namespace="treadstone-local",
+        image="ghcr.io/agent-infra/sandbox:latest",
+        container_port=8080,
+        resources={"requests": {"cpu": "250m"}},
+    )
+    pod_spec = sb["spec"]["podTemplate"]["spec"]
+    assert pod_spec["tolerations"] == [{"key": "k", "operator": "Exists"}]
+
+
+async def test_create_sandbox_invalid_extra_labels_json_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "sandbox_pod_tolerations_json", "")
+    monkeypatch.setattr(settings, "sandbox_pod_extra_labels_json", "not-json")
+
+    client = FakeK8sClient()
+    sb = await client.create_sandbox(
+        name="bad-labels-sb",
+        namespace="treadstone-local",
+        image="ghcr.io/agent-infra/sandbox:latest",
+        container_port=8080,
+        resources={"requests": {"cpu": "250m"}},
+    )
+    assert "metadata" not in sb["spec"]["podTemplate"]
+
+
+async def test_create_sandbox_extra_labels_not_object_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "sandbox_pod_tolerations_json", "")
+    monkeypatch.setattr(settings, "sandbox_pod_extra_labels_json", "[1, 2]")
+
+    client = FakeK8sClient()
+    sb = await client.create_sandbox(
+        name="bad-labels-shape-sb",
+        namespace="treadstone-local",
+        image="ghcr.io/agent-infra/sandbox:latest",
+        container_port=8080,
+        resources={"requests": {"cpu": "250m"}},
+    )
+    assert "metadata" not in sb["spec"]["podTemplate"]
+
+
 async def test_create_sandbox_pod_labels_override_extra_labels(monkeypatch: pytest.MonkeyPatch) -> None:
     """pod_labels (sandbox-specific) take precedence over extra_labels (ACS) on key collision."""
     monkeypatch.setattr(settings, "sandbox_pod_tolerations_json", "")

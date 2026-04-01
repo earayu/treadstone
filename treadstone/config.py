@@ -54,9 +54,10 @@ class Settings(BaseSettings):
     sandbox_storage_class: str = "treadstone-workspace"
     sandbox_default_storage_size: Literal["5Gi", "10Gi", "20Gi"] = "5Gi"
 
-    # ACS overflow scheduling — injected into every direct-path (persist=true) Sandbox CR.
-    # JSON strings; empty string disables injection. Both paths (claim and direct) share
-    # the same toleration; the ResourcePolicy CR handles ECS-first priority.
+    # ACS overflow scheduling — injected into direct Sandbox CRs (agents.x-k8s.io) from
+    # create_sandbox, not SandboxClaim (which uses SandboxTemplates from Helm).
+    # JSON strings; empty string disables injection. Align with Helm acsScheduling when
+    # using both paths. ResourcePolicy CR handles ECS-first priority.
     # Example: '[{"key":"virtual-kubelet.io/provider","operator":"Equal","value":"alibabacloud","effect":"NoSchedule"}]'
     sandbox_pod_tolerations_json: str = ""
     # Extra Pod labels applied on top of sandbox-specific labels.
