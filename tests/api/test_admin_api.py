@@ -524,6 +524,32 @@ async def test_post_waitlist_without_auth(anon_client):
     assert data["email"] == "guest@example.com"
     assert data["status"] == "pending"
     assert data["user_id"] is None
+    assert data.get("github_or_portfolio_url") is None
+
+
+async def test_post_waitlist_accepts_https_portfolio_url(anon_client):
+    resp = await anon_client.post(
+        "/v1/waitlist",
+        json={
+            **_WAITLIST_BODY,
+            "email": "withlink@example.com",
+            "github_or_portfolio_url": "https://github.com/example",
+        },
+    )
+    assert resp.status_code == 201
+    assert resp.json()["github_or_portfolio_url"] == "https://github.com/example"
+
+
+async def test_post_waitlist_rejects_non_https_portfolio_url(anon_client):
+    resp = await anon_client.post(
+        "/v1/waitlist",
+        json={
+            **_WAITLIST_BODY,
+            "email": "badlink@example.com",
+            "github_or_portfolio_url": "http://github.com/example",
+        },
+    )
+    assert resp.status_code == 422
 
 
 async def test_post_waitlist_allows_multiple_same_email_tier(anon_client):

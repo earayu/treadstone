@@ -324,6 +324,7 @@ function WaitlistDialog({ tier, onClose }: WaitlistDialogProps) {
   const [email, setEmail] = useState("")
   const [name, setName] = useState("")
   const [company, setCompany] = useState("")
+  const [portfolioUrl, setPortfolioUrl] = useState("")
   const [useCase, setUseCase] = useState("")
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -337,6 +338,7 @@ function WaitlistDialog({ tier, onClose }: WaitlistDialogProps) {
         name,
         target_tier: tier,
         company: company || undefined,
+        github_or_portfolio_url: portfolioUrl.trim() || undefined,
         use_case: useCase || undefined,  // empty string becomes undefined for non-required tiers
       },
       {
@@ -358,7 +360,7 @@ function WaitlistDialog({ tier, onClose }: WaitlistDialogProps) {
         <div className="flex items-center justify-between border-b border-border/20 px-5 py-4">
           <div>
             <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-muted-foreground">
-              APPLY FOR FREE ACCESS —{" "}
+              REQUEST EARLY ACCESS —{" "}
             </span>
             <span className="text-[11px] font-bold uppercase tracking-[1.5px] text-primary">{tierLabel}</span>
           </div>
@@ -369,14 +371,14 @@ function WaitlistDialog({ tier, onClose }: WaitlistDialogProps) {
 
         {submitted ? (
           <div className="px-5 py-10 text-center">
-            <p className="text-lg font-semibold text-primary">Application submitted!</p>
+            <p className="text-lg font-semibold text-primary">Application submitted</p>
             <p className="mt-2 text-sm text-muted-foreground">
-              We'll review your application and upgrade your account to the {tierLabel} plan shortly. Make sure you've
-              signed up at{" "}
+              We&apos;ll review your request and upgrade your account to the {tierLabel} plan when approved. Sign up at{" "}
               <Link to="/auth/sign-up" className="text-primary underline" onClick={onClose}>
                 treadstone-ai.dev
               </Link>{" "}
-              using the same email.
+              using the same email if you haven&apos;t already. We only use links you provided to evaluate this
+              request.
             </p>
             <button
               onClick={onClose}
@@ -388,8 +390,9 @@ function WaitlistDialog({ tier, onClose }: WaitlistDialogProps) {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 p-5">
             <p className="text-sm text-muted-foreground">
-              We're granting free {tierLabel} access during our early launch. Fill in your details and we'll upgrade
-              your account.
+              Early {tierLabel} capacity is limited. We review requests to prioritize builders who will ship on
+              Treadstone. There is no minimum GitHub stars or followers—optional links just help us understand your
+              background.
             </p>
 
             <div className="flex flex-col gap-1">
@@ -421,30 +424,50 @@ function WaitlistDialog({ tier, onClose }: WaitlistDialogProps) {
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-medium text-muted-foreground">Company (optional)</label>
+              <label className="text-[11px] font-medium text-muted-foreground">Company or project (optional)</label>
               <input
                 type="text"
                 value={company}
                 onChange={(e) => setCompany(e.target.value)}
-                placeholder="Your company or project"
+                placeholder="Acme Inc. or side project name"
                 className="h-[36px] rounded-sm border border-border/40 bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
               />
             </div>
 
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-medium text-muted-foreground">
-                How do you plan to use it?{" "}
+                GitHub profile or portfolio URL (optional)
+              </label>
+              <input
+                type="url"
+                value={portfolioUrl}
+                onChange={(e) => setPortfolioUrl(e.target.value)}
+                placeholder="https://github.com/yourhandle"
+                className="h-[36px] rounded-sm border border-border/40 bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              <p className="text-[10px] leading-snug text-muted-foreground/70">
+                HTTPS only. Helps us see your work—no star count requirement.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-medium text-muted-foreground">
+                What are you building?{" "}
                 {useCaseRequired ? (
                   <span className="text-destructive">*</span>
                 ) : (
-                  <span className="text-muted-foreground/50">(optional)</span>
+                  <span className="text-muted-foreground/50">(optional for Pro)</span>
                 )}
               </label>
+              <p className="text-[10px] leading-snug text-muted-foreground/70">
+                Examples: a multi-agent system using sandboxes as execution, trying new agent workflows, or a personal
+                cloud dev machine. A few sentences is enough.
+              </p>
               <textarea
                 required={useCaseRequired}
                 value={useCase}
                 onChange={(e) => setUseCase(e.target.value)}
-                placeholder="e.g. Building AI coding agents that need isolated execution environments"
+                placeholder="e.g. Multi-agent coding agents with isolated runtimes via treadstone CLI; evaluating long-running sandboxes for browser hand-off."
                 rows={3}
                 maxLength={1000}
                 className="resize-none rounded-sm border border-border/40 bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
@@ -466,7 +489,7 @@ function WaitlistDialog({ tier, onClose }: WaitlistDialogProps) {
                 disabled={submit.isPending}
                 className="rounded-sm bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
               >
-                {submit.isPending ? "Submitting…" : "Submit Application"}
+                {submit.isPending ? "Submitting…" : "Submit request"}
               </button>
             </div>
           </form>

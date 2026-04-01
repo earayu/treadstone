@@ -24,6 +24,7 @@ class WaitlistApplicationResponse:
         status (str):
         gmt_created (datetime.datetime):
         company (None | str | Unset):
+        github_or_portfolio_url (None | str | Unset):
         use_case (None | str | Unset):
         user_id (None | str | Unset):
         processed_at (datetime.datetime | None | Unset):
@@ -36,6 +37,7 @@ class WaitlistApplicationResponse:
     status: str
     gmt_created: datetime.datetime
     company: None | str | Unset = UNSET
+    github_or_portfolio_url: None | str | Unset = UNSET
     use_case: None | str | Unset = UNSET
     user_id: None | str | Unset = UNSET
     processed_at: datetime.datetime | None | Unset = UNSET
@@ -59,6 +61,12 @@ class WaitlistApplicationResponse:
             company = UNSET
         else:
             company = self.company
+
+        github_or_portfolio_url: None | str | Unset
+        if isinstance(self.github_or_portfolio_url, Unset):
+            github_or_portfolio_url = UNSET
+        else:
+            github_or_portfolio_url = self.github_or_portfolio_url
 
         use_case: None | str | Unset
         if isinstance(self.use_case, Unset):
@@ -94,6 +102,8 @@ class WaitlistApplicationResponse:
         )
         if company is not UNSET:
             field_dict["company"] = company
+        if github_or_portfolio_url is not UNSET:
+            field_dict["github_or_portfolio_url"] = github_or_portfolio_url
         if use_case is not UNSET:
             field_dict["use_case"] = use_case
         if user_id is not UNSET:
@@ -126,6 +136,15 @@ class WaitlistApplicationResponse:
             return cast(None | str | Unset, data)
 
         company = _parse_company(d.pop("company", UNSET))
+
+        def _parse_github_or_portfolio_url(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        github_or_portfolio_url = _parse_github_or_portfolio_url(d.pop("github_or_portfolio_url", UNSET))
 
         def _parse_use_case(data: object) -> None | str | Unset:
             if data is None:
@@ -170,6 +189,7 @@ class WaitlistApplicationResponse:
             status=status,
             gmt_created=gmt_created,
             company=company,
+            github_or_portfolio_url=github_or_portfolio_url,
             use_case=use_case,
             user_id=user_id,
             processed_at=processed_at,

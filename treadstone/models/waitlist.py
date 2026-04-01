@@ -26,6 +26,7 @@ class WaitlistApplication(Base):
     name: Mapped[str] = mapped_column(String(256), nullable=False)
     target_tier: Mapped[str] = mapped_column(String(16), nullable=False)
     company: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    github_or_portfolio_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     use_case: Mapped[str | None] = mapped_column(Text, nullable=True)
     user_id: Mapped[str | None] = mapped_column(String(24), ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default=ApplicationStatus.PENDING)

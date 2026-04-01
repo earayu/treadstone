@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
@@ -808,7 +809,35 @@ class WaitlistApplicationRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=256, examples=["Alice Smith"])
     target_tier: str = Field(..., examples=["pro"], description="Target tier: 'pro' or 'ultra'")
     company: str | None = Field(default=None, max_length=256, examples=["Acme Corp"])
+    github_or_portfolio_url: str | None = Field(
+        default=None,
+        max_length=512,
+        examples=["https://github.com/octocat"],
+        description="Optional HTTPS URL (GitHub profile, repository, or portfolio).",
+    )
     use_case: str | None = Field(default=None, max_length=1000, examples=["Building AI coding agents"])
+
+    @field_validator("github_or_portfolio_url", mode="before")
+    @classmethod
+    def strip_empty_portfolio_url(cls, v: object) -> str | None:
+        if v is None:
+            return None
+        if not isinstance(v, str):
+            raise TypeError("github_or_portfolio_url must be a string")
+        s = v.strip()
+        return s if s else None
+
+    @field_validator("github_or_portfolio_url")
+    @classmethod
+    def validate_https_portfolio_url(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        parsed = urlparse(v)
+        if parsed.scheme != "https":
+            raise ValueError("github_or_portfolio_url must use https")
+        if not parsed.netloc:
+            raise ValueError("github_or_portfolio_url must be a valid URL with a host")
+        return v
 
     @field_validator("target_tier")
     @classmethod
@@ -825,6 +854,7 @@ class WaitlistApplicationResponse(BaseModel):
     name: str = Field(..., examples=["Alice Smith"])
     target_tier: str = Field(..., examples=["pro"])
     company: str | None = Field(default=None, examples=["Acme Corp"])
+    github_or_portfolio_url: str | None = Field(default=None, examples=["https://github.com/octocat"])
     use_case: str | None = Field(default=None)
     user_id: str | None = Field(default=None, examples=["userabc123"])
     status: str = Field(..., examples=["pending"])

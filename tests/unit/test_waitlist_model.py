@@ -3,7 +3,18 @@ from treadstone.models.waitlist import ApplicationStatus, WaitlistApplication
 
 def test_waitlist_application_fields_exist():
     app = WaitlistApplication()
-    for field in ("id", "email", "name", "target_tier", "company", "use_case", "user_id", "status", "processed_at"):
+    for field in (
+        "id",
+        "email",
+        "name",
+        "target_tier",
+        "company",
+        "github_or_portfolio_url",
+        "use_case",
+        "user_id",
+        "status",
+        "processed_at",
+    ):
         assert hasattr(app, field)
 
 

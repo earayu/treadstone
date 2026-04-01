@@ -2897,6 +2897,12 @@ export interface components {
              */
             company?: string | null;
             /**
+             * Github Or Portfolio Url
+             * @description Optional HTTPS URL (GitHub profile, repository, or portfolio).
+             * @example https://github.com/octocat
+             */
+            github_or_portfolio_url?: string | null;
+            /**
              * Use Case
              * @example Building AI coding agents
              */
@@ -2929,6 +2935,11 @@ export interface components {
              * @example Acme Corp
              */
             company?: string | null;
+            /**
+             * Github Or Portfolio Url
+             * @example https://github.com/octocat
+             */
+            github_or_portfolio_url?: string | null;
             /** Use Case */
             use_case?: string | null;
             /**
