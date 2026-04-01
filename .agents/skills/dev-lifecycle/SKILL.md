@@ -1,11 +1,11 @@
 ---
 name: dev-lifecycle
-description: Treadstone development lifecycle — feature branches, TDD, ship, PR, CI, merge, version bump, tagged release, and optional production deploy. Use for any shippable code change, GitHub flow, or release. Includes agreed “codeword” paths (合并代码 / 发版本 / 发生产). Source of truth for agents executing ship, bump, release, merge, make local / make prod.
+description: Treadstone development lifecycle — feature branches, TDD, ship, PR, CI, merge, GitHub Actions release (workflow_dispatch with version x.y.z), and optional production deploy. Use for any shippable code change, GitHub flow, or release. Includes agreed “codeword” paths (合并代码 / 发版本 / 发生产). Source of truth for agents executing ship, merge, make local / make prod.
 ---
 
 # Development Lifecycle
 
-**This file is the source of truth** for how agents run Git work, pull requests, CI, version bumps, releases, and production deployment. Follow it end-to-end; do not duplicate these procedures elsewhere except with a pointer here.
+**This file is the source of truth** for how agents run Git work, pull requests, CI, releases, and production deployment. Follow it end-to-end; do not duplicate these procedures elsewhere except with a pointer here.
 
 Never push directly to `main`. All changes land via Pull Requests, including work done by AI agents.
 
@@ -33,32 +33,28 @@ Do not stop after opening the PR; continue until **merge is complete** unless th
 
 ### 2. 发版本 — “cut a release”
 
-**Intent:** Publish a **patch** release and wait until the **Release** GitHub Actions workflow finishes successfully.
+**Intent:** Publish a release and wait until the **Release** GitHub Actions workflow finishes successfully.
 
-**Default:** Start from an up-to-date `main`, bump **one patch** version (e.g. `0.7.12` → `0.7.13`). Use another semver only if the user specifies it.
+**Default:** Bump **one patch** in your head (e.g. `0.7.12` → `0.7.13`). Use another semver only if the user specifies it.
 
 **Do:**
 
-1. Sync: `git fetch origin && git checkout main && git pull`.
-2. Read the current version from `pyproject.toml` (root `version = "x.y.z"`) and compute the next **patch** `V=x.y.(z+1)` unless the user gave an explicit `V`.
-3. Create a bump branch: `git checkout -b chore/release-x.y.z` (use the new version in the name).
-4. Run **`make bump V=x.y.z`** (must not be on `main`). This updates version files, commits, and pushes the branch.
-5. Open a PR for the bump branch, wait for CI, then **`gh pr merge --squash`**.
-6. On **updated `main`**: `git checkout main && git pull`.
-7. Run **`make release V=x.y.z`** (only on `main`). This creates and pushes tag `vx.y.z` and triggers [`.github/workflows/release.yml`](../../../.github/workflows/release.yml).
-8. Wait until the **Release** workflow completes **successfully** (`gh run watch` or equivalent). Do not treat the release as done while the workflow is running or failed.
+1. In GitHub: open **Actions** → workflow **Release** → **Run workflow**.
+2. Enter **version** as **`x.y.z` only** (no `v` prefix), e.g. `0.8.3` — same format as Docker image tags and PyPI.
+3. Start the run. The workflow **first** updates version files (`pyproject.toml`, CLI, SDK, web, `uv.lock`), `deploy/treadstone/values-prod.yaml` and `deploy/treadstone-web/values-prod.yaml` image tags, commits to `main` with `[skip ci]`, creates and pushes tag `vx.y.z`, then runs lint, tests, Docker, PyPI, GitHub Release assets, etc.
+4. Wait until the **Release** workflow completes **successfully** (`gh run watch` or the Actions UI). Do not treat the release as done while it is running or failed.
 
-Do not hand-craft `git tag`, `git push origin v…`, or `gh release create` unless fixing a broken release (see `AGENTS.md` guardrails).
+Do not use **`make bump`** or **`make release`** (they are deprecated in the Makefile). Do not hand-craft `git tag`, `git push origin v…`, or `gh release create` unless fixing a broken release (see `AGENTS.md` guardrails).
 
 ### 3. 发生产 — “deploy to production”
 
-**Intent:** After a successful version release, wait for the **prod image bump** on `main`, then deploy to the production cluster.
+**Intent:** After a successful version release, wait for the **prod image** alignment on `main`, then deploy to the production cluster.
 
-**Prerequisite:** A **发版本** completed through a successful **Release** workflow (tag pushed).
+**Prerequisite:** A **发版本** completed through a successful **Release** workflow (tag pushed and artifacts published).
 
 **Do:**
 
-1. Wait for the **Update Prod Image** workflow to finish successfully after that Release. It runs when the Release workflow completes ([`.github/workflows/update-prod-image.yml`](../../../.github/workflows/update-prod-image.yml)) and commits the new image tag to `deploy/treadstone/values-prod.yaml` on `main`.
+1. Wait for the **Update Prod Image** workflow to finish successfully after that Release. It runs when the Release workflow completes ([`.github/workflows/update-prod-image.yml`](../../../.github/workflows/update-prod-image.yml)) and may commit the new image tag to `deploy/treadstone/values-prod.yaml` on `main` if needed (often a no-op when the Release job already bumped those files).
 2. On your machine, sync `main`: `git checkout main && git pull` so you have the committed prod image tag and any other changes.
 3. Deploy production with **`make prod`**. It runs a `kubectl` context check (`TREADSTONE_PROD_CONTEXT`) and then deploys all Helm layers for `ENV=prod` (`values-prod.yaml`). If the owner says **`ENV=PROD`**, treat it as the same intent as `make prod`.
 
@@ -72,7 +68,7 @@ Do not run `make prod` until **Update Prod Image** has succeeded (otherwise the 
 
 ## The everyday development loop
 
-Feature work (no version bump):
+Feature work (no release):
 
 ```
 branch → TDD → ship → PR → CI → merge
@@ -198,8 +194,8 @@ make destroy-local
 ## Automation reference (read-only context)
 
 - **CI** on PRs: lint, tests, OpenAPI checks, etc. Failures block merge.
-- **Release** (`.github/workflows/release.yml`): runs on tag push `v*`.
-- **Update Prod Image** (`.github/workflows/update-prod-image.yml`): after a successful Release run, updates `deploy/treadstone/values-prod.yaml` on `main`.
+- **Release** ([`.github/workflows/release.yml`](../../../.github/workflows/release.yml)): manual **`workflow_dispatch`** with **version** `x.y.z` (no `v`); bumps versions, updates prod Helm image tags, commits to `main`, pushes tag `vx.y.z`, then builds and publishes.
+- **Update Prod Image** ([`.github/workflows/update-prod-image.yml`](../../../.github/workflows/update-prod-image.yml)): after a successful Release run, may update `deploy/treadstone/values-prod.yaml` on `main` if still needed.
 
 Operational steps for agents live in this skill, not in workflow YAML.
 
@@ -210,7 +206,6 @@ Operational steps for agents live in this skill, not in workflow YAML.
 | Goal | Command / pointer |
 |------|-------------------|
 | Commit + push branch | `make ship MSG="fix: ..."` |
-| Bump version (on bump branch) | `make bump V=x.y.z` |
-| Tag release (on `main` after bump merge) | `make release V=x.y.z` |
+| Cut a release | GitHub → **Actions** → **Release** → **Run workflow** → version `x.y.z` (no `v`) |
 | Prod deploy | `make prod` (set `TREADSTONE_PROD_CONTEXT` and `kubectl` context; see `deploy/README.md`) |
 | Full Makefile | `make help` |

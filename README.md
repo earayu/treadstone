@@ -245,6 +245,10 @@ make destroy-local    # Tear down local env
 
 Local Kubernetes and smoke tests: **[deploy/README.md](deploy/README.md)**
 
+### Release
+
+Cut a release in **GitHub Actions**: **Actions** → **Release** → **Run workflow**, and enter **version** as `x.y.z` only (no `v` prefix — same as Docker image tags and PyPI). The workflow bumps package versions, updates prod Helm image tags in `deploy/`, commits to `main`, pushes tag `vx.y.z`, and publishes images and GitHub Release assets. Do not use `make bump` or `make release` (deprecated).
+
 ---
 
 ## Community

@@ -1,32 +1,113 @@
 name: Release
 
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (semver without v), e.g. 0.8.3 — matches image tags"
+        required: true
+        type: string
 
 env:
   REGISTRY: ghcr.io
   TREADSTONE_IMAGE: ghcr.io/${{ github.repository_owner }}/treadstone
   WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/treadstone-web
+  RELEASE_VERSION: ${{ inputs.version }}
+  RELEASE_TAG: v${{ inputs.version }}
 
 permissions:
   contents: write
   packages: write
 
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
 jobs:
+  # ── Bump version files, prod Helm values, commit to main, tag, push ──
+  bump-and-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      major_minor: ${{ steps.version_parts.outputs.major_minor }}
+    steps:
+      - name: Validate version format
+        run: |
+          V="${{ inputs.version }}"
+          if ! echo "$V" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Version must be semver x.y.z (no v prefix), got: $V"
+            exit 1
+          fi
+
+      - id: version_parts
+        run: |
+          V="${{ inputs.version }}"
+          echo "major_minor=$(echo "$V" | cut -d. -f1-2)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync main
+        run: git pull origin main --rebase
+
+      - name: Ensure tag does not exist
+        run: |
+          git fetch origin --tags
+          if git rev-parse "refs/tags/${{ env.RELEASE_TAG }}" >/dev/null 2>&1; then
+            echo "Tag ${{ env.RELEASE_TAG }} already exists."
+            exit 1
+          fi
+
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+
+      - name: Apply version and prod image tags
+        run: |
+          uv run python scripts/set_release_versions.py "${{ inputs.version }}"
+          uv lock
+          uv run python scripts/update_prod_image.py "${{ env.RELEASE_TAG }}"
+
+      - name: Commit, push main, tag, push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add \
+            pyproject.toml \
+            cli/pyproject.toml \
+            sdk/python/pyproject.toml \
+            web/package.json \
+            web/src/lib/app-version.ts \
+            uv.lock \
+            deploy/treadstone/values-prod.yaml \
+            deploy/treadstone-web/values-prod.yaml
+          git commit -m "chore: release ${{ inputs.version }} [skip ci]"
+          git push origin HEAD:main
+          git tag "${{ env.RELEASE_TAG }}"
+          git push origin "${{ env.RELEASE_TAG }}"
+
   # ── Gate: lint + test must pass before any publishing ──
   lint:
+    needs: [bump-and-tag]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 1
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --frozen
       - run: make lint-py
 
   test:
+    needs: [bump-and-tag]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 1
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --frozen
       - run: uv run pytest tests/ -v
@@ -39,8 +120,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set versions from tag
-        run: python scripts/set_release_versions.py "${{ github.ref_name }}"
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 1
+
+      - name: Set versions from release
+        run: python scripts/set_release_versions.py "${{ env.RELEASE_TAG }}"
 
       - uses: docker/login-action@v3
         with:
@@ -53,8 +138,8 @@ jobs:
         with:
           images: ${{ env.TREADSTONE_IMAGE }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=${{ env.RELEASE_VERSION }}
+            type=raw,value=${{ needs.bump-and-tag.outputs.major_minor }}
             type=raw,value=latest
 
       - uses: docker/build-push-action@v6
@@ -70,6 +155,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 1
 
       - uses: docker/login-action@v3
         with:
@@ -82,8 +170,8 @@ jobs:
         with:
           images: ${{ env.WEB_IMAGE }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=${{ env.RELEASE_VERSION }}
+            type=raw,value=${{ needs.bump-and-tag.outputs.major_minor }}
             type=raw,value=latest
 
       - uses: docker/build-push-action@v6
@@ -101,10 +189,13 @@ jobs:
     environment: pypi
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 1
       - uses: astral-sh/setup-uv@v6
 
-      - name: Set versions from tag
-        run: python scripts/set_release_versions.py "${{ github.ref_name }}"
+      - name: Set versions from release
+        run: python scripts/set_release_versions.py "${{ env.RELEASE_TAG }}"
 
       - name: Build CLI
         working-directory: cli
@@ -130,11 +221,14 @@ jobs:
     environment: pypi
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 1
       - uses: astral-sh/setup-uv@v6
       - run: pip install poetry-core
 
-      - name: Set versions from tag
-        run: python scripts/set_release_versions.py "${{ github.ref_name }}"
+      - name: Set versions from release
+        run: python scripts/set_release_versions.py "${{ env.RELEASE_TAG }}"
 
       - name: Build SDK
         working-directory: sdk/python
@@ -163,9 +257,12 @@ jobs:
         run: yum install -y git
 
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 1
 
-      - name: Set versions from tag
-        run: python3 scripts/set_release_versions.py "${{ github.ref_name }}"
+      - name: Set versions from release
+        run: python3 scripts/set_release_versions.py "${{ env.RELEASE_TAG }}"
 
       - name: Install uv
         run: |
@@ -204,7 +301,6 @@ jobs:
         include:
           - os: macos-latest
             artifact_name: treadstone-darwin-arm64
-          # macos-13 retired Dec 2025; Intel macOS builds use macos-15-intel (x86_64).
           - os: macos-15-intel
             artifact_name: treadstone-darwin-amd64
           - os: windows-latest
@@ -212,10 +308,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 1
       - uses: astral-sh/setup-uv@v6
 
-      - name: Set versions from tag
-        run: python scripts/set_release_versions.py "${{ github.ref_name }}"
+      - name: Set versions from release
+        run: python scripts/set_release_versions.py "${{ env.RELEASE_TAG }}"
 
       - name: Install CLI dependencies + PyInstaller
         working-directory: cli
@@ -252,6 +351,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.RELEASE_TAG }}
           fetch-depth: 0
 
       - name: Download binaries
@@ -273,14 +373,17 @@ jobs:
 
       - name: Generate changelog
         id: changelog
+        env:
+          RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
+          RELEASE_TAG: ${{ env.RELEASE_TAG }}
         run: |
           PREV_TAG=$(git tag --sort=-v:refname | head -2 | tail -1)
-          if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "$GITHUB_REF_NAME" ]; then
+          if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "$RELEASE_TAG" ]; then
             LOG=$(git log --oneline --no-decorate -20)
           else
-            LOG=$(git log --oneline --no-decorate "$PREV_TAG".."$GITHUB_REF_NAME")
+            LOG=$(git log --oneline --no-decorate "$PREV_TAG".."$RELEASE_TAG")
           fi
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="$RELEASE_VERSION"
           {
             echo "body<<CHANGELOG_EOF"
             echo "## What's Changed"
@@ -328,6 +431,7 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
           body: ${{ steps.changelog.outputs.body }}
           generate_release_notes: false
           files: artifacts/*
