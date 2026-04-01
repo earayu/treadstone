@@ -239,8 +239,8 @@ make migrate          # Apply DB migrations
 make migration MSG=x  # New Alembic migration
 make image-api        # Build API image
 make image-web        # Build web image
-make up               # local Kind cluster + deploy
-make down             # Tear down local env
+make local            # local Kind cluster + deploy (see deploy/README.md for kubectl context)
+make destroy-local    # Tear down local env
 ```
 
 Local Kubernetes and smoke tests: **[deploy/README.md](deploy/README.md)**

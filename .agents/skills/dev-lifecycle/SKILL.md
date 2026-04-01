@@ -187,9 +187,10 @@ For **合并代码**, this merge step is mandatory unless the user says otherwis
 Before merging risky work, validate on Kind per `deploy/README.md`:
 
 ```bash
-make up
+kubectl config use-context kind-treadstone
+make local
 make test-e2e
-make down
+make destroy-local
 ```
 
 ---
@@ -211,5 +212,5 @@ Operational steps for agents live in this skill, not in workflow YAML.
 | Commit + push branch | `make ship MSG="fix: ..."` |
 | Bump version (on bump branch) | `make bump V=x.y.z` |
 | Tag release (on `main` after bump merge) | `make release V=x.y.z` |
-| Prod deploy | `make deploy-all ENV=prod` |
+| Prod deploy | `make prod` or `make deploy-all ENV=prod` (set `TREADSTONE_PROD_CONTEXT` and `kubectl` context; see `deploy/README.md`) |
 | Full Makefile | `make help` |

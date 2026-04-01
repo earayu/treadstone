@@ -101,16 +101,22 @@ export function getDefaultDoc(entries: DocsManifestEntry[]): DocsManifestEntry {
   return entry
 }
 
-export function resolveCurrentDoc(entries: DocsManifestEntry[], pageParam: string | null): DocsManifestEntry {
-  return entries.find((entry) => entry.slug === pageParam || entry.aliases.includes(pageParam ?? "")) ?? getDefaultDoc(entries)
+/** `requestedSlug` is the `/docs/:slug` segment (may be a manifest alias). */
+export function resolveCurrentDoc(entries: DocsManifestEntry[], requestedSlug: string | null): DocsManifestEntry {
+  return (
+    entries.find((entry) => entry.slug === requestedSlug || entry.aliases.includes(requestedSlug ?? "")) ??
+    getDefaultDoc(entries)
+  )
 }
 
-export function getCanonicalDocSlug(entries: DocsManifestEntry[], pageParam: string | null): string | null {
-  if (!pageParam) {
+export function getCanonicalDocSlug(entries: DocsManifestEntry[], requestedSlug: string | null): string | null {
+  if (!requestedSlug) {
     return null
   }
 
-  const entry = entries.find((candidate) => candidate.slug === pageParam || candidate.aliases.includes(pageParam))
+  const entry = entries.find(
+    (candidate) => candidate.slug === requestedSlug || candidate.aliases.includes(requestedSlug),
+  )
   return entry?.slug ?? null
 }
 

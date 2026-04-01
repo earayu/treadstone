@@ -13,7 +13,7 @@
 	deploy-storage deploy-infra deploy-runtime deploy-api deploy-web deploy-all \
 	undeploy-storage undeploy-infra undeploy-runtime undeploy-api undeploy-web undeploy-env \
 	restart-api port-forward-api \
-	up down kind-create kind-delete \
+	local prod destroy-local kind-create kind-delete \
 	ship bump release
 
 # ── Development ──────────────────────────────────────────────────────────────
@@ -221,11 +221,17 @@ undeploy-env: undeploy-api undeploy-web undeploy-runtime ## Undeploy namespace-s
 
 # ── Environment Lifecycle ─────────────────────────────────────────────────────
 
-up: ## Bring up full environment: make up / make up ENV=demo
-	@bash scripts/up.sh $(ENV)
+local: ## Local Kind + build + deploy (optional TREADSTONE_PROD_CONTEXT to block prod context)
+	@bash scripts/check-k8s-context.sh local
+	@bash scripts/up.sh local
 
-down: ## Tear down environment: make down / make down ENV=demo
-	@bash scripts/down.sh $(ENV)
+prod: ## Deploy all Helm layers to prod (needs TREADSTONE_PROD_CONTEXT matching current context)
+	@bash scripts/check-k8s-context.sh prod
+	@$(MAKE) deploy-all ENV=prod
+
+destroy-local: ## Tear down local namespace workloads + delete Kind cluster
+	@bash scripts/check-k8s-context.sh local
+	@bash scripts/down.sh local
 
 # ── Kind (local K8s) ─────────────────────────────────────────────────────────
 

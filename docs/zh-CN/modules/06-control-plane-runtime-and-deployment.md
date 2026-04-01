@@ -136,9 +136,9 @@
 
 集群验证入口：
 
-- `make up`
+- `make local`（kubectl 指向 Kind；可选 `TREADSTONE_PROD_CONTEXT` 防止误在生产 context 上执行本地操作，见 `deploy/README.md`）
 - `make test-e2e`
-- `make down`
+- `make destroy-local`
 
 ## 6. 当前边界
 

@@ -493,9 +493,9 @@ export function DocsPage() {
     }
   }, [])
 
-  const pageParam = slugParam ?? null
-  const currentEntry = manifest.length > 0 ? resolveCurrentDoc(manifest, pageParam) : null
-  const canonicalSlug = manifest.length > 0 ? getCanonicalDocSlug(manifest, pageParam) : null
+  const requestedSlug = slugParam ?? null
+  const currentEntry = manifest.length > 0 ? resolveCurrentDoc(manifest, requestedSlug) : null
+  const canonicalSlug = manifest.length > 0 ? getCanonicalDocSlug(manifest, requestedSlug) : null
   const sections = groupDocsBySection(manifest)
   const headings = extractDocHeadings(content)
   const [pageCopied, setPageCopied] = useState(false)
@@ -518,12 +518,12 @@ export function DocsPage() {
   }, [currentEntry?.slug])
 
   useEffect(() => {
-    if (!pageParam || !canonicalSlug || pageParam === canonicalSlug) {
+    if (!requestedSlug || !canonicalSlug || requestedSlug === canonicalSlug) {
       return
     }
 
     navigate(`/docs/${canonicalSlug}`, { replace: true })
-  }, [canonicalSlug, pageParam, navigate])
+  }, [canonicalSlug, requestedSlug, navigate])
 
   /** After markdown renders, scroll to #hash if present (direct links / refresh). */
   useEffect(() => {
