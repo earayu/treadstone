@@ -739,13 +739,14 @@ function WaitlistApplicationsSection({ onLookupEmail }: { onLookupEmail: (email:
   }
 
   const columns = [
-    { label: "NAME / EMAIL", className: "w-[22%]" },
-    { label: "TIER", className: "w-[8%]" },
-    { label: "COMPANY", className: "w-[14%]" },
-    { label: "USE CASE", className: "w-[24%]" },
-    { label: "STATUS", className: "w-[10%]" },
-    { label: "SUBMITTED", className: "w-[12%]" },
-    { label: "ACTIONS", className: "w-[10%]" },
+    { label: "NAME / EMAIL", className: "w-[20%]" },
+    { label: "TIER", className: "w-[7%]" },
+    { label: "COMPANY", className: "w-[12%]" },
+    { label: "LINK", className: "w-[14%]" },
+    { label: "USE CASE", className: "w-[20%]" },
+    { label: "STATUS", className: "w-[9%]" },
+    { label: "SUBMITTED", className: "w-[10%]" },
+    { label: "ACTIONS", className: "w-[8%]" },
   ] as const
 
   return (
@@ -799,13 +800,13 @@ function WaitlistApplicationsSection({ onLookupEmail }: { onLookupEmail: (email:
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={7} className="px-5 py-10 text-center text-sm text-muted-foreground">
+                <td colSpan={8} className="px-5 py-10 text-center text-sm text-muted-foreground">
                   Loading…
                 </td>
               </tr>
             ) : isError ? (
               <tr>
-                <td colSpan={7} className="px-5 py-10 text-center text-sm text-destructive">
+                <td colSpan={8} className="px-5 py-10 text-center text-sm text-destructive">
                   Failed to load waitlist applications.{" "}
                   <button onClick={() => refetch()} className="underline hover:text-destructive/80">
                     Retry
@@ -814,7 +815,7 @@ function WaitlistApplicationsSection({ onLookupEmail }: { onLookupEmail: (email:
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-5 py-10 text-center text-sm text-muted-foreground">
+                <td colSpan={8} className="px-5 py-10 text-center text-sm text-muted-foreground">
                   No applications found.
                 </td>
               </tr>
@@ -844,6 +845,20 @@ function WaitlistApplicationsSection({ onLookupEmail }: { onLookupEmail: (email:
                     </span>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{item.company ?? "—"}</td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    {item.github_or_portfolio_url ? (
+                      <a
+                        href={item.github_or_portfolio_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="line-clamp-2 break-all text-primary underline hover:text-primary/90"
+                      >
+                        {item.github_or_portfolio_url}
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-muted-foreground">
                     <span className="line-clamp-2">{item.use_case ?? "—"}</span>
                   </td>
