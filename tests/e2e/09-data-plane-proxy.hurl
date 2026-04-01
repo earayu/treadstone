@@ -57,14 +57,14 @@ api_key_id: jsonpath "$.id"
 GET {{base_url}}/v1/sandbox-templates
 Authorization: Bearer {{api_key}}
 HTTP 200
-[Captures]
-template_name: jsonpath "$.items[0].name"
+[Asserts]
+jsonpath "$.items" count >= 1
 
 POST {{base_url}}/v1/sandboxes
 Authorization: Bearer {{api_key}}
 Content-Type: application/json
 {
-    "template": "{{template_name}}",
+    "template": "{{sandbox_template}}",
     "name": "e2e-dp-{{unique}}"
 }
 HTTP 202
@@ -131,13 +131,13 @@ HTTP 204
 POST {{base_url}}/v1/sandboxes/{{sandbox_id}}/proxy/v1/shell/exec
 Authorization: Bearer {{api_key}}
 Content-Type: application/json
+[Options]
+retry: 8
+retry-interval: 3s
 {
     "command": "echo e2e-data-plane-ok && pwd",
     "exec_dir": "/tmp"
 }
-[Options]
-retry: 8
-retry-interval: 3s
 HTTP 200
 [Asserts]
 jsonpath "$.success" == true

@@ -64,8 +64,6 @@ api_key_id_a: jsonpath "$.id"
 GET {{base_url}}/v1/sandbox-templates
 Authorization: Bearer {{api_key_a}}
 HTTP 200
-[Captures]
-template_name: jsonpath "$.items[0].name"
 [Asserts]
 jsonpath "$.items" count >= 1
 
@@ -76,7 +74,7 @@ POST {{base_url}}/v1/sandboxes
 Authorization: Bearer {{api_key_a}}
 Content-Type: application/json
 {
-    "template": "{{template_name}}",
+    "template": "{{sandbox_template}}",
     "name": "shared-{{unique}}"
 }
 HTTP 202
@@ -101,13 +99,37 @@ jsonpath "$.enabled" == true
 jsonpath "$.web_url" startsWith "http://sandbox-{{sandbox_id_a}}.sandbox.localhost"
 
 
+# Free tier: max_concurrent_running=1 — stop first sandbox so the duplicate-name request hits 409 (otherwise 429).
+GET {{base_url}}/v1/sandboxes/{{sandbox_id_a}}
+Authorization: Bearer {{api_key_a}}
+[Options]
+retry: 120
+retry-interval: 2s
+HTTP 200
+[Asserts]
+jsonpath "$.status" == "ready"
+
+POST {{base_url}}/v1/sandboxes/{{sandbox_id_a}}/stop
+Authorization: Bearer {{api_key_a}}
+HTTP 200
+
+GET {{base_url}}/v1/sandboxes/{{sandbox_id_a}}
+Authorization: Bearer {{api_key_a}}
+[Options]
+retry: 60
+retry-interval: 2s
+HTTP 200
+[Asserts]
+jsonpath "$.status" == "stopped"
+
+
 # ── Same user cannot reuse the same name ────────────────────────────────────
 
 POST {{base_url}}/v1/sandboxes
 Authorization: Bearer {{api_key_a}}
 Content-Type: application/json
 {
-    "template": "{{template_name}}",
+    "template": "{{sandbox_template}}",
     "name": "shared-{{unique}}"
 }
 HTTP 409
@@ -173,7 +195,7 @@ POST {{base_url}}/v1/sandboxes
 Authorization: Bearer {{api_key_b}}
 Content-Type: application/json
 {
-    "template": "{{template_name}}",
+    "template": "{{sandbox_template}}",
     "name": "shared-{{unique}}"
 }
 HTTP 202
@@ -183,7 +205,7 @@ sandbox_id_b: jsonpath "$.id"
 jsonpath "$.id" isString
 
 
-# ── Deleting User A sandbox revokes the web link immediately ────────────────
+# ── Deleting User A sandbox revokes the web link immediately (row stays DELETING until sync) ─
 
 DELETE {{base_url}}/v1/sandboxes/{{sandbox_id_a}}
 Authorization: Bearer {{api_key_a}}
