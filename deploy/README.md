@@ -47,29 +47,51 @@ For OAuth provider setup, register callback URLs that match `TREADSTONE_APP_BASE
 - local (Kind + Ingress): `http://app.localhost/v1/auth/google/callback` and `http://app.localhost/v1/auth/github/callback`
 - demo/prod: `https://app-demo.treadstone-ai.dev/...` / `https://app.treadstone-ai.dev/...` (see `.env.example` comments)
 
-## One-Command Deployment (Recommended)
+## kubectl context
 
-### Local Environment
+Helm and `kubectl` use **whatever context is currently selected** in your kubeconfig.
 
-`make up` automatically handles: creating the Kind cluster → installing ingress-nginx → building the API and web images → loading them into the cluster → deploying all Helm charts.
+Set **`TREADSTONE_PROD_CONTEXT`** to the **kubeconfig context name of your production cluster** (the string shown by `kubectl config get-contexts` for prod — not a generic “current context” placeholder).
 
-```bash
-make up              # Equivalent to make up ENV=local
-```
+| Command | Role of `TREADSTONE_PROD_CONTEXT` |
+|---------|-------------------------------------|
+| **`make prod`** | **Required.** Refused unless `kubectl config current-context` **equals** `TREADSTONE_PROD_CONTEXT`, so you only deploy to prod when explicitly pointed at prod. |
+| **`make local`** / **`make destroy-local`** | **Optional.** If set, these commands are **refused** when the current context **equals** `TREADSTONE_PROD_CONTEXT` (avoids Kind / local teardown while kubectl still points at production). If unset, this guard is skipped — better for contributors who do not know your prod context name. |
 
-### Demo / Prod Environments
+[`scripts/check-k8s-context.sh`](../scripts/check-k8s-context.sh) implements the above; it does **not** change your context automatically.
 
-```bash
-make up ENV=demo CLUSTER_PROFILE=ack     # Requires an existing, accessible K8s cluster
-make up ENV=prod CLUSTER_PROFILE=ack
-```
-
-### One-Command Teardown
+For local Kind, switch to your Kind context manually (typically `kind-treadstone` when the cluster name is `treadstone`):
 
 ```bash
-make down            # Also deletes the Kind cluster in local environment
-make down ENV=demo
+kubectl config use-context kind-treadstone
+make local
 ```
+
+### Production
+
+```bash
+export TREADSTONE_PROD_CONTEXT=<your-prod-context-name>
+kubectl config use-context "$TREADSTONE_PROD_CONTEXT"
+make prod    # runs deploy-all ENV=prod (default CLUSTER_PROFILE=ack)
+```
+
+### Demo or other remote environments
+
+Use `deploy-all` (or individual `deploy-*` targets) with the right `ENV` and `CLUSTER_PROFILE` after switching `kubectl` to the intended cluster:
+
+```bash
+kubectl config use-context <your-demo-context>
+make deploy-all ENV=demo CLUSTER_PROFILE=ack
+```
+
+### Local teardown
+
+```bash
+# Optional: export TREADSTONE_PROD_CONTEXT so destroy-local is refused while on prod
+make destroy-local    # undeploy-env for local + delete Kind cluster
+```
+
+There is **no** `make` target to destroy prod or remote namespaces; use explicit `helm`/`kubectl` if you need that.
 
 ## Step-by-Step Deployment
 
@@ -263,7 +285,7 @@ make image-web
 kind load docker-image treadstone-web:latest --name treadstone
 make restart-api
 
-# Or run make up to redo the full flow
+# Or run make local to redo the full flow (use Kind context; see kubectl section above)
 ```
 
 ### Uninstall
@@ -271,7 +293,7 @@ make restart-api
 ```bash
 make undeploy-api                  # Uninstall API only
 make undeploy-env                  # Uninstall API + web + runtime (keep shared infra + storage)
-make down                          # Tear down everything (including Kind cluster in local)
+make destroy-local                 # Tear down local env (including Kind cluster)
 ```
 
 ### Delete Kind Cluster
@@ -335,6 +357,7 @@ make restart-api       # Rolling restart for the API
 make port-forward-api  # Forward the API to localhost:8000
 make undeploy-env      # Uninstall namespace-scoped layers
 make test-e2e          # Run E2E tests against deployed service
-make up                # One-command deploy (includes cluster creation for local)
-make down              # One-command teardown
+make local             # Local Kind + images + deploy (optional TREADSTONE_PROD_CONTEXT guard)
+make prod              # deploy-all ENV=prod (needs TREADSTONE_PROD_CONTEXT = current context)
+make destroy-local     # Local teardown + Kind delete (optional TREADSTONE_PROD_CONTEXT guard)
 ```

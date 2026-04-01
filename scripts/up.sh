@@ -26,6 +26,14 @@ if [ "$ENV" = "local" ]; then
 fi
 
 echo ""
+echo "Verifying kubectl context ..."
+if [ "$ENV" = "prod" ]; then
+	bash "$SCRIPT_DIR/check-k8s-context.sh" prod
+else
+	bash "$SCRIPT_DIR/check-k8s-context.sh" local
+fi
+
+echo ""
 echo "Deploying Helm charts (ENV=$ENV) ..."
 if [ -n "$CLUSTER_PROFILE" ]; then
     make deploy-all ENV="$ENV" CLUSTER_PROFILE="$CLUSTER_PROFILE"

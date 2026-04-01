@@ -56,7 +56,7 @@ TREADSTONE_JWT_SECRET=CHANGE_ME
 
 The URL scheme must be `postgresql+asyncpg://` (not `postgresql://`). Keep `?sslmode=require`.
 
-For local Kubernetes deployment (`make up`), also prepare:
+For local Kubernetes deployment (`make local`), also prepare:
 
 ```bash
 cp .env.example .env.local
@@ -101,7 +101,8 @@ For sandbox-related features that require a real Kubernetes cluster, follow `dep
 Quick start:
 
 ```bash
-make up   # One-command: Kind cluster + build + deploy
+kubectl config use-context kind-treadstone   # or your Kind context name
+make local   # One-command: Kind cluster + build + deploy
 curl -sf http://api.localhost/health   # API via Ingress (Web UI: http://app.localhost)
 make test-e2e                          # default BASE_URL=http://api.localhost
 ```
@@ -125,7 +126,8 @@ Pure API development (`make dev-api`) does not require a K8s cluster.
 - Confirm `.env` exists in the project root
 - URL-encode special characters in the password
 
-**`make up` fails before app startup:**
+**`make local` fails before app startup:**
 - Confirm `.env.local` exists
 - Confirm `TREADSTONE_JWT_SECRET` is set
 - Confirm `TREADSTONE_LEADER_ELECTION_ENABLED=true` for the K8s environment
+- Optional: set `TREADSTONE_PROD_CONTEXT` to your prod context name so `make local` / `destroy-local` are refused while kubectl points at prod (see `deploy/README.md`)

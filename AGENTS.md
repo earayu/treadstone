@@ -120,7 +120,7 @@ Rules:
   - `tests/e2e/**/*.hurl` — E2E tests against a deployed cluster, written in [Hurl](https://hurl.dev) (run with `make test-e2e`; see `tests/e2e/README.md`)
 - Shared fixtures live in `tests/conftest.py`.
 - `make test` excludes integration tests via pytest config; use `make test-integration` or `make test-all` when real DB coverage is needed.
-- After `make up`, run `make test-e2e` to validate the deployment. Prefer this over manual curl exploration.
+- After `make local` (Kind cluster + deploy; see `deploy/README.md` for `kubectl` context and optional `TREADSTONE_PROD_CONTEXT`), run `make test-e2e` to validate the deployment. Prefer this over manual curl exploration.
 
 ## OpenAPI / SDK Generation
 
@@ -178,7 +178,7 @@ Run `make help` for the full list. Key commands:
 | `make gen-openapi` | Export `openapi.json` + `openapi-public.json` from the FastAPI app |
 | `make gen-web-types` | Generate `web/src/api/schema.d.ts` from full `openapi.json` |
 | `make gen-sdk-python` | Generate `sdk/python` from `openapi-public.json` (admin and audit excluded) |
-| `make up` / `make down` | Full K8s environment up/down (see `deploy/README.md`) |
+| `make local` / `make destroy-local` / `make prod` | Local Kind up/down and prod deploy (`TREADSTONE_PROD_CONTEXT` for `make prod`; see `deploy/README.md`) |
 | `make ship MSG=x` | git add + commit + push (feature branches only) |
 | `make bump V=x.y.z` | Bump version files, commit + push (feature branches only) |
 | `make release V=x.y.z` | Tag `vx.y.z` on `main` and push tag (triggers full release pipeline) |

@@ -1,11 +1,12 @@
 # End-to-end tests (Hurl)
 
-E2E runs against a **deployed** Treadstone API (default Kind: `http://api.localhost`). See [deploy/README.md](../../deploy/README.md) for `make up` and networking.
+E2E runs against a **deployed** Treadstone API (default Kind: `http://api.localhost`). See [deploy/README.md](../../deploy/README.md) for `make local`, kubectl context, and networking.
 
 ## How to run
 
 ```bash
-make up                    # Kind + Helm (needs .env.local + Neon)
+kubectl config use-context kind-treadstone
+make local                 # Kind + Helm (needs .env.local + Neon)
 make test-e2e              # all scenarios
 make test-e2e FILE=09-data-plane-proxy.hurl
 make test-e2e BASE_URL=http://localhost:8000   # port-forward instead of Ingress
