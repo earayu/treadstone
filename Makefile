@@ -14,6 +14,7 @@
 	undeploy-storage undeploy-infra undeploy-runtime undeploy-api undeploy-web undeploy-env \
 	restart-api port-forward-api \
 	local prod destroy-local kind-create kind-delete \
+	wait-k8s smoke-web \
 	ship bump release
 
 # ── Development ──────────────────────────────────────────────────────────────
@@ -158,6 +159,9 @@ RT_RELEASE      := sandbox-runtime-$(ENV)
 STORAGE_NS      := cluster-storage-system
 STORAGE_RELEASE := cluster-storage-$(CLUSTER_PROFILE)
 
+# Optional extra Helm values for sandbox-runtime (e.g. CI: override `image:` for GitHub-hosted runners).
+RT_VALUES_EXTRA ?=
+
 deploy-storage: ## Deploy cluster-scoped StorageClass aliases for persistent sandboxes
 	helm upgrade --install $(STORAGE_RELEASE) deploy/cluster-storage \
 		-n $(STORAGE_NS) -f deploy/cluster-storage/values-$(CLUSTER_PROFILE).yaml \
@@ -171,6 +175,7 @@ deploy-infra: ## Deploy agent-sandbox controller (once per cluster)
 deploy-runtime: ## Deploy sandbox templates + warmpool
 	helm upgrade --install $(RT_RELEASE) deploy/sandbox-runtime \
 		-n $(NS) -f deploy/sandbox-runtime/values-$(ENV).yaml \
+		$(if $(RT_VALUES_EXTRA),-f $(RT_VALUES_EXTRA),) \
 		--create-namespace
 
 deploy-api: ## Deploy Treadstone API service (creates K8s secret from .env.<ENV>)
@@ -233,6 +238,12 @@ prod: ## Deploy all Helm layers to prod (needs TREADSTONE_PROD_CONTEXT matching 
 destroy-local: ## Tear down local namespace workloads + delete Kind cluster
 	@bash scripts/check-k8s-context.sh local
 	@bash scripts/down.sh local
+
+wait-k8s: ## Wait for ingress, agent-sandbox, API/Web rollouts (ENV=local)
+	@bash scripts/wait-k8s.sh $(ENV)
+
+smoke-web: ## Curl smoke tests for app.localhost and api.localhost via Ingress (Kind)
+	@bash scripts/smoke-web.sh
 
 # ── Kind (local K8s) ─────────────────────────────────────────────────────────
 
