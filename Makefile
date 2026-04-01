@@ -10,7 +10,7 @@
 	build-web \
 	image-api image-web \
 	clean clean-py clean-web \
-	deploy-storage deploy-infra deploy-runtime deploy-api deploy-web deploy-all \
+	deploy-storage deploy-infra ensure-agent-crds deploy-runtime deploy-api deploy-web deploy-all \
 	undeploy-storage undeploy-infra undeploy-runtime undeploy-api undeploy-web undeploy-env \
 	restart-api port-forward-api \
 	local prod destroy-local kind-create kind-delete \
@@ -172,7 +172,13 @@ deploy-infra: ## Deploy agent-sandbox controller (once per cluster)
 		-f deploy/agent-sandbox/values-$(ENV).yaml \
 		--create-namespace
 
-deploy-runtime: ## Deploy sandbox templates + warmpool
+# sandbox-runtime installs SandboxTemplate CRs; Helm must see the CRD (Established) first.
+# Explicit apply avoids races where the agent-sandbox chart applies CRDs late or not at all.
+ensure-agent-crds: ## Apply agent-sandbox extension CRDs and wait until Established
+	kubectl apply -f deploy/agent-sandbox/upstream/extensions.yaml
+	kubectl wait --for=condition=Established crd/sandboxtemplates.extensions.agents.x-k8s.io --timeout=120s
+
+deploy-runtime: ensure-agent-crds ## Deploy sandbox templates + warmpool
 	helm upgrade --install $(RT_RELEASE) deploy/sandbox-runtime \
 		-n $(NS) -f deploy/sandbox-runtime/values-$(ENV).yaml \
 		$(if $(RT_VALUES_EXTRA),-f $(RT_VALUES_EXTRA),) \
