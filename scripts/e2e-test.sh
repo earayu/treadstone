@@ -124,7 +124,12 @@ if [ -n "$TARGET_FILE" ]; then
         printf "ERROR: E2E file not found: %s/%s\n" "$E2E_DIR" "$TARGET_FILE" >&2
         exit 1
     fi
+    _jobs=()
+    if [ -n "${HURL_JOBS:-}" ]; then
+        _jobs=(--jobs "$HURL_JOBS")
+    fi
     hurl --test --variables-file "$VARS_FILE" \
+        "${_jobs[@]}" \
         --report-html "$REPORT_DIR" \
         "$E2E_DIR/$TARGET_FILE"
 else
@@ -136,7 +141,13 @@ else
         printf "ERROR: no .hurl files under %s\n" "$E2E_DIR" >&2
         exit 1
     fi
+    # Optional: set HURL_JOBS=1 in CI to reduce parallel sandbox creation flakiness.
+    _jobs=()
+    if [ -n "${HURL_JOBS:-}" ]; then
+        _jobs=(--jobs "$HURL_JOBS")
+    fi
     hurl --test --variables-file "$VARS_FILE" \
+        "${_jobs[@]}" \
         --report-html "$REPORT_DIR" \
         "${hurl_files[@]}"
 fi

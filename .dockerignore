@@ -1,0 +1,23 @@
+# Keep secrets and local env files out of `docker build` context (sent to the daemon).
+.env
+.env.*
+!.env.example
+
+# VCS / IDE
+.git
+.github
+.cursor
+
+# Dependencies and caches (not needed for API image build context)
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/node_modules
+web/dist
+.pytest_cache
+htmlcov
+
+# Generated / local artifacts
+reports
+openapi.json
+openapi-public.json

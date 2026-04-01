@@ -1,0 +1,192 @@
+# Kind + `make local` + Hurl E2E (same path as developer machines).
+# Requires Neon secrets/vars for a disposable DB branch.
+
+name: K8s E2E
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "treadstone/**"
+      - "deploy/**"
+      - "scripts/**"
+      - "tests/e2e/**"
+      - "web/**"
+      - "alembic/**"
+      - "Makefile"
+      - "Dockerfile"
+      - "web/Dockerfile"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/k8s-e2e.yml"
+  workflow_dispatch:
+    inputs:
+      file:
+        description: "Optional single Hurl file (e.g. 01-auth-flow.hurl)"
+        required: false
+        type: string
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+
+concurrency:
+  group: k8s-e2e-${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  KIND_VERSION: v0.24.0
+  KUBECTL_VERSION: v1.31.0
+  HELM_VERSION: v3.16.2
+  HURL_VERSION: 5.0.1
+
+jobs:
+  skip-fork:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "::notice::Skipped K8s E2E on fork PR (secrets not available)."
+
+  k8s-e2e:
+    if: |
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+
+    steps:
+      - name: Resolve checkout ref
+        id: git_ref
+        run: |
+          case "${{ github.event_name }}" in
+            workflow_run) echo "ref=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT" ;;
+            pull_request) echo "ref=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT" ;;
+            *) echo "ref=${{ github.sha }}" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.git_ref.outputs.ref }}
+
+      - name: Install kubectl
+        run: |
+          curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" -o /tmp/kubectl
+          sudo install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
+          kubectl version --client
+
+      - name: Install kind
+        run: |
+          curl -fsSL "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64" -o /tmp/kind
+          sudo install -m 0755 /tmp/kind /usr/local/bin/kind
+          kind version
+
+      - name: Install Helm
+        run: |
+          curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" | tar xz
+          sudo install -m 0755 linux-amd64/helm /usr/local/bin/helm
+          helm version
+
+      - name: Install hurl
+        run: |
+          curl -fsSL -o /tmp/hurl.deb \
+            "https://github.com/Orange-OpenSource/hurl/releases/download/${HURL_VERSION}/hurl_${HURL_VERSION}_amd64.deb"
+          sudo dpkg -i /tmp/hurl.deb
+          hurl --version
+
+      - name: Compute Neon branch expiry (RFC3339)
+        id: neon_expiry
+        run: echo "expires_at=$(date -u -d '+24 hours' +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Create Neon branch
+        id: neon
+        uses: neondatabase/create-branch-action@v6
+        with:
+          api_key: ${{ secrets.NEON_API_KEY }}
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch_name: gha-${{ github.run_id }}-${{ github.run_attempt }}
+          parent_branch: ${{ vars.NEON_CI_PARENT_BRANCH || 'ci-base' }}
+          database: ${{ vars.NEON_CI_DATABASE || 'ci_empty' }}
+          role: neondb_owner
+          suspend_timeout: 300
+          expires_at: ${{ steps.neon_expiry.outputs.expires_at }}
+
+      - name: Write .env.local
+        run: |
+          set -euo pipefail
+          umask 077
+          DB_URL="${{ steps.neon.outputs.db_url }}"
+          case "$DB_URL" in
+            postgresql+asyncpg://*) ;;
+            postgresql://*) DB_URL="postgresql+asyncpg://${DB_URL#postgresql://}" ;;
+            postgres://*) DB_URL="postgresql+asyncpg://${DB_URL#postgres://}" ;;
+            *) echo "Unexpected DB URL scheme" >&2; exit 1 ;;
+          esac
+          JWT="$(openssl rand -hex 32)"
+          cat > .env.local <<EOF
+          TREADSTONE_DATABASE_URL=${DB_URL}
+          TREADSTONE_APP_NAME=treadstone
+          TREADSTONE_DEBUG=false
+          TREADSTONE_APP_BASE_URL=http://app.localhost
+          TREADSTONE_AUTH_TYPE=cookie
+          TREADSTONE_JWT_SECRET=${JWT}
+          TREADSTONE_CORS_ALLOWED_ORIGINS=["http://localhost:5173","http://app.localhost"]
+          TREADSTONE_EMAIL_BACKEND=memory
+          TREADSTONE_METERING_ENFORCEMENT_ENABLED=true
+          TREADSTONE_LEADER_ELECTION_ENABLED=true
+          TREADSTONE_SANDBOX_DOMAIN=sandbox.localhost
+          TREADSTONE_SANDBOX_NAMESPACE=treadstone-local
+          TREADSTONE_SANDBOX_STORAGE_CLASS=treadstone-workspace
+          EOF
+          sed -i 's/^[[:space:]]*//' .env.local
+
+      - name: Sandbox runtime image override (GitHub-hosted runners)
+        run: |
+          cat > /tmp/ci-sandbox-runtime-image.yaml <<'EOF'
+          image: ghcr.io/agent-infra/sandbox:latest
+          EOF
+
+      - name: make local
+        env:
+          RT_VALUES_EXTRA: /tmp/ci-sandbox-runtime-image.yaml
+        run: make local
+
+      - name: make wait-k8s
+        run: make wait-k8s ENV=local
+
+      - name: make smoke-web
+        run: make smoke-web
+
+      - name: make test-e2e
+        env:
+          HURL_JOBS: "1"
+          E2E_FILE: ${{ github.event.inputs.file || '' }}
+        run: |
+          if [ -n "${E2E_FILE:-}" ]; then
+            make test-e2e FILE="${E2E_FILE}"
+          else
+            make test-e2e
+          fi
+
+      - name: Upload E2E HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report-${{ github.run_id }}
+          path: reports/e2e/
+          if-no-files-found: ignore
+
+      - name: Collect diagnostics
+        if: failure()
+        run: |
+          kubectl get all -A || true
+          kubectl get sandboxclaims,sandboxes,sandboxwarmpools,sandboxtemplates,pvc -A 2>/dev/null || true
+          kubectl get events -A --sort-by=.lastTimestamp 2>/dev/null | tail -n 80 || true
+
+      - name: Cleanup Kind cluster
+        if: always()
+        run: |
+          make destroy-local || true
+          rm -f .env.local
