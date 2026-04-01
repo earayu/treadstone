@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+env:
+  # Use Node 24 for JavaScript actions (e.g. actions/checkout); Node 20 runner default is deprecated.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   update-prod-image:
     if: github.event.workflow_run.conclusion == 'success'

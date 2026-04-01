@@ -39,6 +39,7 @@ env:
   KUBECTL_VERSION: v1.31.0
   HELM_VERSION: v3.16.2
   HURL_VERSION: 5.0.1
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   skip-fork:

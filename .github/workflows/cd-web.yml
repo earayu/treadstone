@@ -19,6 +19,7 @@ on:
 env:
   REGISTRY: ghcr.io
   WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/treadstone-web
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 permissions:
   contents: read
