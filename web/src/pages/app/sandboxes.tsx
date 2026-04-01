@@ -158,7 +158,7 @@ function DeleteConfirmDialog({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={confirmName}
-            className="mt-4 w-full border border-border/30 bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-destructive"
+            className="mt-4 w-full border border-border/30 bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-red-900/60"
           />
           <div className="mt-4 flex justify-end gap-2">
             <Dialog.Close className="border border-border/40 bg-secondary px-4 py-2 text-sm font-semibold text-secondary-foreground transition-colors hover:bg-secondary/80">
@@ -168,7 +168,7 @@ function DeleteConfirmDialog({
               type="button"
               onClick={() => void handleDelete()}
               disabled={input !== confirmName || deleteSandbox.isPending}
-              className="bg-destructive px-4 py-2 text-sm font-bold text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:opacity-40"
+              className="border border-red-950/80 bg-red-950/90 px-4 py-2 text-sm font-bold text-red-200/95 transition-colors hover:border-red-900/70 hover:bg-red-900/85 disabled:opacity-40"
             >
               {isCreating ? "Cancel provisioning" : "Delete"}
             </button>
