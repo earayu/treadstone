@@ -268,6 +268,9 @@ class TestDualPathProvisioning:
         k8s.create_sandbox.assert_called_once()
         k8s.create_sandbox_claim.assert_not_called()
         call_kwargs = k8s.create_sandbox.call_args.kwargs
+        assert call_kwargs["pod_labels"]["treadstone-ai.dev/workload"] == "sandbox"
+        assert call_kwargs["pod_labels"]["treadstone-ai.dev/provision-mode"] == "direct"
+        assert call_kwargs["pod_labels"]["treadstone-ai.dev/sandbox-id"] == result.id
         assert call_kwargs["volume_claim_templates"] is not None
         assert call_kwargs["volume_claim_templates"][0]["spec"]["storageClassName"] == "treadstone-workspace"
         assert call_kwargs["volume_claim_templates"][0]["spec"]["resources"]["requests"]["storage"] == "20Gi"

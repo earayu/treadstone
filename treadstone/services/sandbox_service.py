@@ -38,6 +38,10 @@ from treadstone.services.k8s_client import (
     LABEL_PROVISION_MODE,
     LABEL_SANDBOX_ID,
     LABEL_TEMPLATE,
+    LABEL_WORKLOAD,
+    PROVISION_MODE_CLAIM,
+    PROVISION_MODE_DIRECT,
+    WORKLOAD_SANDBOX,
     K8sClientProtocol,
     get_k8s_client,
 )
@@ -271,7 +275,7 @@ class SandboxService:
             LABEL_SANDBOX_ID: sandbox.id,
             LABEL_OWNER_ID: sandbox.owner_id,
             LABEL_TEMPLATE: template,
-            LABEL_PROVISION_MODE: "claim",
+            LABEL_PROVISION_MODE: PROVISION_MODE_CLAIM,
         }
         annotations = {
             ANNOTATION_SANDBOX_NAME: sandbox.name,
@@ -324,7 +328,7 @@ class SandboxService:
             LABEL_SANDBOX_ID: sandbox.id,
             LABEL_OWNER_ID: sandbox.owner_id,
             LABEL_TEMPLATE: template,
-            LABEL_PROVISION_MODE: "direct",
+            LABEL_PROVISION_MODE: PROVISION_MODE_DIRECT,
         }
         annotations = {
             ANNOTATION_SANDBOX_NAME: sandbox.name,
@@ -333,6 +337,8 @@ class SandboxService:
         pod_labels = {
             LABEL_SANDBOX_ID: sandbox.id,
             LABEL_OWNER_ID: sandbox.owner_id,
+            LABEL_WORKLOAD: WORKLOAD_SANDBOX,
+            LABEL_PROVISION_MODE: PROVISION_MODE_DIRECT,
         }
         logger.info(
             "Creating Sandbox CR %s (template=%s, persist=true, ns=%s)", k8s_name, template, sandbox.k8s_namespace

@@ -1,6 +1,9 @@
 image: ghcr.io/agent-infra/sandbox:latest
 containerPort: 8080
 
+sandboxPodSelectorLabels:
+  treadstone-ai.dev/workload: "sandbox"
+
 sandboxTemplates:
   - name: aio-sandbox-tiny
     displayName: "AIO Sandbox Tiny"
@@ -42,18 +45,24 @@ sandboxTemplates:
     warmPool: { enabled: false, replicas: 1 }
     allowedStorageSizes: ["5Gi", "10Gi", "20Gi"]
 
-# ACS overflow scheduling. When enabled:
-#   - A ResourcePolicy CR is deployed so pods prefer ECS and overflow to ACS.
-#   - SandboxTemplates get tolerations + ACS compute-class labels so pods can
-#     actually land on ACK virtual nodes.
-# Set enabled: true in values-prod.yaml (or any environment that has ACS virtual nodes).
-acsScheduling:
+# ACS overflow scheduling. ResourcePolicy owns ACS-specific labels, annotations,
+# and virtual-node tolerations; SandboxTemplates keep only stable workload labels.
+claimAcsScheduling:
   enabled: false
-  podTolerations:
-    - key: "virtual-kubelet.io/provider"
-      operator: "Equal"
-      value: "alibabacloud"
-      effect: "NoSchedule"
-  podLabels:
-    alibabacloud.com/compute-class: "general-purpose"
-    alibabacloud.com/compute-qos: "default"
+  units:
+    - resource: ecs
+    - resource: acs
+      podLabels:
+        alibabacloud.com/compute-class: "general-purpose"
+        alibabacloud.com/compute-qos: "default"
+
+# Direct sandboxes use PVCs and stay ECS-only until the virtual-node PVC
+# prerequisite is enabled in the cluster.
+directAcsScheduling:
+  enabled: false
+  units:
+    - resource: ecs
+    - resource: acs
+      podLabels:
+        alibabacloud.com/compute-class: "general-purpose"
+        alibabacloud.com/compute-qos: "default"
