@@ -148,10 +148,24 @@ jobs:
           image: ghcr.io/agent-infra/sandbox:latest
           EOF
 
-      - name: make local
+      # Mirrors scripts/up.sh local + make deploy-all, but applies extension CRDs and waits for
+      # Established before sandbox-runtime (Helm otherwise errors: SandboxTemplate kind unknown).
+      - name: Kind cluster, images, deploy
         env:
           RT_VALUES_EXTRA: /tmp/ci-sandbox-runtime-image.yaml
-        run: make local
+        run: |
+          set -euo pipefail
+          bash scripts/check-k8s-context.sh local
+          bash scripts/kind-setup.sh
+          make image-api
+          kind load docker-image treadstone:latest --name treadstone
+          make image-web
+          kind load docker-image treadstone-web:latest --name treadstone
+          bash scripts/check-k8s-context.sh local
+          make deploy-storage deploy-infra ENV=local
+          kubectl apply -f deploy/agent-sandbox/upstream/extensions.yaml
+          kubectl wait --for=condition=Established crd/sandboxtemplates.extensions.agents.x-k8s.io --timeout=120s
+          make deploy-runtime deploy-api deploy-web ENV=local
 
       - name: make wait-k8s
         run: make wait-k8s ENV=local
