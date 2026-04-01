@@ -17,6 +17,11 @@ fi
 
 current="$(kubectl config current-context 2>/dev/null || true)"
 if [[ -z "$current" ]]; then
+	# Fresh machine / CI: kubeconfig exists but no context until kind-setup runs (see scripts/up.sh).
+	if [[ "$mode" == "local" ]]; then
+		echo "OK: no kubectl context yet; kind-setup will create kind-treadstone."
+		exit 0
+	fi
 	echo "ERROR: kubectl has no current context."
 	exit 1
 fi
