@@ -13,7 +13,7 @@ Follow **[`.agents/skills/dev-lifecycle/SKILL.md`](../../.agents/skills/dev-life
 
 - Branching, `make ship`, PR creation, CI, merge
 - `make bump` → PR → merge → `make release` on `main`, and waiting for the **Release** workflow
-- **发生产**: wait for **Update Prod Image**, then `git pull` on `main`, then `make deploy-all ENV=prod`
+- **发生产**: wait for **Update Prod Image**, then `git pull` on `main`, then `make prod`
 - The agreed codewords **合并代码**, **发版本**, **发生产**
 
 Use **`AGENTS.md`** only for repo-wide guardrails (English on GitHub, no bare `HTTPException`, etc.) — not for a duplicate release checklist.

@@ -1,6 +1,6 @@
 ---
 name: dev-lifecycle
-description: Treadstone development lifecycle — feature branches, TDD, ship, PR, CI, merge, version bump, tagged release, and optional production deploy. Use for any shippable code change, GitHub flow, or release. Includes agreed “codeword” paths (合并代码 / 发版本 / 发生产). Source of truth for agents executing ship, bump, release, merge, or deploy-all.
+description: Treadstone development lifecycle — feature branches, TDD, ship, PR, CI, merge, version bump, tagged release, and optional production deploy. Use for any shippable code change, GitHub flow, or release. Includes agreed “codeword” paths (合并代码 / 发版本 / 发生产). Source of truth for agents executing ship, bump, release, merge, make local / make prod.
 ---
 
 # Development Lifecycle
@@ -60,13 +60,13 @@ Do not hand-craft `git tag`, `git push origin v…`, or `gh release create` unle
 
 1. Wait for the **Update Prod Image** workflow to finish successfully after that Release. It runs when the Release workflow completes ([`.github/workflows/update-prod-image.yml`](../../../.github/workflows/update-prod-image.yml)) and commits the new image tag to `deploy/treadstone/values-prod.yaml` on `main`.
 2. On your machine, sync `main`: `git checkout main && git pull` so you have the committed prod image tag and any other changes.
-3. Deploy production. The Makefile matches `deploy/*/values-<env>.yaml`; use **`ENV=prod`** (lowercase) so it resolves to `values-prod.yaml`. If the owner says **`ENV=PROD`**, treat it as the same intent and run `make deploy-all ENV=prod`.
+3. Deploy production with **`make prod`**. It runs a `kubectl` context check (`TREADSTONE_PROD_CONTEXT`) and then deploys all Helm layers for `ENV=prod` (`values-prod.yaml`). If the owner says **`ENV=PROD`**, treat it as the same intent as `make prod`.
 
    ```bash
-   make deploy-all ENV=prod
+   make prod
    ```
 
-Do not run `make deploy-all` until **Update Prod Image** has succeeded (otherwise the cluster may not track the intended image tag on `main`).
+Do not run `make prod` until **Update Prod Image** has succeeded (otherwise the cluster may not track the intended image tag on `main`).
 
 ---
 
@@ -212,5 +212,5 @@ Operational steps for agents live in this skill, not in workflow YAML.
 | Commit + push branch | `make ship MSG="fix: ..."` |
 | Bump version (on bump branch) | `make bump V=x.y.z` |
 | Tag release (on `main` after bump merge) | `make release V=x.y.z` |
-| Prod deploy | `make prod` or `make deploy-all ENV=prod` (set `TREADSTONE_PROD_CONTEXT` and `kubectl` context; see `deploy/README.md`) |
+| Prod deploy | `make prod` (set `TREADSTONE_PROD_CONTEXT` and `kubectl` context; see `deploy/README.md`) |
 | Full Makefile | `make help` |

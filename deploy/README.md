@@ -26,6 +26,21 @@ The API/web/runtime layers use the `ENV` variable (`local`, `demo`, `prod`). Clu
 - Hurl installed (`brew install hurl`) — for E2E tests
 - Neon database connection string ready
 
+## Primary workflow (recommended)
+
+Use these Makefile targets so [`scripts/check-k8s-context.sh`](../scripts/check-k8s-context.sh) runs **before** any Helm install:
+
+| Goal | Command |
+|------|---------|
+| Local Kind: cluster + images + full stack | `make local` |
+| Tear down local Kind | `make destroy-local` |
+| Production | `make prod` (requires `TREADSTONE_PROD_CONTEXT` and matching `kubectl` context) |
+
+**Do not** run `helm upgrade` or `make deploy-*` / `make deploy-all` directly for routine local or prod work—wrong `kubectl` contexts can deploy to the wrong cluster. Those lower-level targets exist for [advanced incremental deploys](#advanced-incremental-layer-deployment) or automation.
+
+- `make prod` runs the prod context check, then `deploy-all ENV=prod` (default `CLUSTER_PROFILE=ack`).
+- `make local` runs `scripts/up.sh local`, which builds/loads images and runs `deploy-all ENV=local CLUSTER_PROFILE=local`.
+
 ## Environment Configuration Files
 
 Before deploying, prepare a `.env.{ENV}` file (e.g. `.env.local`). Refer to `.env.example` for the format:
@@ -72,17 +87,12 @@ make local
 ```bash
 export TREADSTONE_PROD_CONTEXT=<your-prod-context-name>
 kubectl config use-context "$TREADSTONE_PROD_CONTEXT"
-make prod    # runs deploy-all ENV=prod (default CLUSTER_PROFILE=ack)
+make prod
 ```
 
 ### Demo or other remote environments
 
-Use `deploy-all` (or individual `deploy-*` targets) with the right `ENV` and `CLUSTER_PROFILE` after switching `kubectl` to the intended cluster:
-
-```bash
-kubectl config use-context <your-demo-context>
-make deploy-all ENV=demo CLUSTER_PROFILE=ack
-```
+There is no `make demo` wrapper. After **explicitly** switching `kubectl` to the intended cluster, use the [advanced layer targets](#advanced-incremental-layer-deployment) with the right `ENV` and `CLUSTER_PROFILE` (e.g. `make deploy-all ENV=demo CLUSTER_PROFILE=ack`). Double-check `kubectl config current-context` first—there is no automatic guard like `make prod`.
 
 ### Local teardown
 
@@ -95,7 +105,11 @@ There is **no** `make` target to destroy prod or remote namespaces; use explicit
 
 ## Step-by-Step Deployment
 
-For more granular control, you can deploy layer by layer.
+### What `make local` does
+
+`make local` performs the steps below (Kind, images, `deploy-all`) with the local context guard. Prefer it over running `deploy-all` by hand.
+
+For more granular control, you can deploy layer by layer—see [Advanced: incremental layer deployment](#advanced-incremental-layer-deployment).
 
 ### 1. Create Kind Cluster (local only)
 
@@ -114,13 +128,15 @@ make image-web
 kind load docker-image treadstone-web:latest --name treadstone
 ```
 
-### 3. Deploy All Helm Charts
+### 3. Deploy all charts (local)
+
+Use **`make local`** so images and `deploy-all` run together with the correct context check. If you must invoke Helm manually (e.g. debugging), the equivalent is:
 
 ```bash
 make deploy-all ENV=local CLUSTER_PROFILE=local
 ```
 
-This is equivalent to running in sequence:
+That runs, in sequence:
 
 ```bash
 make deploy-storage CLUSTER_PROFILE=local  # StorageClass aliases (cluster-scoped)
@@ -144,6 +160,15 @@ Persistent sandboxes use `TREADSTONE_SANDBOX_STORAGE_CLASS` from the environment
 kubectl get pods -n treadstone-local
 kubectl -n treadstone-local rollout status deploy/treadstone-local-treadstone --timeout=60s
 ```
+
+## Advanced: incremental layer deployment
+
+Use `make deploy-*` / `make deploy-all` only when you need a **partial** upgrade (for example `deploy-api` only) or to deploy environments **without** `make local` / `make prod` (for example **demo**). There is no context guard—**verify `kubectl config current-context`** before every command.
+
+| Target | Typical use |
+|--------|-------------|
+| `make deploy-all ENV=<env> CLUSTER_PROFILE=<profile>` | Full stack for `local` / `demo` / manual prod (prefer `make local` / `make prod` when available) |
+| `make deploy-storage`, `deploy-infra`, `deploy-runtime`, `deploy-api`, `deploy-web` | Single layer; see `Makefile` and `make help` |
 
 ## Accessing the Service
 
@@ -344,20 +369,27 @@ with the ACM certificate ARN for `api.treadstone-ai.dev`.
 
 ## Makefile Command Reference
 
+**Preferred lifecycle** (context checks where applicable):
+
+```bash
+make local             # Local Kind + images + deploy (see Primary workflow)
+make destroy-local     # Local teardown + Kind delete
+make prod              # Production deploy (needs TREADSTONE_PROD_CONTEXT = current context)
+```
+
+**Other** (see `make help`):
+
 ```bash
 make help              # List all available commands
 make kind-create       # Create Kind cluster
 make kind-delete       # Delete Kind cluster
 make image-api         # Build API Docker image
 make image-web         # Build frontend Docker image
-make deploy-all        # Deploy all layers (storage + infra + runtime + api + web)
-make deploy-api        # Deploy API only
-make deploy-web        # Deploy web only
+make deploy-all        # Advanced: all Helm layers (prefer make local / make prod)
+make deploy-api        # Advanced: API chart only
+make deploy-web        # Advanced: web chart only
 make restart-api       # Rolling restart for the API
 make port-forward-api  # Forward the API to localhost:8000
 make undeploy-env      # Uninstall namespace-scoped layers
 make test-e2e          # Run E2E tests against deployed service
-make local             # Local Kind + images + deploy (optional TREADSTONE_PROD_CONTEXT guard)
-make prod              # deploy-all ENV=prod (needs TREADSTONE_PROD_CONTEXT = current context)
-make destroy-local     # Local teardown + Kind delete (optional TREADSTONE_PROD_CONTEXT guard)
 ```
