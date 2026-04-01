@@ -22,9 +22,13 @@ jobs:
       - name: Get release tag
         id: tag
         run: |
-          TAG=$(git describe --tags --exact-match "${{ github.event.workflow_run.head_sha }}" 2>/dev/null || echo "")
+          git fetch --tags origin
+          # workflow_run.head_sha is the pre-bump commit for Release (workflow_dispatch).
+          # bump-and-tag pushes a new commit + tag, so exact-match on head_sha fails.
+          # After checkout main, HEAD is the release tip; nearest tag is the release tag.
+          TAG=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || echo "")
           if [ -z "$TAG" ] || [[ "$TAG" != v* ]]; then
-            echo "No semver tag found for this run — skipping."
+            echo "No semver tag found on main — skipping."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "version=$TAG" >> "$GITHUB_OUTPUT"
