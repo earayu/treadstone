@@ -358,6 +358,38 @@ class TestGetSandbox:
         assert resp.json()["error"]["code"] == "sandbox_not_found"
 
 
+class TestPatchSandbox:
+    async def test_patch_updates_name_and_labels(self, auth_client):
+        create_resp = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": "patch-orig"},
+        )
+        assert create_resp.status_code == 202
+        sandbox_id = create_resp.json()["id"]
+
+        resp = await auth_client.patch(
+            f"/v1/sandboxes/{sandbox_id}",
+            json={"name": "patch-new", "labels": {"env": "staging"}},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["name"] == "patch-new"
+        assert data["labels"] == {"env": "staging"}
+
+        async with _test_session_factory() as session:
+            events = (
+                (await session.execute(select(AuditEvent).where(AuditEvent.action == "sandbox.update"))).scalars().all()
+            )
+        assert len(events) == 1
+        assert events[0].target_id == sandbox_id
+
+    async def test_patch_empty_body_returns_422(self, auth_client):
+        create_resp = await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "patch-e"})
+        sandbox_id = create_resp.json()["id"]
+        resp = await auth_client.patch(f"/v1/sandboxes/{sandbox_id}", json={})
+        assert resp.status_code == 422
+
+
 class TestDeleteSandbox:
     async def test_delete_from_creating_returns_204(self, auth_client):
         create_resp = await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "del-sb"})

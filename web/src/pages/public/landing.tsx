@@ -812,7 +812,7 @@ export function LandingPage() {
             <code className="rounded-sm bg-white/[0.06] px-1.5 py-0.5 font-mono text-[13px]">--json</code> for stable CLI
             output; sandbox detail includes <span className="font-mono text-[13px] text-foreground/80">urls</span> for the
             data plane (
-            <Link to="/docs?page=sandbox-endpoints" className="text-primary underline underline-offset-2 hover:text-primary/90">
+            <Link to="/docs/sandbox-endpoints" className="text-primary underline underline-offset-2 hover:text-primary/90">
               Sandbox endpoints
             </Link>
             ).
@@ -864,7 +864,7 @@ export function LandingPage() {
           </h2>
           <p className="mt-3 mb-12 max-w-[560px] text-base leading-[1.65] text-muted-foreground">
             Install the CLI with curl, PowerShell, or pip—the same commands as the{" "}
-            <Link to="/docs?page=quickstart" className="text-primary underline underline-offset-2 hover:text-primary/90">
+            <Link to="/docs/quickstart" className="text-primary underline underline-offset-2 hover:text-primary/90">
               Quickstart
             </Link>
             . Then run{" "}
@@ -1026,11 +1026,11 @@ export function LandingPage() {
               <ul className="mt-3.5 flex flex-col gap-2.5">
                 {[
                   { label: "Docs Overview", href: "/docs" },
-                  { label: "Quickstart", href: "/docs?page=quickstart" },
-                  { label: "CLI Guide", href: "/docs?page=cli-guide" },
-                  { label: "REST API Guide", href: "/docs?page=rest-api-guide" },
-                  { label: "Python SDK Guide", href: "/docs?page=python-sdk-guide" },
-                  { label: "REST API Reference", href: "/docs?page=api-reference" },
+                  { label: "Quickstart", href: "/docs/quickstart" },
+                  { label: "CLI Guide", href: "/docs/cli-guide" },
+                  { label: "REST API Guide", href: "/docs/rest-api-guide" },
+                  { label: "Python SDK Guide", href: "/docs/python-sdk-guide" },
+                  { label: "REST API Reference", href: "/docs/api-reference" },
                   { label: "CLI on PyPI", href: PYPI_CLI_URL, external: true },
                   { label: "GitHub Releases", href: RELEASES_URL, external: true },
                 ].map((l) => (

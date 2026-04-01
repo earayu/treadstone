@@ -4,7 +4,9 @@ import { useNavigate } from "react-router"
 import { toast } from "sonner"
 
 import { useCurrentUser, useLogout } from "@/hooks/use-auth"
+import { HelpIcon } from "@/components/ui/help-icon"
 import { client, HttpError } from "@/lib/api-client"
+import { DOC } from "@/lib/console-docs"
 
 function roleLabel(role: string): string {
   if (role === "admin") return "Admin"
@@ -86,7 +88,14 @@ export function SettingsPage() {
     <div className="mx-auto flex max-w-xl flex-col gap-10">
       <div>
         <h1 className="text-4xl font-bold tracking-tight text-foreground">Account Settings</h1>
-        <p className="mt-1 text-base text-muted-foreground">Profile and security for your account.</p>
+        <p className="mt-1 flex flex-wrap items-center gap-2 text-base text-muted-foreground">
+          <span>Profile and security for your account.</span>
+          <HelpIcon
+            content="The Console uses a browser session. For scripts and automation, create API keys instead. OAuth-only accounts can add a password here."
+            link={{ href: DOC.apiKeysAuth.sessionsVsApiKeys, label: "Sessions vs API keys" }}
+            side="right"
+          />
+        </p>
       </div>
 
       <section className="border border-border/15 bg-card px-6 py-6">

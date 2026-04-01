@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { client } from "@/lib/api-client"
 import type { components } from "@/api/schema"
+import { client } from "@/lib/api-client"
 
 export type Sandbox = components["schemas"]["SandboxResponse"]
 export type CreateSandboxBody = components["schemas"]["CreateSandboxRequest"]
@@ -87,5 +87,28 @@ export function useStopSandbox() {
       return data!
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sandboxes"] }),
+  })
+}
+
+export function useUpdateSandbox() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      id,
+      body,
+    }: {
+      id: string
+      body: components["schemas"]["UpdateSandboxRequest"]
+    }) => {
+      const { data } = await client.PATCH("/v1/sandboxes/{sandbox_id}", {
+        params: { path: { sandbox_id: id } },
+        body,
+      })
+      return data!
+    },
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({ queryKey: ["sandboxes"] })
+      void qc.invalidateQueries({ queryKey: ["sandboxes", vars.id] })
+    },
   })
 }

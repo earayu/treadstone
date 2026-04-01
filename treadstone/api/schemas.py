@@ -97,6 +97,48 @@ class CreateSandboxRequest(BaseModel):
         return self
 
 
+class UpdateSandboxRequest(BaseModel):
+    """Partial update for sandbox metadata (control plane). Immutable fields: template, persist, storage."""
+
+    name: str | None = Field(default=None, description=SANDBOX_NAME_DESCRIPTION)
+    labels: dict[str, str] | None = Field(default=None, description="Replace sandbox labels entirely when set.")
+    auto_stop_interval: int | None = Field(
+        default=None,
+        description="Minutes of inactivity before auto-stop. 0 means never.",
+    )
+    auto_delete_interval: int | None = Field(
+        default=None,
+        description="Minutes after stop before auto-delete. -1 disables auto-delete.",
+    )
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not SANDBOX_NAME_PATTERN.fullmatch(value):
+            raise ValueError(SANDBOX_NAME_RULE)
+        return value
+
+    @field_validator("auto_stop_interval")
+    @classmethod
+    def validate_auto_stop_interval(cls, value: int | None) -> int | None:
+        if value is None:
+            return None
+        if value < 0:
+            raise ValueError("auto_stop_interval must be 0 (never) or at least 1 minute.")
+        return value
+
+    @field_validator("auto_delete_interval")
+    @classmethod
+    def validate_auto_delete_interval(cls, value: int | None) -> int | None:
+        if value is None:
+            return None
+        if value != -1 and value < 1:
+            raise ValueError("auto_delete_interval must be -1 or at least 1 minute.")
+        return value
+
+
 class SandboxUrls(BaseModel):
     proxy: str = Field(..., examples=["http://localhost/v1/sandboxes/sb-abc123def456/proxy"])
     mcp: str = Field(

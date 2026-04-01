@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
@@ -26,6 +26,7 @@ from treadstone.core.errors import (
     SandboxNotFoundError,
     StorageBackendNotReadyError,
     TemplateNotFoundError,
+    ValidationError,
 )
 from treadstone.models.sandbox import Sandbox, SandboxStatus, is_valid_transition
 from treadstone.models.sandbox_web_link import SandboxWebLink
@@ -185,6 +186,49 @@ class SandboxService:
             except Exception:
                 logger.exception("Failed to record storage allocation for sandbox %s", sandbox_id)
 
+        return sandbox
+
+    async def update(self, sandbox_id: str, owner_id: str, patch: dict[str, Any]) -> Sandbox:
+        """Update mutable sandbox metadata. ``patch`` must be non-empty (caller validates)."""
+        if not patch:
+            raise ValidationError("No fields to update.")
+
+        sandbox = await self.get(sandbox_id, owner_id)
+        if sandbox is None:
+            raise SandboxNotFoundError(sandbox_id)
+
+        allowed = {"name", "labels", "auto_stop_interval", "auto_delete_interval"}
+        extra = set(patch.keys()) - allowed
+        if extra:
+            raise BadRequestError(f"Unsupported fields: {', '.join(sorted(extra))}")
+
+        new_auto_stop = patch["auto_stop_interval"] if "auto_stop_interval" in patch else sandbox.auto_stop_interval
+        if self._metering is not None and settings.metering_enforcement_enabled:
+            max_duration = await self._metering.check_sandbox_duration(self.session, owner_id)
+            if max_duration > 0:
+                if new_auto_stop == 0 or (new_auto_stop * 60) > max_duration:
+                    plan = await self._metering.get_user_plan(self.session, owner_id)
+                    raise SandboxDurationExceededError(plan.tier, max_duration)
+
+        if "name" in patch:
+            sandbox.name = patch["name"]
+        if "labels" in patch:
+            sandbox.labels = patch["labels"]
+        if "auto_stop_interval" in patch:
+            sandbox.auto_stop_interval = patch["auto_stop_interval"]
+        if "auto_delete_interval" in patch:
+            sandbox.auto_delete_interval = patch["auto_delete_interval"]
+
+        sandbox.version += 1
+        self.session.add(sandbox)
+        try:
+            await self.session.commit()
+        except IntegrityError:
+            await self.session.rollback()
+            if "name" in patch:
+                raise SandboxNameConflictError(patch["name"])
+            raise
+        await self.session.refresh(sandbox)
         return sandbox
 
     async def _resolve_template(self, namespace: str, template: str) -> dict:

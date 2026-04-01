@@ -85,6 +85,6 @@ async def docs_page(slug: str, request: Request):
         )
 
     return RedirectResponse(
-        url=f"{_FRONTEND_DOCS_BASE}?page={canonical_slug}",
+        url=f"{_FRONTEND_DOCS_BASE}/{canonical_slug}",
         status_code=302,
     )

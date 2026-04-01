@@ -1,6 +1,6 @@
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router"
-import { Copy, RefreshCw, Trash2 } from "lucide-react"
+import { RefreshCw, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 
@@ -9,15 +9,25 @@ import {
   useDeleteSandbox,
   useStartSandbox,
   useStopSandbox,
+  useUpdateSandbox,
+  type Sandbox,
 } from "@/api/sandboxes"
 import { useSandboxTemplates } from "@/api/templates"
-import { client } from "@/lib/api-client"
-import { cn } from "@/lib/utils"
+import { useUsageOverview } from "@/api/usage"
+import { SandboxEndpointsCell } from "@/components/sandbox-endpoints"
+import { DOC } from "@/lib/console-docs"
+import { DOCS_SANDBOX_ENDPOINTS, SANDBOX_ENDPOINTS_HELP } from "@/lib/sandbox-endpoints-meta"
+import { HelpIcon } from "@/components/ui/help-icon"
+import { client, HttpError } from "@/lib/api-client"
 import { formatMinutes } from "@/lib/format-time"
+import { formatTierDisplayName } from "@/lib/tier-label"
+import { cn } from "@/lib/utils"
 import type { components } from "@/api/schema"
 
 type SandboxDetail = components["schemas"]["SandboxDetailResponse"]
 type WebLinkStatus = components["schemas"]["SandboxWebLinkStatusResponse"]
+
+const SANDBOX_NAME_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,53}[a-z0-9])?$/
 
 function formatRelativeTime(dateStr: string | null | undefined): string {
   if (!dateStr) return "—"
@@ -45,20 +55,369 @@ function formatDateTime(iso: string | null | undefined): string {
   }
 }
 
-function labelsToString(labels: SandboxDetail["labels"]): string {
-  if (!labels || typeof labels !== "object") return "—"
+function labelsToComma(labels: SandboxDetail["labels"]): string {
+  if (!labels || typeof labels !== "object") return ""
   const entries = Object.entries(labels as Record<string, unknown>)
-  if (entries.length === 0) return "—"
-  return entries.map(([k, v]) => `${k}: ${String(v)}`).join(", ")
+  if (entries.length === 0) return ""
+  return entries.map(([k, v]) => `${k}=${String(v)}`).join(", ")
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+function parseLabels(raw: string): { ok: true; labels: Record<string, string> } | { ok: false } {
+  const trimmed = raw.trim()
+  if (!trimmed) return { ok: true, labels: {} }
+  const labels: Record<string, string> = {}
+  for (const part of trimmed.split(",")) {
+    const p = part.trim()
+    if (!p) continue
+    const eq = p.indexOf("=")
+    if (eq <= 0) return { ok: false }
+    const key = p.slice(0, eq).trim()
+    const value = p.slice(eq + 1).trim()
+    if (!key) return { ok: false }
+    labels[key] = value
+  }
+  return { ok: true, labels }
+}
+
+function labelsEqual(a: Record<string, string>, b: Record<string, string>): boolean {
+  const ak = Object.keys(a).sort()
+  const bk = Object.keys(b).sort()
+  if (ak.length !== bk.length) return false
+  return ak.every((k) => a[k] === b[k])
+}
+
+function ConfigReadonly({
+  label,
+  children,
+  className,
+}: {
+  label: string
+  children: React.ReactNode
+  className?: string
+}) {
   return (
-    <div className="flex flex-col gap-0.5 border-b border-border/10 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-      <span className="text-[10px] font-bold uppercase tracking-[1px] text-muted-foreground">
-        {label}
-      </span>
-      <div className="min-w-0 flex-1 text-sm text-foreground sm:text-right">{children}</div>
+    <div className={cn("min-w-0", className)}>
+      <p className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground">{label}</p>
+      <div className="mt-2 text-sm text-foreground">{children}</div>
+    </div>
+  )
+}
+
+function SandboxSettingsEditor({
+  sandbox,
+  templateSpec,
+}: {
+  sandbox: SandboxDetail
+  templateSpec: string | null
+}) {
+  const { data: usage } = useUsageOverview()
+  const updateSandbox = useUpdateSandbox()
+
+  const [nameDraft, setNameDraft] = useState(sandbox.name)
+  const [labelsDraft, setLabelsDraft] = useState(labelsToComma(sandbox.labels))
+  const [nameTouched, setNameTouched] = useState(false)
+  const [autoStopNever, setAutoStopNever] = useState(sandbox.auto_stop_interval === 0)
+  const [autoStopMinutes, setAutoStopMinutes] = useState(
+    sandbox.auto_stop_interval === 0 ? "60" : String(sandbox.auto_stop_interval),
+  )
+  const [autoDeleteEnabled, setAutoDeleteEnabled] = useState(sandbox.auto_delete_interval !== -1)
+  const [autoDeleteDays, setAutoDeleteDays] = useState(
+    sandbox.auto_delete_interval === -1
+      ? "7"
+      : String(Math.round(sandbox.auto_delete_interval / (24 * 60))),
+  )
+
+  const tierAllowsNever = usage?.limits.max_sandbox_duration_seconds === 0
+  const maxAutoStopMinutes =
+    usage && usage.limits.max_sandbox_duration_seconds > 0
+      ? Math.floor(usage.limits.max_sandbox_duration_seconds / 60)
+      : undefined
+
+  const autoStopMinutesDisplay = useMemo(() => {
+    if (autoStopNever || maxAutoStopMinutes === undefined) {
+      return autoStopMinutes
+    }
+    const n = parseInt(autoStopMinutes, 10)
+    if (Number.isNaN(n)) {
+      return autoStopMinutes
+    }
+    if (n > maxAutoStopMinutes) {
+      return String(maxAutoStopMinutes)
+    }
+    return autoStopMinutes
+  }, [autoStopMinutes, autoStopNever, maxAutoStopMinutes])
+
+  const nameTrimmed = nameDraft.trim()
+  const nameInvalid = nameTrimmed.length > 0 && !SANDBOX_NAME_PATTERN.test(nameTrimmed)
+  const showNameError = nameTouched && nameInvalid
+
+  async function handleSaveSettings() {
+    if (nameInvalid) {
+      toast.error("Fix the sandbox name before saving.")
+      return
+    }
+    const parsedLabels = parseLabels(labelsDraft)
+    if (!parsedLabels.ok) {
+      toast.error("Labels must be comma-separated key=value pairs, e.g. env=dev, team=core.")
+      return
+    }
+
+    let stopMinutes: number
+    if (autoStopNever) {
+      stopMinutes = 0
+    } else {
+      const n = parseInt(autoStopMinutesDisplay, 10)
+      if (Number.isNaN(n) || n < 1) {
+        toast.error("Auto-stop must be at least 1 minute, or enable Never if your plan allows it.")
+        return
+      }
+      stopMinutes = maxAutoStopMinutes !== undefined ? Math.min(n, maxAutoStopMinutes) : n
+    }
+
+    let autoDelete = -1
+    if (autoDeleteEnabled) {
+      const days = parseInt(autoDeleteDays, 10)
+      if (Number.isNaN(days) || days < 1) {
+        toast.error("Auto-delete must be at least 1 day, or turn it off.")
+        return
+      }
+      autoDelete = days * 24 * 60
+    }
+
+    const body: components["schemas"]["UpdateSandboxRequest"] = {}
+    if (nameTrimmed !== sandbox.name) {
+      body.name = nameTrimmed
+    }
+    const currentLabels = (sandbox.labels ?? {}) as Record<string, string>
+    if (!labelsEqual(parsedLabels.labels, currentLabels)) {
+      body.labels = parsedLabels.labels
+    }
+    if (stopMinutes !== sandbox.auto_stop_interval) {
+      body.auto_stop_interval = stopMinutes
+    }
+    if (autoDelete !== sandbox.auto_delete_interval) {
+      body.auto_delete_interval = autoDelete
+    }
+
+    if (Object.keys(body).length === 0) {
+      toast.info("No changes to save.")
+      return
+    }
+
+    try {
+      const updated = await updateSandbox.mutateAsync({ id: sandbox.id, body })
+      setNameDraft(updated.name)
+      setLabelsDraft(labelsToComma(updated.labels))
+      setNameTouched(false)
+      setAutoStopNever(updated.auto_stop_interval === 0)
+      setAutoStopMinutes(updated.auto_stop_interval === 0 ? "60" : String(updated.auto_stop_interval))
+      const ad = updated.auto_delete_interval
+      setAutoDeleteEnabled(ad !== -1)
+      setAutoDeleteDays(ad === -1 ? "7" : String(Math.round(ad / (24 * 60))))
+      toast.success("Settings saved.")
+    } catch (e) {
+      const message = e instanceof HttpError ? e.message : "Could not save settings."
+      toast.error(message)
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-2">
+        <h2
+          id="sandbox-config-heading"
+          className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground"
+        >
+          Configuration
+        </h2>
+        <HelpIcon
+          content="Editable fields map to the same lifecycle settings as the API. Template and disk are fixed after create."
+          link={{ href: DOC.sandboxLifecycle.keyFields, label: "Key fields" }}
+          side="right"
+        />
+      </div>
+      <div className="mt-4 space-y-8 border border-border/30 bg-card/70 p-6">
+        <div className="grid gap-6 md:grid-cols-2">
+          <div>
+            <label
+              htmlFor="detail-sandbox-name"
+              className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground"
+            >
+              Sandbox name
+            </label>
+            <input
+              id="detail-sandbox-name"
+              type="text"
+              autoComplete="off"
+              value={nameDraft}
+              onBlur={() => setNameTouched(true)}
+              onChange={(e) => setNameDraft(e.target.value.toLowerCase())}
+              className="mt-2 h-10 w-full border border-border/40 bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/40 focus:border-border focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+            <p
+              className={cn(
+                "mt-1.5 text-[10px] uppercase tracking-wide",
+                showNameError ? "text-destructive" : "text-muted-foreground/80",
+              )}
+            >
+              Lowercase, numbers, hyphens only. 1–55 chars.
+            </p>
+          </div>
+          <div>
+            <label
+              htmlFor="detail-sandbox-labels"
+              className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground"
+            >
+              Labels
+            </label>
+            <input
+              id="detail-sandbox-labels"
+              type="text"
+              autoComplete="off"
+              placeholder="env=dev, team=core"
+              value={labelsDraft}
+              onChange={(e) => setLabelsDraft(e.target.value)}
+              className="mt-2 h-10 w-full border border-border/40 bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/40 focus:border-border focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+            <p className="mt-1.5 text-[10px] text-muted-foreground/80">
+              Comma-separated <span className="font-mono">key=value</span> pairs.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-6 border-t border-border/20 pt-8 md:grid-cols-2">
+          <div className="space-y-5">
+            <div>
+              <div className="flex items-center justify-between gap-4">
+                <label
+                  htmlFor="detail-auto-stop"
+                  className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground"
+                >
+                  Auto-stop interval
+                </label>
+                {tierAllowsNever && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Never
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={autoStopNever}
+                      onClick={() => setAutoStopNever((p) => !p)}
+                      className={cn(
+                        "relative h-7 w-12 shrink-0 overflow-hidden rounded-full border transition-colors",
+                        autoStopNever ? "border-primary bg-primary/30" : "border-border/70 bg-muted/60",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "absolute left-0 top-0.5 size-6 rounded-full shadow transition-transform",
+                          autoStopNever ? "translate-x-5 bg-primary" : "translate-x-0.5 bg-foreground/40",
+                        )}
+                      />
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  id="detail-auto-stop"
+                  type="number"
+                  min={1}
+                  max={maxAutoStopMinutes}
+                  inputMode="numeric"
+                  disabled={autoStopNever}
+                  value={autoStopNever ? "" : autoStopMinutesDisplay}
+                  placeholder={autoStopNever ? "Never" : undefined}
+                  onChange={(e) => setAutoStopMinutes(e.target.value)}
+                  className="h-10 w-full min-w-0 flex-1 border border-border/40 bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                />
+                <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Minutes
+                </span>
+              </div>
+              {maxAutoStopMinutes !== undefined && (
+                <p className="mt-1.5 text-[10px] text-muted-foreground/60">
+                  Max auto-stop interval: {formatMinutes(maxAutoStopMinutes)}
+                </p>
+              )}
+            </div>
+            <div>
+              <div className="flex items-center justify-between gap-4">
+                <label
+                  htmlFor="detail-auto-delete"
+                  className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground"
+                >
+                  Auto-delete interval
+                </label>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={autoDeleteEnabled}
+                  onClick={() => setAutoDeleteEnabled((p) => !p)}
+                  className={cn(
+                    "relative h-7 w-12 shrink-0 overflow-hidden rounded-full border transition-colors",
+                    autoDeleteEnabled ? "border-primary bg-primary/30" : "border-border/70 bg-muted/60",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "absolute left-0 top-0.5 size-6 rounded-full shadow transition-transform",
+                      autoDeleteEnabled ? "translate-x-5 bg-primary" : "translate-x-0.5 bg-foreground/40",
+                    )}
+                  />
+                </button>
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  id="detail-auto-delete"
+                  type="number"
+                  min={1}
+                  inputMode="numeric"
+                  disabled={!autoDeleteEnabled}
+                  value={autoDeleteDays}
+                  onChange={(e) => setAutoDeleteDays(e.target.value)}
+                  className="h-10 w-full min-w-0 flex-1 border border-border/40 bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                />
+                <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Days
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-border/20 pt-6">
+          <button
+            type="button"
+            onClick={() => void handleSaveSettings()}
+            disabled={updateSandbox.isPending}
+            className="h-11 w-full bg-primary text-sm font-bold uppercase tracking-[2px] text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 md:w-auto md:min-w-[200px] md:px-8"
+          >
+            {updateSandbox.isPending ? "Saving…" : "Save settings"}
+          </button>
+        </div>
+
+        <div className="border-t border-border/20 pt-8">
+          <p className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground">Read-only</p>
+          <div className="mt-4 grid gap-8 sm:grid-cols-2">
+            <ConfigReadonly label="Sandbox ID">
+              <span className="font-mono text-xs break-all">{sandbox.id}</span>
+            </ConfigReadonly>
+            <ConfigReadonly label="Template">
+              <span className="text-muted-foreground">{templateSpec}</span>
+            </ConfigReadonly>
+            <ConfigReadonly label="Status">
+              <span className="capitalize">{sandbox.status}</span>
+            </ConfigReadonly>
+            <ConfigReadonly label="Persist">{sandbox.persist ? "Yes" : "No"}</ConfigReadonly>
+            <ConfigReadonly label="Storage">{sandbox.storage_size ?? "—"}</ConfigReadonly>
+            <ConfigReadonly label="Created">{formatDateTime(sandbox.created_at)}</ConfigReadonly>
+            <ConfigReadonly label="Started">{formatDateTime(sandbox.started_at)}</ConfigReadonly>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -69,6 +428,7 @@ export function SandboxDetailPage() {
   const qc = useQueryClient()
   const { data: sandbox, isLoading, isError, error } = useSandbox(id)
   const { data: templatesData } = useSandboxTemplates()
+  const { data: usage } = useUsageOverview()
   const deleteSandbox = useDeleteSandbox()
   const stopSandbox = useStopSandbox()
   const startSandbox = useStartSandbox()
@@ -99,8 +459,8 @@ export function SandboxDetailPage() {
   const pageTitle = sandbox
     ? sandbox.name?.trim() || sandbox.id
     : id
-    ? `Sandbox ${id}`
-    : "Sandbox"
+      ? `Sandbox ${id}`
+      : "Sandbox"
 
   const isReady = sandbox?.status === "ready"
   const isCreating = sandbox?.status === "creating"
@@ -177,6 +537,10 @@ export function SandboxDetailPage() {
     }
   }
 
+  const tierTitle = usage?.tier
+    ? `${formatTierDisplayName(usage.tier).toUpperCase().replace(/\s+/g, "-")} LIMITS`
+    : "PLAN LIMITS"
+
   return (
     <div className="pb-16">
       <Link
@@ -186,224 +550,239 @@ export function SandboxDetailPage() {
         <span aria-hidden>←</span> Back to sandboxes
       </Link>
 
-      <div className="mt-6">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">{pageTitle}</h1>
-        {sandbox && (
-          <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-            <span className="inline-flex items-center gap-2">
+      <div className="mt-6 lg:grid lg:grid-cols-[1fr_minmax(260px,300px)] lg:items-start lg:gap-10">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">{pageTitle}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {sandbox
+              ? "Control plane settings, data-plane URLs, and lifecycle actions."
+              : isLoading
+                ? "Loading sandbox…"
+                : "Sandbox environment"}
+          </p>
+
+          {sandbox && (
+            <div className="mt-6 flex flex-wrap items-center gap-3 border border-border/30 bg-card/70 px-4 py-3">
               <span
                 className={cn(
-                  "inline-block size-2 rounded-full",
-                  isReady && "bg-primary",
-                  isCreating && "bg-amber-500",
-                  !isReady && !isCreating && "bg-muted-foreground/50",
+                  "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold",
+                  isReady && "border-primary/40 bg-primary/10 text-foreground",
+                  isCreating && "border-amber-500/40 bg-amber-500/10 text-foreground",
+                  !isReady && !isCreating && "border-border/50 bg-muted/30 text-muted-foreground",
                 )}
-              />
-              <span className="font-medium capitalize text-foreground">
-                {isReady ? "Running" : sandbox.status}
+              >
+                <span
+                  className={cn(
+                    "inline-block size-1.5 rounded-full",
+                    isReady && "bg-primary",
+                    isCreating && "bg-amber-500",
+                    !isReady && !isCreating && "bg-muted-foreground/60",
+                  )}
+                />
+                <span className="capitalize">{isReady ? "Running" : sandbox.status}</span>
               </span>
-            </span>
-            <span aria-hidden>·</span>
-            <span>{sandbox.template}</span>
-            <span aria-hidden>·</span>
-            <span>Started {formatRelativeTime(sandbox.started_at ?? undefined)}</span>
-          </p>
-        )}
-      </div>
+              <span className="text-xs text-muted-foreground">
+                <span className="font-medium text-foreground/90">{sandbox.template}</span>
+                <span aria-hidden className="mx-2 text-border">
+                  ·
+                </span>
+                Started {formatRelativeTime(sandbox.started_at ?? undefined)}
+              </span>
+            </div>
+          )}
 
-      <div className="mt-8">
-        {isLoading && (
-          <p className="py-12 text-center text-sm text-muted-foreground">Loading…</p>
-        )}
-        {isError && (
-          <p className="rounded border border-destructive/30 bg-destructive/5 py-8 text-center text-sm text-destructive">
-            {error instanceof Error ? error.message : "Failed to load sandbox."}
-          </p>
-        )}
-        {sandbox && (
-          <>
-            <section
-              className="rounded-lg border border-border/20 bg-card/30"
-              aria-labelledby="sandbox-config-heading"
-            >
-              <h2
-                id="sandbox-config-heading"
-                className="border-b border-border/15 px-5 py-3 text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground"
-              >
-                Configuration
-              </h2>
-              <div className="px-5 pb-1">
-                <Row label="Sandbox ID">
-                  <span className="font-mono text-xs break-all">{sandbox.id}</span>
-                </Row>
-                <Row label="Name">{sandbox.name || "—"}</Row>
-                <Row label="Template">
-                  <span className="text-muted-foreground">{templateSpec}</span>
-                </Row>
-                <Row label="Status">
-                  <span className="capitalize">{sandbox.status}</span>
-                </Row>
-                <Row label="Labels">{labelsToString(sandbox.labels)}</Row>
-                <Row label="Auto-stop">{formatMinutes(sandbox.auto_stop_interval)} inactivity</Row>
-                <Row label="Auto-delete">
-                  {sandbox.auto_delete_interval === -1
-                    ? "Off"
-                    : `${formatMinutes(sandbox.auto_delete_interval)} after stop`}
-                </Row>
-                <Row label="Persist">{sandbox.persist ? "Yes" : "No"}</Row>
-                <Row label="Storage">{sandbox.storage_size ?? "—"}</Row>
-                <Row label="Created">{formatDateTime(sandbox.created_at)}</Row>
-                <Row label="Started">{formatDateTime(sandbox.started_at)}</Row>
-              </div>
-            </section>
+          <div className="mt-8">
+            {isLoading && (
+              <p className="py-12 text-center text-sm text-muted-foreground">Loading…</p>
+            )}
+            {isError && (
+              <p className="rounded border border-destructive/30 bg-destructive/5 py-8 text-center text-sm text-destructive">
+                {error instanceof Error ? error.message : "Failed to load sandbox."}
+              </p>
+            )}
+            {sandbox && (
+              <>
+                <section className="space-y-8" aria-labelledby="sandbox-config-heading">
+                  <SandboxSettingsEditor key={sandbox.id} sandbox={sandbox} templateSpec={templateSpec} />
 
-            <section className="mt-8" aria-labelledby="sandbox-handoff-heading">
-              <h2
-                id="sandbox-handoff-heading"
-                className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground"
-              >
-                Browser hand-off
-              </h2>
-              <div className="mt-3 space-y-3 rounded-lg border border-border/15 bg-background/40 p-4">
-                <div>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[10px] font-bold uppercase tracking-[1px] text-muted-foreground">
-                      Web URL
-                    </p>
-                    <div className="flex items-center gap-1">
-                      {sandbox.urls?.web && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void navigator.clipboard.writeText(sandbox.urls!.web!)
-                            toast.success("Copied!")
-                          }}
-                          title="Copy web URL"
-                          className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                        >
-                          <Copy className="size-3" />
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => void handleRecreateLink()}
-                        title="Recreate link"
-                        className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  <div aria-labelledby="sandbox-endpoints-heading">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2
+                        id="sandbox-endpoints-heading"
+                        className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground"
                       >
-                        <RefreshCw className="size-3" />
-                      </button>
-                      {webLink?.enabled && (
+                        Sandbox endpoints
+                      </h2>
+                      <HelpIcon
+                        content={SANDBOX_ENDPOINTS_HELP}
+                        link={{ href: DOCS_SANDBOX_ENDPOINTS, label: "Sandbox endpoints" }}
+                        side="top"
+                      />
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Same Web, MCP, and Proxy URLs as the sandboxes list — from{" "}
+                      <code className="font-mono text-[11px]">urls</code> on this sandbox.{" "}
+                      <Link
+                        to={DOC.sandboxEndpoints.controlPlaneVsDataPlane}
+                        className="text-primary underline underline-offset-2 hover:text-primary/90"
+                      >
+                        Control vs data plane
+                      </Link>
+                    </p>
+                    <div className="mt-4 border border-border/30 bg-card/70 p-4">
+                      <SandboxEndpointsCell sandbox={sandbox as Sandbox} className="gap-2" />
+                    </div>
+
+                    <div className="mt-6">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground">
+                          Web session
+                        </h3>
+                        <HelpIcon
+                          content="Hand-off opens the workspace in a browser. Rotate the link if it leaks; see Browser Handoff for revoke and refresh."
+                          link={{ href: DOC.browserHandoff.revokeAndRefresh, label: "Revoke & refresh" }}
+                          side="right"
+                        />
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Short-lived token on the Web URL. Recreate to rotate; delete to revoke.{" "}
+                        <Link
+                          to={DOC.browserHandoff.howToUseWebUrl}
+                          className="text-primary underline underline-offset-2 hover:text-primary/90"
+                        >
+                          How to use the Web URL
+                        </Link>
+                      </p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2 border border-border/30 bg-card/70 px-4 py-3">
                         <button
                           type="button"
-                          onClick={() => void handleDeleteLink()}
-                          title="Delete link"
-                          className="rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => void handleRecreateLink()}
+                          title="Recreate web link"
+                          className="inline-flex items-center gap-1.5 border border-border/40 bg-secondary px-3 py-1.5 text-xs font-semibold text-secondary-foreground transition-colors hover:bg-secondary/80"
                         >
-                          <Trash2 className="size-3" />
+                          <RefreshCw className="size-3.5" />
+                          Recreate link
                         </button>
-                      )}
+                        {webLink?.enabled && (
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteLink()}
+                            title="Delete web link"
+                            className="inline-flex items-center gap-1.5 border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/20"
+                          >
+                            <Trash2 className="size-3.5" />
+                            Delete link
+                          </button>
+                        )}
+                      </div>
+                      <div className="mt-4 grid gap-6 border border-border/30 bg-card/70 p-6 sm:grid-cols-2">
+                        <ConfigReadonly label="Link expires">
+                          {webLink?.expires_at ? formatDateTime(webLink.expires_at) : "Never"}
+                        </ConfigReadonly>
+                        <ConfigReadonly label="Last used">{formatDateTime(webLink?.last_used_at)}</ConfigReadonly>
+                      </div>
                     </div>
                   </div>
-                  {sandbox.urls?.web ? (
-                    <a
-                      href={sandbox.urls.web}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-1 block break-all font-mono text-xs text-primary hover:underline"
-                    >
-                      {sandbox.urls.web}
-                    </a>
-                  ) : (
-                    <p className="mt-1 text-xs text-muted-foreground">—</p>
-                  )}
-                </div>
-                <div>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[10px] font-bold uppercase tracking-[1px] text-muted-foreground">
-                      Proxy URL
-                    </p>
-                    {sandbox.urls?.proxy && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void navigator.clipboard.writeText(sandbox.urls!.proxy!)
-                          toast.success("Copied!")
-                        }}
-                        title="Copy proxy URL"
-                        className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                      >
-                        <Copy className="size-3" />
-                      </button>
-                    )}
-                  </div>
-                  <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
-                    {sandbox.urls?.proxy ?? "—"}
-                  </p>
-                </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[1px] text-muted-foreground">
-                      Link expires
-                    </p>
-                    <p className="mt-1 text-xs text-foreground">
-                      {webLink?.expires_at ? formatDateTime(webLink.expires_at) : "Never"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[1px] text-muted-foreground">
-                      Last used
-                    </p>
-                    <p className="mt-1 text-xs text-foreground">
-                      {formatDateTime(webLink?.last_used_at)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </section>
+                </section>
 
-            <div className="mt-8 flex flex-wrap items-center gap-2">
-              {isReady && (
-                <button
-                  type="button"
-                  onClick={() => void handleStop()}
-                  disabled={stopSandbox.isPending}
-                  className="border border-border/40 bg-secondary px-4 py-2 text-sm font-semibold text-secondary-foreground transition-colors hover:bg-secondary/80 disabled:opacity-40"
-                >
-                  Stop
-                </button>
-              )}
-              {isCreating && (
-                <span
-                  role="status"
-                  aria-live="polite"
-                  className="border border-border/40 bg-secondary/50 px-4 py-2 text-sm font-medium text-muted-foreground"
-                >
-                  Provisioning…
-                </span>
-              )}
-              {canStart && (
-                <button
-                  type="button"
-                  onClick={() => void handleStart()}
-                  disabled={startSandbox.isPending}
-                  className="border border-border/40 bg-secondary px-4 py-2 text-sm font-semibold text-secondary-foreground transition-colors hover:bg-secondary/80 disabled:opacity-40"
-                >
-                  Start
-                </button>
-              )}
-              {canDelete && (
-                <button
-                  type="button"
-                  onClick={() => void handleDelete()}
-                  disabled={deleteSandbox.isPending}
-                  className="bg-destructive px-4 py-2 text-sm font-bold text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:opacity-50"
-                >
-                  {isCreating ? "Cancel provisioning" : "Delete"}
-                </button>
-              )}
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground">
+                      Lifecycle
+                    </span>
+                    <HelpIcon
+                      content="Stop frees compute; start brings the sandbox back. Delete removes it permanently."
+                      link={{ href: DOC.sandboxLifecycle.stopStart, label: "Stop & start" }}
+                      side="top"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                  {isReady && (
+                    <button
+                      type="button"
+                      onClick={() => void handleStop()}
+                      disabled={stopSandbox.isPending}
+                      className="border border-border/40 bg-secondary px-4 py-2 text-sm font-semibold text-secondary-foreground transition-colors hover:bg-secondary/80 disabled:opacity-40"
+                    >
+                      Stop
+                    </button>
+                  )}
+                  {isCreating && (
+                    <span
+                      role="status"
+                      aria-live="polite"
+                      className="border border-border/40 bg-secondary/50 px-4 py-2 text-sm font-medium text-muted-foreground"
+                    >
+                      Provisioning…
+                    </span>
+                  )}
+                  {canStart && (
+                    <button
+                      type="button"
+                      onClick={() => void handleStart()}
+                      disabled={startSandbox.isPending}
+                      className="border border-border/40 bg-secondary px-4 py-2 text-sm font-semibold text-secondary-foreground transition-colors hover:bg-secondary/80 disabled:opacity-40"
+                    >
+                      Start
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button
+                      type="button"
+                      onClick={() => void handleDelete()}
+                      disabled={deleteSandbox.isPending}
+                      className="bg-destructive px-4 py-2 text-sm font-bold text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:opacity-50"
+                    >
+                      {isCreating ? "Cancel provisioning" : "Delete"}
+                    </button>
+                  )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        <aside className="mt-10 hidden lg:mt-0 lg:block">
+          <div className="border border-border/15 bg-card p-6">
+            <div className="flex items-center gap-2">
+              <h2 className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground">{tierTitle}</h2>
+              <HelpIcon
+                content="CU-hours and monthly limits are explained under Usage & Limits."
+                link={{ href: DOC.usageLimits.whatIsCu, label: "What is a CU?" }}
+                side="left"
+              />
             </div>
-          </>
-        )}
+            {!usage ? (
+              <p className="mt-4 text-sm text-muted-foreground">Loading limits…</p>
+            ) : (
+              <ul className="mt-6 space-y-5">
+                <li>
+                  <p className="text-[10px] uppercase tracking-[2px] text-muted-foreground">Compute usage</p>
+                  <p className="mt-1 text-lg font-bold text-foreground">
+                    {usage.compute.compute_unit_hours.toFixed(2)}{" "}
+                    <span className="text-xs font-normal text-muted-foreground">CU-h</span>
+                  </p>
+                </li>
+                <li>
+                  <p className="text-[10px] uppercase tracking-[2px] text-muted-foreground">Concurrency limit</p>
+                  <p className="mt-1 text-lg font-bold text-foreground">
+                    {usage.limits.max_concurrent_running}{" "}
+                    <span className="text-xs font-normal uppercase text-muted-foreground">max</span>
+                  </p>
+                </li>
+                <li>
+                  <p className="text-[10px] uppercase tracking-[2px] text-muted-foreground">Max auto-stop interval</p>
+                  <p className="mt-1 text-lg font-bold text-foreground">
+                    {usage.limits.max_sandbox_duration_seconds === 0
+                      ? "Unlimited"
+                      : formatMinutes(Math.floor(usage.limits.max_sandbox_duration_seconds / 60))}
+                  </p>
+                </li>
+              </ul>
+            )}
+          </div>
+        </aside>
       </div>
     </div>
   )
