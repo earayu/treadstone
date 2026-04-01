@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate, RouterProvider, Link, useParams } from "react-router"
+import { createBrowserRouter, Navigate, RouterProvider, Link, useParams, useLocation } from "react-router"
 
 import { PublicLayout } from "@/components/layout/public-layout"
 import { AuthLayout } from "@/components/layout/auth-layout"
@@ -26,10 +26,11 @@ import { AdminUsersPage } from "@/pages/internal/admin-users"
 import { AdminFeedbackPage } from "@/pages/internal/admin-feedback"
 import { AuditEventsPage } from "@/pages/internal/audit-events"
 
-/** `/docs/quickstart` → `/docs?page=quickstart` — SPA only registered `docs`, not `docs/:slug`. */
+/** `/docs/quickstart#anchor` → `/docs?page=quickstart#anchor` — SPA only registered `docs`, not `docs/:slug`. */
 function DocsSlugRedirect() {
   const { slug } = useParams()
-  const to = slug ? `/docs?page=${encodeURIComponent(slug)}` : "/docs"
+  const { hash } = useLocation()
+  const to = slug ? `/docs?page=${encodeURIComponent(slug)}${hash}` : "/docs"
   return <Navigate to={to} replace />
 }
 

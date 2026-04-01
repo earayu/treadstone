@@ -33,5 +33,17 @@ export const DOC = {
   },
   restApiGuide: {
     dataPlaneProxy: "/docs/rest-api-guide#how-to-use-the-data-plane-proxy",
+    /** `### cURL` under “How to use the data-plane proxy” */
+    curlExample: "/docs/rest-api-guide#curl",
+  },
+  /** Heading `## How to use (MCP client config)` → `how-to-use-mcp-client-config` */
+  mcpSandbox: {
+    clientConfig: "/docs/mcp-sandbox#how-to-use-mcp-client-config",
+  },
+  /** `## Hands-on examples` — shell/file/browser via proxy */
+  insideSandbox: {
+    handsOnExamples: "/docs/inside-sandbox#hands-on-examples",
+    /** `### 5) Run a longer CLI (install tools, agents, or one-shot scripts)` */
+    shellLongCli: "/docs/inside-sandbox#5-run-a-longer-cli-install-tools-agents-or-one-shot-scripts",
   },
 } as const

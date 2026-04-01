@@ -248,7 +248,7 @@ export function CreateSandboxPage() {
                           {templateSizeLabel(t)}
                         </span>
                         <span className="mt-2 line-clamp-2 text-[10px] leading-snug text-muted-foreground">
-                          {t.description || `${t.resource_spec.cpu} CPU · ${t.resource_spec.memory}`}
+                          {t.description || `${t.resource_spec.cpu} CPU · ${t.resource_spec.memory} RAM`}
                         </span>
                       </button>
                     )
