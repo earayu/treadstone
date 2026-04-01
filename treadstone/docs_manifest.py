@@ -179,7 +179,7 @@ def render_sitemap_markdown(entries: Iterable[DocManifestEntry]) -> str:
             "## Public Endpoints",
             "",
             "- [`/docs/{slug}`](/docs/index): Returns raw Markdown when the client sends "
-            "`Accept: text/markdown`; otherwise redirects to `/docs?page={slug}`.",
+            "`Accept: text/markdown`; otherwise redirects to `/docs/{slug}`.",
             "- [`/docs/sitemap.md`](/docs/sitemap.md): This complete documentation index.",
             "- [`/llms.txt`](/llms.txt): Short machine-oriented entrypoint.",
             "- [`/openapi.json`](/openapi.json): Hosted spec — control plane plus merged sandbox proxy paths "

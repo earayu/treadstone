@@ -33,7 +33,7 @@ Read [`/docs/index.md`](/docs/index.md) first if you are new.
 
 ## Public Endpoints
 
-- [`/docs/{slug}`](/docs/index): Returns raw Markdown when the client sends `Accept: text/markdown`; otherwise redirects to `/docs?page={slug}`.
+- [`/docs/{slug}`](/docs/index): Returns raw Markdown when the client sends `Accept: text/markdown`; otherwise redirects to `/docs/{slug}`.
 - [`/docs/sitemap.md`](/docs/sitemap.md): This complete documentation index.
 - [`/llms.txt`](/llms.txt): Short machine-oriented entrypoint.
 - [`/openapi.json`](/openapi.json): Hosted spec — control plane plus merged sandbox proxy paths (not the same as `make gen-openapi`, which feeds the SDK).

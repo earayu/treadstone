@@ -708,7 +708,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Sandbox */
+        /**
+         * Get Sandbox
+         * @description Return DB-backed sandbox detail. K8s state is synced by Watch/reconcile only (no read-path K8s API calls).
+         */
         get: operations["sandboxes-get_sandbox"];
         put?: never;
         post?: never;
@@ -716,7 +719,8 @@ export interface paths {
         delete: operations["sandboxes-delete_sandbox"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update Sandbox */
+        patch: operations["sandboxes-update_sandbox"];
         trace?: never;
     };
     "/v1/sandboxes/{sandbox_id}/start": {
@@ -2164,7 +2168,7 @@ export interface components {
             proxy: string;
             /**
              * Mcp
-             * @description MCP server endpoint. Connect MCP clients to this URL; authenticates via API key header.
+             * @description MCP server endpoint. Connect MCP clients (Cursor, Claude Desktop, scripts) directly to this URL. Authenticates via API key header.
              * @example http://localhost/v1/sandboxes/sb-abc123def456/proxy/mcp
              */
             mcp: string;
@@ -2467,6 +2471,34 @@ export interface components {
             overrides?: {
                 [key: string]: unknown;
             } | null;
+        };
+        /**
+         * UpdateSandboxRequest
+         * @description Partial update for sandbox metadata (control plane). Immutable fields: template, persist, storage.
+         */
+        UpdateSandboxRequest: {
+            /**
+             * Name
+             * @description Optional custom sandbox name. Sandbox name must be 1-55 characters of lowercase letters, numbers, or hyphens, and must start and end with a letter or number. Sandbox names only need to be unique for the current user.
+             */
+            name?: string | null;
+            /**
+             * Labels
+             * @description Replace sandbox labels entirely when set.
+             */
+            labels?: {
+                [key: string]: string;
+            } | null;
+            /**
+             * Auto Stop Interval
+             * @description Minutes of inactivity before auto-stop. 0 means never.
+             */
+            auto_stop_interval?: number | null;
+            /**
+             * Auto Delete Interval
+             * @description Minutes after stop before auto-delete. -1 disables auto-delete.
+             */
+            auto_delete_interval?: number | null;
         };
         /** UpdateTierTemplateRequest */
         UpdateTierTemplateRequest: {
@@ -4203,6 +4235,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "sandboxes-update_sandbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandbox_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSandboxRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxDetailResponse"];
+                };
             };
             /** @description Validation Error */
             422: {

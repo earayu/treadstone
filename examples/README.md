@@ -46,7 +46,7 @@ sb = Sandbox(
 result = sb.shell.exec_command(command="ls -la")
 ```
 
-See [Inside your sandbox](https://treadstone-ai.dev/docs/inside-sandbox.md) and [API Keys & Auth](https://treadstone-ai.dev/docs/api-keys-auth.md) for keys and scopes.
+See [Inside your sandbox](https://treadstone-ai.dev/docs/inside-sandbox) and [API Keys & Auth](https://treadstone-ai.dev/docs/api-keys-auth) for keys and scopes.
 
 ## Prerequisites
 
@@ -61,18 +61,18 @@ Set a control-plane API key:
 export TREADSTONE_API_KEY=<your-key>
 ```
 
-Or pass `--api-key` on each run. Create a key with `treadstone api-keys create --name local --save` (see [Quickstart](https://treadstone-ai.dev/docs/quickstart.md)).
+Or pass `--api-key` on each run. Create a key with `treadstone api-keys create --name local --save` (see [Quickstart](https://treadstone-ai.dev/docs/quickstart)).
 
 ## Layout
 
 | Path | Maps to docs | What it shows |
 |------|----------------|---------------|
-| [`control_plane/01_create_sandbox.py`](control_plane/01_create_sandbox.py) | [Quickstart](https://treadstone-ai.dev/docs/quickstart.md), [Sandbox lifecycle](https://treadstone-ai.dev/docs/sandbox-lifecycle.md) | List templates, create sandbox, wait for `ready`, optional delete |
-| [`control_plane/02_list_sandboxes.py`](control_plane/02_list_sandboxes.py) | [Sandbox lifecycle](https://treadstone-ai.dev/docs/sandbox-lifecycle.md) | List sandboxes, group by status, optional `--status` filter |
-| [`control_plane/03_lifecycle_stop_start.py`](control_plane/03_lifecycle_stop_start.py) | [Sandbox lifecycle](https://treadstone-ai.dev/docs/sandbox-lifecycle.md) | Stop → start transitions |
-| [`control_plane/04_browser_handoff.py`](control_plane/04_browser_handoff.py) | [Browser handoff](https://treadstone-ai.dev/docs/browser-handoff.md) | `web-link` create, status, delete, create again |
-| [`data_plane/01_agent_sandbox_runtime.py`](data_plane/01_agent_sandbox_runtime.py) | [Inside your sandbox](https://treadstone-ai.dev/docs/inside-sandbox.md) | Scoped data-plane key + `agent_sandbox`: shell, file, browser, Jupyter |
-| [`data_plane/02_httpx_proxy_shell_exec.py`](data_plane/02_httpx_proxy_shell_exec.py) | [REST API guide](https://treadstone-ai.dev/docs/rest-api-guide.md), [Inside your sandbox](https://treadstone-ai.dev/docs/inside-sandbox.md) | Minimal `httpx` `POST /v1/shell/exec` via `urls.proxy` (no `agent-sandbox`) |
+| [`control_plane/01_create_sandbox.py`](control_plane/01_create_sandbox.py) | [Quickstart](https://treadstone-ai.dev/docs/quickstart), [Sandbox lifecycle](https://treadstone-ai.dev/docs/sandbox-lifecycle) | List templates, create sandbox, wait for `ready`, optional delete |
+| [`control_plane/02_list_sandboxes.py`](control_plane/02_list_sandboxes.py) | [Sandbox lifecycle](https://treadstone-ai.dev/docs/sandbox-lifecycle) | List sandboxes, group by status, optional `--status` filter |
+| [`control_plane/03_lifecycle_stop_start.py`](control_plane/03_lifecycle_stop_start.py) | [Sandbox lifecycle](https://treadstone-ai.dev/docs/sandbox-lifecycle) | Stop → start transitions |
+| [`control_plane/04_browser_handoff.py`](control_plane/04_browser_handoff.py) | [Browser handoff](https://treadstone-ai.dev/docs/browser-handoff) | `web-link` create, status, delete, create again |
+| [`data_plane/01_agent_sandbox_runtime.py`](data_plane/01_agent_sandbox_runtime.py) | [Inside your sandbox](https://treadstone-ai.dev/docs/inside-sandbox) | Scoped data-plane key + `agent_sandbox`: shell, file, browser, Jupyter |
+| [`data_plane/02_httpx_proxy_shell_exec.py`](data_plane/02_httpx_proxy_shell_exec.py) | [REST API guide](https://treadstone-ai.dev/docs/rest-api-guide), [Inside your sandbox](https://treadstone-ai.dev/docs/inside-sandbox) | Minimal `httpx` `POST /v1/shell/exec` via `urls.proxy` (no `agent-sandbox`) |
 
 Shared helpers: [`_shared.py`](_shared.py).
 
@@ -98,4 +98,4 @@ python examples/data_plane/02_httpx_proxy_shell_exec.py --api-key "$TREADSTONE_A
 
 ## API reference
 
-Full OpenAPI (including merged sandbox runtime paths under the proxy) is served by the API, e.g. `GET https://api.treadstone-ai.dev/openapi.json` and [Swagger UI](https://api.treadstone-ai.dev/docs). The Python SDK used here is generated from a **public** export that omits merged proxy paths; use hosted Swagger for data-plane HTTP contract details. See [Python SDK guide](https://treadstone-ai.dev/docs/python-sdk-guide.md).
+Full OpenAPI (including merged sandbox runtime paths under the proxy) is served by the API, e.g. `GET https://api.treadstone-ai.dev/openapi.json` and [Swagger UI](https://api.treadstone-ai.dev/docs). The Python SDK used here is generated from a **public** export that omits merged proxy paths; use hosted Swagger for data-plane HTTP contract details. See [Python SDK guide](https://treadstone-ai.dev/docs/python-sdk-guide).

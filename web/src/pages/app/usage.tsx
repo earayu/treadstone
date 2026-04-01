@@ -2,6 +2,8 @@ import { useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
 import { useGrants, useComputeSessions, useUsageOverview, useUserPlan } from "@/api/usage"
+import { HelpIcon } from "@/components/ui/help-icon"
+import { DOC } from "@/lib/console-docs"
 import { cn } from "@/lib/utils"
 import { formatSeconds } from "@/lib/format-time"
 import { formatTierDisplayName } from "@/lib/tier-label"
@@ -104,8 +106,13 @@ export function UsagePage() {
 
       <div>
         <h1 className="text-4xl font-bold tracking-tight text-foreground">Usage &amp; Quotas</h1>
-        <p className="mt-1 text-base text-muted-foreground">
-          Compute consumption, quota grants, and plan limits for your workspace.
+        <p className="mt-1 flex flex-wrap items-center gap-2 text-base text-muted-foreground">
+          <span>Compute consumption, quota grants, and plan limits for your workspace.</span>
+          <HelpIcon
+            content="CU-h and monthly budgets are explained in Usage & Limits. This page mirrors the same numbers as the API."
+            link={{ href: DOC.usageLimits.whatIsCu, label: "What is a CU?" }}
+            side="right"
+          />
         </p>
       </div>
 
@@ -165,9 +172,16 @@ export function UsagePage() {
 
       <div className="border border-border/15 bg-black">
         <div className="flex items-center justify-between border-b border-border/15 bg-card px-6 py-4">
-          <h3 className="text-xs font-bold uppercase tracking-[1.2px] text-muted-foreground">
-            Compute sessions
-          </h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-xs font-bold uppercase tracking-[1.2px] text-muted-foreground">
+              Compute sessions
+            </h3>
+            <HelpIcon
+              content="Sessions are recorded runs of sandboxes for metering. Compare with the Usage API and CLI."
+              link={{ href: DOC.usageLimits.checkingBalance, label: "Checking your balance" }}
+              side="bottom"
+            />
+          </div>
           <div className="flex gap-1">
             {SESSION_STATUS_OPTIONS.map((opt) => (
               <button

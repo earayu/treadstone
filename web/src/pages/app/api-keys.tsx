@@ -11,6 +11,8 @@ import {
   useDeleteApiKey,
   type ApiKey,
 } from "@/api/api-keys"
+import { HelpIcon } from "@/components/ui/help-icon"
+import { DOC } from "@/lib/console-docs"
 import { cn } from "@/lib/utils"
 
 const DATE_TIME_FORMAT: Intl.DateTimeFormatOptions = {
@@ -172,8 +174,13 @@ export function ApiKeysPage() {
       <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="text-4xl font-bold tracking-tight text-foreground">API Keys</h1>
-          <p className="mt-1 text-base text-muted-foreground">
-            Create and revoke keys for the REST API, CLI, and SDKs.
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-base text-muted-foreground">
+            <span>Create and revoke keys for the REST API, CLI, and SDKs.</span>
+            <HelpIcon
+              content="Keys can cover the control plane (lifecycle, usage) and/or the data plane (sandbox proxy). Defaults match the API."
+              link={{ href: DOC.apiKeysAuth.inTheConsole, label: "Keys in Console" }}
+              side="right"
+            />
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -378,6 +385,14 @@ export function ApiKeysPage() {
               </div>
 
               <div className="space-y-3 rounded border border-border/15 bg-background/50 p-4">
+                <div className="flex items-center gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Scopes</p>
+                  <HelpIcon
+                    content="Control plane: sandboxes, templates, usage. Data plane: HTTP into running sandboxes via the proxy URL."
+                    link={{ href: DOC.apiKeysAuth.scopeDataPlane, label: "Data plane scope" }}
+                    side="left"
+                  />
+                </div>
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="text-sm font-medium text-foreground">Control plane</p>

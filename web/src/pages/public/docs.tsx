@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { Link, useSearchParams } from "react-router"
+import { Link, useNavigate, useParams } from "react-router"
 import ReactMarkdown from "react-markdown"
 import type { Components } from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -46,7 +46,7 @@ function docsMarkdownPathToSpaHref(href: string | undefined): string | null {
     return null
   }
   const hash = m[2] ?? ""
-  return `/docs?page=${m[1]}${hash}`
+  return `/docs/${m[1]}${hash}`
 }
 
 /** Derive fence language from `<code class="language-xxx">` inside a `<pre>`. */
@@ -440,7 +440,7 @@ function OnThisPage({ headings }: { headings: DocHeading[] }) {
                 const el = document.getElementById(heading.id)
                 if (el) {
                   el.scrollIntoView({ behavior: "smooth", block: "start" })
-                  const nextUrl = `${window.location.pathname}${window.location.search}#${heading.id}`
+                  const nextUrl = `${window.location.pathname}#${heading.id}`
                   window.history.replaceState(null, "", nextUrl)
                 }
               }}
@@ -455,7 +455,8 @@ function OnThisPage({ headings }: { headings: DocHeading[] }) {
 }
 
 export function DocsPage() {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const { slug: slugParam } = useParams<{ slug?: string }>()
+  const navigate = useNavigate()
   const [manifest, setManifest] = useState<DocsManifestEntry[]>([])
   const [content, setContent] = useState("")
   const [loadingManifest, setLoadingManifest] = useState(true)
@@ -492,7 +493,7 @@ export function DocsPage() {
     }
   }, [])
 
-  const pageParam = searchParams.get("page")
+  const pageParam = slugParam ?? null
   const currentEntry = manifest.length > 0 ? resolveCurrentDoc(manifest, pageParam) : null
   const canonicalSlug = manifest.length > 0 ? getCanonicalDocSlug(manifest, pageParam) : null
   const sections = groupDocsBySection(manifest)
@@ -521,8 +522,8 @@ export function DocsPage() {
       return
     }
 
-    setSearchParams({ page: canonicalSlug }, { replace: true })
-  }, [canonicalSlug, pageParam, setSearchParams])
+    navigate(`/docs/${canonicalSlug}`, { replace: true })
+  }, [canonicalSlug, pageParam, navigate])
 
   /** After markdown renders, scroll to #hash if present (direct links / refresh). */
   useEffect(() => {
@@ -583,8 +584,8 @@ export function DocsPage() {
     }
   }, [currentEntry])
 
-  function navigate(slug: string) {
-    setSearchParams({ page: slug })
+  function goToDoc(slug: string) {
+    navigate(`/docs/${slug}`)
     setMobileNavOpen(false)
   }
 
@@ -592,7 +593,7 @@ export function DocsPage() {
     <div className="flex min-h-[calc(100vh-3.5rem)] bg-background">
       <aside className="hidden w-72 shrink-0 border-r border-border/20 lg:block">
         <div className="sticky top-0 h-screen overflow-y-auto px-3">
-          <Sidebar currentSlug={currentEntry?.slug ?? ""} sections={sections} onNavigate={navigate} />
+          <Sidebar currentSlug={currentEntry?.slug ?? ""} sections={sections} onNavigate={goToDoc} />
         </div>
       </aside>
 
@@ -614,7 +615,7 @@ export function DocsPage() {
                 <X className="size-4" />
               </button>
             </div>
-            <Sidebar currentSlug={currentEntry?.slug ?? ""} sections={sections} onNavigate={navigate} />
+            <Sidebar currentSlug={currentEntry?.slug ?? ""} sections={sections} onNavigate={goToDoc} />
           </aside>
         </div>
       )}

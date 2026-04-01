@@ -14,10 +14,15 @@ from treadstone.api.schemas import (
     SandboxResponse,
     SandboxWebLinkResponse,
     SandboxWebLinkStatusResponse,
+    UpdateSandboxRequest,
 )
 from treadstone.config import settings
 from treadstone.core.database import get_session
-from treadstone.core.errors import EmailVerificationRequiredError, SandboxNotFoundError, ValidationError
+from treadstone.core.errors import (
+    EmailVerificationRequiredError,
+    SandboxNotFoundError,
+    ValidationError,
+)
 from treadstone.core.public_base_url import public_control_plane_base_url
 from treadstone.core.request_context import set_request_context
 from treadstone.models.sandbox_web_link import SandboxWebLink
@@ -278,6 +283,33 @@ async def get_sandbox(
     if sandbox is None:
         raise SandboxNotFoundError(sandbox_id)
     set_request_context(request, sandbox_id=sandbox.id)
+    web_link = await _load_active_web_link(session, sandbox.id) if settings.sandbox_domain else None
+    return _to_detail(sandbox, public_control_plane_base_url(request), web_link)
+
+
+@router.patch("/{sandbox_id}", response_model=SandboxDetailResponse)
+async def update_sandbox(
+    request: Request,
+    sandbox_id: str,
+    body: UpdateSandboxRequest,
+    user: User = Depends(get_current_control_plane_user),
+    session: AsyncSession = Depends(get_session),
+):
+    patch = body.model_dump(exclude_unset=True)
+    if not patch:
+        raise ValidationError("At least one field is required to update the sandbox.")
+    service = SandboxService(session=session, metering=_metering)
+    sandbox = await service.update(sandbox_id=sandbox_id, owner_id=user.id, patch=patch)
+    set_request_context(request, sandbox_id=sandbox.id)
+    await record_audit_event(
+        session,
+        action="sandbox.update",
+        target_type="sandbox",
+        target_id=sandbox.id,
+        metadata={"fields": sorted(patch.keys())},
+        request=request,
+    )
+    await session.commit()
     web_link = await _load_active_web_link(session, sandbox.id) if settings.sandbox_domain else None
     return _to_detail(sandbox, public_control_plane_base_url(request), web_link)
 

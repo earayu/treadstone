@@ -55,9 +55,15 @@ const docsBySlug: Record<string, string> = {
 }
 
 function renderDocsPage(initialEntry = "/docs") {
-  const router = createMemoryRouter([{ path: "/docs", element: <DocsPage /> }], {
-    initialEntries: [initialEntry],
-  })
+  const router = createMemoryRouter(
+    [
+      { path: "/docs", element: <DocsPage /> },
+      { path: "/docs/:slug", element: <DocsPage /> },
+    ],
+    {
+      initialEntries: [initialEntry],
+    },
+  )
   return { router, ...render(<RouterProvider router={router} />) }
 }
 
@@ -112,7 +118,7 @@ describe("DocsPage", () => {
   })
 
   it("renders a single page title even when markdown includes an h1", async () => {
-    renderDocsPage("/docs?page=cli-guide")
+    renderDocsPage("/docs/cli-guide")
 
     expect(await screen.findByText("CLI content.")).toBeInTheDocument()
 
@@ -120,18 +126,18 @@ describe("DocsPage", () => {
     expect(markdownHeading).toBeNull()
   })
 
-  it("canonicalizes legacy alias query params to the new slug", async () => {
-    const { router } = renderDocsPage("/docs?page=quickstart-agent-cli")
+  it("canonicalizes alias path segments to the canonical slug", async () => {
+    const { router } = renderDocsPage("/docs/quickstart-agent-cli")
 
     expect(await screen.findByText("CLI content.")).toBeInTheDocument()
 
     await waitFor(() => {
-      expect(router.state.location.search).toBe("?page=cli-guide")
+      expect(router.state.location.pathname).toBe("/docs/cli-guide")
     })
   })
 
   it("renders an in-page navigation from markdown headings", async () => {
-    renderDocsPage("/docs?page=cli-guide")
+    renderDocsPage("/docs/cli-guide")
 
     expect(await screen.findByText("CLI content.")).toBeInTheDocument()
 
@@ -148,7 +154,7 @@ describe("DocsPage", () => {
       configurable: true,
     })
 
-    renderDocsPage("/docs?page=cli-guide")
+    renderDocsPage("/docs/cli-guide")
 
     expect(await screen.findByText("CLI content.")).toBeInTheDocument()
 

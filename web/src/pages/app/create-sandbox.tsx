@@ -9,7 +9,9 @@ import { useCurrentUser } from "@/hooks/use-auth"
 import { HttpError } from "@/lib/api-client"
 import { cn } from "@/lib/utils"
 import { formatSeconds, formatMinutes } from "@/lib/format-time"
+import { DOC } from "@/lib/console-docs"
 import { formatTierDisplayName } from "@/lib/tier-label"
+import { HelpIcon } from "@/components/ui/help-icon"
 
 const SANDBOX_NAME_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,53}[a-z0-9])?$/
 
@@ -196,8 +198,13 @@ export function CreateSandboxPage() {
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
             Create Sandbox
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Configure and deploy a new sandbox environment.
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <span>Configure and deploy a new sandbox environment.</span>
+            <HelpIcon
+              content="Templates, auto-stop, and optional disk follow the same fields as the API. See the quickstart for the shortest path, or key fields for persist and naming rules."
+              link={{ href: DOC.quickstart.shortestPath, label: "Quickstart" }}
+              side="right"
+            />
           </p>
 
           {isUnverified && (
@@ -480,9 +487,16 @@ export function CreateSandboxPage() {
 
         <aside className="mt-10 lg:mt-0">
           <div className="border border-border/15 bg-card p-6">
-            <h2 className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground">
-              {tierTitle}
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground">
+                {tierTitle}
+              </h2>
+              <HelpIcon
+                content="CU-hours and plan caps are defined in Usage & Limits."
+                link={{ href: DOC.usageLimits.whatIsCu, label: "What is a CU?" }}
+                side="left"
+              />
+            </div>
             {usageLoading || !usage ? (
               <p className="mt-4 text-sm text-muted-foreground">Loading limits…</p>
             ) : (
