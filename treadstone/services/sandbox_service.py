@@ -13,7 +13,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select, update
+from sqlalchemy import and_, case, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,6 +47,29 @@ if TYPE_CHECKING:
     from treadstone.services.metering_service import MeteringService
 
 logger = logging.getLogger(__name__)
+
+
+def _sandbox_status_rank():
+    """Stable list ordering: running first, then provisioning, deleting, then error/stopped."""
+    return case(
+        (Sandbox.status == SandboxStatus.READY, 0),
+        (Sandbox.status == SandboxStatus.CREATING, 1),
+        (Sandbox.status.in_(["starting", "stopping"]), 1),
+        (Sandbox.status == SandboxStatus.DELETING, 2),
+        (Sandbox.status.in_([SandboxStatus.ERROR, SandboxStatus.STOPPED]), 3),
+        else_=4,
+    )
+
+
+def _sandbox_activity_at():
+    """Recency proxy when no gmt_updated exists (see sandbox list sorting design)."""
+    return func.coalesce(
+        Sandbox.gmt_last_active,
+        Sandbox.last_synced_at,
+        Sandbox.gmt_started,
+        Sandbox.gmt_stopped,
+        Sandbox.gmt_created,
+    )
 
 
 def _effective_resource_limits(requests: dict[str, str], limits: dict[str, str] | None) -> dict[str, str]:
@@ -333,15 +356,33 @@ class SandboxService:
         )
         return result.scalar_one_or_none()
 
-    async def list_by_owner(self, owner_id: str, labels: dict | None = None) -> list[Sandbox]:
-        stmt = select(Sandbox).where(Sandbox.owner_id == owner_id, Sandbox.gmt_deleted.is_(None))
-        result = await self.session.execute(stmt)
-        sandboxes = list(result.scalars().all())
-
+    async def list_by_owner(
+        self,
+        owner_id: str,
+        labels: dict | None = None,
+        *,
+        offset: int = 0,
+        limit: int = 100,
+    ) -> tuple[list[Sandbox], int]:
+        """Return one page of sandboxes and total count, ordered for stable UI lists."""
+        conds = [Sandbox.owner_id == owner_id, Sandbox.gmt_deleted.is_(None)]
         if labels:
-            sandboxes = [s for s in sandboxes if all(s.labels.get(k) == v for k, v in labels.items())]
+            conds.append(Sandbox.labels.contains(labels))
+        where_clause = and_(*conds)
 
-        return sandboxes
+        count_stmt = select(func.count()).select_from(Sandbox).where(where_clause)
+        total = int((await self.session.execute(count_stmt)).scalar_one())
+
+        order_by = (
+            _sandbox_status_rank().asc(),
+            _sandbox_activity_at().desc(),
+            Sandbox.gmt_created.desc(),
+            Sandbox.name.asc(),
+        )
+        data_stmt = select(Sandbox).where(where_clause).order_by(*order_by).offset(offset).limit(limit)
+        result = await self.session.execute(data_stmt)
+        sandboxes = list(result.scalars().all())
+        return sandboxes, total
 
     async def delete(self, sandbox_id: str, owner_id: str) -> None:
         sandbox = await self.get(sandbox_id, owner_id)

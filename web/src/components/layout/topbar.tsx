@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react"
 import { Link, useLocation, useMatch, useNavigate } from "react-router"
-import { Mail, User, Settings, LogOut, BookOpen } from "lucide-react"
+import { Mail, User, Settings, LogOut } from "lucide-react"
 import { useSandbox } from "@/api/sandboxes"
 import { useCurrentUser, useLogout } from "@/hooks/use-auth"
 import { useSubmitFeedback } from "@/api/support"
@@ -140,10 +140,9 @@ export function Topbar() {
         <div className="flex items-center gap-4 border-r border-border/30 pr-6">
           <Link
             to="/docs"
-            aria-label="Documentation"
-            className="text-muted-foreground transition-colors hover:text-foreground"
+            className="text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
-            <BookOpen className="size-4" />
+            Docs
           </Link>
           <a
             href={GITHUB_URL}
