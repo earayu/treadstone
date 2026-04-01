@@ -96,7 +96,7 @@ curl http://localhost:8000/health
 
 ## 6. Local K8s Cluster (Sandbox Development)
 
-For sandbox-related features that require a real Kubernetes cluster, follow `deploy/README.md` — it covers Kind cluster creation, image building, Helm deployment, and smoke testing end-to-end.
+For sandbox-related features that require a real Kubernetes cluster, follow `deploy/README.md` — use **`make local`** (and **`make destroy-local`** to tear down) so the Makefile runs context checks before Helm; smoke testing end-to-end.
 
 Quick start:
 

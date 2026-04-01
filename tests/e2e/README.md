@@ -6,7 +6,7 @@ E2E runs against a **deployed** Treadstone API (default Kind: `http://api.localh
 
 ```bash
 kubectl config use-context kind-treadstone
-make local                 # Kind + Helm (needs .env.local + Neon)
+make local                 # Kind + build + deploy (needs .env.local + Neon; see deploy/README.md)
 make test-e2e              # all scenarios
 make test-e2e FILE=09-data-plane-proxy.hurl
 make test-e2e BASE_URL=http://localhost:8000   # port-forward instead of Ingress

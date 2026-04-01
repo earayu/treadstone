@@ -68,7 +68,7 @@ scripts/           # Helper scripts (release, install, deploy, E2E)
 | `architecture-data-flow-trace` | Tracing runtime architecture, state transitions, and end-to-end data flow |
 | [`treadstone-public-docs`](.agents/skills/treadstone-public-docs/SKILL.md) | Public docs system, docs IA, manifest-driven delivery, `llms.txt` / sitemap / robots, control vs data plane narratives, dual human/agent quality |
 
-For K8s deployment (Kind cluster, Helm, smoke tests), see [`deploy/README.md`](deploy/README.md).
+For Kubernetes deployment, use **`make local`**, **`make destroy-local`**, and **`make prod`** (context checks before Helm); details in [`deploy/README.md`](deploy/README.md).
 
 ## Code Conventions
 
@@ -145,7 +145,7 @@ Rules:
 
 - PRs, CI, merges, and `make ship`
 - Version bumps (`make bump`), tagged releases (`make release`), and waiting for the Release workflow
-- Production deploy (`make deploy-all ENV=prod`) and the **发生产** path (including Update Prod Image)
+- Production deploy (`make prod`) and the **发生产** path (including Update Prod Image)
 
 That skill is the single source of truth for step order and the agreed codewords (**合并代码**, **发版本**, **发生产**). Do not improvise a parallel release checklist.
 
@@ -182,4 +182,3 @@ Run `make help` for the full list. Key commands:
 | `make ship MSG=x` | git add + commit + push (feature branches only) |
 | `make bump V=x.y.z` | Bump version files, commit + push (feature branches only) |
 | `make release V=x.y.z` | Tag `vx.y.z` on `main` and push tag (triggers full release pipeline) |
-| `make deploy-all ENV=prod` | Deploy all Helm layers to production (after **发生产** prerequisites; see `dev-lifecycle`) |

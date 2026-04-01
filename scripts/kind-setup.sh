@@ -130,7 +130,7 @@ main() {
     verify_cluster
     echo ""
     echo "Next steps:"
-    echo "  make deploy-all ENV=local"
+    echo "  make local"
 }
 
 main "$@"

@@ -142,6 +142,7 @@ clean-web: ## Remove web build artifacts
 	rm -rf web/dist web/.vite
 
 # ── Deploy (Helm) ────────────────────────────────────────────────────────────
+# Prefer `make local` / `make prod` / `make destroy-local` so scripts/check-k8s-context.sh runs first.
 
 ENV ?= local
 # StorageClass is cluster-scoped, not per-ENV: local → local-path, any other ENV → ack.
