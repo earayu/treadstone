@@ -50,14 +50,14 @@ api_key_id: jsonpath "$.id"
 GET {{base_url}}/v1/sandbox-templates
 Authorization: Bearer {{api_key}}
 HTTP 200
-[Captures]
-template_name: jsonpath "$.items[0].name"
+[Asserts]
+jsonpath "$.items" count >= 1
 
 POST {{base_url}}/v1/sandboxes
 Authorization: Bearer {{api_key}}
 Content-Type: application/json
 {
-    "template": "{{template_name}}",
+    "template": "{{sandbox_template}}",
     "name": "e2e-lc-{{unique}}"
 }
 HTTP 202

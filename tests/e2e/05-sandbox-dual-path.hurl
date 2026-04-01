@@ -11,6 +11,8 @@ Content-Type: application/json
     "password": "{{test_password}}"
 }
 HTTP 201
+[Captures]
+user_id: jsonpath "$.id"
 
 POST {{base_url}}/v1/auth/login
 Content-Type: application/json
@@ -64,13 +66,11 @@ api_key_id: jsonpath "$.id"
 GET {{base_url}}/v1/sandbox-templates
 Authorization: Bearer {{api_key}}
 HTTP 200
-[Captures]
-template_name: jsonpath "$.items[0].name"
 [Asserts]
 jsonpath "$.items" count >= 1
 
 
-# ── Invalid Template → 404 ───────────────────────────────────────────────────
+# ── Unknown template name → 403 (metering runs before K8s template resolution) ─
 
 POST {{base_url}}/v1/sandboxes
 Authorization: Bearer {{api_key}}
@@ -79,9 +79,9 @@ Content-Type: application/json
     "template": "nonexistent-template-xyz",
     "name": "e2e-bad-tmpl-{{unique}}"
 }
-HTTP 404
+HTTP 403
 [Asserts]
-jsonpath "$.error.code" == "template_not_found"
+jsonpath "$.error.code" == "template_not_allowed"
 
 
 # ── Claim Path (persist=false, default) ──────────────────────────────────────
@@ -90,7 +90,7 @@ POST {{base_url}}/v1/sandboxes
 Authorization: Bearer {{api_key}}
 Content-Type: application/json
 {
-    "template": "{{template_name}}",
+    "template": "{{sandbox_template}}",
     "name": "e2e-claim-{{unique}}"
 }
 HTTP 202
@@ -109,13 +109,64 @@ jsonpath "$.persist" == false
 jsonpath "$.storage_size" == null
 
 
+# Free tier: max_concurrent_running=1 — stopped sandboxes do not count; stop claim before second create (else HTTP 429).
+GET {{base_url}}/v1/sandboxes/{{claim_sandbox_id}}
+Authorization: Bearer {{api_key}}
+[Options]
+retry: 120
+retry-interval: 2s
+HTTP 200
+[Asserts]
+jsonpath "$.status" == "ready"
+
+POST {{base_url}}/v1/sandboxes/{{claim_sandbox_id}}/stop
+Authorization: Bearer {{api_key}}
+HTTP 200
+
+GET {{base_url}}/v1/sandboxes/{{claim_sandbox_id}}
+Authorization: Bearer {{api_key}}
+[Options]
+retry: 60
+retry-interval: 2s
+HTTP 200
+[Asserts]
+jsonpath "$.status" == "stopped"
+
+
+# Free tier has 0 GiB storage quota — persist=true needs an admin storage grant (HTTP 402 otherwise).
+POST {{base_url}}/v1/auth/login
+Content-Type: application/json
+{
+    "email": "{{admin_email}}",
+    "password": "{{admin_password}}"
+}
+HTTP 200
+
+POST {{base_url}}/v1/admin/users/{{user_id}}/storage-grants
+Content-Type: application/json
+{
+    "size_gib": 10,
+    "grant_type": "admin_grant",
+    "reason": "E2E dual-path persist path"
+}
+HTTP 201
+
+POST {{base_url}}/v1/auth/login
+Content-Type: application/json
+{
+    "email": "e2e-05-{{unique}}@test.treadstone.dev",
+    "password": "{{test_password}}"
+}
+HTTP 200
+
+
 # ── Direct Path (persist=true) ───────────────────────────────────────────────
 
 POST {{base_url}}/v1/sandboxes
 Authorization: Bearer {{api_key}}
 Content-Type: application/json
 {
-    "template": "{{template_name}}",
+    "template": "{{sandbox_template}}",
     "name": "e2e-direct-{{unique}}",
     "persist": true,
     "storage_size": "5Gi"
@@ -156,4 +207,5 @@ Authorization: Bearer {{api_key}}
 HTTP 204
 
 DELETE {{base_url}}/v1/auth/api-keys/{{api_key_id}}
+Authorization: Bearer {{api_key}}
 HTTP 204

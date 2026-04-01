@@ -42,7 +42,7 @@ jsonpath "$.compute.compute_unit_hours" >= 0.0
 jsonpath "$.compute.monthly_limit" == 10.0
 jsonpath "$.compute.monthly_used" >= 0.0
 jsonpath "$.compute.monthly_remaining" >= 0.0
-jsonpath "$.compute.extra_remaining" == 50.0
+jsonpath "$.compute.extra_remaining" == 0.0
 jsonpath "$.compute.total_remaining" >= 0.0
 jsonpath "$.compute.unit" == "CU-hours"
 jsonpath "$.storage.current_used_gib" == 0
@@ -50,10 +50,10 @@ jsonpath "$.storage.total_quota_gib" == 0
 jsonpath "$.storage.available_gib" == 0
 jsonpath "$.storage.unit" == "GiB"
 jsonpath "$.limits.max_concurrent_running" == 1
-jsonpath "$.limits.max_sandbox_duration_seconds" == 1800
+jsonpath "$.limits.max_sandbox_duration_seconds" == 7200
 jsonpath "$.limits.current_running" == 0
 jsonpath "$.grace_period.active" == false
-jsonpath "$.grace_period.grace_period_seconds" == 600
+jsonpath "$.grace_period.grace_period_seconds" == 900
 
 
 # ── GET /v1/usage/plan — full UserPlan details ──────────────────────────────
@@ -69,9 +69,9 @@ jsonpath "$.compute_units_monthly_limit" == 10.0
 jsonpath "$.compute_units_monthly_used" >= 0.0
 jsonpath "$.storage_capacity_limit_gib" == 0
 jsonpath "$.max_concurrent_running" == 1
-jsonpath "$.max_sandbox_duration_seconds" == 1800
+jsonpath "$.max_sandbox_duration_seconds" == 7200
 jsonpath "$.allowed_templates" count >= 1
-jsonpath "$.grace_period_seconds" == 600
+jsonpath "$.grace_period_seconds" == 900
 jsonpath "$.billing_period_start" isString
 jsonpath "$.billing_period_end" isString
 jsonpath "$.grace_period_started_at" == null

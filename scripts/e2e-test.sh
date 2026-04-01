@@ -57,6 +57,8 @@ email_10=e2e-10-${UNIQUE}@test.treadstone.dev
 test_password=${TEST_PASSWORD}
 new_password=E2eStr0ng_New1!
 unique=${UNIQUE}
+# Must match free-tier tier_template.allowed_templates (see Alembic seed); do not use GET /sandbox-templates items[0] (sort order may pick a disallowed template).
+sandbox_template=aio-sandbox-tiny
 EOF
 
 # ── Wait for service ─────────────────────────────────────────────────────────
@@ -124,14 +126,12 @@ if [ -n "$TARGET_FILE" ]; then
         printf "ERROR: E2E file not found: %s/%s\n" "$E2E_DIR" "$TARGET_FILE" >&2
         exit 1
     fi
-    _jobs=()
+    hurl_cmd=(hurl --test --variables-file "$VARS_FILE")
     if [ -n "${HURL_JOBS:-}" ]; then
-        _jobs=(--jobs "$HURL_JOBS")
+        hurl_cmd+=(--jobs "$HURL_JOBS")
     fi
-    hurl --test --variables-file "$VARS_FILE" \
-        "${_jobs[@]}" \
-        --report-html "$REPORT_DIR" \
-        "$E2E_DIR/$TARGET_FILE"
+    hurl_cmd+=(--report-html "$REPORT_DIR" "$E2E_DIR/$TARGET_FILE")
+    "${hurl_cmd[@]}"
 else
     hurl_files=()
     while IFS= read -r f; do
@@ -142,14 +142,13 @@ else
         exit 1
     fi
     # Optional: set HURL_JOBS=1 in CI to reduce parallel sandbox creation flakiness.
-    _jobs=()
+    hurl_cmd=(hurl --test --variables-file "$VARS_FILE")
     if [ -n "${HURL_JOBS:-}" ]; then
-        _jobs=(--jobs "$HURL_JOBS")
+        hurl_cmd+=(--jobs "$HURL_JOBS")
     fi
-    hurl --test --variables-file "$VARS_FILE" \
-        "${_jobs[@]}" \
-        --report-html "$REPORT_DIR" \
-        "${hurl_files[@]}"
+    hurl_cmd+=(--report-html "$REPORT_DIR")
+    hurl_cmd+=("${hurl_files[@]}")
+    "${hurl_cmd[@]}"
 fi
 
 # ── Post-process: group by run, improve visual design ────────────────────────
