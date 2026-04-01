@@ -80,14 +80,35 @@ const DOCS_SANDBOX_ENDPOINTS = "/docs?page=sandbox-endpoints"
 
 const ENDPOINT_TOOLTIP_WEB = `For humans: opens in your browser so you can use the built-in Chrome, VS Code, Terminal, Jupyter, and other tools inside the sandbox. Click opens this URL in a new tab. Full reference: ${DOCS_SANDBOX_ENDPOINTS}`
 
-const ENDPOINT_TOOLTIP_MCP = `For AI assistants: MCP clients connect here to work inside the sandbox—browser automation, VS Code, Share, and more. Use an API key (Authorization: Bearer) on requests; click copies the URL to paste into your MCP client. Full reference: ${DOCS_SANDBOX_ENDPOINTS}`
+const ENDPOINT_TOOLTIP_MCP = `For AI assistants: MCP clients connect here to work inside the sandbox—browser automation, VS Code, Share, and more. Click copies a sample mcp.json-style snippet (url + Authorization header). Replace the placeholder with an API key from Settings → API Keys. Full reference: ${DOCS_SANDBOX_ENDPOINTS}`
 
 const ENDPOINT_TOOLTIP_PROXY = `HTTP access to the sandbox runtime. Send requests with your API key. Click copies the URL. Full reference: ${DOCS_SANDBOX_ENDPOINTS}`
 
-async function copyEndpointUrl(url: string): Promise<void> {
+/** Placeholder for Bearer token; uppercase so it is obvious in pasted JSON. */
+const MCP_CONFIG_API_KEY_PLACEHOLDER =
+  "PASTE_YOUR_API_KEY_HERE_CREATE_ONE_IN_APP_SETTINGS_API_KEYS"
+
+function buildMcpClientConfigJson(mcpUrl: string, mcpServerKey: string): string {
+  return JSON.stringify(
+    {
+      mcpServers: {
+        [mcpServerKey]: {
+          url: mcpUrl,
+          headers: {
+            Authorization: `Bearer ${MCP_CONFIG_API_KEY_PLACEHOLDER}`,
+          },
+        },
+      },
+    },
+    null,
+    2,
+  )
+}
+
+async function copyToClipboard(text: string, successMessage: string): Promise<void> {
   try {
-    await navigator.clipboard.writeText(url)
-    toast.success("Copied to clipboard.")
+    await navigator.clipboard.writeText(text)
+    toast.success(successMessage)
   } catch {
     toast.error("Could not copy to clipboard.")
   }
@@ -130,22 +151,33 @@ function EndpointCopyRow({
   display,
   tooltip,
   labelClassName,
+  copyText,
+  copySuccessMessage,
 }: {
   kind: "PROXY" | "MCP"
   url: string
   display: string
   tooltip: string
   labelClassName: string
+  /** When set, this is copied instead of `url` (e.g. MCP client JSON). */
+  copyText?: string
+  copySuccessMessage?: string
 }) {
   const label = kind === "MCP" ? "MCP" : "PROXY"
+  const textToCopy = copyText ?? url
+  const successMessage = copySuccessMessage ?? "Copied to clipboard."
+  const ariaLabel =
+    kind === "MCP" && copyText
+      ? "Copy MCP server configuration JSON"
+      : `Copy ${label} URL`
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <button
           type="button"
-          onClick={() => void copyEndpointUrl(url)}
+          onClick={() => void copyToClipboard(textToCopy, successMessage)}
           title={url}
-          aria-label={`Copy ${label} URL`}
+          aria-label={ariaLabel}
           className="group flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-sm py-0.5 text-left transition-colors [-webkit-tap-highlight-color:transparent] hover:bg-muted/25 active:-translate-y-px"
         >
           <span
@@ -198,6 +230,8 @@ function SandboxEndpointsCell({ sandbox }: { sandbox: Sandbox }) {
           display={compactUrlDisplay(urls.mcp)}
           tooltip={ENDPOINT_TOOLTIP_MCP}
           labelClassName="border-slate-500/30 text-slate-500 dark:text-slate-400"
+          copyText={buildMcpClientConfigJson(urls.mcp, `treadstone-${sandbox.id}`)}
+          copySuccessMessage="Copied MCP config. Replace the API key placeholder with a key from Settings → API Keys."
         />
       ) : null}
       <EndpointCopyRow
@@ -239,7 +273,7 @@ Auto-delete: the sandbox is permanently deleted after this duration once stopped
     key: "web_url",
     label: "Endpoints",
     className: "w-[29%]",
-    help: `Web: opens the workspace in your browser. MCP: copy for MCP clients (AI tools). Proxy: copy the data-plane base URL for HTTP with your API key.`,
+    help: `Web: opens the workspace in your browser. MCP: copies a JSON snippet for MCP clients (URL + API key placeholder—replace with a key from Settings → API Keys). Proxy: copy the data-plane base URL for HTTP with your API key.`,
     helpLink: { href: DOCS_SANDBOX_ENDPOINTS, label: "Sandbox endpoints" },
   },
   { key: "actions", label: "", className: "w-[8%]" },

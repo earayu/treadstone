@@ -1,4 +1,4 @@
-import { Link, NavLink } from "react-router"
+import { Link, NavLink, useLocation } from "react-router"
 import {
   Box,
   Key,
@@ -31,6 +31,7 @@ const adminNavItems = [
 ]
 
 export function Sidebar() {
+  const { pathname } = useLocation()
   const { data: user } = useCurrentUser()
   const isAdmin = user?.role === "admin"
 
@@ -55,14 +56,18 @@ export function Sidebar() {
             key={item.to}
             to={item.to}
             end={item.end}
-            className={({ isActive }) =>
-              cn(
+            className={({ isActive }) => {
+              const active =
+                item.to === "/app"
+                  ? pathname === "/app" || pathname.startsWith("/app/sandboxes/")
+                  : isActive
+              return cn(
                 "flex items-center gap-3 border-l-2 px-4 py-3 text-sm transition-colors",
-                isActive
+                active
                   ? "border-primary bg-sidebar-accent font-bold text-primary"
                   : "border-transparent text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
               )
-            }
+            }}
           >
             <item.icon className="size-4 shrink-0" />
             {item.label}

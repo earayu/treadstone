@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react"
-import { Link, useLocation, useNavigate } from "react-router"
+import { Link, useLocation, useMatch, useNavigate } from "react-router"
 import { Mail, User, Settings, LogOut, BookOpen } from "lucide-react"
+import { useSandbox } from "@/api/sandboxes"
 import { useCurrentUser, useLogout } from "@/hooks/use-auth"
 import { useSubmitFeedback } from "@/api/support"
 import { toast } from "sonner"
@@ -31,8 +32,9 @@ const ROUTE_LABELS: Record<string, string> = {
   "/app/api-keys": "API Keys",
   "/app/usage": "Usage",
   "/app/settings": "Settings",
-  "/app/sandboxes/new": "Create Sandbox",
 }
+
+const crumbLinkClass = "text-muted-foreground transition-colors hover:text-foreground"
 
 function useClickOutside(ref: React.RefObject<HTMLElement | null>, handler: () => void) {
   useEffect(() => {
@@ -63,9 +65,16 @@ export function Topbar() {
   useClickOutside(mailRef, () => setMailOpen(false))
   useClickOutside(userRef, () => setUserOpen(false))
 
-  const pageLabel = location.pathname.startsWith("/app/sandboxes/")
-    ? "Sandbox Detail"
-    : (ROUTE_LABELS[location.pathname] ?? "Console")
+  const sandboxDetailMatch = useMatch({ path: "/app/sandboxes/:id", end: true })
+  const sandboxDetailId = sandboxDetailMatch?.params.id
+  const isSandboxDetail = Boolean(sandboxDetailId && sandboxDetailId !== "new")
+  const { data: sandboxBreadcrumb } = useSandbox(isSandboxDetail && sandboxDetailId ? sandboxDetailId : "")
+
+  const path = location.pathname
+  const pageLabel = ROUTE_LABELS[path] ?? "Console"
+
+  const sandboxDetailLabel =
+    sandboxBreadcrumb?.name?.trim() || sandboxBreadcrumb?.id || sandboxDetailId || "Sandbox"
 
   async function handleFeedbackSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -96,15 +105,35 @@ export function Topbar() {
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-background px-6">
-      <div className="flex items-center gap-2 text-xs uppercase tracking-widest">
-        <Link
-          to="/app"
-          className="text-muted-foreground transition-colors hover:text-foreground"
-        >
+      <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs uppercase tracking-widest">
+        <Link to="/app" className={crumbLinkClass}>
           Console
         </Link>
         <span className="text-muted-foreground">&rsaquo;</span>
-        <span className="font-medium text-foreground">{pageLabel}</span>
+        {path === "/app/sandboxes/new" ? (
+          <>
+            <Link to="/app" className={crumbLinkClass}>
+              Sandboxes
+            </Link>
+            <span className="text-muted-foreground">&rsaquo;</span>
+            <span className="min-w-0 truncate font-medium text-foreground">Create</span>
+          </>
+        ) : isSandboxDetail ? (
+          <>
+            <Link to="/app" className={crumbLinkClass}>
+              Sandboxes
+            </Link>
+            <span className="text-muted-foreground">&rsaquo;</span>
+            <span
+              className="min-w-0 max-w-[min(52vw,320px)] truncate font-medium text-foreground"
+              title={sandboxDetailLabel}
+            >
+              {sandboxDetailLabel}
+            </span>
+          </>
+        ) : (
+          <span className="min-w-0 truncate font-medium text-foreground">{pageLabel}</span>
+        )}
       </div>
 
       <div className="flex items-center gap-6">
