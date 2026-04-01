@@ -1,17 +1,39 @@
-{{- if .Values.acsScheduling.enabled }}
+{{- if .Values.claimAcsScheduling.enabled }}
 ---
 apiVersion: scheduling.alibabacloud.com/v1alpha1
 kind: ResourcePolicy
 metadata:
-  name: sandbox-acs-overflow
+  name: sandbox-claim-acs-overflow
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "sandbox-runtime.labels" . | nindent 4 }}
 spec:
-  # Empty selector applies to all pods in the namespace (all sandbox pods).
-  selector: {}
+  selector:
+    {{- range $k, $v := .Values.sandboxPodSelectorLabels }}
+    {{ $k }}: {{ $v | quote }}
+    {{- end }}
+    treadstone-ai.dev/provision-mode: "claim"
   strategy: prefer
   units:
-    - resource: ecs   # First: schedule to self-owned ECS nodes.
-    - resource: acs   # Overflow: ACS virtual nodes (per-second billing, no pre-provisioning needed).
+    {{- toYaml .Values.claimAcsScheduling.units | nindent 4 }}
+{{- end }}
+
+{{- if .Values.directAcsScheduling.enabled }}
+---
+apiVersion: scheduling.alibabacloud.com/v1alpha1
+kind: ResourcePolicy
+metadata:
+  name: sandbox-direct-acs-overflow
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sandbox-runtime.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- range $k, $v := .Values.sandboxPodSelectorLabels }}
+    {{ $k }}: {{ $v | quote }}
+    {{- end }}
+    treadstone-ai.dev/provision-mode: "direct"
+  strategy: prefer
+  units:
+    {{- toYaml .Values.directAcsScheduling.units | nindent 4 }}
 {{- end }}

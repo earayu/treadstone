@@ -15,18 +15,13 @@ metadata:
     {{- end }}
 spec:
   podTemplate:
-    {{- if and $.Values.acsScheduling.enabled $.Values.acsScheduling.podLabels }}
     metadata:
       labels:
-        {{- range $k, $v := $.Values.acsScheduling.podLabels }}
+        {{- range $k, $v := $.Values.sandboxPodSelectorLabels }}
         {{ $k }}: {{ $v | quote }}
         {{- end }}
-    {{- end }}
+        treadstone-ai.dev/provision-mode: "claim"
     spec:
-      {{- if and $.Values.acsScheduling.enabled $.Values.acsScheduling.podTolerations }}
-      tolerations:
-        {{- toYaml $.Values.acsScheduling.podTolerations | nindent 8 }}
-      {{- end }}
       containers:
         - name: sandbox
           image: {{ $.Values.image }}

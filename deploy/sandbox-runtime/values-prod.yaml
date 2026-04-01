@@ -44,5 +44,34 @@ sandboxTemplates:
     warmPool: { enabled: false, replicas: 1 }
     allowedStorageSizes: ["5Gi", "10Gi", "20Gi"]
 
-acsScheduling:
+claimAcsScheduling:
   enabled: true
+  units:
+    - resource: ecs
+    - resource: acs
+      podLabels:
+        alibabacloud.com/compute-class: "general-purpose"
+        alibabacloud.com/compute-qos: "default"
+      podAnnotations:
+        network.alibabacloud.com/vswitch-ids: "vsw-t4ntxqr509hpovxccg7lj"
+    - resource: acs
+      podLabels:
+        alibabacloud.com/compute-class: "performance"
+        alibabacloud.com/compute-qos: "default"
+      podAnnotations:
+        network.alibabacloud.com/vswitch-ids: "vsw-t4ntxqr509hpovxccg7lj"
+    - resource: acs
+      podLabels:
+        alibabacloud.com/compute-class: "general-purpose"
+        alibabacloud.com/compute-qos: "best-effort"
+      podAnnotations:
+        network.alibabacloud.com/vswitch-ids: "vsw-t4ntxqr509hpovxccg7lj"
+    - resource: acs
+      podLabels:
+        alibabacloud.com/compute-class: "performance"
+        alibabacloud.com/compute-qos: "best-effort"
+      podAnnotations:
+        network.alibabacloud.com/vswitch-ids: "vsw-t4ntxqr509hpovxccg7lj"
+
+directAcsScheduling:
+  enabled: false
