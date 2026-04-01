@@ -17,18 +17,20 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+          fetch-tags: true
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      # Use the GitHub Release tag, not git describe on HEAD:
+      # - checkout may not see the new tag yet, or describe can pick the previous ancestor tag.
+      # - This job runs after Release succeeds, so releases/latest is the tag just published.
       - name: Get release tag
         id: tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git fetch --tags origin
-          # workflow_run.head_sha is the pre-bump commit for Release (workflow_dispatch).
-          # bump-and-tag pushes a new commit + tag, so exact-match on head_sha fails.
-          # After checkout main, HEAD is the release tip; nearest tag is the release tag.
-          TAG=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || echo "")
-          if [ -z "$TAG" ] || [[ "$TAG" != v* ]]; then
-            echo "No semver tag found on main — skipping."
+          TAG=$(gh api "repos/${{ github.repository }}/releases/latest" --jq -r .tag_name)
+          if [ -z "$TAG" ] || [ "$TAG" = "null" ] || [[ "$TAG" != v* ]]; then
+            echo "No tag from releases/latest — skipping."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "version=$TAG" >> "$GITHUB_OUTPUT"
