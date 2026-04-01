@@ -2,6 +2,9 @@
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
+from treadstone.config import settings
 from treadstone.services.k8s_client import (
     SANDBOX_GID,
     SANDBOX_HOME_DIR,
@@ -343,3 +346,191 @@ async def test_create_sandbox_manifest_without_pvc_has_no_init_or_security_conte
     assert "initContainers" not in pod_spec
     assert "volumeMounts" not in pod_spec["containers"][0]
     assert "volumeClaimTemplates" not in manifest["spec"]
+
+
+# ── ACS overflow scheduling injection ──
+
+
+_TOLERATION = {
+    "key": "virtual-kubelet.io/provider",
+    "operator": "Equal",
+    "value": "alibabacloud",
+    "effect": "NoSchedule",
+}
+_TOLERATION_JSON = (
+    '[{"key":"virtual-kubelet.io/provider","operator":"Equal","value":"alibabacloud","effect":"NoSchedule"}]'
+)
+_EXTRA_LABELS = {"alibabacloud.com/compute-class": "general-purpose", "alibabacloud.com/compute-qos": "default"}
+_EXTRA_LABELS_JSON = '{"alibabacloud.com/compute-class":"general-purpose","alibabacloud.com/compute-qos":"default"}'
+
+
+async def test_create_sandbox_injects_tolerations_and_labels(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "sandbox_pod_tolerations_json", _TOLERATION_JSON)
+    monkeypatch.setattr(settings, "sandbox_pod_extra_labels_json", _EXTRA_LABELS_JSON)
+
+    client = FakeK8sClient()
+    sb = await client.create_sandbox(
+        name="acs-sb",
+        namespace="treadstone-prod",
+        image="ghcr.io/agent-infra/sandbox:latest",
+        container_port=8080,
+        resources={"requests": {"cpu": "500m", "memory": "2Gi"}},
+        pod_labels={"treadstone-ai.dev/sandbox-id": "sb123"},
+    )
+
+    pod_template = sb["spec"]["podTemplate"]
+    pod_spec = pod_template["spec"]
+
+    assert pod_spec["tolerations"] == [_TOLERATION], "toleration must be injected"
+    labels = pod_template["metadata"]["labels"]
+    assert labels["alibabacloud.com/compute-class"] == "general-purpose"
+    assert labels["alibabacloud.com/compute-qos"] == "default"
+    # sandbox-specific pod_labels must be preserved and take precedence
+    assert labels["treadstone-ai.dev/sandbox-id"] == "sb123"
+
+
+async def test_create_sandbox_no_scheduling_fields_when_config_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "sandbox_pod_tolerations_json", "")
+    monkeypatch.setattr(settings, "sandbox_pod_extra_labels_json", "")
+
+    client = FakeK8sClient()
+    sb = await client.create_sandbox(
+        name="plain-sb",
+        namespace="treadstone-local",
+        image="ghcr.io/agent-infra/sandbox:latest",
+        container_port=8080,
+        resources={"requests": {"cpu": "250m", "memory": "512Mi"}},
+    )
+
+    pod_spec = sb["spec"]["podTemplate"]["spec"]
+    assert "tolerations" not in pod_spec, "no tolerations when config is empty"
+    assert "metadata" not in sb["spec"]["podTemplate"], "no extra labels when config is empty"
+
+
+async def test_create_sandbox_invalid_tolerations_json_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "sandbox_pod_tolerations_json", "not valid json")
+    monkeypatch.setattr(settings, "sandbox_pod_extra_labels_json", "")
+
+    client = FakeK8sClient()
+    sb = await client.create_sandbox(
+        name="bad-tol-sb",
+        namespace="treadstone-local",
+        image="ghcr.io/agent-infra/sandbox:latest",
+        container_port=8080,
+        resources={"requests": {"cpu": "250m"}},
+    )
+    pod_spec = sb["spec"]["podTemplate"]["spec"]
+    assert "tolerations" not in pod_spec
+
+
+async def test_create_sandbox_tolerations_not_array_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "sandbox_pod_tolerations_json", "{}")
+    monkeypatch.setattr(settings, "sandbox_pod_extra_labels_json", "")
+
+    client = FakeK8sClient()
+    sb = await client.create_sandbox(
+        name="bad-tol-shape-sb",
+        namespace="treadstone-local",
+        image="ghcr.io/agent-infra/sandbox:latest",
+        container_port=8080,
+        resources={"requests": {"cpu": "250m"}},
+    )
+    pod_spec = sb["spec"]["podTemplate"]["spec"]
+    assert "tolerations" not in pod_spec
+
+
+async def test_create_sandbox_tolerations_array_skips_non_objects(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        settings,
+        "sandbox_pod_tolerations_json",
+        '[{"key":"k","operator":"Exists"}, "skip-me"]',
+    )
+    monkeypatch.setattr(settings, "sandbox_pod_extra_labels_json", "")
+
+    client = FakeK8sClient()
+    sb = await client.create_sandbox(
+        name="partial-tol-sb",
+        namespace="treadstone-local",
+        image="ghcr.io/agent-infra/sandbox:latest",
+        container_port=8080,
+        resources={"requests": {"cpu": "250m"}},
+    )
+    pod_spec = sb["spec"]["podTemplate"]["spec"]
+    assert pod_spec["tolerations"] == [{"key": "k", "operator": "Exists"}]
+
+
+async def test_create_sandbox_invalid_extra_labels_json_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "sandbox_pod_tolerations_json", "")
+    monkeypatch.setattr(settings, "sandbox_pod_extra_labels_json", "not-json")
+
+    client = FakeK8sClient()
+    sb = await client.create_sandbox(
+        name="bad-labels-sb",
+        namespace="treadstone-local",
+        image="ghcr.io/agent-infra/sandbox:latest",
+        container_port=8080,
+        resources={"requests": {"cpu": "250m"}},
+    )
+    assert "metadata" not in sb["spec"]["podTemplate"]
+
+
+async def test_create_sandbox_extra_labels_not_object_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "sandbox_pod_tolerations_json", "")
+    monkeypatch.setattr(settings, "sandbox_pod_extra_labels_json", "[1, 2]")
+
+    client = FakeK8sClient()
+    sb = await client.create_sandbox(
+        name="bad-labels-shape-sb",
+        namespace="treadstone-local",
+        image="ghcr.io/agent-infra/sandbox:latest",
+        container_port=8080,
+        resources={"requests": {"cpu": "250m"}},
+    )
+    assert "metadata" not in sb["spec"]["podTemplate"]
+
+
+async def test_create_sandbox_pod_labels_override_extra_labels(monkeypatch: pytest.MonkeyPatch) -> None:
+    """pod_labels (sandbox-specific) take precedence over extra_labels (ACS) on key collision."""
+    monkeypatch.setattr(settings, "sandbox_pod_tolerations_json", "")
+    monkeypatch.setattr(
+        settings,
+        "sandbox_pod_extra_labels_json",
+        '{"alibabacloud.com/compute-class":"general-purpose","env":"base"}',
+    )
+
+    client = FakeK8sClient()
+    sb = await client.create_sandbox(
+        name="override-sb",
+        namespace="treadstone-local",
+        image="ghcr.io/agent-infra/sandbox:latest",
+        container_port=8080,
+        resources={"requests": {"cpu": "250m"}},
+        pod_labels={"env": "sandbox-override"},
+    )
+
+    labels = sb["spec"]["podTemplate"]["metadata"]["labels"]
+    assert labels["alibabacloud.com/compute-class"] == "general-purpose"
+    assert labels["env"] == "sandbox-override", "pod_labels must win over extra_labels on collision"
+
+
+async def test_kr8s_client_injects_tolerations(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "sandbox_pod_tolerations_json", _TOLERATION_JSON)
+    monkeypatch.setattr(settings, "sandbox_pod_extra_labels_json", _EXTRA_LABELS_JSON)
+
+    api = _RecordingAPI()
+    client = Kr8sClient()
+    client._api = api  # type: ignore[attr-defined]
+
+    await client.create_sandbox(
+        name="kr8s-acs-sb",
+        namespace="treadstone-prod",
+        image="ghcr.io/agent-infra/sandbox:latest",
+        container_port=8080,
+        resources={"requests": {"cpu": "500m"}},
+    )
+
+    manifest = api.calls[0]["json"]
+    pod_spec = manifest["spec"]["podTemplate"]["spec"]
+    assert pod_spec["tolerations"] == [_TOLERATION]
+    labels = manifest["spec"]["podTemplate"]["metadata"]["labels"]
+    assert labels["alibabacloud.com/compute-class"] == "general-purpose"

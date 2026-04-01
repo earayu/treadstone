@@ -39,3 +39,4 @@ Thumbs.db
 
 # local scratch / browser session output
 xiaohongshu_feed_sample/
+.worktrees/

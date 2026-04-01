@@ -1,0 +1,17 @@
+{{- if .Values.acsScheduling.enabled }}
+---
+apiVersion: scheduling.alibabacloud.com/v1alpha1
+kind: ResourcePolicy
+metadata:
+  name: sandbox-acs-overflow
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sandbox-runtime.labels" . | nindent 4 }}
+spec:
+  # Empty selector applies to all pods in the namespace (all sandbox pods).
+  selector: {}
+  strategy: prefer
+  units:
+    - resource: ecs   # First: schedule to self-owned ECS nodes.
+    - resource: acs   # Overflow: ACS virtual nodes (per-second billing, no pre-provisioning needed).
+{{- end }}

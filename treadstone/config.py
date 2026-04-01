@@ -54,6 +54,16 @@ class Settings(BaseSettings):
     sandbox_storage_class: str = "treadstone-workspace"
     sandbox_default_storage_size: Literal["5Gi", "10Gi", "20Gi"] = "5Gi"
 
+    # ACS overflow scheduling — injected into direct Sandbox CRs (agents.x-k8s.io) from
+    # create_sandbox, not SandboxClaim (which uses SandboxTemplates from Helm).
+    # JSON strings; empty string disables injection. Align with Helm acsScheduling when
+    # using both paths. ResourcePolicy CR handles ECS-first priority.
+    # Example: '[{"key":"virtual-kubelet.io/provider","operator":"Equal","value":"alibabacloud","effect":"NoSchedule"}]'
+    sandbox_pod_tolerations_json: str = ""
+    # Extra Pod labels applied on top of sandbox-specific labels.
+    # Example: '{"alibabacloud.com/compute-class":"general-purpose","alibabacloud.com/compute-qos":"default"}'
+    sandbox_pod_extra_labels_json: str = ""
+
     # Metering — enforcement (quota checks) can be disabled independently of recording
     metering_enforcement_enabled: bool = False
 
