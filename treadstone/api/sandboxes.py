@@ -262,9 +262,13 @@ async def list_sandboxes(
     labels_dict = _parse_label_filters(label)
 
     service = SandboxService(session=session)
-    sandboxes = await service.list_by_owner(owner_id=user.id, labels=labels_dict or None)
-    total = len(sandboxes)
-    page = sandboxes[offset : offset + limit]
+    sandboxes, total = await service.list_by_owner(
+        owner_id=user.id,
+        labels=labels_dict or None,
+        offset=offset,
+        limit=limit,
+    )
+    page = sandboxes
     base_url = public_control_plane_base_url(request)
     web_links = await _load_active_web_links(session, [sb.id for sb in page]) if settings.sandbox_domain else {}
     return {"items": [_to_response(sb, base_url, web_links.get(sb.id)) for sb in page], "total": total}

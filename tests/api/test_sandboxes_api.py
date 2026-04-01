@@ -1,5 +1,7 @@
 """API tests for Sandbox CRUD endpoints."""
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from fastapi_users.db import SQLAlchemyUserDatabase
 from httpx import ASGITransport, AsyncClient
@@ -320,6 +322,62 @@ class TestListSandboxes:
         resp = await auth_client.get("/v1/sandboxes?label=invalid")
         assert resp.status_code == 422
         assert resp.json()["error"]["code"] == "validation_error"
+
+    async def test_list_orders_ready_before_stopped(self, auth_client):
+        r_stopped = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": "order-stopped"},
+        )
+        r_ready = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": "order-ready"},
+        )
+        id_stopped = r_stopped.json()["id"]
+        id_ready = r_ready.json()["id"]
+        async with _test_session_factory() as session:
+            sb_s = (await session.execute(select(Sandbox).where(Sandbox.id == id_stopped))).scalar_one()
+            sb_s.status = "stopped"
+            sb_r = (await session.execute(select(Sandbox).where(Sandbox.id == id_ready))).scalar_one()
+            sb_r.status = "ready"
+            await session.commit()
+
+        resp = await auth_client.get("/v1/sandboxes")
+        assert resp.status_code == 200
+        ids = [item["id"] for item in resp.json()["items"]]
+        assert ids.index(id_ready) < ids.index(id_stopped)
+
+    async def test_list_same_status_orders_by_activity_then_name(self, auth_client):
+        r_old = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": "act-old"},
+        )
+        r_new = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": "act-new"},
+        )
+        id_old = r_old.json()["id"]
+        id_new = r_new.json()["id"]
+        now = datetime.now(UTC)
+        async with _test_session_factory() as session:
+            sb_o = (await session.execute(select(Sandbox).where(Sandbox.id == id_old))).scalar_one()
+            sb_o.status = "ready"
+            sb_o.gmt_last_active = now - timedelta(hours=2)
+            sb_n = (await session.execute(select(Sandbox).where(Sandbox.id == id_new))).scalar_one()
+            sb_n.status = "ready"
+            sb_n.gmt_last_active = now - timedelta(minutes=5)
+            await session.commit()
+
+        resp = await auth_client.get("/v1/sandboxes")
+        assert resp.status_code == 200
+        ids = [item["id"] for item in resp.json()["items"]]
+        assert ids.index(id_new) < ids.index(id_old)
+
+    async def test_list_order_stable_across_requests(self, auth_client):
+        await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "stable-a"})
+        await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "stable-b"})
+        first = await auth_client.get("/v1/sandboxes")
+        second = await auth_client.get("/v1/sandboxes")
+        assert first.json()["items"] == second.json()["items"]
 
 
 class TestGetSandbox:
