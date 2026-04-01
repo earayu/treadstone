@@ -54,6 +54,15 @@ class Settings(BaseSettings):
     sandbox_storage_class: str = "treadstone-workspace"
     sandbox_default_storage_size: Literal["5Gi", "10Gi", "20Gi"] = "5Gi"
 
+    # ACS overflow scheduling — injected into every direct-path (persist=true) Sandbox CR.
+    # JSON strings; empty string disables injection. Both paths (claim and direct) share
+    # the same toleration; the ResourcePolicy CR handles ECS-first priority.
+    # Example: '[{"key":"virtual-kubelet.io/provider","operator":"Equal","value":"alibabacloud","effect":"NoSchedule"}]'
+    sandbox_pod_tolerations_json: str = ""
+    # Extra Pod labels applied on top of sandbox-specific labels.
+    # Example: '{"alibabacloud.com/compute-class":"general-purpose","alibabacloud.com/compute-qos":"default"}'
+    sandbox_pod_extra_labels_json: str = ""
+
     # Metering — enforcement (quota checks) can be disabled independently of recording
     metering_enforcement_enabled: bool = False
 

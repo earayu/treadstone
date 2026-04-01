@@ -17,6 +17,8 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any, Protocol, runtime_checkable
 
+from treadstone.config import settings
+
 logger = logging.getLogger(__name__)
 
 CLAIM_API_GROUP = "extensions.agents.x-k8s.io"
@@ -35,6 +37,23 @@ WATCH_TIMEOUT_SECONDS = 300
 SANDBOX_HOME_DIR = "/home/gem"
 SANDBOX_UID = 1000
 SANDBOX_GID = 1000
+
+
+def _pod_scheduling_fields() -> tuple[list[dict[str, Any]], dict[str, str]]:
+    """Return (extra_tolerations, extra_labels) from current settings.
+
+    Both are empty by default; populated when ACS overflow is configured via
+    TREADSTONE_SANDBOX_POD_TOLERATIONS_JSON / TREADSTONE_SANDBOX_POD_EXTRA_LABELS_JSON.
+    Applied to every direct-path Sandbox CR's podTemplate so that ResourcePolicy can
+    route pods to ECS first and overflow to ACS virtual nodes when ECS is full.
+    """
+    tolerations: list[dict[str, Any]] = []
+    extra_labels: dict[str, str] = {}
+    if settings.sandbox_pod_tolerations_json:
+        tolerations = json.loads(settings.sandbox_pod_tolerations_json)
+    if settings.sandbox_pod_extra_labels_json:
+        extra_labels = json.loads(settings.sandbox_pod_extra_labels_json)
+    return tolerations, extra_labels
 
 
 class WatchExpiredError(Exception):
@@ -222,15 +241,22 @@ class Kr8sClient:
                 }
             ]
 
+        extra_tolerations, extra_labels = _pod_scheduling_fields()
+        if extra_tolerations:
+            pod_spec.setdefault("tolerations", [])
+            pod_spec["tolerations"].extend(extra_tolerations)
+
         cr_metadata: dict[str, Any] = {"name": name, "namespace": namespace}
         if labels:
             cr_metadata["labels"] = labels
         if annotations:
             cr_metadata["annotations"] = annotations
 
+        # extra_labels (e.g. ACS compute-class) are base; pod_labels (sandbox-specific) overlay.
+        merged_pod_labels: dict[str, str] = {**extra_labels, **(pod_labels or {})}
         pod_template: dict[str, Any] = {"spec": pod_spec}
-        if pod_labels:
-            pod_template["metadata"] = {"labels": pod_labels}
+        if merged_pod_labels:
+            pod_template["metadata"] = {"labels": merged_pod_labels}
 
         manifest: dict[str, Any] = {
             "apiVersion": f"{SANDBOX_API_GROUP}/{SANDBOX_API_VERSION}",
@@ -536,13 +562,17 @@ class FakeK8sClient:
             sb_metadata["labels"] = labels
         if annotations:
             sb_metadata["annotations"] = annotations
-        pod_template: dict[str, Any] = {
-            "spec": {
-                "containers": [{"name": "sandbox", "image": image, "resources": resources}],
-            },
+
+        extra_tolerations, extra_labels = _pod_scheduling_fields()
+        pod_spec: dict[str, Any] = {
+            "containers": [{"name": "sandbox", "image": image, "resources": resources}],
         }
-        if pod_labels:
-            pod_template["metadata"] = {"labels": pod_labels}
+        if extra_tolerations:
+            pod_spec["tolerations"] = extra_tolerations
+        pod_template: dict[str, Any] = {"spec": pod_spec}
+        merged_pod_labels: dict[str, str] = {**extra_labels, **(pod_labels or {})}
+        if merged_pod_labels:
+            pod_template["metadata"] = {"labels": merged_pod_labels}
         sandbox: dict[str, Any] = {
             "apiVersion": f"{SANDBOX_API_GROUP}/{SANDBOX_API_VERSION}",
             "kind": "Sandbox",

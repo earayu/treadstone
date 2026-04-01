@@ -41,3 +41,19 @@ sandboxTemplates:
     memory: { requests: "16Gi", limits: "16Gi" }
     warmPool: { enabled: false, replicas: 1 }
     allowedStorageSizes: ["5Gi", "10Gi", "20Gi"]
+
+# ACS overflow scheduling. When enabled:
+#   - A ResourcePolicy CR is deployed so pods prefer ECS and overflow to ACS.
+#   - SandboxTemplates get tolerations + ACS compute-class labels so pods can
+#     actually land on ACK virtual nodes.
+# Set enabled: true in values-prod.yaml (or any environment that has ACS virtual nodes).
+acsScheduling:
+  enabled: false
+  podTolerations:
+    - key: "virtual-kubelet.io/provider"
+      operator: "Equal"
+      value: "alibabacloud"
+      effect: "NoSchedule"
+  podLabels:
+    alibabacloud.com/compute-class: "general-purpose"
+    alibabacloud.com/compute-qos: "default"

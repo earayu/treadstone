@@ -43,3 +43,6 @@ sandboxTemplates:
     memory: { requests: "16Gi", limits: "16Gi" }
     warmPool: { enabled: false, replicas: 1 }
     allowedStorageSizes: ["5Gi", "10Gi", "20Gi"]
+
+acsScheduling:
+  enabled: true
