@@ -183,6 +183,7 @@ class TestSandboxServiceStartStop:
         result = await service.start(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
         assert result.status == SandboxStatus.CREATING
         k8s.scale_sandbox.assert_called_once_with(name="sb1234567890abcdef", namespace="treadstone-local", replicas=1)
+        k8s.get_sandbox.assert_not_called()
 
     async def test_stop_calls_scale_sandbox_0(self):
         from treadstone.services.sandbox_service import SandboxService
@@ -227,6 +228,37 @@ class TestSandboxServiceStartStop:
         result = await service.start(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
         assert result.status == SandboxStatus.CREATING
         k8s.scale_sandbox.assert_called_once_with(name="sb1234567890abcdef", namespace="treadstone-local", replicas=1)
+        k8s.get_sandbox.assert_called_once_with(name="sb1234567890abcdef", namespace="treadstone-local")
+
+    async def test_start_from_error_immediately_marks_ready_when_k8s_is_already_ready(self):
+        from treadstone.services.sandbox_service import SandboxService
+
+        sb = _make_sandbox(status=SandboxStatus.ERROR, version=3)
+        session = _mock_session(sb, sb)
+        k8s = _mock_k8s_client()
+        k8s.get_sandbox.return_value = {
+            "metadata": {"resourceVersion": "42"},
+            "spec": {"replicas": 1},
+            "status": {
+                "conditions": [
+                    {
+                        "type": "Ready",
+                        "status": "True",
+                        "message": "Sandbox is healthy",
+                    }
+                ]
+            },
+        }
+        service = SandboxService(session=session, k8s_client=k8s)
+
+        result = await service.start(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
+
+        assert result.status == SandboxStatus.READY
+        assert result.status_message == "Sandbox is healthy"
+        assert result.k8s_resource_version == "42"
+        k8s.scale_sandbox.assert_called_once_with(name="sb1234567890abcdef", namespace="treadstone-local", replicas=1)
+        k8s.get_sandbox.assert_called_once_with(name="sb1234567890abcdef", namespace="treadstone-local")
+        session.refresh.assert_awaited_once_with(sb)
 
 
 class TestDualPathProvisioning:
