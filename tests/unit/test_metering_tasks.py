@@ -664,11 +664,13 @@ class TestCheckGracePeriods:
 
         stop_callback = AsyncMock()
         session = AsyncMock()
-        results = iter([
-            _MockDistinct(["user_01"]),
-            _MockScalars([sandbox]),
-            _MockScalars([]),
-        ])
+        results = iter(
+            [
+                _MockDistinct(["user_01"]),
+                _MockScalars([sandbox]),
+                _MockScalars([]),
+            ]
+        )
         session.execute = AsyncMock(side_effect=lambda stmt: next(results))
         session.add = MagicMock()
         session.commit = AsyncMock()
