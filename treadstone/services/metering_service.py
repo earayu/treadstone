@@ -861,7 +861,9 @@ class MeteringService:
 
         extra_compute_remaining = await self.get_extra_compute_remaining(session, user_id)
         monthly_remaining = max(Decimal("0"), plan.compute_units_monthly_limit - plan.compute_units_monthly_used)
-        total_compute_remaining = monthly_remaining + extra_compute_remaining
+        total_compute_remaining = (
+            monthly_remaining + extra_compute_remaining - (plan.compute_units_overage or Decimal("0"))
+        )
 
         storage_gib_hours = await self.get_storage_gib_hours_for_period(
             session, user_id, plan.period_start, plan.period_end
