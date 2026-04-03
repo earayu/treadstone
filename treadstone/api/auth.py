@@ -38,6 +38,7 @@ from treadstone.api.schemas import (
 from treadstone.config import settings
 from treadstone.core.database import get_session
 from treadstone.core.errors import (
+    AuthRequiredError,
     BadRequestError,
     ConflictError,
     EmailAlreadyVerifiedError,
@@ -62,6 +63,7 @@ from treadstone.models.api_key import (
     build_api_key_preview,
     hash_api_key_secret,
 )
+from treadstone.models.cli_login_flow import CliLoginFlow, hash_flow_secret
 from treadstone.models.email_verification_log import EmailVerificationLog
 from treadstone.models.sandbox import Sandbox
 from treadstone.models.user import OAuthAccount, Role, User, random_id, utc_now
@@ -148,13 +150,19 @@ def _oauth_error_message(provider: str, error: str, error_description: str | Non
     return f"{provider.title()} login failed."
 
 
-async def _validate_cli_flow_pending(session: AsyncSession, cli_flow_id: str) -> None:
+async def _validate_cli_flow_pending(
+    session: AsyncSession,
+    cli_flow_id: str,
+    cli_flow_secret: str | None = None,
+) -> None:
     """Pre-check that the CLI flow is valid and pending. Called BEFORE user creation to avoid DB side effects."""
-    from treadstone.models.cli_login_flow import CliLoginFlow
-
     result = await session.execute(select(CliLoginFlow).where(CliLoginFlow.id == cli_flow_id))
     flow = result.scalar_one_or_none()
-    if flow is None or flow.status != "pending":
+    if flow is None:
+        raise BadRequestError("CLI login flow is invalid or already completed.")
+    if cli_flow_secret is not None and hash_flow_secret(cli_flow_secret) != flow.flow_secret_hash:
+        raise AuthRequiredError("Invalid flow secret.")
+    if flow.status != "pending":
         raise BadRequestError("CLI login flow is invalid or already completed.")
     now = utc_now()
     expires = flow.gmt_expires
@@ -549,12 +557,26 @@ async def register(
     return response
 
 
-async def _oauth_authorize(provider: str, return_to: str | None, cli_flow_id: str | None = None) -> RedirectResponse:
+async def _oauth_authorize(
+    provider: str,
+    return_to: str | None,
+    cli_flow_id: str | None = None,
+    cli_flow_secret: str | None = None,
+    session: AsyncSession | None = None,
+) -> RedirectResponse:
     oauth_client = _get_oauth_client(provider)
     if return_to is not None and cli_flow_id is not None:
         raise BadRequestError("Cannot specify both return_to and cli_flow_id.")
+    if return_to is not None and cli_flow_secret is not None:
+        raise BadRequestError("Cannot specify both return_to and cli_flow_secret.")
     if return_to is not None:
         validate_browser_return_to(return_to)
+    if cli_flow_id is not None:
+        if session is None:
+            raise BadRequestError("CLI login session is unavailable.")
+        if not cli_flow_secret:
+            raise AuthRequiredError("Missing flow secret.")
+        await _validate_cli_flow_pending(session, cli_flow_id, cli_flow_secret)
 
     csrf_token = secrets.token_urlsafe(32)
     state = _oauth_state_payload(provider, csrf_token, return_to, cli_flow_id)
@@ -748,8 +770,13 @@ async def _oauth_callback(
 
 
 @router.get("/google/authorize", include_in_schema=False)
-async def google_authorize(return_to: str | None = Query(default=None), cli_flow_id: str | None = Query(default=None)):
-    return await _oauth_authorize("google", return_to, cli_flow_id)
+async def google_authorize(
+    return_to: str | None = Query(default=None),
+    cli_flow_id: str | None = Query(default=None),
+    cli_flow_secret: str | None = Query(default=None),
+    session: AsyncSession = Depends(get_session),
+):
+    return await _oauth_authorize("google", return_to, cli_flow_id, cli_flow_secret, session)
 
 
 @router.get("/google/callback", include_in_schema=False)
@@ -766,8 +793,13 @@ async def google_callback(
 
 
 @router.get("/github/authorize", include_in_schema=False)
-async def github_authorize(return_to: str | None = Query(default=None), cli_flow_id: str | None = Query(default=None)):
-    return await _oauth_authorize("github", return_to, cli_flow_id)
+async def github_authorize(
+    return_to: str | None = Query(default=None),
+    cli_flow_id: str | None = Query(default=None),
+    cli_flow_secret: str | None = Query(default=None),
+    session: AsyncSession = Depends(get_session),
+):
+    return await _oauth_authorize("github", return_to, cli_flow_id, cli_flow_secret, session)
 
 
 @router.get("/github/callback", include_in_schema=False)
