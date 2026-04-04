@@ -1,12 +1,18 @@
 """API tests for API Key CRUD and scope management endpoints."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+
 import pytest
 import sqlalchemy as sa
+from fastapi.security import HTTPAuthorizationCredentials
 from fastapi_users.db import SQLAlchemyUserDatabase
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from starlette.requests import Request
 
+from treadstone.api.deps import get_current_data_plane_user
 from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
@@ -20,6 +26,21 @@ from treadstone.models.api_key import (
 from treadstone.models.user import OAuthAccount, User
 
 _test_session_factory = None
+
+
+@contextmanager
+def _count_select_statements(sync_engine) -> Iterator[list[str]]:
+    statements: list[str] = []
+
+    def before_cursor_execute(conn, cursor, statement, parameters, context, executemany) -> None:
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+
+    event.listen(sync_engine, "before_cursor_execute", before_cursor_execute)
+    try:
+        yield statements
+    finally:
+        event.remove(sync_engine, "before_cursor_execute", before_cursor_execute)
 
 
 @pytest.fixture
@@ -279,3 +300,52 @@ async def test_list_api_keys_includes_is_enabled(auth_client):
     assert len(items) >= 1
     for item in items:
         assert "is_enabled" in item
+
+
+async def test_api_key_control_plane_auth_uses_single_select(auth_client):
+    create_resp = await auth_client.post("/v1/auth/api-keys", json={"name": "control-plane-reads"})
+    api_key_value = create_resp.json()["key"]
+
+    async with _test_session_factory() as session:
+        sync_engine = session.bind.sync_engine
+
+    with _count_select_statements(sync_engine) as selects:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get("/v1/auth/user", headers={"Authorization": f"Bearer {api_key_value}"})
+
+    assert resp.status_code == 200
+    assert len(selects) == 1
+
+
+async def test_selected_data_plane_auth_checks_grant_with_second_select(auth_client):
+    sandbox_resp = await auth_client.post(
+        "/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "selected-scope"}
+    )
+    sandbox_id = sandbox_resp.json()["id"]
+    create_resp = await auth_client.post(
+        "/v1/auth/api-keys",
+        json={
+            "name": "selected-data-plane",
+            "scope": {
+                "control_plane": False,
+                "data_plane": {"mode": "selected", "sandbox_ids": [sandbox_id]},
+            },
+        },
+    )
+    api_key_value = create_resp.json()["key"]
+
+    request = Request({"type": "http", "headers": [], "path_params": {"sandbox_id": sandbox_id}})
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=api_key_value)
+
+    async with _test_session_factory() as session:
+        sync_engine = session.bind.sync_engine
+        with _count_select_statements(sync_engine) as selects:
+            user = await get_current_data_plane_user(
+                request=request,
+                credentials=credentials,
+                session=session,
+                cookie_user=None,
+            )
+
+    assert user.email == "keyuser@test.com"
+    assert len(selects) == 2

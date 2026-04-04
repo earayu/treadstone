@@ -6,7 +6,7 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import noload
 
 from treadstone.core.database import get_session
 from treadstone.core.errors import AuthInvalidError, AuthRequiredError, ForbiddenError
@@ -33,27 +33,36 @@ def _set_auth_context(
     )
 
 
-async def _get_active_user(session: AsyncSession, user_id: str) -> User | None:
-    result = await session.execute(select(User).where(User.id == user_id, User.is_active.is_(True)))
-    return result.unique().scalar_one_or_none()
-
-
 async def _authenticate_api_key_value(session: AsyncSession, secret: str) -> tuple[ApiKey, User] | None:
     result = await session.execute(
-        select(ApiKey)
-        .options(selectinload(ApiKey.sandbox_grants))
+        select(ApiKey, User)
+        .options(noload(ApiKey.sandbox_grants))
+        .join(User, User.id == ApiKey.user_id)
         .where(
             ApiKey.key_hash == hash_api_key_secret(secret),
             ApiKey.gmt_deleted.is_(None),
+            User.is_active.is_(True),
         )
     )
-    api_key = result.scalar_one_or_none()
-    if api_key is None or api_key.is_expired() or not api_key.is_enabled:
+    row = result.unique().one_or_none()
+    if row is None:
         return None
-    user = await _get_active_user(session, api_key.user_id)
-    if user is None:
+    api_key, user = row
+    if api_key.is_expired() or not api_key.is_enabled:
         return None
     return api_key, user
+
+
+async def _api_key_has_sandbox_access(session: AsyncSession, api_key_id: str, sandbox_id: str) -> bool:
+    result = await session.execute(
+        select(ApiKeySandboxGrant.id)
+        .where(
+            ApiKeySandboxGrant.api_key_id == api_key_id,
+            ApiKeySandboxGrant.sandbox_id == sandbox_id,
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none() is not None
 
 
 async def get_current_control_plane_user(
@@ -108,13 +117,7 @@ async def get_current_data_plane_user(
 
     sandbox_id = request.path_params.get("sandbox_id")
     if sandbox_id and api_key.data_plane_mode == ApiKeyDataPlaneMode.SELECTED.value:
-        result = await session.execute(
-            select(ApiKeySandboxGrant.sandbox_id).where(
-                ApiKeySandboxGrant.api_key_id == api_key.id,
-                ApiKeySandboxGrant.sandbox_id == sandbox_id,
-            )
-        )
-        if result.scalar_one_or_none() is None:
+        if not await _api_key_has_sandbox_access(session, api_key.id, sandbox_id):
             raise ForbiddenError("This API key does not have access to this sandbox.")
 
     _set_auth_context(request, "api_key", user, api_key)

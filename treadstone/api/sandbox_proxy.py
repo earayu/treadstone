@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from treadstone.api.deps import _authenticate_api_key_value, get_current_data_plane_user
+from treadstone.api.deps import _api_key_has_sandbox_access, _authenticate_api_key_value, get_current_data_plane_user
 from treadstone.core.database import async_session, get_session
 from treadstone.core.errors import (
     SandboxNotFoundError,
@@ -19,7 +19,7 @@ from treadstone.core.errors import (
     ValidationError,
 )
 from treadstone.core.request_context import set_scope_context
-from treadstone.models.api_key import ApiKeyDataPlaneMode, ApiKeySandboxGrant
+from treadstone.models.api_key import ApiKeyDataPlaneMode
 from treadstone.models.sandbox import Sandbox, SandboxStatus
 from treadstone.models.user import User, utc_now
 from treadstone.services.sandbox_proxy import (
@@ -137,13 +137,7 @@ async def ws_proxy(
             return
 
         if api_key.data_plane_mode == ApiKeyDataPlaneMode.SELECTED.value:
-            grant_result = await session.execute(
-                select(ApiKeySandboxGrant.sandbox_id).where(
-                    ApiKeySandboxGrant.api_key_id == api_key.id,
-                    ApiKeySandboxGrant.sandbox_id == sandbox_id,
-                )
-            )
-            if grant_result.scalar_one_or_none() is None:
+            if not await _api_key_has_sandbox_access(session, api_key.id, sandbox_id):
                 await websocket.close(code=1008, reason="This API key does not have access to this sandbox.")
                 return
 
