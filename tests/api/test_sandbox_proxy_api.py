@@ -318,6 +318,46 @@ async def test_proxy_forwards_query_string(auth_client):
     assert "stream=1" in captured_paths[0]
 
 
+async def test_proxy_ignores_namespace_and_port_override_headers(auth_client):
+    create_resp = await auth_client.post(
+        "/v1/sandboxes",
+        json={"template": "aio-sandbox-tiny", "name": "proxy-routing-boundary"},
+    )
+    sandbox_id = create_resp.json()["id"]
+
+    async with _test_session_factory() as session:
+        from treadstone.models.sandbox import Sandbox
+
+        sb = await session.get(Sandbox, sandbox_id)
+        sb.status = "ready"
+        session.add(sb)
+        await session.commit()
+
+    key_resp = await auth_client.post("/v1/auth/api-keys", json={"name": "proxy-routing-boundary"})
+    api_key = key_resp.json()["key"]
+
+    proxy_calls: list[dict] = []
+
+    async def capturing_proxy_http_request(**kwargs):
+        proxy_calls.append(kwargs)
+        return 200, {"content-type": "text/plain"}, _mock_upstream(body=b"ok").send.return_value
+
+    with patch("treadstone.api.sandbox_proxy.proxy_http_request", side_effect=capturing_proxy_http_request):
+        resp = await auth_client.get(
+            f"/v1/sandboxes/{sandbox_id}/proxy/healthz",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "X-Sandbox-Namespace": "attacker-ns",
+                "X-Sandbox-Port": "9001",
+            },
+        )
+
+    assert resp.status_code == 200
+    assert len(proxy_calls) == 1
+    assert proxy_calls[0]["namespace"] != "attacker-ns"
+    assert proxy_calls[0]["port"] != 9001
+
+
 def _make_ws_scope(path: str, headers: list[tuple[bytes, bytes]], query_string: bytes = b"") -> dict:
     """Build a minimal ASGI WebSocket scope for direct ASGI dispatch in tests."""
     return {
@@ -446,3 +486,43 @@ async def test_proxy_ws_token_param_auth(auth_client, monkeypatch):
     assert "token=" not in upstream_path
     # other query params must survive
     assert "sessionId=xyz" in upstream_path
+
+
+async def test_proxy_ws_ignores_namespace_and_port_override_headers(auth_client, monkeypatch):
+    monkeypatch.setattr("treadstone.api.sandbox_proxy.async_session", _test_session_factory)
+
+    create_resp = await auth_client.post(
+        "/v1/sandboxes",
+        json={"template": "aio-sandbox-tiny", "name": "proxy-ws-routing-boundary"},
+    )
+    sandbox_id = create_resp.json()["id"]
+
+    async with _test_session_factory() as session:
+        from treadstone.models.sandbox import Sandbox
+
+        sb = await session.get(Sandbox, sandbox_id)
+        sb.status = "ready"
+        session.add(sb)
+        await session.commit()
+
+    key_resp = await auth_client.post("/v1/auth/api-keys", json={"name": "proxy-ws-routing-boundary"})
+    api_key = key_resp.json()["key"]
+
+    proxy_calls: list[dict] = []
+
+    async def capturing_proxy_websocket(**kwargs):
+        proxy_calls.append(kwargs)
+
+    headers = [
+        (b"authorization", f"Bearer {api_key}".encode()),
+        (b"x-sandbox-namespace", b"attacker-ns"),
+        (b"x-sandbox-port", b"9001"),
+    ]
+    scope = _make_ws_scope(f"/v1/sandboxes/{sandbox_id}/proxy/mcp", headers=headers)
+
+    with patch("treadstone.api.sandbox_proxy.proxy_websocket", side_effect=capturing_proxy_websocket):
+        await _run_ws_asgi(scope)
+
+    assert len(proxy_calls) == 1
+    assert proxy_calls[0]["namespace"] != "attacker-ns"
+    assert proxy_calls[0]["port"] != 9001

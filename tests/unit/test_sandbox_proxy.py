@@ -53,10 +53,30 @@ class TestResolveRouting:
         )
         assert result["sandbox_id"] == "from-path"
 
-    def test_path_sandbox_id_with_namespace_from_header(self):
+    def test_path_sandbox_id_with_namespace_from_header_when_explicitly_allowed(self):
         result = resolve_routing(
             {"x-sandbox-namespace": "staging", "x-sandbox-port": "9090"},
             path_sandbox_id="sb-1",
+            allow_namespace_override=True,
+            allow_port_override=True,
+        )
+        assert result == {"sandbox_id": "sb-1", "namespace": "staging", "port": 9090}
+
+    def test_path_sandbox_id_ignores_namespace_and_port_headers_by_default(self):
+        result = resolve_routing(
+            {"x-sandbox-namespace": "staging", "x-sandbox-port": "9090"},
+            path_sandbox_id="sb-1",
+        )
+        assert result["sandbox_id"] == "sb-1"
+        assert result["namespace"] != "staging"
+        assert result["port"] != 9090
+
+    def test_path_sandbox_id_can_explicitly_allow_namespace_and_port_overrides(self):
+        result = resolve_routing(
+            {"x-sandbox-namespace": "staging", "x-sandbox-port": "9090"},
+            path_sandbox_id="sb-1",
+            allow_namespace_override=True,
+            allow_port_override=True,
         )
         assert result == {"sandbox_id": "sb-1", "namespace": "staging", "port": 9090}
 

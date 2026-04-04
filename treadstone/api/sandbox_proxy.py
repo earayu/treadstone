@@ -64,6 +64,8 @@ async def http_proxy(
         routing = resolve_routing(
             headers,
             path_sandbox_id=sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.id,
+            allow_namespace_override=False,
+            allow_port_override=False,
         )
     except ValueError as exc:
         raise ValidationError(str(exc)) from exc
@@ -107,8 +109,8 @@ async def ws_proxy(
     - ``Authorization: Bearer sk-…`` header (preferred)
     - ``?token=sk-…`` query param (for clients that cannot set WS headers)
 
-    X-Sandbox-Namespace and X-Sandbox-Port headers are honoured for routing,
-    matching the behaviour of the HTTP proxy.
+    The public proxy route does not honour external namespace or port override
+    headers once the sandbox id has been authorized from the path.
     """
     auth_header = websocket.headers.get("authorization", "")
     token_param = websocket.query_params.get("token", "")
@@ -187,11 +189,16 @@ async def ws_proxy(
     else:
         full_path = f"{path}?{query_string}" if query_string else path
 
-    # Resolve namespace / port overrides from WS headers (same as HTTP proxy).
+    # Route to the authorized sandbox using the platform-managed namespace/port.
     ws_headers = dict(websocket.headers)
     k8s_id = sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.id
     try:
-        routing = resolve_routing(ws_headers, path_sandbox_id=k8s_id)
+        routing = resolve_routing(
+            ws_headers,
+            path_sandbox_id=k8s_id,
+            allow_namespace_override=False,
+            allow_port_override=False,
+        )
     except ValueError as exc:
         logger.warning("WebSocket routing error for sandbox %s: %s", sandbox_id, exc)
         await websocket.close(code=1008, reason=str(exc))

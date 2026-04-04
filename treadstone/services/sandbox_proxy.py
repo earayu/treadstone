@@ -98,11 +98,14 @@ def resolve_routing(
     headers: dict[str, str],
     *,
     path_sandbox_id: str | None = None,
+    allow_namespace_override: bool = False,
+    allow_port_override: bool = False,
 ) -> dict[str, Any]:
     """Resolve sandbox routing from path params (priority) and/or headers.
 
-    Defaults for namespace and port come from settings, overridable per-request
-    via X-Sandbox-Namespace / X-Sandbox-Port headers.
+    Defaults for namespace and port come from settings. Header overrides are only
+    accepted when explicitly allowed, or when routing is driven entirely by
+    headers (no trusted path sandbox id is present).
 
     Returns a dict with sandbox_id, namespace, port.
     Raises ValueError for invalid input.
@@ -113,11 +116,19 @@ def resolve_routing(
     if not _sanitize_sandbox_id(sandbox_id):
         raise ValueError("Invalid sandbox ID format.")
 
-    namespace = headers.get("x-sandbox-namespace", settings.sandbox_namespace)
+    allow_namespace_header = allow_namespace_override or path_sandbox_id is None
+    namespace = (
+        headers.get("x-sandbox-namespace", settings.sandbox_namespace)
+        if allow_namespace_header
+        else settings.sandbox_namespace
+    )
     if not _sanitize_namespace(namespace):
         raise ValueError("Invalid namespace format.")
 
-    port_raw = headers.get("x-sandbox-port", str(settings.sandbox_port))
+    allow_port_header = allow_port_override or path_sandbox_id is None
+    port_raw = headers.get("x-sandbox-port", str(settings.sandbox_port)) if allow_port_header else str(
+        settings.sandbox_port
+    )
     try:
         port = int(port_raw)
     except (ValueError, TypeError) as exc:
