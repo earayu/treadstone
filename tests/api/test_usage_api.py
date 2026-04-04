@@ -17,7 +17,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
-from treadstone.models.metering import ComputeSession, StorageLedger, StorageState, TierTemplate
+from treadstone.models.metering import (
+    ComputeGrant,
+    ComputeSession,
+    StorageLedger,
+    StorageQuotaGrant,
+    StorageState,
+    TierTemplate,
+    UserPlan,
+)
 from treadstone.models.sandbox import Sandbox, SandboxStatus
 from treadstone.models.user import OAuthAccount, User
 
@@ -206,6 +214,70 @@ async def test_get_usage_clips_cross_period_cumulative_usage(user_client, monkey
     # Sum formula: 0.5*vcpu_hours + 0.125*memory_gib_hours; overlap_ratio 0.5 → 1.5 * 0.5 = 0.75
     assert data["compute"]["compute_unit_hours"] == 0.75
     assert data["storage"]["gib_hours"] == 5.0
+
+
+async def test_get_usage_exposes_negative_total_remaining_during_overage(user_client):
+    await user_client.get("/v1/usage")
+
+    async with _test_session_factory() as session:
+        user = (await session.execute(select(User).where(User.email == "user@example.com"))).unique().scalar_one()
+        plan = (await session.execute(select(UserPlan).where(UserPlan.user_id == user.id))).scalar_one()
+        plan.compute_units_monthly_used = Decimal("10")
+        plan.compute_units_overage = Decimal("2")
+        session.add(plan)
+        await session.commit()
+
+    resp = await user_client.get("/v1/usage")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["compute"]["monthly_remaining"] == 0.0
+    assert data["compute"]["total_remaining"] == -2.0
+
+
+async def test_grants_exactly_at_expiry_align_with_usage_summary(user_client, monkeypatch):
+    fixed_now = datetime(2026, 3, 15, 12, 0, 0, tzinfo=UTC)
+    monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: fixed_now)
+    monkeypatch.setattr("treadstone.api.metering_serializers.utc_now", lambda: fixed_now)
+
+    async with _test_session_factory() as session:
+        user = (await session.execute(select(User).where(User.email == "user@example.com"))).unique().scalar_one()
+        session.add(
+            ComputeGrant(
+                id="cgexactexpiry000001",
+                user_id=user.id,
+                grant_type="promo",
+                original_amount=Decimal("5"),
+                remaining_amount=Decimal("5"),
+                granted_at=fixed_now,
+                expires_at=fixed_now,
+            )
+        )
+        session.add(
+            StorageQuotaGrant(
+                id="sqgexactexpiry00001",
+                user_id=user.id,
+                grant_type="promo",
+                size_gib=7,
+                granted_at=fixed_now,
+                expires_at=fixed_now,
+            )
+        )
+        await session.commit()
+
+    usage_resp = await user_client.get("/v1/usage")
+    grants_resp = await user_client.get("/v1/usage/grants")
+
+    assert usage_resp.status_code == 200
+    assert usage_resp.json()["compute"]["extra_remaining"] == 0.0
+    assert usage_resp.json()["storage"]["total_quota_gib"] == 0
+
+    assert grants_resp.status_code == 200
+    body = grants_resp.json()
+    compute = next(item for item in body["compute_grants"] if item["id"] == "cgexactexpiry000001")
+    storage = next(item for item in body["storage_quota_grants"] if item["id"] == "sqgexactexpiry00001")
+    assert compute["status"] == "expired"
+    assert storage["status"] == "expired"
 
 
 async def test_get_usage_unauthenticated(db_session):
