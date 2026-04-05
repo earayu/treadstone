@@ -818,14 +818,14 @@ async def list_users(
             count_stmt = count_stmt.where(User.email.ilike(pattern))
         total = (await session.execute(count_stmt)).scalar_one()
         result = await session.execute(
-            stmt.order_by(User.gmt_created.desc()).offset(offset).limit(limit),
+            stmt.order_by(User.gmt_created.desc(), User.id.desc()).offset(offset).limit(limit),
         )
         page = list(result.unique().scalars().all())
     else:
         if email_filter and email_filter.lower() not in current_user.email.lower():
             return {"items": [], "total": 0}
         total = 1
-        page = [current_user]
+        page = [current_user] if offset == 0 else []
     return {
         "items": [{"id": u.id, "email": u.email, "role": u.role, "is_active": u.is_active} for u in page],
         "total": total,
