@@ -10,6 +10,7 @@ from decimal import Decimal
 import pytest
 from fastapi_users.db import SQLAlchemyUserDatabase
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from treadstone.core.database import Base, get_session
@@ -523,7 +524,7 @@ async def test_post_waitlist_without_auth(anon_client):
     data = resp.json()
     assert data["email"] == "guest@example.com"
     assert data["status"] == "pending"
-    assert data["user_id"] is None
+    assert "user_id" not in data
     assert data.get("github_or_portfolio_url") is None
 
 
@@ -561,7 +562,7 @@ async def test_post_waitlist_allows_multiple_same_email_tier(anon_client):
     assert r1.json()["id"] != r2.json()["id"]
 
 
-async def test_post_waitlist_links_user_id_when_email_matches(admin_client, anon_client):
+async def test_post_waitlist_does_not_link_existing_user_id(db_session, admin_client, anon_client):
     r = await anon_client.post(
         "/v1/waitlist",
         json={
@@ -571,7 +572,13 @@ async def test_post_waitlist_links_user_id_when_email_matches(admin_client, anon
         },
     )
     assert r.status_code == 201
-    assert r.json()["user_id"] == _get_user_id(admin_client)
+    assert "user_id" not in r.json()
+
+    async with _test_session_factory() as session:
+        row = (
+            await session.execute(select(WaitlistApplication).where(WaitlistApplication.email == "admin@example.com"))
+        ).scalar_one()
+        assert row.user_id is None
 
 
 async def test_patch_waitlist_only_from_pending(admin_client, anon_client):

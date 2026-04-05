@@ -856,7 +856,6 @@ class WaitlistApplicationResponse(BaseModel):
     company: str | None = Field(default=None, examples=["Acme Corp"])
     github_or_portfolio_url: str | None = Field(default=None, examples=["https://github.com/octocat"])
     use_case: str | None = Field(default=None)
-    user_id: str | None = Field(default=None, examples=["userabc123"])
     status: str = Field(..., examples=["pending"])
     processed_at: datetime | None = Field(default=None)
     gmt_created: datetime = Field(..., examples=["2026-03-30T00:00:00Z"])

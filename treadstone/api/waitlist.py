@@ -9,12 +9,10 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from treadstone.api.schemas import WaitlistApplicationRequest, WaitlistApplicationResponse
 from treadstone.core.database import get_session
-from treadstone.models.user import User
 from treadstone.models.waitlist import ApplicationStatus, WaitlistApplication
 
 logger = logging.getLogger(__name__)
@@ -31,7 +29,6 @@ def _serialize_application(app: WaitlistApplication) -> dict:
         "company": app.company,
         "github_or_portfolio_url": app.github_or_portfolio_url,
         "use_case": app.use_case,
-        "user_id": app.user_id,
         "status": app.status,
         "processed_at": app.processed_at,
         "gmt_created": app.gmt_created,
@@ -50,9 +47,6 @@ async def submit_waitlist_application(
     """
     email_lower = body.email.lower()
 
-    user_row = await session.execute(select(User).where(func.lower(User.email) == email_lower))
-    matched_user = user_row.unique().scalar_one_or_none()
-
     application = WaitlistApplication(
         email=email_lower,
         name=body.name,
@@ -60,7 +54,6 @@ async def submit_waitlist_application(
         company=body.company,
         github_or_portfolio_url=body.github_or_portfolio_url,
         use_case=body.use_case,
-        user_id=matched_user.id if matched_user else None,
         status=ApplicationStatus.PENDING,
     )
     session.add(application)
