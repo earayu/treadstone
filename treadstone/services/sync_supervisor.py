@@ -160,18 +160,17 @@ class LeaderControlledSyncSupervisor:
         from treadstone.services.metering_tasks import TICK_INTERVAL, run_metering_tick
 
         while True:
-            await asyncio.sleep(TICK_INTERVAL)
             try:
                 await run_metering_tick(self._session_factory, stop_sandbox_callback=_k8s_stop_sandbox)
             except Exception:
                 logger.exception("Metering tick failed")
+            await asyncio.sleep(TICK_INTERVAL)
 
     async def _lifecycle_tick_loop(self) -> None:
         """Periodic lifecycle tick — idle auto-stop and auto-delete."""
         from treadstone.services.sandbox_lifecycle_tasks import LIFECYCLE_TICK_INTERVAL, run_lifecycle_tick
 
         while True:
-            await asyncio.sleep(LIFECYCLE_TICK_INTERVAL)
             try:
                 await run_lifecycle_tick(
                     self._session_factory,
@@ -180,6 +179,7 @@ class LeaderControlledSyncSupervisor:
                 )
             except Exception:
                 logger.exception("Lifecycle tick failed")
+            await asyncio.sleep(LIFECYCLE_TICK_INTERVAL)
 
     async def _stop_all_tasks(self, reason: str) -> None:
         await self._stop_task(self._sync_task, "sync loop", reason)
