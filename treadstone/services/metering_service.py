@@ -865,9 +865,8 @@ class MeteringService:
             ).where(overlapping, fully_contained)
         )
         full_vcpu_hours, full_memory_gib_hours = aggregate_result.one()
-        total_compute_unit_hours = (
-            CU_VCPU_WEIGHT * Decimal(str(full_vcpu_hours or 0))
-            + CU_MEMORY_WEIGHT * Decimal(str(full_memory_gib_hours or 0))
+        total_compute_unit_hours = CU_VCPU_WEIGHT * Decimal(str(full_vcpu_hours or 0)) + CU_MEMORY_WEIGHT * Decimal(
+            str(full_memory_gib_hours or 0)
         )
         result = await session.execute(
             select(
@@ -885,8 +884,8 @@ class MeteringService:
                 period_start=period_start,
                 period_end=period_end,
             )
-            session_compute_unit_hours = (
-                CU_VCPU_WEIGHT * Decimal(str(vcpu_hours)) + CU_MEMORY_WEIGHT * Decimal(str(memory_gib_hours))
+            session_compute_unit_hours = CU_VCPU_WEIGHT * Decimal(str(vcpu_hours)) + CU_MEMORY_WEIGHT * Decimal(
+                str(memory_gib_hours)
             )
             total_compute_unit_hours += session_compute_unit_hours * overlap_ratio
 
@@ -946,9 +945,13 @@ class MeteringService:
 
     async def get_usage_summary(self, session: AsyncSession, user_id: str) -> dict:
         """Assemble the complete usage overview for GET /v1/usage."""
-        plan, extra_storage, current_storage_used, running_count, extra_compute_remaining = (
-            await self._get_usage_summary_snapshot(session, user_id)
-        )
+        (
+            plan,
+            extra_storage,
+            current_storage_used,
+            running_count,
+            extra_compute_remaining,
+        ) = await self._get_usage_summary_snapshot(session, user_id)
         total_storage_quota = plan.storage_capacity_limit_gib + extra_storage
 
         compute_unit_hours = await self.get_compute_unit_hours_for_period(
