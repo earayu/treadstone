@@ -10,11 +10,13 @@ from decimal import Decimal
 import pytest
 from fastapi_users.db import SQLAlchemyUserDatabase
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
+from treadstone.models.audit_event import AuditEvent
 from treadstone.models.metering import TierTemplate
 from treadstone.models.user import OAuthAccount, User
 from treadstone.models.user_feedback import UserFeedback  # noqa: F401 — register model for SQLite metadata
@@ -603,11 +605,51 @@ async def test_create_feedback_requires_auth(anon_client):
     assert resp.status_code == 401
 
 
+async def test_create_feedback_rejects_api_key_only_auth(member_client, anon_client):
+    key_resp = await member_client.post(
+        "/v1/auth/api-keys",
+        json={"name": "feedback-bot", "scope": {"control_plane": True, "data_plane": {"mode": "none"}}},
+    )
+    assert key_resp.status_code == 201
+    api_key = key_resp.json()["key"]
+
+    resp = await anon_client.post(
+        "/v1/support/feedback",
+        json={"body": "forged by api key"},
+        headers={"Authorization": f"Bearer {api_key}"},
+    )
+    assert resp.status_code == 401
+    assert resp.json()["error"]["code"] == "auth_required"
+
+
 async def test_create_feedback_member(member_client):
     resp = await member_client.post("/v1/support/feedback", json={"body": "  My issue  "})
     assert resp.status_code == 201
     data = resp.json()
     assert data["id"].startswith("fb")
+
+
+async def test_create_feedback_rate_limits_repeat_submissions(member_client):
+    first = await member_client.post("/v1/support/feedback", json={"body": "first issue"})
+    assert first.status_code == 201
+
+    second = await member_client.post("/v1/support/feedback", json={"body": "second issue"})
+    assert second.status_code == 429
+    assert second.json()["error"]["code"] == "feedback_rate_limited"
+
+    async with _test_session_factory() as session:
+        events = (
+            await session.execute(
+                select(AuditEvent)
+                .where(AuditEvent.action == "feedback.create")
+                .order_by(AuditEvent.created_at.asc())
+            )
+        ).scalars().all()
+
+    assert len(events) == 2
+    assert events[0].result == "success"
+    assert events[1].result == "failure"
+    assert events[1].error_code == "feedback_rate_limited"
 
 
 async def test_create_feedback_empty_body(member_client):
