@@ -331,6 +331,26 @@ class TestSubdomainRouting:
             assert signin_loc.path == "/auth/sign-in"
             assert sandbox_url in parse_qs(signin_loc.query)["return_to"][0]
 
+    async def test_browser_bootstrap_preserves_fragment_in_next_redirect(
+        self,
+        auth_client: AsyncClient,
+        monkeypatch,
+    ):
+        _enable_subdomain(monkeypatch)
+        sandbox_id = await _create_ready_sandbox(auth_client)
+        return_to = f"https://sandbox-{sandbox_id}.sandbox.localhost/workbench?tab=logs#cell-7"
+
+        resp = await auth_client.get(
+            "/v1/browser/bootstrap",
+            params={"return_to": return_to},
+            follow_redirects=False,
+        )
+
+        assert resp.status_code == 303
+        redirect_loc = urlparse(resp.headers["location"])
+        assert redirect_loc.path == "/_treadstone/open"
+        assert parse_qs(redirect_loc.query)["next"] == ["/workbench?tab=logs#cell-7"]
+
     async def test_non_sandbox_subdomain_falls_through(self, db_session, monkeypatch):
         _enable_subdomain(monkeypatch)
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
