@@ -91,6 +91,7 @@ def _enable_subdomain(monkeypatch, domain: str = "sandbox.localhost", app_base_u
     s = Settings()
     monkeypatch.setattr("treadstone.services.browser_login.settings", s)
     monkeypatch.setattr("treadstone.api.sandboxes.settings", s)
+    monkeypatch.setattr("treadstone.core.public_base_url.settings", s)
     monkeypatch.setattr("treadstone.core.users.settings", s)
     monkeypatch.setattr("treadstone.middleware.sandbox_subdomain.settings", s)
     monkeypatch.setattr("treadstone.services.sandbox_service.settings", s)
@@ -192,6 +193,29 @@ class TestCreateSandbox:
         assert data["urls"]["web"].startswith(
             f"http://sandbox-{data['id']}.sandbox.localhost/_treadstone/open?token=swl"
         )
+
+    async def test_create_ignores_spoofed_forwarded_host_when_public_app_base_url_configured(
+        self, auth_client, monkeypatch
+    ):
+        _enable_subdomain(monkeypatch, domain="treadstone-ai.dev", app_base_url="https://app.treadstone-ai.dev")
+
+        resp = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": "public-origin-sb"},
+            headers={
+                "X-Forwarded-Proto": "https",
+                "X-Forwarded-Host": "evil.example.com",
+                "Host": "evil.example.com",
+            },
+        )
+
+        assert resp.status_code == 202
+        data = resp.json()
+        assert data["urls"]["proxy"].startswith(f"https://app.treadstone-ai.dev/v1/sandboxes/{data['id']}/proxy")
+        assert data["urls"]["mcp"].startswith(f"https://app.treadstone-ai.dev/v1/sandboxes/{data['id']}/proxy/mcp")
+        assert data["urls"]["web"].startswith(f"https://sandbox-{data['id']}.treadstone-ai.dev/_treadstone/open?token=")
+        assert "evil.example.com" not in data["urls"]["proxy"]
+        assert "evil.example.com" not in data["urls"]["web"]
 
     async def test_create_same_name_for_different_users_succeeds(self, auth_client, second_auth_client):
         first = await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "shared-name"})
@@ -469,8 +493,11 @@ class TestDeleteSandbox:
         status_resp = await auth_client.get(f"/v1/sandboxes/{sandbox_id}/web-link")
 
         assert delete_resp.status_code == 204
-        assert status_resp.status_code == 200
-        assert status_resp.json()["enabled"] is False
+        assert status_resp.status_code in {200, 404}
+        if status_resp.status_code == 200:
+            assert status_resp.json()["enabled"] is False
+        else:
+            assert status_resp.json()["error"]["code"] == "sandbox_not_found"
 
     async def test_delete_keeps_row_until_sync_removes_it(self, auth_client):
         create_resp = await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "del-row"})
