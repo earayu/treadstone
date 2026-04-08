@@ -1,6 +1,26 @@
 image: ghcr.io/agent-infra/sandbox:1.0.0.152
 containerPort: 8080
 
+sandboxProbes:
+  startup:
+    enabled: true
+    path: /v1/sandbox
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 36
+  readiness:
+    enabled: true
+    path: /v1/sandbox
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+  liveness:
+    enabled: false
+    path: /v1/sandbox
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
 sandboxPodSelectorLabels:
   treadstone-ai.dev/workload: "sandbox"
 

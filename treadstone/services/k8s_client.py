@@ -14,6 +14,7 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
+from copy import deepcopy
 from datetime import UTC, datetime
 from typing import Any, Protocol, runtime_checkable
 
@@ -35,6 +36,19 @@ WATCH_TIMEOUT_SECONDS = 300
 SANDBOX_HOME_DIR = "/home/gem"
 SANDBOX_UID = 1000
 SANDBOX_GID = 1000
+
+DEFAULT_STARTUP_PROBE: dict[str, Any] = {
+    "httpGet": {"path": "/v1/sandbox", "port": 8080},
+    "periodSeconds": 5,
+    "timeoutSeconds": 3,
+    "failureThreshold": 36,
+}
+DEFAULT_READINESS_PROBE: dict[str, Any] = {
+    "httpGet": {"path": "/v1/sandbox", "port": 8080},
+    "periodSeconds": 5,
+    "timeoutSeconds": 3,
+    "failureThreshold": 3,
+}
 
 
 class WatchExpiredError(Exception):
@@ -71,6 +85,9 @@ class K8sClientProtocol(Protocol):
         image: str,
         container_port: int,
         resources: dict[str, Any],
+        startup_probe: dict[str, Any] | None = None,
+        readiness_probe: dict[str, Any] | None = None,
+        liveness_probe: dict[str, Any] | None = None,
         volume_claim_templates: list[dict[str, Any]] | None = None,
         shutdown_time: datetime | None = None,
         labels: dict[str, str] | None = None,
@@ -174,6 +191,9 @@ class Kr8sClient:
         image: str,
         container_port: int,
         resources: dict[str, Any],
+        startup_probe: dict[str, Any] | None = None,
+        readiness_probe: dict[str, Any] | None = None,
+        liveness_probe: dict[str, Any] | None = None,
         volume_claim_templates: list[dict[str, Any]] | None = None,
         shutdown_time: datetime | None = None,
         labels: dict[str, str] | None = None,
@@ -187,6 +207,12 @@ class Kr8sClient:
             "ports": [{"containerPort": container_port}],
             "resources": resources,
         }
+        _apply_container_probes(
+            container,
+            startup_probe=startup_probe,
+            readiness_probe=readiness_probe,
+            liveness_probe=liveness_probe,
+        )
 
         pod_spec: dict[str, Any] = {"containers": [container], "restartPolicy": "OnFailure"}
 
@@ -372,6 +398,9 @@ def _parse_sandbox_template(template: dict) -> dict:
     image = ""
     resource_spec: dict[str, str] = {}
     resource_limits: dict[str, str] = {}
+    startup_probe: dict[str, Any] | None = None
+    readiness_probe: dict[str, Any] | None = None
+    liveness_probe: dict[str, Any] | None = None
     if containers:
         image = containers[0].get("image", "")
         resources = containers[0].get("resources", {})
@@ -379,6 +408,9 @@ def _parse_sandbox_template(template: dict) -> dict:
         resource_spec = {"cpu": requests.get("cpu", ""), "memory": requests.get("memory", "")}
         limits = resources.get("limits", {})
         resource_limits = {"cpu": limits.get("cpu", ""), "memory": limits.get("memory", "")}
+        startup_probe = _copy_probe(containers[0].get("startupProbe"))
+        readiness_probe = _copy_probe(containers[0].get("readinessProbe"))
+        liveness_probe = _copy_probe(containers[0].get("livenessProbe"))
     annotations = template.get("metadata", {}).get("annotations", {})
     raw_sizes = annotations.get(ANNOTATION_ALLOWED_STORAGE_SIZES, "")
     allowed_storage_sizes = [s.strip() for s in raw_sizes.split(",") if s.strip()] if raw_sizes else []
@@ -389,8 +421,32 @@ def _parse_sandbox_template(template: dict) -> dict:
         "image": image,
         "resource_spec": resource_spec,
         "resource_limits": resource_limits,
+        "startup_probe": startup_probe,
+        "readiness_probe": readiness_probe,
+        "liveness_probe": liveness_probe,
         "allowed_storage_sizes": allowed_storage_sizes,
     }
+
+
+def _copy_probe(probe: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not probe:
+        return None
+    return deepcopy(probe)
+
+
+def _apply_container_probes(
+    container: dict[str, Any],
+    *,
+    startup_probe: dict[str, Any] | None = None,
+    readiness_probe: dict[str, Any] | None = None,
+    liveness_probe: dict[str, Any] | None = None,
+) -> None:
+    if startup_probe:
+        container["startupProbe"] = deepcopy(startup_probe)
+    if readiness_probe:
+        container["readinessProbe"] = deepcopy(readiness_probe)
+    if liveness_probe:
+        container["livenessProbe"] = deepcopy(liveness_probe)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -415,6 +471,9 @@ class FakeK8sClient:
             "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "250m", "memory": "1Gi"},
             "resource_limits": {"cpu": "250m", "memory": "1Gi"},
+            "startup_probe": deepcopy(DEFAULT_STARTUP_PROBE),
+            "readiness_probe": deepcopy(DEFAULT_READINESS_PROBE),
+            "liveness_probe": None,
             "allowed_storage_sizes": ["5Gi", "10Gi", "20Gi"],
         },
         {
@@ -424,6 +483,9 @@ class FakeK8sClient:
             "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "500m", "memory": "2Gi"},
             "resource_limits": {"cpu": "500m", "memory": "2Gi"},
+            "startup_probe": deepcopy(DEFAULT_STARTUP_PROBE),
+            "readiness_probe": deepcopy(DEFAULT_READINESS_PROBE),
+            "liveness_probe": None,
             "allowed_storage_sizes": ["5Gi", "10Gi", "20Gi"],
         },
         {
@@ -433,6 +495,9 @@ class FakeK8sClient:
             "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "1", "memory": "4Gi"},
             "resource_limits": {"cpu": "1", "memory": "4Gi"},
+            "startup_probe": deepcopy(DEFAULT_STARTUP_PROBE),
+            "readiness_probe": deepcopy(DEFAULT_READINESS_PROBE),
+            "liveness_probe": None,
             "allowed_storage_sizes": ["5Gi", "10Gi", "20Gi"],
         },
         {
@@ -442,6 +507,9 @@ class FakeK8sClient:
             "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "2", "memory": "8Gi"},
             "resource_limits": {"cpu": "2", "memory": "8Gi"},
+            "startup_probe": deepcopy(DEFAULT_STARTUP_PROBE),
+            "readiness_probe": deepcopy(DEFAULT_READINESS_PROBE),
+            "liveness_probe": None,
             "allowed_storage_sizes": ["5Gi", "10Gi", "20Gi"],
         },
         {
@@ -451,12 +519,15 @@ class FakeK8sClient:
             "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "4", "memory": "16Gi"},
             "resource_limits": {"cpu": "4", "memory": "16Gi"},
+            "startup_probe": deepcopy(DEFAULT_STARTUP_PROBE),
+            "readiness_probe": deepcopy(DEFAULT_READINESS_PROBE),
+            "liveness_probe": None,
             "allowed_storage_sizes": ["5Gi", "10Gi", "20Gi"],
         },
     )
 
     def __init__(self) -> None:
-        self._templates: list[dict[str, Any]] = list(self._DEFAULT_TEMPLATES)
+        self._templates: list[dict[str, Any]] = deepcopy(list(self._DEFAULT_TEMPLATES))
         self._claims: dict[str, dict[str, Any]] = {}
         self._sandboxes: dict[str, dict[str, Any]] = {}
         self._storage_classes: dict[str, dict[str, Any]] = {
@@ -496,11 +567,28 @@ class FakeK8sClient:
             claim["spec"]["lifecycle"] = {"shutdownTime": format_shutdown_time(shutdown_time)}
         self._claims[key] = claim
 
+        template = next((item for item in self._templates if item["name"] == template_ref), None)
+        container: dict[str, Any] = {
+            "name": "sandbox",
+            "image": template.get("image", self._DEFAULT_IMAGE) if template else self._DEFAULT_IMAGE,
+            "resources": {
+                "requests": deepcopy(template.get("resource_spec", {})) if template else {},
+                "limits": deepcopy(template.get("resource_limits", {})) if template else {},
+            },
+        }
+        if template is not None:
+            _apply_container_probes(
+                container,
+                startup_probe=template.get("startup_probe"),
+                readiness_probe=template.get("readiness_probe"),
+                liveness_probe=template.get("liveness_probe"),
+            )
+
         self._sandboxes[key] = {
             "apiVersion": f"{SANDBOX_API_GROUP}/{SANDBOX_API_VERSION}",
             "kind": "Sandbox",
             "metadata": {"name": sandbox_name, "namespace": namespace, "resourceVersion": "1"},
-            "spec": {"replicas": 1, "podTemplate": {"spec": {}}},
+            "spec": {"replicas": 1, "podTemplate": {"spec": {"containers": [container]}}},
             "status": {
                 "conditions": [_make_ready_condition("False", "DependenciesNotReady", "Pod does not exist")],
                 "serviceFQDN": f"{sandbox_name}.{namespace}.svc.cluster.local",
@@ -528,6 +616,9 @@ class FakeK8sClient:
         image: str,
         container_port: int,
         resources: dict[str, Any],
+        startup_probe: dict[str, Any] | None = None,
+        readiness_probe: dict[str, Any] | None = None,
+        liveness_probe: dict[str, Any] | None = None,
         volume_claim_templates: list[dict[str, Any]] | None = None,
         shutdown_time: datetime | None = None,
         labels: dict[str, str] | None = None,
@@ -544,6 +635,12 @@ class FakeK8sClient:
         pod_spec: dict[str, Any] = {
             "containers": [{"name": "sandbox", "image": image, "resources": resources}],
         }
+        _apply_container_probes(
+            pod_spec["containers"][0],
+            startup_probe=startup_probe,
+            readiness_probe=readiness_probe,
+            liveness_probe=liveness_probe,
+        )
         pod_template: dict[str, Any] = {"spec": pod_spec}
         if pod_labels:
             pod_template["metadata"] = {"labels": pod_labels}
