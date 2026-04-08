@@ -181,3 +181,35 @@ Run `make help` for the full list. Key commands:
 | `make local` / `make destroy-local` / `make prod` | Local Kind up/down and prod deploy (`TREADSTONE_PROD_CONTEXT` for `make prod`; see `deploy/README.md`) |
 | `make ship MSG=x` | git add + commit + push (feature branches only) |
 | Release | GitHub → **Actions** → **Release** → **Run workflow** → version `x.y.z` (no `v`; matches image tags) |
+
+## Cursor Cloud specific instructions
+
+### Environment
+
+- Python 3.12 is available at `/usr/bin/python3.12`. `uv` is at `~/.local/bin/uv`.
+- Node 20 via nvm; `pnpm` installed globally. Source nvm before using: `export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"`.
+- The update script runs `uv sync` and `cd web && pnpm install --frozen-lockfile` on startup. After that, dependencies are ready.
+
+### Running tests
+
+- **Unset `TREADSTONE_JWT_SECRET` and `TREADSTONE_DEBUG`** before running `make test`. The injected Cloud Agent secret is too short (< 32 chars) and `TREADSTONE_DEBUG=true` from the environment causes `test_settings_defaults` to fail. The test conftest provides its own safe values when these env vars are absent.
+- Command: `unset TREADSTONE_JWT_SECRET TREADSTONE_DEBUG && make test`
+- Web tests: `cd web && pnpm test`
+
+### Running dev servers
+
+- **API**: `unset TREADSTONE_JWT_SECRET TREADSTONE_DEBUG && make dev-api` — the `.env` file supplies the real DB URL and a generated JWT secret. Unset the shell env vars so `.env` values are used.
+- **Web**: `make dev-web` (port 5173).
+- Both servers support hot reload.
+
+### .env configuration
+
+- `.env` is created from `.env.example`. Key fields: `TREADSTONE_DATABASE_URL` (from Neon), `TREADSTONE_JWT_SECRET` (must be ≥ 32 chars), `TREADSTONE_LEADER_ELECTION_ENABLED=false` (no K8s in bare dev), `TREADSTONE_APP_BASE_URL=http://localhost:8000`.
+- `.env` is gitignored; it must be recreated per environment.
+- The `TREADSTONE_DATABASE_URL` and `TREADSTONE_JWT_SECRET` secrets are injected as environment variables. The JWT secret may be too short — generate a longer one for `.env`.
+
+### Gotchas
+
+- `pnpm install --frozen-lockfile` may warn about esbuild build scripts being ignored. Run `pnpm approve-builds` interactively once, or add `"pnpm": {"onlyBuiltDependencies": ["esbuild"]}` to `web/package.json`. The esbuild binary in the pnpm store still works for vite even without explicit approval.
+- The database is Neon (cloud SaaS) — no local Postgres needed. Unit/API tests use in-memory SQLite via aiosqlite; integration tests need the real Neon DB.
+- Lint: `make lint` (runs both `lint-py` and `lint-web`). See Makefile for individual targets.
