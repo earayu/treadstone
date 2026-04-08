@@ -56,8 +56,9 @@ claimAcsScheduling:
         alibabacloud.com/compute-class: "general-purpose"
         alibabacloud.com/compute-qos: "default"
 
-# Direct sandboxes use PVCs and stay ECS-only until the virtual-node PVC
-# prerequisite is enabled in the cluster.
+# Direct sandboxes use PVCs. Leave this disabled unless the target cluster
+# enables virtual-node PVC scheduling prerequisites (for ACK: eci-profile
+# with WaitForFirstConsumer=true and a compatible scheduler version).
 directAcsScheduling:
   enabled: false
   units:
@@ -66,3 +67,15 @@ directAcsScheduling:
       podLabels:
         alibabacloud.com/compute-class: "general-purpose"
         alibabacloud.com/compute-qos: "default"
+    - resource: acs
+      podLabels:
+        alibabacloud.com/compute-class: "performance"
+        alibabacloud.com/compute-qos: "default"
+    - resource: acs
+      podLabels:
+        alibabacloud.com/compute-class: "general-purpose"
+        alibabacloud.com/compute-qos: "best-effort"
+    - resource: acs
+      podLabels:
+        alibabacloud.com/compute-class: "performance"
+        alibabacloud.com/compute-qos: "best-effort"

@@ -66,4 +66,22 @@ claimAcsScheduling:
         alibabacloud.com/compute-qos: "best-effort"
 
 directAcsScheduling:
-  enabled: false
+  enabled: true
+  units:
+    - resource: ecs
+    - resource: acs
+      podLabels:
+        alibabacloud.com/compute-class: "general-purpose"
+        alibabacloud.com/compute-qos: "default"
+    - resource: acs
+      podLabels:
+        alibabacloud.com/compute-class: "performance"
+        alibabacloud.com/compute-qos: "default"
+    - resource: acs
+      podLabels:
+        alibabacloud.com/compute-class: "general-purpose"
+        alibabacloud.com/compute-qos: "best-effort"
+    - resource: acs
+      podLabels:
+        alibabacloud.com/compute-class: "performance"
+        alibabacloud.com/compute-qos: "best-effort"
