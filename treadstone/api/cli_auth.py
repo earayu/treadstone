@@ -61,6 +61,16 @@ def _effective_status(flow: CliLoginFlow) -> str:
     return flow.status
 
 
+async def validate_cli_flow_secret(
+    session: AsyncSession,
+    flow_id: str,
+    raw_secret: str | None,
+) -> CliLoginFlow:
+    flow = await _get_flow_or_404(session, flow_id)
+    _verify_flow_secret(flow, raw_secret)
+    return flow
+
+
 @router.post("/flows")
 async def create_cli_flow(session: AsyncSession = Depends(get_session)):
     """Create a CLI login flow for browser-based authentication."""
@@ -75,7 +85,10 @@ async def create_cli_flow(session: AsyncSession = Depends(get_session)):
     session.add(flow)
     await session.commit()
 
-    browser_url = f"{settings.app_base_url.rstrip('/')}/auth/cli/login?flow_id={flow.id}"
+    browser_url = (
+        f"{settings.app_base_url.rstrip('/')}/auth/cli/login?"
+        f"{urlencode({'flow_id': flow.id, 'flow_secret': raw_secret})}"
+    )
     return {
         "flow_id": flow.id,
         "flow_secret": raw_secret,
@@ -131,10 +144,13 @@ async def exchange_cli_flow(
 @router.get("/login", include_in_schema=False)
 async def cli_login_page(
     flow_id: str = Query(...),
+    flow_secret: str | None = Query(default=None),
     error: str | None = Query(default=None),
 ) -> RedirectResponse:
     """Redirect to the SPA CLI login page."""
     params: dict[str, str] = {"flow_id": flow_id}
+    if flow_secret:
+        params["flow_secret"] = flow_secret
     if error:
         params["error"] = error
     return RedirectResponse(url=f"/auth/cli/login?{urlencode(params)}", status_code=303)
@@ -146,10 +162,11 @@ async def cli_login_submit(
     email: str = Form(...),
     password: str = Form(...),
     flow_id: str = Form(...),
+    flow_secret: str = Form(...),
     session: AsyncSession = Depends(get_session),
 ) -> JSONResponse:
     """Handle email/password login from the SPA CLI login page."""
-    flow = await _get_flow_or_404(session, flow_id)
+    flow = await validate_cli_flow_secret(session, flow_id, flow_secret)
     status = _effective_status(flow)
     if status != "pending":
         raise BadRequestError("CLI login flow has already been used or has expired.")
@@ -189,6 +206,7 @@ async def cli_login_submit(
 async def approve_cli_flow(
     request: Request,
     flow_id: str,
+    x_flow_secret: str | None = Header(default=None),
     current_user: User = Depends(optional_cookie_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, str]:
@@ -196,7 +214,7 @@ async def approve_cli_flow(
     if current_user is None:
         raise AuthRequiredError("You must be signed in to approve a CLI login flow.")
 
-    flow = await _get_flow_or_404(session, flow_id)
+    flow = await validate_cli_flow_secret(session, flow_id, x_flow_secret)
     status = _effective_status(flow)
     if status != "pending":
         raise BadRequestError("CLI login flow has already been used or has expired.")
