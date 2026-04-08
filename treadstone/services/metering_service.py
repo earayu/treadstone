@@ -597,7 +597,7 @@ class MeteringService:
         plan = await self.get_user_plan(session, user_id)
         monthly_remaining = plan.compute_units_monthly_limit - plan.compute_units_monthly_used
         extra_remaining = await self.get_extra_compute_remaining(session, user_id)
-        total_remaining = monthly_remaining + extra_remaining
+        total_remaining = monthly_remaining + extra_remaining - (plan.compute_units_overage or Decimal("0"))
         if total_remaining <= Decimal("0"):
             raise ComputeQuotaExceededError(
                 monthly_used=float(plan.compute_units_monthly_used),
@@ -959,7 +959,9 @@ class MeteringService:
         )
 
         monthly_remaining = max(Decimal("0"), plan.compute_units_monthly_limit - plan.compute_units_monthly_used)
-        total_compute_remaining = monthly_remaining + extra_compute_remaining
+        total_compute_remaining = (
+            monthly_remaining + extra_compute_remaining - (plan.compute_units_overage or Decimal("0"))
+        )
 
         storage_gib_hours = await self.get_storage_gib_hours_for_period(
             session, user_id, plan.period_start, plan.period_end

@@ -828,6 +828,20 @@ class TestCheckComputeQuota:
             await svc.check_compute_quota(AsyncMock(), "user01")
         assert "extra remaining: 0.0" in exc_info.value.message
 
+    async def test_outstanding_overage_blocks_even_with_partial_extra_recovery(self):
+        plan = _make_plan(
+            "user01",
+            compute_units_monthly_limit=Decimal("50"),
+            compute_units_monthly_used=Decimal("50"),
+            compute_units_overage=Decimal("8"),
+        )
+        svc = MeteringService()
+        svc.get_user_plan = AsyncMock(return_value=plan)
+        svc.get_extra_compute_remaining = AsyncMock(return_value=Decimal("5"))
+
+        with pytest.raises(ComputeQuotaExceededError):
+            await svc.check_compute_quota(AsyncMock(), "user01")
+
 
 class TestGetTotalComputeRemaining:
     async def test_monthly_plus_extra(self):
