@@ -9,11 +9,15 @@ modern styling and collapsible per-run sections.
 Usage:
     python scripts/gen-e2e-report.py [REPORT_DIR]
     REPORT_DIR defaults to reports/e2e
+
+Env:
+    E2E_REPORT_RUN_GAP_SECONDS — max seconds between consecutive test rows to treat as the
+    same run (default 300). Rows are merged into one collapsible section per run cluster.
 """
 
+import os
 import re
 import sys
-from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
@@ -77,6 +81,35 @@ def parse_rows(html: str) -> list[dict]:
             }
         )
     return rows
+
+
+def _run_gap_seconds() -> int:
+    raw = os.environ.get("E2E_REPORT_RUN_GAP_SECONDS", "300")
+    try:
+        v = int(raw)
+        return v if v > 0 else 300
+    except ValueError:
+        return 300
+
+
+def cluster_rows_into_runs(rows: list[dict], gap_seconds: int) -> list[list[dict]]:
+    """Group rows into runs: consecutive rows (by timestamp ascending) belong to the
+    same run if the gap between neighbors is <= gap_seconds. Runs are returned newest-first."""
+    if not rows:
+        return []
+    sorted_rows = sorted(rows, key=lambda r: r["timestamp"])
+    runs: list[list[dict]] = []
+    current: list[dict] = [sorted_rows[0]]
+    for row in sorted_rows[1:]:
+        prev = current[-1]
+        if row["timestamp"] - prev["timestamp"] > gap_seconds:
+            runs.append(current)
+            current = [row]
+        else:
+            current.append(row)
+    runs.append(current)
+    runs.sort(key=lambda g: max(r["timestamp"] for r in g), reverse=True)
+    return runs
 
 
 # ── HTML generation ────────────────────────────────────────────────────────────
@@ -406,20 +439,18 @@ ROW_TEMPLATE = """\
               </tr>"""
 
 
-def render(rows: list[dict]) -> str:
-    groups: dict[int, list[dict]] = defaultdict(list)
-    for row in rows:
-        groups[row["timestamp"]].append(row)
-
-    sorted_ts = sorted(groups.keys(), reverse=True)
+def render(rows: list[dict], *, gap_seconds: int | None = None) -> str:
+    gap = gap_seconds if gap_seconds is not None else _run_gap_seconds()
+    run_groups = cluster_rows_into_runs(rows, gap)
 
     all_passed = sum(1 for r in rows if r["status"] == "success")
     all_failed = len(rows) - all_passed
-    files_per_run = max((len(v) for v in groups.values()), default=0)
+    files_per_run = max((len(g) for g in run_groups), default=0)
 
     runs_parts: list[str] = []
-    for i, ts in enumerate(sorted_ts):
-        run_rows = sorted(groups[ts], key=lambda r: r["short_name"])
+    for i, group in enumerate(run_groups):
+        ts = max(r["timestamp"] for r in group)
+        run_rows = sorted(group, key=lambda r: r["short_name"])
         passed = sum(1 for r in run_rows if r["status"] == "success")
         failed = len(run_rows) - passed
         pct = round(passed / len(run_rows) * 100, 1) if run_rows else 0
@@ -430,7 +461,7 @@ def render(rows: list[dict]) -> str:
 
         rows_parts = [ROW_TEMPLATE.format(**r) for r in run_rows]
 
-        run_num = len(sorted_ts) - i  # oldest = #1
+        run_num = len(run_groups) - i  # oldest = #1
         latest_badge = ' <span class="badge-latest">latest</span>' if i == 0 else ""
 
         runs_parts.append(
@@ -448,7 +479,7 @@ def render(rows: list[dict]) -> str:
 
     return HTML_TEMPLATE.format(
         css=CSS,
-        total_runs=len(sorted_ts),
+        total_runs=len(run_groups),
         total_files=files_per_run,
         total_passed=all_passed,
         total_failed=all_failed,
@@ -473,8 +504,10 @@ def main() -> None:
         print("[gen-e2e-report] No test rows found in report (keeping Hurl index.html unchanged).", file=sys.stderr)
         sys.exit(0)
 
-    index.write_text(render(rows), encoding="utf-8")
-    print(f"[gen-e2e-report] Rewrote {index} ({len(rows)} rows across {len(set(r['timestamp'] for r in rows))} runs)")
+    gap = _run_gap_seconds()
+    index.write_text(render(rows, gap_seconds=gap), encoding="utf-8")
+    n_runs = len(cluster_rows_into_runs(rows, gap))
+    print(f"[gen-e2e-report] Rewrote {index} ({len(rows)} rows, {n_runs} run group(s), gap={gap}s)")
 
 
 if __name__ == "__main__":

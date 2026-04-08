@@ -20,6 +20,22 @@ def _load_gen_e2e_report():
 _mod = _load_gen_e2e_report()
 parse_rows = _mod.parse_rows
 render = _mod.render
+cluster_rows_into_runs = _mod.cluster_rows_into_runs
+
+
+def _minimal_row(ts: int, short_name: str, href_suffix: str) -> dict:
+    return {
+        "timestamp": ts,
+        "status": "success",
+        "filename": f"tests/e2e/{short_name}",
+        "short_name": short_name,
+        "duration_ms": 100,
+        "source_href": f"store/{href_suffix}-source.html",
+        "timeline_href": f"store/{href_suffix}-timeline.html",
+        "start_time": "-",
+        "duration_s": "0.1",
+    }
+
 
 # Minimal Hurl 5.x-style index fragment (data-* on <tr>, links under store/)
 _HURL_INDEX_ROW_STORE = """
@@ -122,3 +138,42 @@ def test_render_roundtrip_links_non_empty(snippet: str) -> None:
     for r in rows:
         assert f'href="{r["source_href"]}"' in out
         assert f'href="{r["timeline_href"]}"' in out
+
+
+def test_cluster_rows_into_runs_merges_within_gap() -> None:
+    rows = [
+        _minimal_row(100, "a.hurl", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        _minimal_row(105, "b.hurl", "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+        _minimal_row(110, "c.hurl", "cccccccc-cccc-cccc-cccc-cccccccccccc"),
+    ]
+    runs = cluster_rows_into_runs(rows, 300)
+    assert len(runs) == 1
+    assert len(runs[0]) == 3
+
+
+def test_cluster_rows_into_runs_splits_on_gap() -> None:
+    rows = [
+        _minimal_row(100, "a.hurl", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        _minimal_row(500, "b.hurl", "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+    ]
+    runs = cluster_rows_into_runs(rows, 300)
+    assert len(runs) == 2
+
+
+def test_render_one_section_when_timestamps_clustered() -> None:
+    rows = [
+        _minimal_row(1000, "a.hurl", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        _minimal_row(1050, "b.hurl", "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+        _minimal_row(1100, "c.hurl", "cccccccc-cccc-cccc-cccc-cccccccccccc"),
+    ]
+    out = render(rows, gap_seconds=300)
+    assert out.count('<section class="run ') == 1
+
+
+def test_render_two_sections_when_gap_exceeded() -> None:
+    rows = [
+        _minimal_row(100, "a.hurl", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        _minimal_row(500, "b.hurl", "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+    ]
+    out = render(rows, gap_seconds=300)
+    assert out.count('<section class="run ') == 2
