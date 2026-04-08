@@ -44,13 +44,15 @@ def verify_bootstrap_ticket(token: str) -> dict[str, Any] | None:
     return payload
 
 
-def issue_sandbox_web_cookie(*, sandbox_id: str, issued_via: str) -> str:
+def issue_sandbox_web_cookie(*, sandbox_id: str, issued_via: str, link_id: str | None = None) -> str:
     payload = {
         "kind": "sandbox_web",
         "sandbox_id": sandbox_id,
         "issued_via": issued_via,
         "exp": utc_now() + timedelta(seconds=SANDBOX_WEB_COOKIE_TTL_SECONDS),
     }
+    if link_id is not None:
+        payload["link_id"] = link_id
     return jwt.encode(payload, settings.jwt_secret, algorithm=_JWT_ALGORITHM)
 
 

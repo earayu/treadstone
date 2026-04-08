@@ -29,6 +29,8 @@ from treadstone.models.cli_login_flow import (
 )
 from treadstone.models.user import User, utc_now
 from treadstone.services.audit import record_audit_event
+from treadstone.services.cli_login_flow import approve_cli_flow as approve_cli_flow_transition
+from treadstone.services.cli_login_flow import consume_cli_flow
 
 router = APIRouter(prefix="/v1/auth/cli", tags=["auth"])
 
@@ -59,13 +61,6 @@ def _effective_status(flow: CliLoginFlow) -> str:
     return flow.status
 
 
-def _mark_approved(flow: CliLoginFlow, user: User, provider: str) -> None:
-    flow.status = "approved"
-    flow.user_id = user.id
-    flow.provider = provider
-    flow.gmt_completed = utc_now()
-
-
 @router.post("/flows")
 async def create_cli_flow(session: AsyncSession = Depends(get_session)):
     """Create a CLI login flow for browser-based authentication."""
@@ -79,7 +74,6 @@ async def create_cli_flow(session: AsyncSession = Depends(get_session)):
     )
     session.add(flow)
     await session.commit()
-    await session.refresh(flow)
 
     browser_url = f"{settings.app_base_url.rstrip('/')}/auth/cli/login?flow_id={flow.id}"
     return {
@@ -127,9 +121,8 @@ async def exchange_cli_flow(
 
     strategy = get_jwt_strategy()
     token = await strategy.write_token(user)
-
-    flow.status = "used"
-    session.add(flow)
+    if not await consume_cli_flow(session, flow_id=flow.id):
+        raise BadRequestError("CLI login flow has already been used.")
     await session.commit()
 
     return {"session_token": token}
@@ -176,7 +169,8 @@ async def cli_login_submit(
         await session.commit()
         raise
 
-    _mark_approved(flow, user, provider="email")
+    if not await approve_cli_flow_transition(session, flow_id=flow.id, user_id=user.id, provider="email"):
+        raise BadRequestError("CLI login flow has already been used or has expired.")
     set_request_context(request, actor_user_id=user.id, credential_type="cookie")
     await record_audit_event(
         session,
@@ -186,7 +180,6 @@ async def cli_login_submit(
         metadata={"email": user.email, "provider": "email", "surface": "cli"},
         request=request,
     )
-    session.add(flow)
     await session.commit()
 
     return JSONResponse({"status": "approved"})
@@ -208,7 +201,8 @@ async def approve_cli_flow(
     if status != "pending":
         raise BadRequestError("CLI login flow has already been used or has expired.")
 
-    _mark_approved(flow, current_user, provider="session")
+    if not await approve_cli_flow_transition(session, flow_id=flow.id, user_id=current_user.id, provider="session"):
+        raise BadRequestError("CLI login flow has already been used or has expired.")
     set_request_context(request, actor_user_id=current_user.id, credential_type="cookie")
     await record_audit_event(
         session,
@@ -218,7 +212,6 @@ async def approve_cli_flow(
         metadata={"email": current_user.email, "provider": "session", "surface": "cli"},
         request=request,
     )
-    session.add(flow)
     await session.commit()
 
     return {"status": "approved"}

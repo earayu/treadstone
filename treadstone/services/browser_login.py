@@ -37,5 +37,7 @@ def validate_browser_return_to(return_to: str) -> tuple[str, str, str, str]:
     next_path = parsed.path or "/"
     if parsed.query:
         next_path = f"{next_path}?{parsed.query}"
+    if parsed.fragment:
+        next_path = f"{next_path}#{parsed.fragment}"
 
     return parsed.scheme, parsed.netloc, sandbox_id, next_path
