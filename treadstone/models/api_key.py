@@ -1,12 +1,18 @@
+from __future__ import annotations
+
 import hashlib
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from treadstone.core.database import Base
 from treadstone.models.user import random_id, utc_now
+
+if TYPE_CHECKING:
+    from treadstone.models.user import User
 
 
 def hash_api_key_secret(secret: str) -> str:
@@ -38,7 +44,8 @@ class ApiKey(Base):
     gmt_updated: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     gmt_expires: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     gmt_deleted: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    sandbox_grants: Mapped[list["ApiKeySandboxGrant"]] = relationship(
+    user: Mapped[User] = relationship("User")
+    sandbox_grants: Mapped[list[ApiKeySandboxGrant]] = relationship(
         "ApiKeySandboxGrant",
         back_populates="api_key",
         cascade="all, delete-orphan",
@@ -68,4 +75,4 @@ class ApiKeySandboxGrant(Base):
     )
     gmt_created: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
-    api_key: Mapped["ApiKey"] = relationship("ApiKey", back_populates="sandbox_grants")
+    api_key: Mapped[ApiKey] = relationship("ApiKey", back_populates="sandbox_grants")

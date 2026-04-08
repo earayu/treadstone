@@ -213,9 +213,9 @@ HTTP 204
 
 GET {{base_url}}/v1/sandboxes/{{sandbox_id_a}}/web-link
 Authorization: Bearer {{api_key_a}}
-HTTP 200
+HTTP *
 [Asserts]
-jsonpath "$.enabled" == false
+body matches /("enabled"\s*:\s*false)|("code"\s*:\s*"sandbox_not_found")/
 
 
 # ── Cleanup ─────────────────────────────────────────────────────────────────

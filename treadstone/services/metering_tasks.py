@@ -13,15 +13,17 @@ Module separation rationale:
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import Numeric, cast, func, literal, select, update
+from sqlalchemy import Numeric, cast, func, literal, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from treadstone.models.audit_event import AuditActorType
-from treadstone.models.metering import ComputeSession, StorageLedger, StorageState, UserPlan
+from treadstone.models.metering import ComputeGrant, ComputeSession, StorageLedger, StorageState, UserPlan
 from treadstone.models.sandbox import Sandbox, SandboxStatus
 from treadstone.models.user import utc_now
 from treadstone.services.audit import record_audit_event
@@ -40,6 +42,16 @@ _metering = MeteringService()
 
 class _OptimisticLockConflict(Exception):
     """Raised inside a savepoint to trigger rollback on lock conflict."""
+
+
+@dataclass(slots=True)
+class _UserMeteringSnapshot:
+    plan: UserPlan
+    extra_compute_remaining: Decimal
+    total_remaining: Decimal
+
+
+_SANDBOX_UNSET = object()
 
 
 # ═══════════════════════════════════════════════════════════
@@ -175,14 +187,19 @@ async def check_warning_thresholds(session: AsyncSession) -> None:
     100% signal is more urgent.
     """
     user_ids = await _get_users_with_running_sandboxes(session)
+    snapshots = await _load_user_metering_snapshots(session, user_ids)
 
     for user_id in user_ids:
-        plan = await _metering.get_user_plan(session, user_id)
-        total_remaining = await _metering.get_total_compute_remaining(session, user_id)
+        snapshot = snapshots.get(user_id)
+        if snapshot is None:
+            continue
+
+        plan = snapshot.plan
+        total_remaining = snapshot.total_remaining
 
         monthly_limit = plan.compute_units_monthly_limit
         monthly_used = plan.compute_units_monthly_used
-        extra_remaining = await _metering.get_extra_compute_remaining(session, user_id)
+        extra_remaining = snapshot.extra_compute_remaining
 
         # 100% warning: monthly + extra fully exhausted
         if total_remaining <= Decimal("0") and plan.warning_100_notified_at is None:
@@ -253,13 +270,26 @@ async def check_grace_periods(
     corrected by reconcile).
     """
     user_ids = await _get_users_with_running_sandboxes(session)
+    snapshots = await _load_user_metering_snapshots(session, user_ids)
+    running_sandboxes_by_user = await _get_running_sandboxes_by_user(session, user_ids)
 
     for user_id in user_ids:
-        plan = await _metering.get_user_plan(session, user_id)
-        total_remaining = await _metering.get_total_compute_remaining(session, user_id)
+        snapshot = snapshots.get(user_id)
+        if snapshot is None:
+            continue
+
+        plan = snapshot.plan
+        total_remaining = snapshot.total_remaining
 
         if total_remaining <= Decimal("0"):
-            await _handle_exhausted(session, plan, user_id, total_remaining, stop_sandbox_callback)
+            await _handle_exhausted(
+                session,
+                plan,
+                user_id,
+                total_remaining,
+                stop_sandbox_callback,
+                running_sandboxes=running_sandboxes_by_user.get(user_id, []),
+            )
         else:
             await _handle_credits_restored(session, plan, user_id, total_remaining)
 
@@ -272,6 +302,8 @@ async def _handle_exhausted(
     user_id: str,
     total_remaining: Decimal,
     stop_callback: StopSandboxCallback | None,
+    *,
+    running_sandboxes: list[Sandbox] | None = None,
 ) -> None:
     """Handle a user whose credits are fully exhausted."""
     now = utc_now()
@@ -303,7 +335,16 @@ async def _handle_exhausted(
 
     if elapsed > plan.grace_period_seconds or exceeded_absolute_cap:
         reason = "absolute_cap_exceeded" if exceeded_absolute_cap else "grace_period_expired"
-        await _enforce_stop(session, plan, user_id, reason, elapsed, overage, stop_callback)
+        await _enforce_stop(
+            session,
+            plan,
+            user_id,
+            reason,
+            elapsed,
+            overage,
+            stop_callback,
+            running_sandboxes=running_sandboxes,
+        )
 
 
 async def _enforce_stop(
@@ -314,24 +355,39 @@ async def _enforce_stop(
     grace_elapsed_seconds: float,
     overage: Decimal,
     stop_callback: StopSandboxCallback | None,
+    *,
+    running_sandboxes: list[Sandbox] | None = None,
 ) -> None:
     """Force-stop all running sandboxes for a user (grace period enforcement).
 
     Closes ComputeSession for each successfully stopped sandbox to prevent
-    continued billing.  Only clears grace state when all sandboxes are
-    stopped successfully; partial failures preserve the grace timer so
-    enforcement retries immediately on the next tick.
+    continued billing.  Metering close and audit writes are best-effort here:
+    the authoritative enforcement outcome is whether any sandboxes remain in a
+    running state after this pass. If none remain, clear grace state so the
+    user plan does not stay stuck in grace due to follow-up failures that
+    existing repair loops can reconcile later.
     """
-    sandboxes = await _get_running_sandboxes(session, user_id)
+    sandboxes = running_sandboxes if running_sandboxes is not None else await _get_running_sandboxes(session, user_id)
 
-    all_stopped = True
     for sandbox in sandboxes:
         try:
             if stop_callback is not None:
                 await stop_callback(session, sandbox)
             else:
                 await _db_only_stop(session, sandbox)
+        except Exception:
+            logger.exception("Failed to force-stop sandbox %s during grace enforcement", sandbox.id)
+            continue
+
+        try:
             await _metering.close_compute_session(session, sandbox.id)
+        except Exception:
+            logger.exception(
+                "Failed to close compute session for sandbox %s during grace enforcement",
+                sandbox.id,
+            )
+
+        try:
             await record_audit_event(
                 session,
                 action="metering.auto_stop",
@@ -347,10 +403,10 @@ async def _enforce_stop(
                 },
             )
         except Exception:
-            logger.exception("Failed to force-stop sandbox %s during grace enforcement", sandbox.id)
-            all_stopped = False
+            logger.exception("Failed to record auto-stop audit event for sandbox %s", sandbox.id)
 
-    if all_stopped:
+    remaining_running = await _get_running_sandboxes(session, user_id)
+    if not remaining_running:
         plan.grace_period_started_at = None
         plan.gmt_updated = utc_now()
         session.add(plan)
@@ -403,6 +459,8 @@ async def handle_period_rollover(
     session: AsyncSession,
     cs: ComputeSession,
     plan: UserPlan,
+    *,
+    sandbox: Sandbox | None | object = _SANDBOX_UNSET,
 ) -> ComputeSession | None:
     """Split a ComputeSession at the billing period boundary.
 
@@ -458,7 +516,8 @@ async def handle_period_rollover(
     )
 
     # 3. If sandbox still running, create a new session for the new period
-    sandbox = await session.get(Sandbox, cs.sandbox_id)
+    if sandbox is _SANDBOX_UNSET:
+        sandbox = await session.get(Sandbox, cs.sandbox_id)
     if sandbox is None or sandbox.status != SandboxStatus.READY:
         await session.flush()
         return None
@@ -491,18 +550,26 @@ async def reset_monthly_credits(session: AsyncSession) -> int:
 
     result = await session.execute(select(UserPlan).where(UserPlan.period_end <= now))
     plans = result.scalars().all()
+    sessions_by_user = await _get_open_sessions_by_user(session, [plan.user_id for plan in plans])
+    sandbox_by_id = await _get_sandboxes_by_id(
+        session,
+        [cs.sandbox_id for sessions in sessions_by_user.values() for cs in sessions],
+    )
 
     reset_count = 0
     for plan in plans:
         while plan.period_end <= now:
-            open_sessions_result = await session.execute(
-                select(ComputeSession).where(
-                    ComputeSession.user_id == plan.user_id,
-                    ComputeSession.ended_at.is_(None),
+            next_open_sessions: list[ComputeSession] = []
+            for cs in sessions_by_user.get(plan.user_id, []):
+                new_session = await handle_period_rollover(
+                    session,
+                    cs,
+                    plan,
+                    sandbox=sandbox_by_id.get(cs.sandbox_id),
                 )
-            )
-            for cs in open_sessions_result.scalars():
-                await handle_period_rollover(session, cs, plan)
+                if new_session is not None:
+                    next_open_sessions.append(new_session)
+            sessions_by_user[plan.user_id] = next_open_sessions
 
             if plan.period_end <= now:
                 new_period_start = plan.period_end
@@ -586,6 +653,59 @@ async def _get_users_with_running_sandboxes(session: AsyncSession) -> list[str]:
     return [row[0] for row in result.all()]
 
 
+async def _load_user_metering_snapshots(
+    session: AsyncSession,
+    user_ids: list[str],
+) -> dict[str, _UserMeteringSnapshot]:
+    """Batch-load plan and grant state for users touched by a metering tick."""
+    if not user_ids:
+        return {}
+
+    result = await session.execute(select(UserPlan).where(UserPlan.user_id.in_(user_ids)))
+    plans_by_user = {plan.user_id: plan for plan in result.scalars().all()}
+
+    missing_user_ids = [user_id for user_id in user_ids if user_id not in plans_by_user]
+    for user_id in missing_user_ids:
+        plans_by_user[user_id] = await _metering.get_user_plan(session, user_id)
+
+    now = utc_now()
+    grants_result = await session.execute(
+        select(
+            ComputeGrant.user_id,
+            func.coalesce(func.sum(ComputeGrant.remaining_amount), 0),
+        )
+        .where(
+            ComputeGrant.user_id.in_(user_ids),
+            ComputeGrant.remaining_amount > 0,
+            or_(
+                ComputeGrant.expires_at.is_(None),
+                ComputeGrant.expires_at > now,
+            ),
+        )
+        .group_by(ComputeGrant.user_id)
+    )
+    extra_remaining_by_user = {
+        user_id: Decimal(str(remaining_amount)) for user_id, remaining_amount in grants_result.all()
+    }
+
+    snapshots: dict[str, _UserMeteringSnapshot] = {}
+    for user_id in user_ids:
+        plan = plans_by_user[user_id]
+        extra_remaining = extra_remaining_by_user.get(user_id, Decimal("0"))
+        total_remaining = (
+            plan.compute_units_monthly_limit
+            - plan.compute_units_monthly_used
+            + extra_remaining
+            - (plan.compute_units_overage or Decimal("0"))
+        )
+        snapshots[user_id] = _UserMeteringSnapshot(
+            plan=plan,
+            extra_compute_remaining=extra_remaining,
+            total_remaining=total_remaining,
+        )
+    return snapshots
+
+
 async def _get_running_sandboxes(session: AsyncSession, user_id: str) -> list[Sandbox]:
     """Return all CREATING/READY sandboxes for the given user."""
     result = await session.execute(
@@ -595,3 +715,46 @@ async def _get_running_sandboxes(session: AsyncSession, user_id: str) -> list[Sa
         )
     )
     return list(result.scalars().all())
+
+
+async def _get_running_sandboxes_by_user(session: AsyncSession, user_ids: list[str]) -> dict[str, list[Sandbox]]:
+    """Return running sandboxes for a set of users using one grouped query."""
+    if not user_ids:
+        return {}
+
+    result = await session.execute(
+        select(Sandbox).where(
+            Sandbox.owner_id.in_(user_ids),
+            Sandbox.status.in_([SandboxStatus.CREATING, SandboxStatus.READY]),
+        )
+    )
+    sandboxes_by_user: dict[str, list[Sandbox]] = defaultdict(list)
+    for sandbox in result.scalars().all():
+        sandboxes_by_user[sandbox.owner_id].append(sandbox)
+    return dict(sandboxes_by_user)
+
+
+async def _get_open_sessions_by_user(session: AsyncSession, user_ids: list[str]) -> dict[str, list[ComputeSession]]:
+    """Return open compute sessions grouped by user in one query."""
+    if not user_ids:
+        return {}
+
+    result = await session.execute(
+        select(ComputeSession).where(
+            ComputeSession.user_id.in_(user_ids),
+            ComputeSession.ended_at.is_(None),
+        )
+    )
+    sessions_by_user: dict[str, list[ComputeSession]] = defaultdict(list)
+    for compute_session in result.scalars().all():
+        sessions_by_user[compute_session.user_id].append(compute_session)
+    return dict(sessions_by_user)
+
+
+async def _get_sandboxes_by_id(session: AsyncSession, sandbox_ids: list[str]) -> dict[str, Sandbox]:
+    """Return sandboxes keyed by id for rollover checks."""
+    if not sandbox_ids:
+        return {}
+
+    result = await session.execute(select(Sandbox).where(Sandbox.id.in_(sandbox_ids)))
+    return {sandbox.id: sandbox for sandbox in result.scalars().all()}
