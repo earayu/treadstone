@@ -60,7 +60,7 @@ def compute_grant_status(grant: ComputeGrant) -> str:
         expires = grant.expires_at
         if expires.tzinfo is None:
             expires = expires.replace(tzinfo=now.tzinfo)
-        if expires < now:
+        if expires <= now:
             return "expired"
     return "active"
 
@@ -72,7 +72,7 @@ def storage_quota_grant_status(grant: StorageQuotaGrant) -> str:
         expires = grant.expires_at
         if expires.tzinfo is None:
             expires = expires.replace(tzinfo=now.tzinfo)
-        if expires < now:
+        if expires <= now:
             return "expired"
     return "active"
 
