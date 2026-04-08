@@ -1,0 +1,20 @@
+# Pilot: 15 × aio-sandbox-tiny — verify create / poll / cleanup before main run.
+
+name: "pilot-stateless-15"
+description: "Small pilot to validate benchmark harness and treadstone auth before stateless burst."
+
+matrix:
+  - template: aio-sandbox-tiny
+    count: 15
+    persist: false
+
+concurrency: 5
+ready_timeout_sec: 600
+poll_interval_sec: 10
+
+auto_stop_interval: 60
+auto_delete_interval: -1
+
+cleanup:
+  after_run: true
+  on_failure: true

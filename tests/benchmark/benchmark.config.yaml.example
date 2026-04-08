@@ -1,0 +1,22 @@
+# Treadstone Benchmark Configuration
+# Copy this file to benchmark.config.yaml and fill in your values.
+# benchmark.config.yaml is gitignored — never commit credentials.
+#
+# base_url priority (highest to lowest):
+#   1. --base-url CLI flag
+#   2. TREADSTONE_BASE_URL environment variable
+#   3. base_url in this file
+#   4. ~/.config/treadstone/config.toml (treadstone CLI global config)
+
+# Treadstone API server (matches treadstone CLI default: treadstone config get base_url).
+base_url: "https://api.treadstone-ai.dev"
+
+# treadstone binary version to install.
+# "latest" fetches the newest GitHub release via the official install script.
+# Use a specific version e.g. "0.8.8" to pin.
+binary_version: "latest"
+
+# Directory where benchmark results are written.
+# Each run creates a timestamped subdirectory inside results_dir.
+# Default: tests/benchmark/results/
+# results_dir: "tests/benchmark/results"

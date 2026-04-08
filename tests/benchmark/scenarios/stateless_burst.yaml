@@ -1,0 +1,35 @@
+# Scenario: stateless-burst-100
+# Goal: Verify that 100 stateless sandboxes can be created concurrently, testing
+#       ECS + ACS overflow scheduling under a burst workload.
+#
+# This is the recommended first benchmark run. It uses the smallest template
+# (aio-sandbox-tiny: 250m CPU, 1Gi memory) to minimize cost while still
+# generating enough concurrent Pods to trigger ACS overflow scheduling.
+
+name: "stateless-burst-100"
+description: >
+  Burst-create 100 stateless (no persistent storage) sandboxes to validate
+  ECS+ACS overflow scheduling. Expected: >=95% API acceptance, >=90% reach
+  ready status within the timeout window.
+
+# Matrix: each entry defines a profile. Total sandboxes = sum of all count values.
+# To run a mixed scenario, add more entries (see mixed_burst.yaml for reference).
+matrix:
+  - template: aio-sandbox-tiny
+    count: 100
+    persist: false
+    # storage_size is ignored when persist: false
+
+# Execution settings
+concurrency: 10          # max simultaneous in-flight create API calls
+ready_timeout_sec: 900   # per-sandbox polling timeout (15 min)
+poll_interval_sec: 10    # how often to poll sandbox status
+
+# Sandbox lifecycle options (passed to `treadstone sandboxes create`)
+auto_stop_interval: 60   # minutes; sandbox auto-stops after this idle period
+auto_delete_interval: -1 # minutes after stop before auto-delete; -1 = disabled
+
+# Cleanup settings
+cleanup:
+  after_run: true   # delete all created sandboxes after the benchmark finishes
+  on_failure: true  # delete even if some sandboxes did not reach ready status

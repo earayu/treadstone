@@ -1,0 +1,35 @@
+# Scenario: mixed-burst-70-30
+# Goal: Simulate a realistic mixed workload — 70% stateless, 30% stateful —
+#       to observe how ECS + ACS handle heterogeneous sandbox types concurrently.
+#
+# NOTE: This scenario is a placeholder for the third benchmark round.
+#       Run stateless_burst.yaml and stateful_burst.yaml first.
+#       The matrix below illustrates the combinatorial approach:
+#       add/remove entries or change counts to adjust the mix.
+
+name: "mixed-burst-70-30"
+description: >
+  Mixed concurrency benchmark: 70 stateless (aio-sandbox-tiny) and 30
+  stateful (aio-sandbox-medium with 5Gi) sandboxes submitted together.
+  Tests how the scheduler handles the two provisioning paths simultaneously.
+
+matrix:
+  - template: aio-sandbox-tiny
+    count: 70
+    persist: false
+
+  - template: aio-sandbox-medium
+    count: 30
+    persist: true
+    storage_size: "5Gi"
+
+concurrency: 10          # shared concurrency limit across all profiles
+ready_timeout_sec: 1200  # 20 min — allow time for slower stateful sandboxes
+poll_interval_sec: 10
+
+auto_stop_interval: 60
+auto_delete_interval: -1
+
+cleanup:
+  after_run: true
+  on_failure: true
