@@ -6,11 +6,11 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, lazyload
 
 from treadstone.core.database import get_session
 from treadstone.core.errors import AuthInvalidError, AuthRequiredError, ForbiddenError
-from treadstone.core.request_context import set_request_context
+from treadstone.core.request_context import get_request_context, set_request_context
 from treadstone.core.users import fastapi_users
 from treadstone.models.api_key import ApiKey, ApiKeyDataPlaneMode, ApiKeySandboxGrant, hash_api_key_secret
 from treadstone.models.user import Role, User
@@ -33,25 +33,24 @@ def _set_auth_context(
     )
 
 
-async def _get_active_user(session: AsyncSession, user_id: str) -> User | None:
-    result = await session.execute(select(User).where(User.id == user_id, User.is_active.is_(True)))
-    return result.unique().scalar_one_or_none()
-
-
 async def _authenticate_api_key_value(session: AsyncSession, secret: str) -> tuple[ApiKey, User] | None:
     result = await session.execute(
         select(ApiKey)
-        .options(selectinload(ApiKey.sandbox_grants))
+        .options(joinedload(ApiKey.user), lazyload(ApiKey.sandbox_grants))
         .where(
             ApiKey.key_hash == hash_api_key_secret(secret),
             ApiKey.gmt_deleted.is_(None),
         )
     )
-    api_key = result.scalar_one_or_none()
+    api_key = result.unique().scalar_one_or_none()
     if api_key is None or api_key.is_expired() or not api_key.is_enabled:
         return None
-    user = await _get_active_user(session, api_key.user_id)
+    user = api_key.user
     if user is None:
+        return None
+    if not user.is_active:
+        return None
+    if user.id != api_key.user_id:
         return None
     return api_key, user
 
@@ -126,4 +125,13 @@ async def get_current_data_plane_user(
 async def get_current_admin(user: User = Depends(get_current_control_plane_user)) -> User:
     if user.role != Role.ADMIN.value:
         raise ForbiddenError("Admin required")
+    return user
+
+
+async def get_current_admin_session(
+    request: Request,
+    user: User = Depends(get_current_admin),
+) -> User:
+    if get_request_context(request, "credential_type") != "cookie":
+        raise AuthInvalidError("Admin session cookie required.")
     return user

@@ -528,7 +528,9 @@ class TestCheckGracePeriods:
             call_count += 1
             if call_count == 1:
                 return _MockDistinct(["user_01"])
-            return _MockScalars([sandbox])
+            if call_count == 2:
+                return _MockScalars([sandbox])
+            return _MockScalars([])
 
         session.execute = AsyncMock(side_effect=mock_execute)
         session.get = AsyncMock(return_value=sandbox)
@@ -572,7 +574,9 @@ class TestCheckGracePeriods:
             call_count += 1
             if call_count == 1:
                 return _MockDistinct(["user_01"])
-            return _MockScalars([sandbox])
+            if call_count == 2:
+                return _MockScalars([sandbox])
+            return _MockScalars([])
 
         session.execute = AsyncMock(side_effect=mock_execute)
         session.add = MagicMock()
@@ -633,7 +637,9 @@ class TestCheckGracePeriods:
             call_count += 1
             if call_count == 1:
                 return _MockDistinct(["user_01"])
-            return _MockScalars([sandbox])
+            if call_count == 2:
+                return _MockScalars([sandbox])
+            return _MockScalars([])
 
         session.execute = AsyncMock(side_effect=mock_execute)
         session.add = MagicMock()
@@ -647,6 +653,41 @@ class TestCheckGracePeriods:
                 await check_grace_periods(session, stop_sandbox_callback=stop_callback)
 
         stop_callback.assert_awaited_once_with(session, sandbox)
+
+    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    async def test_clears_grace_when_stop_succeeds_but_followups_fail(self, mock_now):
+        from treadstone.services.metering_tasks import check_grace_periods
+
+        grace_start = FIXED_NOW - timedelta(seconds=2000)
+        plan = _make_plan(grace_period_seconds=1800, grace_period_started_at=grace_start)
+        sandbox = _make_sandbox()
+
+        stop_callback = AsyncMock()
+        session = AsyncMock()
+        results = iter(
+            [
+                _MockDistinct(["user_01"]),
+                _MockScalars([sandbox]),
+                _MockScalars([]),
+            ]
+        )
+        session.execute = AsyncMock(side_effect=lambda stmt: next(results))
+        session.add = MagicMock()
+        session.commit = AsyncMock()
+
+        with patch("treadstone.services.metering_tasks._metering") as mock_metering:
+            mock_metering.get_user_plan = AsyncMock(return_value=plan)
+            mock_metering.get_total_compute_remaining = AsyncMock(return_value=Decimal("-5"))
+            mock_metering.close_compute_session = AsyncMock(side_effect=RuntimeError("metering failed"))
+            with patch(
+                "treadstone.services.metering_tasks.record_audit_event",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("audit failed"),
+            ):
+                await check_grace_periods(session, stop_sandbox_callback=stop_callback)
+
+        stop_callback.assert_awaited_once_with(session, sandbox)
+        assert plan.grace_period_started_at is None
 
     @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_no_running_sandboxes_is_noop(self, mock_now):
