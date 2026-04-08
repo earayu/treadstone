@@ -58,7 +58,6 @@ async def submit_waitlist_application(
     )
     session.add(application)
     await session.commit()
-    await session.refresh(application)
 
     logger.info(
         "Waitlist application submitted: email=%s tier=%s id=%s",
