@@ -28,6 +28,7 @@ from treadstone.models.metering import (
 )
 from treadstone.models.sandbox import Sandbox, SandboxStatus
 from treadstone.models.user import OAuthAccount, User
+from treadstone.services.metering_service import MeteringService
 
 _test_session_factory: async_sessionmaker | None = None
 
@@ -219,6 +220,8 @@ async def test_get_usage_clips_cross_period_cumulative_usage(user_client, monkey
 async def test_get_usage_surfaces_negative_total_remaining_when_user_has_overage(user_client):
     async with _test_session_factory() as session:
         user = (await session.execute(select(User).where(User.email == "user@example.com"))).unique().scalar_one()
+        metering = MeteringService()
+        await metering.ensure_user_plan(session, user.id)
         user_plan = (await session.execute(select(UserPlan).where(UserPlan.user_id == user.id))).scalar_one()
         user_plan.compute_units_monthly_used = Decimal("10")
         user_plan.compute_units_overage = Decimal("2.5")
