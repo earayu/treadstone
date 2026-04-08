@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from treadstone.api.deps import get_current_admin
 from treadstone.api.schemas import AuditEventListResponse, AuditFilterOptionsResponse
 from treadstone.core.database import get_session
+from treadstone.core.errors import ValidationError
 from treadstone.models.audit_event import AuditEvent
 from treadstone.models.user import User
 
@@ -66,6 +67,15 @@ def _serialize_event(event: AuditEvent) -> dict:
     }
 
 
+def _normalize_actor_email(actor_email: str | None) -> str | None:
+    if actor_email is None:
+        return None
+    trimmed = actor_email.strip()
+    if not trimmed:
+        return None
+    return trimmed.lower()
+
+
 @router.get("/filter-options", response_model=AuditFilterOptionsResponse)
 async def get_audit_filter_options(
     _admin: User = Depends(get_current_admin),
@@ -97,9 +107,13 @@ async def list_audit_events(
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
 ):
+    if since is not None and until is not None and since > until:
+        raise ValidationError("since must be less than or equal to until.")
+
     resolved_actor_user_id = actor_user_id
-    if actor_email and not actor_user_id:
-        user_row = await session.execute(select(User).where(User.email == actor_email))
+    normalized_actor_email = _normalize_actor_email(actor_email)
+    if normalized_actor_email and not actor_user_id:
+        user_row = await session.execute(select(User).where(func.lower(User.email) == normalized_actor_email))
         user = user_row.unique().scalar_one_or_none()
         if user:
             resolved_actor_user_id = user.id

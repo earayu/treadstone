@@ -142,3 +142,32 @@ async def test_audit_events_filter_by_actor_email_not_found_returns_empty(admin_
     data = response.json()
     assert data["total"] == 0
     assert data["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_audit_events_filter_by_actor_email_is_case_insensitive_and_trimmed(admin_client):
+    await admin_client.post(
+        "/v1/sandboxes",
+        json={"template": "aio-sandbox-tiny", "name": "actor-email-normalized-box"},
+    )
+
+    response = await admin_client.get("/v1/audit/events", params={"actor_email": "  ADMIN@EXAMPLE.COM  "})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] >= 1
+    assert all(item["actor_user_id"] is not None for item in data["items"])
+
+
+@pytest.mark.asyncio
+async def test_audit_events_reject_inverted_time_range(admin_client):
+    response = await admin_client.get(
+        "/v1/audit/events",
+        params={
+            "since": "2026-04-08T12:00:00Z",
+            "until": "2026-04-08T11:59:59Z",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
