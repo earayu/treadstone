@@ -277,6 +277,27 @@ class TestSubdomainRouting:
         assert events[0].result == "failure"
         assert events[0].error_code == "sandbox_web_link_invalid"
 
+    async def test_delete_web_link_revokes_existing_open_link_cookie(self, auth_client: AsyncClient, monkeypatch):
+        _enable_subdomain(monkeypatch)
+        sandbox_id = await _create_ready_sandbox(auth_client)
+        open_link = (await auth_client.post(f"/v1/sandboxes/{sandbox_id}/web-link")).json()["open_link"]
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://app.localhost") as browser:
+            first_open = await browser.get(open_link, follow_redirects=True)
+            assert first_open.status_code == 200
+
+            delete_resp = await auth_client.delete(f"/v1/sandboxes/{sandbox_id}/web-link")
+            assert delete_resp.status_code == 204
+
+            followup = await browser.get(
+                f"https://sandbox-{sandbox_id}.sandbox.localhost/",
+                follow_redirects=False,
+            )
+
+        assert followup.status_code == 303
+        location = urlparse(followup.headers["location"])
+        assert location.path == "/v1/browser/bootstrap"
+
     async def test_recreate_web_link_after_delete_returns_new_active_link(self, auth_client: AsyncClient, monkeypatch):
         _enable_subdomain(monkeypatch)
         sandbox_id = await _create_ready_sandbox(auth_client)

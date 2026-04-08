@@ -31,8 +31,11 @@ async def _k8s_delete_sandbox(session, sandbox) -> None:
     """Delete a sandbox K8s resource (used as auto-delete callback).
 
     Soft-deletes the SandboxWebLink, marks sandbox as DELETING in DB, then
-    calls the K8s API.  If K8s fails, rolls back the in-memory state and
-    re-raises so the outer handler does NOT commit a broken DELETING status.
+    calls the K8s API.  ``gmt_deleted`` stays unset until watch/reconcile
+    confirms the CR is gone, otherwise sync queries would stop seeing the row
+    before they can finalize it to DELETED. If K8s fails, rolls back the
+    in-memory state and re-raises so the outer handler does NOT commit a
+    broken DELETING status.
     The watch/reconcile loop transitions to DELETED once the CR is gone.
     """
     from sqlalchemy import select
@@ -54,7 +57,6 @@ async def _k8s_delete_sandbox(session, sandbox) -> None:
 
     prev_status = sandbox.status
     sandbox.status = SandboxStatus.DELETING
-    sandbox.gmt_deleted = utc_now()
     sandbox.version += 1
     session.add(sandbox)
 
@@ -73,7 +75,6 @@ async def _k8s_delete_sandbox(session, sandbox) -> None:
         )
     except Exception:
         sandbox.status = SandboxStatus.STOPPED
-        sandbox.gmt_deleted = None
         sandbox.version -= 1
         session.add(sandbox)
         if link is not None:
