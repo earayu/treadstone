@@ -9,6 +9,7 @@ from treadstone.services.k8s_client import (
     WATCH_TIMEOUT_SECONDS,
     FakeK8sClient,
     Kr8sClient,
+    _parse_sandbox_template,
     format_shutdown_time,
 )
 
@@ -58,6 +59,55 @@ async def test_list_sandbox_templates():
     names = [t["name"] for t in templates]
     assert "aio-sandbox-tiny" in names
     assert "aio-sandbox-xlarge" in names
+    assert templates[0]["startup_probe"]["httpGet"]["path"] == "/v1/sandbox"
+    assert templates[0]["readiness_probe"]["httpGet"]["path"] == "/v1/sandbox"
+    assert templates[0]["liveness_probe"] is None
+
+
+def test_parse_sandbox_template_extracts_probes():
+    parsed = _parse_sandbox_template(
+        {
+            "metadata": {
+                "name": "aio-sandbox-tiny",
+                "annotations": {
+                    "display-name": "AIO Sandbox Tiny",
+                    "description": "Lightweight sandbox for code execution and scripting",
+                    "treadstone-ai.dev/allowed-storage-sizes": "5Gi,10Gi",
+                },
+            },
+            "spec": {
+                "podTemplate": {
+                    "spec": {
+                        "containers": [
+                            {
+                                "image": "ghcr.io/agent-infra/sandbox:1.0.0.152",
+                                "resources": {
+                                    "requests": {"cpu": "250m", "memory": "1Gi"},
+                                    "limits": {"cpu": "250m", "memory": "1Gi"},
+                                },
+                                "startupProbe": {
+                                    "httpGet": {"path": "/v1/sandbox", "port": 8080},
+                                    "periodSeconds": 5,
+                                    "timeoutSeconds": 3,
+                                    "failureThreshold": 36,
+                                },
+                                "readinessProbe": {
+                                    "httpGet": {"path": "/v1/sandbox", "port": 8080},
+                                    "periodSeconds": 5,
+                                    "timeoutSeconds": 3,
+                                    "failureThreshold": 3,
+                                },
+                            }
+                        ]
+                    }
+                }
+            },
+        }
+    )
+
+    assert parsed["startup_probe"]["httpGet"]["path"] == "/v1/sandbox"
+    assert parsed["readiness_probe"]["failureThreshold"] == 3
+    assert parsed["liveness_probe"] is None
 
 
 async def test_create_and_get_sandbox_claim():
@@ -149,6 +199,18 @@ async def test_create_sandbox_direct():
         image="ghcr.io/agent-infra/sandbox:1.0.0.152",
         container_port=8080,
         resources={"requests": {"cpu": "250m", "memory": "512Mi"}},
+        startup_probe={
+            "httpGet": {"path": "/v1/sandbox", "port": 8080},
+            "periodSeconds": 5,
+            "timeoutSeconds": 3,
+            "failureThreshold": 36,
+        },
+        readiness_probe={
+            "httpGet": {"path": "/v1/sandbox", "port": 8080},
+            "periodSeconds": 5,
+            "timeoutSeconds": 3,
+            "failureThreshold": 3,
+        },
         volume_claim_templates=[
             {
                 "metadata": {"name": "workspace"},
@@ -164,6 +226,10 @@ async def test_create_sandbox_direct():
     assert sb["metadata"]["name"] == "direct-sb"
     assert sb["spec"]["volumeClaimTemplates"] is not None
     assert sb["status"]["serviceFQDN"] == "direct-sb.treadstone-local.svc.cluster.local"
+    container = sb["spec"]["podTemplate"]["spec"]["containers"][0]
+    assert container["startupProbe"]["httpGet"]["path"] == "/v1/sandbox"
+    assert container["readinessProbe"]["httpGet"]["path"] == "/v1/sandbox"
+    assert "livenessProbe" not in container
 
     fetched = await client.get_sandbox("direct-sb", "treadstone-local")
     assert fetched is not None
@@ -258,6 +324,46 @@ async def test_get_storage_class_requests_expected_endpoint():
     assert call["method"] == "GET"
     assert call["base"] == "/apis/storage.k8s.io/v1/storageclasses/treadstone-workspace"
     assert call["version"] == ""
+
+
+async def test_create_sandbox_requests_expected_manifest_with_probes():
+    client = Kr8sClient()
+    api = _RecordingAPI()
+
+    async def fake_get_api():
+        return api
+
+    client._get_api = fake_get_api  # type: ignore[method-assign]
+
+    await client.create_sandbox(
+        name="direct-sb",
+        namespace="treadstone-prod",
+        image="ghcr.io/agent-infra/sandbox:1.0.0.152",
+        container_port=8080,
+        resources={"requests": {"cpu": "250m", "memory": "1Gi"}},
+        startup_probe={
+            "httpGet": {"path": "/v1/sandbox", "port": 8080},
+            "periodSeconds": 5,
+            "timeoutSeconds": 3,
+            "failureThreshold": 36,
+        },
+        readiness_probe={
+            "httpGet": {"path": "/v1/sandbox", "port": 8080},
+            "periodSeconds": 5,
+            "timeoutSeconds": 3,
+            "failureThreshold": 3,
+        },
+        liveness_probe=None,
+    )
+
+    assert len(api.calls) == 1
+    call = api.calls[0]
+    assert call["method"] == "POST"
+    assert call["base"] == "/apis/agents.x-k8s.io/v1alpha1/namespaces/treadstone-prod/sandboxes"
+    container = call["json"]["spec"]["podTemplate"]["spec"]["containers"][0]
+    assert container["startupProbe"]["httpGet"]["path"] == "/v1/sandbox"
+    assert container["readinessProbe"]["failureThreshold"] == 3
+    assert "livenessProbe" not in container
 
 
 # ── Kr8sClient manifest structure (persist=true) ──
