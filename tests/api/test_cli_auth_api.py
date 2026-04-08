@@ -75,7 +75,8 @@ async def test_create_flow_returns_flow_data(db_session, monkeypatch):
         data = await _create_flow(http_client)
 
     assert data["flow_id"].startswith("clf")
-    assert "http://test/auth/cli/login?flow_id=" in data["browser_url"]
+    assert f"http://test/auth/cli/login?flow_id={data['flow_id']}" in data["browser_url"]
+    assert f"flow_secret={data['flow_secret']}" in data["browser_url"]
     assert data["poll_interval"] == 2
 
 
@@ -125,7 +126,12 @@ async def test_email_login_approves_flow_and_exchange_returns_session(db_session
 
         login_resp = await http_client.post(
             "/v1/auth/cli/login",
-            data={"email": "u@b.com", "password": "Pass123!", "flow_id": flow["flow_id"]},
+            data={
+                "email": "u@b.com",
+                "password": "Pass123!",
+                "flow_id": flow["flow_id"],
+                "flow_secret": flow["flow_secret"],
+            },
         )
         assert login_resp.status_code == 200
         assert login_resp.json()["status"] == "approved"
@@ -153,7 +159,12 @@ async def test_exchange_marks_flow_as_used(db_session, monkeypatch):
 
         await http_client.post(
             "/v1/auth/cli/login",
-            data={"email": "u@b.com", "password": "Pass123!", "flow_id": flow["flow_id"]},
+            data={
+                "email": "u@b.com",
+                "password": "Pass123!",
+                "flow_id": flow["flow_id"],
+                "flow_secret": flow["flow_secret"],
+            },
         )
         headers = {"X-Flow-Secret": flow["flow_secret"]}
         await http_client.post(f"/v1/auth/cli/flows/{flow['flow_id']}/exchange", headers=headers)
@@ -161,6 +172,49 @@ async def test_exchange_marks_flow_as_used(db_session, monkeypatch):
         second = await http_client.post(f"/v1/auth/cli/flows/{flow['flow_id']}/exchange", headers=headers)
         assert second.status_code == 400
         assert "already been used" in second.json()["error"]["message"]
+
+
+@pytest.mark.asyncio
+async def test_exchange_rejects_stale_approved_view_when_flow_was_already_used(db_session, monkeypatch):
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
+        await _register_user(http_client)
+        flow = await _create_flow(http_client)
+
+        await http_client.post(
+            "/v1/auth/cli/login",
+            data={
+                "email": "u@b.com",
+                "password": "Pass123!",
+                "flow_id": flow["flow_id"],
+                "flow_secret": flow["flow_secret"],
+            },
+        )
+
+    async with _test_session_factory() as session:
+        stale_flow = (
+            await session.execute(select(CliLoginFlow).where(CliLoginFlow.id == flow["flow_id"]))
+        ).scalar_one()
+
+    async with _test_session_factory() as session:
+        live_flow = (await session.execute(select(CliLoginFlow).where(CliLoginFlow.id == flow["flow_id"]))).scalar_one()
+        live_flow.status = "used"
+        session.add(live_flow)
+        await session.commit()
+
+    async def return_stale_flow(_session, _flow_id):
+        return stale_flow
+
+    monkeypatch.setattr(cli_auth_api, "_get_flow_or_404", return_stale_flow)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
+        exchange = await http_client.post(
+            f"/v1/auth/cli/flows/{flow['flow_id']}/exchange",
+            headers={"X-Flow-Secret": flow["flow_secret"]},
+        )
+
+    assert exchange.status_code == 400
+    assert "already been used" in exchange.json()["error"]["message"]
 
 
 @pytest.mark.asyncio
@@ -203,13 +257,14 @@ async def test_cli_login_page_renders(db_session, monkeypatch):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
         flow = await _create_flow(http_client)
         resp = await http_client.get(
-            f"/v1/auth/cli/login?flow_id={flow['flow_id']}",
+            f"/v1/auth/cli/login?flow_id={flow['flow_id']}&flow_secret={flow['flow_secret']}",
             follow_redirects=False,
         )
 
     assert resp.status_code == 303
     location = resp.headers["location"]
     assert f"/auth/cli/login?flow_id={flow['flow_id']}" in location
+    assert f"flow_secret={flow['flow_secret']}" in location
 
 
 @pytest.mark.asyncio
@@ -221,7 +276,12 @@ async def test_email_login_wrong_password_re_renders_page(db_session, monkeypatc
 
         resp = await http_client.post(
             "/v1/auth/cli/login",
-            data={"email": "u@b.com", "password": "wrong", "flow_id": flow["flow_id"]},
+            data={
+                "email": "u@b.com",
+                "password": "wrong",
+                "flow_id": flow["flow_id"],
+                "flow_secret": flow["flow_secret"],
+            },
         )
 
     assert resp.status_code == 400
@@ -246,7 +306,7 @@ async def test_oauth_callback_approves_cli_flow(db_session, monkeypatch):
 
         authorize = await http_client.get(
             "/v1/auth/google/authorize",
-            params={"cli_flow_id": flow["flow_id"]},
+            params={"cli_flow_id": flow["flow_id"], "cli_flow_secret": flow["flow_secret"]},
             follow_redirects=False,
         )
         assert authorize.status_code == 303
@@ -288,7 +348,12 @@ async def test_session_token_from_exchange_is_valid(db_session, monkeypatch):
 
         await http_client.post(
             "/v1/auth/cli/login",
-            data={"email": "u@b.com", "password": "Pass123!", "flow_id": flow["flow_id"]},
+            data={
+                "email": "u@b.com",
+                "password": "Pass123!",
+                "flow_id": flow["flow_id"],
+                "flow_secret": flow["flow_secret"],
+            },
         )
 
         exchange = await http_client.post(
@@ -328,21 +393,12 @@ async def test_oauth_callback_with_expired_flow_does_not_create_user(db_session,
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
         authorize = await http_client.get(
             "/v1/auth/google/authorize",
-            params={"cli_flow_id": flow["flow_id"]},
+            params={"cli_flow_id": flow["flow_id"], "cli_flow_secret": flow["flow_secret"]},
             follow_redirects=False,
         )
-        state = parse_qs(urlparse(authorize.headers["location"]).query)["state"][0]
-        callback = await http_client.get(
-            "/v1/auth/google/callback",
-            params={"code": "oauth-code", "state": state},
-            follow_redirects=False,
-        )
-
-    assert callback.status_code == 303
-    location = callback.headers["location"]
-    assert "/auth/cli/login?" in location
-    assert "result=failed" in location
-    assert "error=" in location
+    assert authorize.status_code == 400
+    assert authorize.json()["error"]["code"] == "bad_request"
+    assert "expired" in authorize.json()["error"]["message"].lower()
 
     async with _test_session_factory() as session:
         users = (await session.execute(select(User).where(User.email == "ghost@example.com"))).unique().scalars().all()
@@ -365,7 +421,7 @@ async def test_oauth_access_denied_marks_cli_flow_as_failed(db_session, monkeypa
 
         authorize = await http_client.get(
             "/v1/auth/google/authorize",
-            params={"cli_flow_id": flow["flow_id"]},
+            params={"cli_flow_id": flow["flow_id"], "cli_flow_secret": flow["flow_secret"]},
             follow_redirects=False,
         )
         state = parse_qs(urlparse(authorize.headers["location"]).query)["state"][0]
@@ -403,6 +459,7 @@ async def test_session_based_approve(db_session, monkeypatch):
         resp = await http_client.post(
             f"/v1/auth/cli/flows/{flow['flow_id']}/approve",
             cookies={"session": session_cookie},
+            headers={"X-Flow-Secret": flow["flow_secret"]},
         )
         assert resp.status_code == 200
         assert resp.json()["status"] == "approved"
@@ -443,12 +500,109 @@ async def test_session_based_approve_is_not_replayable(db_session, monkeypatch):
         first = await http_client.post(
             f"/v1/auth/cli/flows/{flow['flow_id']}/approve",
             cookies={"session": session_cookie},
+            headers={"X-Flow-Secret": flow["flow_secret"]},
         )
         assert first.status_code == 200
 
         second = await http_client.post(
             f"/v1/auth/cli/flows/{flow['flow_id']}/approve",
             cookies={"session": session_cookie},
+            headers={"X-Flow-Secret": flow["flow_secret"]},
         )
         assert second.status_code == 400
         assert "already been used or has expired" in second.json()["error"]["message"]
+
+
+@pytest.mark.asyncio
+async def test_email_login_requires_matching_flow_secret(db_session, monkeypatch):
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
+        await _register_user(http_client)
+        flow = await _create_flow(http_client)
+
+        resp = await http_client.post(
+            "/v1/auth/cli/login",
+            data={"email": "u@b.com", "password": "Pass123!", "flow_id": flow["flow_id"], "flow_secret": "wrong"},
+        )
+
+    assert resp.status_code == 401
+    assert resp.json()["error"]["code"] == "auth_required"
+
+
+@pytest.mark.asyncio
+async def test_session_based_approve_requires_matching_flow_secret(db_session, monkeypatch):
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
+        reg_resp = await http_client.post("/v1/auth/register", json={"email": "u@b.com", "password": "Pass123!"})
+        session_cookie = reg_resp.cookies.get("session")
+        flow = await _create_flow(http_client)
+
+        resp = await http_client.post(
+            f"/v1/auth/cli/flows/{flow['flow_id']}/approve",
+            cookies={"session": session_cookie},
+            headers={"X-Flow-Secret": "wrong"},
+        )
+
+    assert resp.status_code == 401
+    assert resp.json()["error"]["code"] == "auth_required"
+
+
+@pytest.mark.asyncio
+async def test_oauth_authorize_requires_matching_cli_flow_secret(db_session, monkeypatch):
+    monkeypatch.setattr(auth_api.settings, "app_base_url", "http://test")
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
+
+    from tests.api.test_oauth_api import FakeOAuthClient
+
+    client = FakeOAuthClient("google", account_id="acct-cli-secret", account_email="cli-secret@example.com")
+    monkeypatch.setattr(auth_api, "get_google_oauth_client", lambda: client, raising=False)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
+        flow = await _create_flow(http_client)
+
+        authorize = await http_client.get(
+            "/v1/auth/google/authorize",
+            params={"cli_flow_id": flow["flow_id"], "cli_flow_secret": "wrong"},
+            follow_redirects=False,
+        )
+
+    assert authorize.status_code == 401
+    assert authorize.json()["error"]["code"] == "auth_required"
+
+
+@pytest.mark.asyncio
+async def test_session_based_approve_rejects_stale_pending_view(db_session, monkeypatch):
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
+        reg_resp = await http_client.post("/v1/auth/register", json={"email": "u@b.com", "password": "Pass123!"})
+        session_cookie = reg_resp.cookies.get("session")
+        flow = await _create_flow(http_client)
+
+    async with _test_session_factory() as session:
+        stale_flow = (
+            await session.execute(select(CliLoginFlow).where(CliLoginFlow.id == flow["flow_id"]))
+        ).scalar_one()
+
+    async with _test_session_factory() as session:
+        live_flow = (await session.execute(select(CliLoginFlow).where(CliLoginFlow.id == flow["flow_id"]))).scalar_one()
+        live_flow.status = "approved"
+        live_flow.user_id = reg_resp.json()["id"]
+        live_flow.provider = "session"
+        live_flow.gmt_completed = utc_now()
+        session.add(live_flow)
+        await session.commit()
+
+    async def return_stale_flow(_session, _flow_id):
+        return stale_flow
+
+    monkeypatch.setattr(cli_auth_api, "_get_flow_or_404", return_stale_flow)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
+        resp = await http_client.post(
+            f"/v1/auth/cli/flows/{flow['flow_id']}/approve",
+            cookies={"session": session_cookie},
+            headers={"X-Flow-Secret": flow["flow_secret"]},
+        )
+
+    assert resp.status_code == 400
+    assert "already been used or has expired" in resp.json()["error"]["message"]

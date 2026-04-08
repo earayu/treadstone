@@ -2,17 +2,24 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from treadstone.api.deps import get_current_admin
+from treadstone.api.deps import bearer_scheme, optional_cookie_user
 from treadstone.api.schemas import AuditEventListResponse, AuditFilterOptionsResponse
 from treadstone.core.database import get_session
+from treadstone.core.errors import AuthRequiredError, ForbiddenError, ValidationError
+from treadstone.core.request_context import set_request_context
 from treadstone.models.audit_event import AuditEvent
 from treadstone.models.user import User
+from treadstone.services.audit import record_audit_event
 
 router = APIRouter(prefix="/v1/audit", tags=["audit"])
+
+
+def _events_ordering():
+    return AuditEvent.created_at.desc(), AuditEvent.id.desc()
 
 
 def _apply_filters(
@@ -66,9 +73,39 @@ def _serialize_event(event: AuditEvent) -> dict:
     }
 
 
+def _normalize_actor_email(actor_email: str | None) -> str | None:
+    if actor_email is None:
+        return None
+    trimmed = actor_email.strip()
+    if not trimmed:
+        return None
+    return trimmed.lower()
+
+
+def _compact_filters(**values: object) -> dict[str, object]:
+    return {key: value for key, value in values.items() if value is not None}
+
+
+async def get_audit_session_admin(
+    request: Request,
+    _credentials=Depends(bearer_scheme),
+    cookie_user: User | None = Depends(optional_cookie_user),
+) -> User:
+    if _credentials is not None:
+        raise ForbiddenError("Audit endpoints require an admin session cookie.")
+    if cookie_user is None:
+        raise AuthRequiredError()
+    if cookie_user.role != "admin":
+        raise ForbiddenError("Admin required")
+
+    set_request_context(request, actor_user_id=cookie_user.id, credential_type="cookie")
+    return cookie_user
+
+
 @router.get("/filter-options", response_model=AuditFilterOptionsResponse)
 async def get_audit_filter_options(
-    _admin: User = Depends(get_current_admin),
+    request: Request,
+    admin: User = Depends(get_audit_session_admin),
     session: AsyncSession = Depends(get_session),
 ):
     actions = (await session.execute(select(AuditEvent.action).distinct().order_by(AuditEvent.action))).scalars().all()
@@ -78,12 +115,23 @@ async def get_audit_filter_options(
         .all()
     )
     results = (await session.execute(select(AuditEvent.result).distinct().order_by(AuditEvent.result))).scalars().all()
+    await record_audit_event(
+        session,
+        action="audit.filter_options.read",
+        target_type="audit_event",
+        actor_user_id=admin.id,
+        credential_type="cookie",
+        metadata={"actions": len(actions), "target_types": len(target_types), "results": len(results)},
+        request=request,
+    )
+    await session.commit()
     return {"actions": actions, "target_types": target_types, "results": results}
 
 
 @router.get("/events", response_model=AuditEventListResponse)
 async def list_audit_events(
-    _admin=Depends(get_current_admin),
+    request: Request,
+    admin: User = Depends(get_audit_session_admin),
     session: AsyncSession = Depends(get_session),
     action: str | None = Query(default=None),
     target_type: str | None = Query(default=None),
@@ -97,11 +145,19 @@ async def list_audit_events(
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
 ):
+    if since is not None and until is not None and since > until:
+        raise ValidationError("since must be less than or equal to until.")
+
     resolved_actor_user_id = actor_user_id
-    if actor_email and not actor_user_id:
-        user_row = await session.execute(select(User).where(User.email == actor_email))
+    normalized_actor_email = _normalize_actor_email(actor_email)
+    if actor_email is not None and normalized_actor_email is None:
+        return {"items": [], "total": 0}
+    if normalized_actor_email:
+        user_row = await session.execute(select(User).where(func.lower(User.email) == normalized_actor_email))
         user = user_row.unique().scalar_one_or_none()
         if user:
+            if actor_user_id and actor_user_id != user.id:
+                return {"items": [], "total": 0}
             resolved_actor_user_id = user.id
         else:
             return {"items": [], "total": 0}
@@ -117,9 +173,7 @@ async def list_audit_events(
         since=since,
         until=until,
     )
-    items_result = await session.execute(
-        base_statement.order_by(AuditEvent.created_at.desc()).limit(limit).offset(offset)
-    )
+    items_result = await session.execute(base_statement.order_by(*_events_ordering()).limit(limit).offset(offset))
     total_statement = _apply_filters(
         select(func.count()).select_from(AuditEvent),
         action=action,
@@ -132,4 +186,25 @@ async def list_audit_events(
         until=until,
     )
     total = (await session.execute(total_statement)).scalar_one()
+    filters = _compact_filters(
+        action=action,
+        target_type=target_type,
+        target_id=target_id,
+        actor_user_id=resolved_actor_user_id,
+        actor_email=actor_email,
+        request_id=request_id,
+        result=result,
+        since=since.isoformat() if since is not None else None,
+        until=until.isoformat() if until is not None else None,
+    )
+    await record_audit_event(
+        session,
+        action="audit.events.read",
+        target_type="audit_event",
+        actor_user_id=admin.id,
+        credential_type="cookie",
+        metadata={"filters": filters, "limit": limit, "offset": offset, "matched_total": total},
+        request=request,
+    )
+    await session.commit()
     return {"items": [_serialize_event(event) for event in items_result.scalars().all()], "total": total}

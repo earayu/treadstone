@@ -1,16 +1,26 @@
 """Unit tests for sandbox lifecycle tasks — idle auto-stop and auto-delete."""
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
+import pytest
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from treadstone.core.database import Base
 from treadstone.models.sandbox import Sandbox, SandboxStatus
+from treadstone.models.sandbox_web_link import SandboxWebLink
+from treadstone.models.user import User
+from treadstone.services.k8s_sync import handle_watch_event
 from treadstone.services.sandbox_lifecycle_tasks import (
     check_auto_delete,
     check_idle_auto_stop,
     run_lifecycle_tick,
 )
+from treadstone.services.sync_supervisor import _k8s_delete_sandbox
 
 FIXED_NOW = datetime(2026, 3, 15, 10, 0, 0, tzinfo=UTC)
+REAL_FIXED_NOW = datetime(2026, 3, 15, 10, 0, 0)
 
 
 def _make_sandbox(**overrides) -> Sandbox:
@@ -44,6 +54,7 @@ def _make_sandbox(**overrides) -> Sandbox:
 def _mock_session_with_sandboxes(sandboxes: list[Sandbox]) -> AsyncMock:
     """Build a mock AsyncSession that returns sandboxes from execute()."""
     session = AsyncMock()
+    session.add = Mock()
 
     class _MockScalars:
         def __init__(self, items):
@@ -60,7 +71,45 @@ def _mock_session_with_sandboxes(sandboxes: list[Sandbox]) -> AsyncMock:
             return _MockScalars(self._items)
 
     session.execute.return_value = _MockResult(sandboxes)
+    nested_cm = AsyncMock()
+    nested_cm.__aenter__ = AsyncMock(return_value=session)
+    nested_cm.__aexit__ = AsyncMock(return_value=False)
+    session.begin_nested = Mock(return_value=nested_cm)
     return session
+
+
+def _async_context_manager(value):
+    cm = AsyncMock()
+    cm.__aenter__ = AsyncMock(return_value=value)
+    cm.__aexit__ = AsyncMock(return_value=False)
+    return cm
+
+
+@pytest.fixture
+async def session_factory():
+    engine = create_async_engine("sqlite+aiosqlite://", echo=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    async with factory() as session:
+        user = User(id="user_test_01", email="test@example.com", hashed_password="x", role="admin")
+        session.add(user)
+        await session.commit()
+
+    yield factory
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    await engine.dispose()
+
+
+async def _insert_real_sandbox(factory, **overrides) -> str:
+    sandbox = _make_sandbox(**overrides)
+    async with factory() as session:
+        session.add(sandbox)
+        await session.commit()
+    return sandbox.id
 
 
 # ═══════════════════════════════════════════════════
@@ -230,9 +279,114 @@ async def test_auto_delete_uses_db_fallback_without_callback(mock_audit, mock_no
 
     await check_auto_delete(session, delete_callback=None)
 
-    assert sandbox.status == SandboxStatus.DELETING
+    assert sandbox.status == SandboxStatus.DELETED
     assert sandbox.gmt_deleted is not None
     session.commit.assert_called_once()
+
+
+@patch("treadstone.services.sandbox_lifecycle_tasks.utc_now", return_value=REAL_FIXED_NOW)
+@patch("treadstone.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
+@patch("treadstone.services.sandbox_lifecycle_tasks._metering", create=True)
+async def test_idle_auto_stop_rolls_back_partial_db_update_on_followup_failure(
+    mock_metering,
+    mock_audit,
+    mock_now,
+    session_factory,
+):
+    """A failed follow-up step must not commit the eager STOPPED state."""
+    mock_metering.close_compute_session = AsyncMock(side_effect=RuntimeError("metering unavailable"))
+    sandbox_id = await _insert_real_sandbox(
+        session_factory,
+        id="sb_real_idle_01",
+        status=SandboxStatus.READY,
+        auto_stop_interval=15,
+        gmt_last_active=REAL_FIXED_NOW - timedelta(minutes=20),
+    )
+
+    async with session_factory() as session:
+        await check_idle_auto_stop(session, stop_callback=None)
+
+    async with session_factory() as session:
+        sandbox = await session.get(Sandbox, sandbox_id)
+        assert sandbox.status == SandboxStatus.READY
+        assert sandbox.gmt_stopped is None
+        assert sandbox.version == 1
+    mock_audit.assert_not_called()
+
+
+@patch("treadstone.services.sandbox_lifecycle_tasks.utc_now", return_value=REAL_FIXED_NOW)
+@patch("treadstone.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
+async def test_auto_delete_rolls_back_partial_delete_on_audit_failure(mock_audit, mock_now, session_factory):
+    """A failed audit write must not leave the sandbox stuck in DELETING."""
+    mock_audit.side_effect = RuntimeError("audit table unavailable")
+    sandbox_id = await _insert_real_sandbox(
+        session_factory,
+        id="sb_real_delete_01",
+        status=SandboxStatus.STOPPED,
+        auto_delete_interval=60,
+        gmt_stopped=REAL_FIXED_NOW - timedelta(minutes=90),
+    )
+
+    async with session_factory() as session:
+        await check_auto_delete(session, delete_callback=None)
+
+    async with session_factory() as session:
+        sandbox = await session.get(Sandbox, sandbox_id)
+        assert sandbox.status == SandboxStatus.STOPPED
+        assert sandbox.gmt_deleted is None
+        assert sandbox.version == 1
+
+
+@patch("treadstone.services.sync_supervisor.utc_now", return_value=REAL_FIXED_NOW)
+@patch("treadstone.services.sandbox_lifecycle_tasks.utc_now", return_value=REAL_FIXED_NOW)
+@patch("treadstone.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
+async def test_auto_delete_k8s_path_stays_trackable_until_watch_finishes(
+    mock_audit,
+    mock_lifecycle_now,
+    mock_supervisor_now,
+    session_factory,
+):
+    """Lifecycle auto-delete must keep the row visible to watch/reconcile until finalization."""
+    sandbox_id = await _insert_real_sandbox(
+        session_factory,
+        id="sb_real_delete_02",
+        name="real-delete",
+        status=SandboxStatus.STOPPED,
+        auto_delete_interval=60,
+        gmt_stopped=REAL_FIXED_NOW - timedelta(minutes=90),
+        k8s_sandbox_claim_name="real-delete",
+        k8s_sandbox_name="real-delete",
+    )
+    async with session_factory() as session:
+        session.add(
+            SandboxWebLink(
+                id="link_test_01",
+                sandbox_id=sandbox_id,
+                created_by_user_id="user_test_01",
+                gmt_expires=None,
+            )
+        )
+        await session.commit()
+
+    async with session_factory() as session:
+        await check_auto_delete(session, delete_callback=_k8s_delete_sandbox)
+
+    async with session_factory() as session:
+        sandbox = await session.get(Sandbox, sandbox_id)
+        link = (
+            await session.execute(select(SandboxWebLink).where(SandboxWebLink.sandbox_id == sandbox_id))
+        ).scalar_one()
+        assert sandbox.status == SandboxStatus.DELETING
+        assert sandbox.gmt_deleted is None
+        assert link.gmt_deleted == REAL_FIXED_NOW
+
+    deleted_cr = {"metadata": {"name": "real-delete", "namespace": "treadstone-local", "resourceVersion": "99"}}
+    await handle_watch_event("DELETED", deleted_cr, session_factory)
+
+    async with session_factory() as session:
+        sandbox = await session.get(Sandbox, sandbox_id)
+        assert sandbox.status == SandboxStatus.DELETED
+        assert sandbox.gmt_deleted is not None
 
 
 # ═══════════════════════════════════════════════════
@@ -244,10 +398,9 @@ async def test_auto_delete_uses_db_fallback_without_callback(mock_audit, mock_no
 @patch("treadstone.services.sandbox_lifecycle_tasks.check_idle_auto_stop", new_callable=AsyncMock)
 async def test_run_lifecycle_tick_calls_both_steps(mock_idle, mock_delete):
     """run_lifecycle_tick should execute both sub-steps with independent sessions."""
-    factory = AsyncMock()
+    factory = Mock()
     session_a, session_b = AsyncMock(), AsyncMock()
-    factory.return_value.__aenter__ = AsyncMock(side_effect=[session_a, session_b])
-    factory.return_value.__aexit__ = AsyncMock(return_value=False)
+    factory.side_effect = [_async_context_manager(session_a), _async_context_manager(session_b)]
 
     stop_cb = AsyncMock()
     delete_cb = AsyncMock()
@@ -261,7 +414,8 @@ async def test_run_lifecycle_tick_calls_both_steps(mock_idle, mock_delete):
 @patch("treadstone.services.sandbox_lifecycle_tasks.check_idle_auto_stop", new_callable=AsyncMock)
 async def test_run_lifecycle_tick_step_failure_does_not_block_next(mock_idle, mock_delete):
     """If check_idle_auto_stop fails, check_auto_delete should still run."""
-    factory = AsyncMock()
+    factory = Mock()
+    factory.side_effect = [_async_context_manager(AsyncMock()), _async_context_manager(AsyncMock())]
     mock_idle.side_effect = RuntimeError("DB error")
 
     await run_lifecycle_tick(factory)

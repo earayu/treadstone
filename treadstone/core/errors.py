@@ -90,6 +90,15 @@ class StorageBackendNotReadyError(TreadstoneError):
         )
 
 
+class SandboxTemplateCatalogUnavailableError(TreadstoneError):
+    def __init__(self, message: str = "Sandbox template catalog is temporarily unavailable."):
+        super().__init__(
+            code="sandbox_template_catalog_unavailable",
+            message=message,
+            status=503,
+        )
+
+
 class SandboxNameConflictError(TreadstoneError):
     def __init__(self, name: str):
         super().__init__(
@@ -191,6 +200,15 @@ class ConcurrentLimitError(TreadstoneError):
                 f"Running: {current_running} / {max_concurrent}. "
                 f"Stop an existing sandbox before creating a new one."
             ),
+            status=429,
+        )
+
+
+class FeedbackRateLimitError(TreadstoneError):
+    def __init__(self, wait_seconds: int):
+        super().__init__(
+            code="feedback_rate_limited",
+            message=f"Please wait {wait_seconds} seconds before sending more feedback.",
             status=429,
         )
 

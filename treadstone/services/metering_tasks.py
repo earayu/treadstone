@@ -361,20 +361,33 @@ async def _enforce_stop(
     """Force-stop all running sandboxes for a user (grace period enforcement).
 
     Closes ComputeSession for each successfully stopped sandbox to prevent
-    continued billing.  Only clears grace state when all sandboxes are
-    stopped successfully; partial failures preserve the grace timer so
-    enforcement retries immediately on the next tick.
+    continued billing.  Metering close and audit writes are best-effort here:
+    the authoritative enforcement outcome is whether any sandboxes remain in a
+    running state after this pass. If none remain, clear grace state so the
+    user plan does not stay stuck in grace due to follow-up failures that
+    existing repair loops can reconcile later.
     """
     sandboxes = running_sandboxes if running_sandboxes is not None else await _get_running_sandboxes(session, user_id)
 
-    all_stopped = True
     for sandbox in sandboxes:
         try:
             if stop_callback is not None:
                 await stop_callback(session, sandbox)
             else:
                 await _db_only_stop(session, sandbox)
+        except Exception:
+            logger.exception("Failed to force-stop sandbox %s during grace enforcement", sandbox.id)
+            continue
+
+        try:
             await _metering.close_compute_session(session, sandbox.id)
+        except Exception:
+            logger.exception(
+                "Failed to close compute session for sandbox %s during grace enforcement",
+                sandbox.id,
+            )
+
+        try:
             await record_audit_event(
                 session,
                 action="metering.auto_stop",
@@ -390,10 +403,10 @@ async def _enforce_stop(
                 },
             )
         except Exception:
-            logger.exception("Failed to force-stop sandbox %s during grace enforcement", sandbox.id)
-            all_stopped = False
+            logger.exception("Failed to record auto-stop audit event for sandbox %s", sandbox.id)
 
-    if all_stopped:
+    remaining_running = await _get_running_sandboxes(session, user_id)
+    if not remaining_running:
         plan.grace_period_started_at = None
         plan.gmt_updated = utc_now()
         session.add(plan)
