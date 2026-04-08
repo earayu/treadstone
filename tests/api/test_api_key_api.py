@@ -1,10 +1,12 @@
 """API tests for API Key CRUD and scope management endpoints."""
 
+from contextlib import contextmanager
+
 import pytest
 import sqlalchemy as sa
 from fastapi_users.db import SQLAlchemyUserDatabase
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from treadstone.core.database import Base, get_session
@@ -20,12 +22,28 @@ from treadstone.models.api_key import (
 from treadstone.models.user import OAuthAccount, User
 
 _test_session_factory = None
+_test_engine = None
+
+
+@contextmanager
+def _capture_sql():
+    statements: list[str] = []
+
+    def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    event.listen(_test_engine.sync_engine, "before_cursor_execute", before_cursor_execute)
+    try:
+        yield statements
+    finally:
+        event.remove(_test_engine.sync_engine, "before_cursor_execute", before_cursor_execute)
 
 
 @pytest.fixture
 async def db_session():
-    global _test_session_factory
+    global _test_engine, _test_session_factory
     test_engine = create_async_engine("sqlite+aiosqlite://", echo=False)
+    _test_engine = test_engine
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
@@ -52,6 +70,7 @@ async def db_session():
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
     await test_engine.dispose()
+    _test_engine = None
 
 
 @pytest.fixture
@@ -279,3 +298,17 @@ async def test_list_api_keys_includes_is_enabled(auth_client):
     assert len(items) >= 1
     for item in items:
         assert "is_enabled" in item
+
+
+async def test_api_key_control_plane_auth_loads_user_in_single_select(auth_client):
+    create_resp = await auth_client.post("/v1/auth/api-keys", json={"name": "single-select"})
+    api_key_value = create_resp.json()["key"]
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        with _capture_sql() as statements:
+            resp = await client.get("/v1/auth/user", headers={"Authorization": f"Bearer {api_key_value}"})
+
+    assert resp.status_code == 200
+    selects = [statement for statement in statements if statement.lstrip().upper().startswith("SELECT")]
+    assert len(selects) == 1
+    assert all("api_key_sandbox_grant" not in statement for statement in selects)

@@ -99,6 +99,16 @@ async def _record_sensitive_admin_read(
     )
 
 
+async def _load_existing_user_ids(session: AsyncSession, user_ids: list[str]) -> set[str]:
+    """Resolve batch user existence with a single query."""
+    unique_user_ids = {user_id for user_id in user_ids}
+    if not unique_user_ids:
+        return set()
+
+    result = await session.execute(select(User.id).where(User.id.in_(unique_user_ids)))
+    return set(result.scalars().all())
+
+
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
 
 _metering = MeteringService()
@@ -247,6 +257,16 @@ async def admin_lookup_user_by_email(
     result = await session.execute(select(User).where(User.email == email))
     user = result.unique().scalar_one_or_none()
     if user is None:
+        await record_audit_event(
+            session,
+            action="admin.user.lookup_by_email",
+            target_type="user",
+            result="failure",
+            error_code="not_found",
+            metadata={"email": email},
+            request=request,
+        )
+        await session.commit()
         raise NotFoundError("User", email)
     await _record_sensitive_admin_read(
         session,
@@ -436,10 +456,10 @@ async def admin_batch_compute_grants(
     results: list[dict] = []
     succeeded = 0
     failed = 0
+    existing_user_ids = await _load_existing_user_ids(session, body.user_ids)
 
     for uid in body.user_ids:
-        user_result = await session.execute(select(User).where(User.id == uid))
-        if user_result.unique().scalar_one_or_none() is None:
+        if uid not in existing_user_ids:
             results.append({"user_id": uid, "grant_id": None, "status": "failed", "error": "User not found"})
             failed += 1
             continue
@@ -498,10 +518,10 @@ async def admin_batch_storage_grants(
     results: list[dict] = []
     succeeded = 0
     failed = 0
+    existing_user_ids = await _load_existing_user_ids(session, body.user_ids)
 
     for uid in body.user_ids:
-        user_result = await session.execute(select(User).where(User.id == uid))
-        if user_result.unique().scalar_one_or_none() is None:
+        if uid not in existing_user_ids:
             results.append({"user_id": uid, "grant_id": None, "status": "failed", "error": "User not found"})
             failed += 1
             continue

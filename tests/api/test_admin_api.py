@@ -13,6 +13,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from treadstone.api import admin as admin_api
 from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
@@ -471,6 +472,64 @@ async def test_batch_grants_empty_user_ids_rejected(admin_client):
     assert resp.status_code == 422
 
 
+async def test_batch_compute_grants_preloads_existing_users_once(admin_client, anon_client, monkeypatch):
+    second = await anon_client.post("/v1/auth/register", json={"email": "second@example.com", "password": "Pass123!"})
+    second_user_id = second.json()["id"]
+    seen_user_ids: list[list[str]] = []
+    original = admin_api._load_existing_user_ids
+
+    async def spy(session: AsyncSession, user_ids: list[str]) -> set[str]:
+        seen_user_ids.append(list(user_ids))
+        return await original(session, user_ids)
+
+    monkeypatch.setattr(admin_api, "_load_existing_user_ids", spy)
+
+    resp = await admin_client.post(
+        "/v1/admin/compute-grants/batch",
+        json={
+            "user_ids": [_get_user_id(admin_client), second_user_id, "nonexistent_user"],
+            "amount": 25,
+            "grant_type": "campaign",
+        },
+    )
+
+    assert resp.status_code == 200
+    assert seen_user_ids == [[_get_user_id(admin_client), second_user_id, "nonexistent_user"]]
+    data = resp.json()
+    assert data["succeeded"] == 2
+    assert data["failed"] == 1
+
+
+async def test_batch_storage_grants_preloads_existing_users_once(admin_client, anon_client, monkeypatch):
+    second = await anon_client.post(
+        "/v1/auth/register", json={"email": "storage-second@example.com", "password": "Pass123!"}
+    )
+    second_user_id = second.json()["id"]
+    seen_user_ids: list[list[str]] = []
+    original = admin_api._load_existing_user_ids
+
+    async def spy(session: AsyncSession, user_ids: list[str]) -> set[str]:
+        seen_user_ids.append(list(user_ids))
+        return await original(session, user_ids)
+
+    monkeypatch.setattr(admin_api, "_load_existing_user_ids", spy)
+
+    resp = await admin_client.post(
+        "/v1/admin/storage-grants/batch",
+        json={
+            "user_ids": [_get_user_id(admin_client), second_user_id, "nonexistent_user"],
+            "size_gib": 5,
+            "grant_type": "campaign",
+        },
+    )
+
+    assert resp.status_code == 200
+    assert seen_user_ids == [[_get_user_id(admin_client), second_user_id, "nonexistent_user"]]
+    data = resp.json()
+    assert data["succeeded"] == 2
+    assert data["failed"] == 1
+
+
 # ── GET /v1/admin/users/lookup-by-email ──────────────────────────────────────
 
 
@@ -485,6 +544,9 @@ async def test_lookup_user_by_email(admin_client):
 async def test_lookup_user_by_email_not_found(admin_client):
     resp = await admin_client.get("/v1/admin/users/lookup-by-email", params={"email": "nobody@example.com"})
     assert resp.status_code == 404
+    events = await _list_audit_events("admin.user.lookup_by_email")
+    assert events[-1].result == "failure"
+    assert events[-1].event_metadata["email"] == "nobody@example.com"
 
 
 async def test_lookup_user_by_email_requires_admin(member_client):
@@ -643,11 +705,55 @@ async def test_create_feedback_requires_auth(anon_client):
     assert resp.status_code == 401
 
 
+async def test_create_feedback_rejects_api_key_only_auth(member_client, anon_client):
+    key_resp = await member_client.post(
+        "/v1/auth/api-keys",
+        json={"name": "feedback-bot", "scope": {"control_plane": True, "data_plane": {"mode": "none"}}},
+    )
+    assert key_resp.status_code == 201
+    api_key = key_resp.json()["key"]
+
+    resp = await anon_client.post(
+        "/v1/support/feedback",
+        json={"body": "forged by api key"},
+        headers={"Authorization": f"Bearer {api_key}"},
+    )
+    assert resp.status_code == 401
+    assert resp.json()["error"]["code"] == "auth_required"
+
+
 async def test_create_feedback_member(member_client):
     resp = await member_client.post("/v1/support/feedback", json={"body": "  My issue  "})
     assert resp.status_code == 201
     data = resp.json()
     assert data["id"].startswith("fb")
+
+
+async def test_create_feedback_rate_limits_repeat_submissions(member_client):
+    first = await member_client.post("/v1/support/feedback", json={"body": "first issue"})
+    assert first.status_code == 201
+
+    second = await member_client.post("/v1/support/feedback", json={"body": "second issue"})
+    assert second.status_code == 429
+    assert second.json()["error"]["code"] == "feedback_rate_limited"
+
+    async with _test_session_factory() as session:
+        events = (
+            (
+                await session.execute(
+                    select(AuditEvent)
+                    .where(AuditEvent.action == "feedback.create")
+                    .order_by(AuditEvent.created_at.asc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    assert len(events) == 2
+    assert events[0].result == "success"
+    assert events[1].result == "failure"
+    assert events[1].error_code == "feedback_rate_limited"
 
 
 async def test_create_feedback_empty_body(member_client):

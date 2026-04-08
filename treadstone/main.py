@@ -47,11 +47,11 @@ async def _run_metering_loop(session_factory) -> None:
     from treadstone.services.sync_supervisor import _k8s_stop_sandbox
 
     while True:
-        await asyncio.sleep(TICK_INTERVAL)
         try:
             await run_metering_tick(session_factory, stop_sandbox_callback=_k8s_stop_sandbox)
         except Exception:
             logger.exception("Metering tick failed")
+        await asyncio.sleep(TICK_INTERVAL)
 
 
 async def _run_lifecycle_loop(session_factory) -> None:
@@ -60,7 +60,6 @@ async def _run_lifecycle_loop(session_factory) -> None:
     from treadstone.services.sync_supervisor import _k8s_delete_sandbox, _k8s_stop_sandbox
 
     while True:
-        await asyncio.sleep(LIFECYCLE_TICK_INTERVAL)
         try:
             await run_lifecycle_tick(
                 session_factory,
@@ -69,6 +68,7 @@ async def _run_lifecycle_loop(session_factory) -> None:
             )
         except Exception:
             logger.exception("Lifecycle tick failed")
+        await asyncio.sleep(LIFECYCLE_TICK_INTERVAL)
 
 
 @asynccontextmanager

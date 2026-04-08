@@ -6,7 +6,7 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, lazyload
 
 from treadstone.core.database import get_session
 from treadstone.core.errors import AuthInvalidError, AuthRequiredError, ForbiddenError
@@ -33,25 +33,24 @@ def _set_auth_context(
     )
 
 
-async def _get_active_user(session: AsyncSession, user_id: str) -> User | None:
-    result = await session.execute(select(User).where(User.id == user_id, User.is_active.is_(True)))
-    return result.unique().scalar_one_or_none()
-
-
 async def _authenticate_api_key_value(session: AsyncSession, secret: str) -> tuple[ApiKey, User] | None:
     result = await session.execute(
         select(ApiKey)
-        .options(selectinload(ApiKey.sandbox_grants))
+        .options(joinedload(ApiKey.user), lazyload(ApiKey.sandbox_grants))
         .where(
             ApiKey.key_hash == hash_api_key_secret(secret),
             ApiKey.gmt_deleted.is_(None),
         )
     )
-    api_key = result.scalar_one_or_none()
+    api_key = result.unique().scalar_one_or_none()
     if api_key is None or api_key.is_expired() or not api_key.is_enabled:
         return None
-    user = await _get_active_user(session, api_key.user_id)
+    user = api_key.user
     if user is None:
+        return None
+    if not user.is_active:
+        return None
+    if user.id != api_key.user_id:
         return None
     return api_key, user
 
