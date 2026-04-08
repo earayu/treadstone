@@ -52,29 +52,43 @@ tbody tr:hover { background: rgba(0,0,0,.015); }
 <body>
 <div class="container">
   <h1>K8s E2E reports</h1>
-  <p class="lead">One row per workflow run. Open a batch for the file list and detail links.</p>
+  <p class="lead">One row per workflow run — click Report to open the Hurl HTML detail page.</p>
   <div class="table-wrap">
     <table>
       <thead>
         <tr>
-          <th>Batch</th>
-          <th>Published (UTC)</th>
-          <th>Summary</th>
+          <th>Time (UTC)</th>
+          <th>Git</th>
+          <th>PR</th>
+          <th>Result</th>
           <th>CI</th>
+          <th>Report</th>
         </tr>
       </thead>
       <tbody>
 <tr>
-  <td class="mono"><a href="./batches/24134760796-1/index.html">24134760796-1</a></td>
-  <td>2026-04-08T12:37:32Z</td>
-  <td>—</td>
-  <td><a href="https://github.com/earayu/treadstone/actions/runs/24134760796" rel="noopener">Workflow run</a></td>
+  <td>2026-04-08T14:19:46Z</td>
+  <td><a href="https://github.com/earayu/treadstone/commit/3cc6c5338559939ad0adb0702d8a90d866d4324a" rel="noopener" class="mono">3cc6c53</a> <span style="color:var(--text-muted);font-size:12px">281/merge</span></td>
+  <td><a href="https://github.com/earayu/treadstone/pull/281" rel="noopener">#281</a></td>
+  <td><span class="badge badge-pass">pass</span></td>
+  <td><a href="https://github.com/earayu/treadstone/actions/runs/24139418761" rel="noopener">CI run</a></td>
+  <td><a href="./batches/24139418761-2/index.html">Report</a></td>
 </tr>
 <tr>
-  <td class="mono"><a href="./batches/24134262846-1/index.html">24134262846-1</a></td>
+  <td>2026-04-08T12:37:32Z</td>
+  <td>—</td>
+  <td>—</td>
+  <td>—</td>
+  <td><a href="https://github.com/earayu/treadstone/actions/runs/24134760796" rel="noopener">CI run</a></td>
+  <td><a href="./batches/24134760796-1/index.html">Report</a></td>
+</tr>
+<tr>
   <td>2026-04-08T12:11:50Z</td>
   <td>—</td>
-  <td><a href="https://github.com/earayu/treadstone/actions/runs/24134262846" rel="noopener">Workflow run</a></td>
+  <td>—</td>
+  <td>—</td>
+  <td><a href="https://github.com/earayu/treadstone/actions/runs/24134262846" rel="noopener">CI run</a></td>
+  <td><a href="./batches/24134262846-1/index.html">Report</a></td>
 </tr>
       </tbody>
     </table>
