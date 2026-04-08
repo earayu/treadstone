@@ -77,7 +77,7 @@ sandbox_id: jsonpath "$.id"
 GET {{base_url}}/v1/sandboxes/{{sandbox_id}}
 Authorization: Bearer {{api_key}}
 [Options]
-retry: 120
+retry: 30
 retry-interval: 2s
 HTTP 200
 [Asserts]
