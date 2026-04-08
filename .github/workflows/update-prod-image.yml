@@ -32,7 +32,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG=$(gh api "repos/${{ github.repository }}/releases/latest" --jq -r .tag_name)
+          TAG=$(gh api "repos/${{ github.repository }}/releases/latest" --template '{{.tag_name}}')
           if [ -z "$TAG" ] || [ "$TAG" = "null" ] || [[ "$TAG" != v* ]]; then
             echo "No tag from releases/latest — skipping."
             echo "skip=true" >> "$GITHUB_OUTPUT"
