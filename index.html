@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Treadstone — CI reports</title>
+  <style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f8f9fb; --surface: #ffffff; --border: #e2e5eb; --text: #1a1d23;
+  --text-muted: #6b7280; --accent: #6366f1; --pass: #16a34a; --fail: #dc2626;
+  --shadow: 0 1px 3px rgba(0,0,0,.08); --radius: 10px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --mono: "SF Mono", "Fira Code", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1117; --surface: #1a1d27; --border: #2d3142; --text: #e2e4ec;
+    --text-muted: #8b93a8; --pass: #4ade80; --fail: #f87171;
+    --shadow: 0 1px 3px rgba(0,0,0,.4);
+  }
+}
+body {
+  font-family: var(--font); font-size: 14px; line-height: 1.5;
+  background: var(--bg); color: var(--text); min-height: 100vh;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.container { max-width: 1100px; margin: 0 auto; padding: 32px 24px 64px; }
+h1 { font-size: 26px; font-weight: 700; margin-bottom: 8px; }
+.lead { color: var(--text-muted); margin-bottom: 28px; font-size: 15px; }
+.table-wrap {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow); overflow-x: auto;
+}
+table { width: 100%; border-collapse: collapse; }
+th {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--text-muted); padding: 10px 14px; text-align: left;
+  border-bottom: 1px solid var(--border); background: var(--bg);
+}
+td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: rgba(0,0,0,.015); }
+@media (prefers-color-scheme: dark) { tbody tr:hover { background: rgba(255,255,255,.03); } }
+.mono { font-family: var(--mono); font-size: 13px; }
+.badge { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 99px; }
+.badge-pass { background: rgba(22,163,74,.15); color: var(--pass); }
+.badge-fail { background: rgba(220,38,38,.15); color: var(--fail); }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Treadstone</h1>
+  <p class="lead"><a href="e2e/">K8s E2E test reports (batches)</a></p>
+</div>
+</body>
+</html>
