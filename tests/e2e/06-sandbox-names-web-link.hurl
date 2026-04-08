@@ -103,7 +103,7 @@ jsonpath "$.web_url" startsWith "http://sandbox-{{sandbox_id_a}}.sandbox.localho
 GET {{base_url}}/v1/sandboxes/{{sandbox_id_a}}
 Authorization: Bearer {{api_key_a}}
 [Options]
-retry: 120
+retry: 30
 retry-interval: 2s
 HTTP 200
 [Asserts]
@@ -116,7 +116,7 @@ HTTP 200
 GET {{base_url}}/v1/sandboxes/{{sandbox_id_a}}
 Authorization: Bearer {{api_key_a}}
 [Options]
-retry: 60
+retry: 20
 retry-interval: 2s
 HTTP 200
 [Asserts]
