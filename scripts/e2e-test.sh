@@ -158,9 +158,10 @@ else
     set -e
 fi
 
-# ── Post-process: group by run, improve visual design ────────────────────────
+# ── Write minimal batch-meta.json (result based on Hurl exit code) ───────────
 
-python3 "$ROOT_DIR/scripts/gen-e2e-report.py" "$REPORT_DIR"
+result=$( [ "${hurl_status:-0}" -eq 0 ] && echo pass || echo fail )
+printf '{"schema":1,"result":"%s"}\n' "${result}" > "$REPORT_DIR/batch-meta.json"
 
 printf "\nHTML report: %s/index.html\n" "$REPORT_DIR"
 exit "${hurl_status:-0}"

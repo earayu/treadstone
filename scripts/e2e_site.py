@@ -85,12 +85,13 @@ def augment_batch_meta(batch_dir: Path) -> None:
     if meta_path.exists():
         data: dict = json.loads(meta_path.read_text(encoding="utf-8"))
     else:
-        data = {"schema": 1, "styled": False}
+        data = {"schema": 1}
+
+    server = os.environ.get("GITHUB_SERVER_URL", "https://github.com").rstrip("/")
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
 
     rid = os.environ.get("GITHUB_RUN_ID")
     if rid:
-        server = os.environ.get("GITHUB_SERVER_URL", "https://github.com").rstrip("/")
-        repo = os.environ.get("GITHUB_REPOSITORY", "")
         attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
         data["github"] = {
             "run_id": int(rid),
@@ -99,6 +100,24 @@ def augment_batch_meta(batch_dir: Path) -> None:
             "workflow": os.environ.get("GITHUB_WORKFLOW", ""),
             "run_url": f"{server}/{repo}/actions/runs/{rid}" if repo else "",
         }
+
+    sha = os.environ.get("GITHUB_SHA", "")
+    if sha:
+        data["git"] = {
+            "sha": sha,
+            "sha_short": sha[:7],
+            "ref_name": os.environ.get("GITHUB_REF_NAME", ""),
+            "commit_url": f"{server}/{repo}/commit/{sha}" if repo else "",
+        }
+
+    pr_number = os.environ.get("PR_NUMBER", "")
+    pr_url = os.environ.get("PR_URL", "")
+    if pr_number:
+        data["pr"] = {
+            "number": int(pr_number) if pr_number.isdigit() else pr_number,
+            "url": pr_url,
+        }
+
     data["published_at"] = _utc_now_iso()
     meta_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
@@ -130,39 +149,60 @@ def render_e2e_index(site_root: Path) -> None:
     rows_html: list[str] = []
     for batch_id, batch_path in batches:
         meta_path = batch_path / _BATCH_META
-        passed = failed = None
         published = "—"
+        result = None
         run_link = ""
+        git_cell = "—"
+        pr_cell = "—"
         if meta_path.is_file():
             try:
                 meta = json.loads(meta_path.read_text(encoding="utf-8"))
-                passed = meta.get("passed")
-                failed = meta.get("failed")
                 published = meta.get("published_at", published)
+                result = meta.get("result")
                 gh = meta.get("github") or {}
                 run_link = gh.get("run_url") or ""
+                git = meta.get("git") or {}
+                sha_short = git.get("sha_short", "")
+                commit_url = git.get("commit_url", "")
+                ref_name = git.get("ref_name", "")
+                if sha_short and commit_url:
+                    git_cell = f'<a href="{commit_url}" rel="noopener" class="mono">{sha_short}</a>'
+                    if ref_name:
+                        git_cell += f' <span style="color:var(--text-muted);font-size:12px">{ref_name}</span>'
+                elif ref_name:
+                    git_cell = f'<span class="mono">{ref_name}</span>'
+                pr = meta.get("pr") or {}
+                pr_number = pr.get("number")
+                pr_url = pr.get("url", "")
+                if pr_number and pr_url:
+                    pr_cell = f'<a href="{pr_url}" rel="noopener">#{pr_number}</a>'
+                elif pr_number:
+                    pr_cell = f"#{pr_number}"
             except json.JSONDecodeError:
                 pass
-        status_cell = "—"
-        if passed is not None and failed is not None:
-            if failed == 0:
-                status_cell = f'<span class="badge badge-pass">{passed} ok</span>'
-            else:
-                status_cell = f'<span class="badge badge-fail">{failed} failed</span> / {passed} ok'
+
+        if result == "pass":
+            result_cell = '<span class="badge badge-pass">pass</span>'
+        elif result == "fail":
+            result_cell = '<span class="badge badge-fail">fail</span>'
+        else:
+            result_cell = "—"
 
         batch_href = f"./batches/{batch_id}/index.html"
-        gh_cell = f'<a href="{run_link}" rel="noopener">Workflow run</a>' if run_link else "—"
+        gh_cell = f'<a href="{run_link}" rel="noopener">CI run</a>' if run_link else "—"
 
         rows_html.append(
             f"""<tr>
-  <td class="mono"><a href="{batch_href}">{batch_id}</a></td>
   <td>{published}</td>
-  <td>{status_cell}</td>
+  <td>{git_cell}</td>
+  <td>{pr_cell}</td>
+  <td>{result_cell}</td>
   <td>{gh_cell}</td>
+  <td><a href="{batch_href}">Report</a></td>
 </tr>"""
         )
 
-    body = "\n".join(rows_html) if rows_html else '<tr><td colspan="4">No batches yet.</td></tr>'
+    body = "\n".join(rows_html) if rows_html else '<tr><td colspan="6">No batches yet.</td></tr>'
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -175,15 +215,17 @@ def render_e2e_index(site_root: Path) -> None:
 <body>
 <div class="container">
   <h1>K8s E2E reports</h1>
-  <p class="lead">One row per workflow run. Open a batch for the file list and detail links.</p>
+  <p class="lead">One row per workflow run — click Report to open the Hurl HTML detail page.</p>
   <div class="table-wrap">
     <table>
       <thead>
         <tr>
-          <th>Batch</th>
-          <th>Published (UTC)</th>
-          <th>Summary</th>
+          <th>Time (UTC)</th>
+          <th>Git</th>
+          <th>PR</th>
+          <th>Result</th>
           <th>CI</th>
+          <th>Report</th>
         </tr>
       </thead>
       <tbody>
