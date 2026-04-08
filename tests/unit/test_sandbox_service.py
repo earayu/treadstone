@@ -51,7 +51,7 @@ def _mock_session(sandbox: Sandbox | None = None, *extra_scalars):
 def _mock_k8s_client():
     k8s = AsyncMock()
     k8s.create_sandbox_claim = AsyncMock(
-        return_value={"metadata": {"name": "test-sb"}, "status": {"sandbox": {"Name": "test-sb"}}}
+        return_value={"metadata": {"name": "test-sb"}, "status": {"sandbox": {"name": "test-sb", "podIPs": []}}}
     )
     k8s.delete_sandbox_claim = AsyncMock(return_value=True)
     k8s.create_sandbox = AsyncMock(return_value={"metadata": {"name": "test-sb"}, "kind": "Sandbox"})
@@ -67,6 +67,19 @@ def _mock_k8s_client():
                 "image": "ghcr.io/agent-infra/sandbox:1.0.0.152",
                 "resource_spec": {"cpu": "250m", "memory": "1Gi"},
                 "resource_limits": {"cpu": "250m", "memory": "1Gi"},
+                "startup_probe": {
+                    "httpGet": {"path": "/v1/sandbox", "port": 8080},
+                    "periodSeconds": 5,
+                    "timeoutSeconds": 3,
+                    "failureThreshold": 36,
+                },
+                "readiness_probe": {
+                    "httpGet": {"path": "/v1/sandbox", "port": 8080},
+                    "periodSeconds": 5,
+                    "timeoutSeconds": 3,
+                    "failureThreshold": 3,
+                },
+                "liveness_probe": None,
             },
         ]
     )
@@ -170,6 +183,24 @@ class TestSandboxServiceDelete:
         with pytest.raises(InvalidTransitionError):
             await service.delete(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
 
+    async def test_delete_claim_path_uses_claim_name_even_after_warm_pool_adoption(self):
+        from treadstone.services.sandbox_service import SandboxService
+
+        sb = _make_sandbox(
+            status=SandboxStatus.READY,
+            provision_mode="claim",
+            k8s_sandbox_claim_name="claim-sb",
+            k8s_sandbox_name="aio-sandbox-tiny-pool-7dpvv",
+        )
+        session = _mock_session(sb)
+        k8s = _mock_k8s_client()
+        service = SandboxService(session=session, k8s_client=k8s)
+
+        await service.delete(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
+
+        k8s.delete_sandbox_claim.assert_called_once_with(name="claim-sb", namespace="treadstone-local")
+        k8s.delete_sandbox.assert_not_called()
+
 
 class TestSandboxServiceStartStop:
     async def test_start_calls_scale_sandbox_1(self):
@@ -228,6 +259,48 @@ class TestSandboxServiceStartStop:
         assert result.status == SandboxStatus.CREATING
         k8s.scale_sandbox.assert_called_once_with(name="sb1234567890abcdef", namespace="treadstone-local", replicas=1)
 
+    async def test_stop_claim_path_uses_actual_k8s_sandbox_name_after_adoption(self):
+        from treadstone.services.sandbox_service import SandboxService
+
+        sb = _make_sandbox(
+            status=SandboxStatus.READY,
+            provision_mode="claim",
+            k8s_sandbox_claim_name="claim-sb",
+            k8s_sandbox_name="aio-sandbox-tiny-pool-7dpvv",
+        )
+        session = _mock_session(sb)
+        k8s = _mock_k8s_client()
+        service = SandboxService(session=session, k8s_client=k8s)
+
+        await service.stop(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
+
+        k8s.scale_sandbox.assert_called_once_with(
+            name="aio-sandbox-tiny-pool-7dpvv",
+            namespace="treadstone-local",
+            replicas=0,
+        )
+
+    async def test_start_claim_path_uses_actual_k8s_sandbox_name_after_adoption(self):
+        from treadstone.services.sandbox_service import SandboxService
+
+        sb = _make_sandbox(
+            status=SandboxStatus.STOPPED,
+            provision_mode="claim",
+            k8s_sandbox_claim_name="claim-sb",
+            k8s_sandbox_name="aio-sandbox-tiny-pool-7dpvv",
+        )
+        session = _mock_session(sb)
+        k8s = _mock_k8s_client()
+        service = SandboxService(session=session, k8s_client=k8s)
+
+        await service.start(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
+
+        k8s.scale_sandbox.assert_called_once_with(
+            name="aio-sandbox-tiny-pool-7dpvv",
+            namespace="treadstone-local",
+            replicas=1,
+        )
+
 
 class TestDualPathProvisioning:
     async def test_create_without_persist_uses_claim_path(self):
@@ -274,6 +347,9 @@ class TestDualPathProvisioning:
         assert call_kwargs["volume_claim_templates"] is not None
         assert call_kwargs["volume_claim_templates"][0]["spec"]["storageClassName"] == "treadstone-workspace"
         assert call_kwargs["volume_claim_templates"][0]["spec"]["resources"]["requests"]["storage"] == "20Gi"
+        assert call_kwargs["startup_probe"]["httpGet"]["path"] == "/v1/sandbox"
+        assert call_kwargs["readiness_probe"]["httpGet"]["path"] == "/v1/sandbox"
+        assert call_kwargs["liveness_probe"] is None
 
     async def test_create_with_persist_checks_storage_class_before_creating(self):
         from treadstone.services.sandbox_service import SandboxService

@@ -183,6 +183,36 @@ class TestHandleWatchEvent:
         }
         await handle_watch_event("ADDED", cr, session_factory)
 
+    async def test_modified_ready_adopted_sandbox_matches_by_claim_owner(self, session_factory):
+        await _create_sandbox(
+            session_factory,
+            k8s_sandbox_name=None,
+            k8s_sandbox_claim_name="claim-sb",
+            status=SandboxStatus.CREATING,
+        )
+        cr = {
+            "metadata": {
+                "name": "aio-sandbox-tiny-pool-7dpvv",
+                "namespace": "treadstone-local",
+                "resourceVersion": "510",
+                "ownerReferences": [{"kind": "SandboxClaim", "name": "claim-sb", "controller": True}],
+            },
+            "spec": {"replicas": 1},
+            "status": {
+                "conditions": [_cond("True", "DependenciesReady", "ok")],
+                "serviceFQDN": "aio-sandbox-tiny-pool-7dpvv.treadstone-local.svc.cluster.local",
+            },
+        }
+
+        await handle_watch_event("MODIFIED", cr, session_factory)
+
+        async with session_factory() as session:
+            sb = await session.get(Sandbox, "sb00000000test1234")
+            assert sb.status == SandboxStatus.READY
+            assert sb.k8s_sandbox_name == "aio-sandbox-tiny-pool-7dpvv"
+            assert sb.endpoints["service_fqdn"] == "aio-sandbox-tiny-pool-7dpvv.treadstone-local.svc.cluster.local"
+            assert sb.k8s_resource_version == "510"
+
 
 class TestReconcile:
     async def test_reconcile_updates_drift(self, session_factory):
@@ -278,6 +308,27 @@ class TestReconcile:
         async with session_factory() as session:
             sb = await session.get(Sandbox, "sb00000000test1234")
             assert sb.status == SandboxStatus.READY
+
+    async def test_reconcile_finds_adopted_sandbox_by_claim_owner(self, session_factory):
+        await _create_sandbox(
+            session_factory,
+            k8s_sandbox_name=None,
+            k8s_sandbox_claim_name="claim-sb",
+            status=SandboxStatus.CREATING,
+            k8s_resource_version="old",
+        )
+        k8s = FakeK8sClient()
+        await k8s.create_sandbox_claim("claim-sb", "aio-sandbox-tiny", "treadstone-local")
+        k8s.simulate_claim_adoption("claim-sb", "treadstone-local", "aio-sandbox-tiny-pool-7dpvv")
+        k8s.simulate_sandbox_ready("aio-sandbox-tiny-pool-7dpvv", "treadstone-local")
+
+        await reconcile("treadstone-local", k8s, session_factory)
+
+        async with session_factory() as session:
+            sb = await session.get(Sandbox, "sb00000000test1234")
+            assert sb.status == SandboxStatus.READY
+            assert sb.k8s_sandbox_name == "aio-sandbox-tiny-pool-7dpvv"
+            assert sb.endpoints["service_fqdn"] == "aio-sandbox-tiny-pool-7dpvv.treadstone-local.svc.cluster.local"
 
     async def test_reconcile_returns_resource_version(self, session_factory):
         k8s = FakeK8sClient()

@@ -561,7 +561,7 @@ class FakeK8sClient:
             "kind": "SandboxClaim",
             "metadata": claim_metadata,
             "spec": {"sandboxTemplateRef": {"name": template_ref}},
-            "status": {"conditions": [], "sandbox": {"Name": sandbox_name}},
+            "status": {"conditions": [], "sandbox": {"name": sandbox_name, "podIPs": []}},
         }
         if shutdown_time:
             claim["spec"]["lifecycle"] = {"shutdownTime": format_shutdown_time(shutdown_time)}
@@ -740,6 +740,31 @@ class FakeK8sClient:
             sb["status"]["replicas"] = 1
             rv = str(int(sb["metadata"].get("resourceVersion", "1")) + 1)
             sb["metadata"]["resourceVersion"] = rv
+
+    def simulate_claim_adoption(self, claim_name: str, namespace: str, adopted_sandbox_name: str) -> None:
+        """Simulate warm-pool adoption where claim and Sandbox names diverge.
+
+        The agent-sandbox v0.3.x controller can bind a SandboxClaim to an
+        already-existing warm-pool Sandbox. The resulting Sandbox CR keeps the
+        warm-pool-derived ``metadata.name`` and points back to the claim via an
+        owner reference.
+        """
+        claim_key = f"{namespace}/{claim_name}"
+        sandbox_key = f"{namespace}/{claim_name}"
+        claim = self._claims.get(claim_key)
+        sandbox = self._sandboxes.pop(sandbox_key, None)
+        if claim is None or sandbox is None:
+            return
+
+        claim["status"]["sandbox"] = {"name": adopted_sandbox_name, "podIPs": []}
+
+        sandbox["metadata"]["name"] = adopted_sandbox_name
+        sandbox["metadata"]["ownerReferences"] = [{"kind": "SandboxClaim", "name": claim_name, "controller": True}]
+        sandbox["status"]["service"] = adopted_sandbox_name
+        sandbox["status"]["serviceFQDN"] = f"{adopted_sandbox_name}.{namespace}.svc.cluster.local"
+        rv = str(int(sandbox["metadata"].get("resourceVersion", "1")) + 1)
+        sandbox["metadata"]["resourceVersion"] = rv
+        self._sandboxes[f"{namespace}/{adopted_sandbox_name}"] = sandbox
 
     def remove_storage_class(self, name: str) -> None:
         self._storage_classes.pop(name, None)
