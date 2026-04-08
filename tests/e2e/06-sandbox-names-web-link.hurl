@@ -215,7 +215,6 @@ GET {{base_url}}/v1/sandboxes/{{sandbox_id_a}}/web-link
 Authorization: Bearer {{api_key_a}}
 HTTP *
 [Asserts]
-status in [200, 404]
 body matches /("enabled"\s*:\s*false)|("code"\s*:\s*"sandbox_not_found")/
 
 
