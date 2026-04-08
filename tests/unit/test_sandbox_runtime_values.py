@@ -2,7 +2,6 @@ from pathlib import Path
 
 import yaml
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SANDBOX_RUNTIME_DIR = REPO_ROOT / "deploy" / "sandbox-runtime"
 EXPECTED_DIRECT_ACS_UNITS = [
