@@ -55,43 +55,45 @@ async def check_idle_auto_stop(
     for sandbox in sandboxes:
         idle_seconds = (now - sandbox.gmt_last_active).total_seconds()
         threshold_seconds = sandbox.auto_stop_interval * 60
+        sandbox_id = sandbox.id
 
         if idle_seconds <= threshold_seconds:
             continue
 
         try:
-            if stop_callback is not None:
-                await stop_callback(session, sandbox)
-                # Eagerly mark STOPPED in DB so the next tick does not re-trigger
-                # before the K8s sync loop has a chance to update status.
-                if sandbox.status == SandboxStatus.READY:
-                    sandbox.status = SandboxStatus.STOPPED
-                    sandbox.gmt_stopped = utc_now()
-                    sandbox.version += 1
-                    session.add(sandbox)
-            else:
-                await _db_only_stop(session, sandbox)
-            await _metering.close_compute_session(session, sandbox.id)
-            await record_audit_event(
-                session,
-                action="sandbox.idle_auto_stop",
-                target_type="sandbox",
-                target_id=sandbox.id,
-                actor_type=AuditActorType.SYSTEM.value,
-                metadata={
-                    "owner_id": sandbox.owner_id,
-                    "auto_stop_interval_minutes": sandbox.auto_stop_interval,
-                    "idle_seconds": int(idle_seconds),
-                },
-            )
-            logger.info(
-                "Idle auto-stop: sandbox %s idle %.0fs > %ds threshold",
-                sandbox.id,
-                idle_seconds,
-                threshold_seconds,
-            )
+            async with session.begin_nested():
+                if stop_callback is not None:
+                    await stop_callback(session, sandbox)
+                    # Eagerly mark STOPPED in DB so the next tick does not re-trigger
+                    # before the K8s sync loop has a chance to update status.
+                    if sandbox.status == SandboxStatus.READY:
+                        sandbox.status = SandboxStatus.STOPPED
+                        sandbox.gmt_stopped = utc_now()
+                        sandbox.version += 1
+                        session.add(sandbox)
+                else:
+                    await _db_only_stop(session, sandbox)
+                await _metering.close_compute_session(session, sandbox.id)
+                await record_audit_event(
+                    session,
+                    action="sandbox.idle_auto_stop",
+                    target_type="sandbox",
+                    target_id=sandbox.id,
+                    actor_type=AuditActorType.SYSTEM.value,
+                    metadata={
+                        "owner_id": sandbox.owner_id,
+                        "auto_stop_interval_minutes": sandbox.auto_stop_interval,
+                        "idle_seconds": int(idle_seconds),
+                    },
+                )
+                logger.info(
+                    "Idle auto-stop: sandbox %s idle %.0fs > %ds threshold",
+                    sandbox.id,
+                    idle_seconds,
+                    threshold_seconds,
+                )
         except Exception:
-            logger.exception("Failed to idle-auto-stop sandbox %s", sandbox.id)
+            logger.exception("Failed to idle-auto-stop sandbox %s", sandbox_id)
 
     await session.commit()
 
@@ -118,35 +120,37 @@ async def check_auto_delete(
     for sandbox in sandboxes:
         stopped_seconds = (now - sandbox.gmt_stopped).total_seconds()
         threshold_seconds = sandbox.auto_delete_interval * 60
+        sandbox_id = sandbox.id
 
         if stopped_seconds <= threshold_seconds:
             continue
 
         try:
-            if delete_callback is not None:
-                await delete_callback(session, sandbox)
-            else:
-                await _db_only_delete(session, sandbox)
-            await record_audit_event(
-                session,
-                action="sandbox.auto_delete",
-                target_type="sandbox",
-                target_id=sandbox.id,
-                actor_type=AuditActorType.SYSTEM.value,
-                metadata={
-                    "owner_id": sandbox.owner_id,
-                    "auto_delete_interval_minutes": sandbox.auto_delete_interval,
-                    "stopped_seconds": int(stopped_seconds),
-                },
-            )
-            logger.info(
-                "Auto-delete: sandbox %s stopped %.0fs > %ds threshold",
-                sandbox.id,
-                stopped_seconds,
-                threshold_seconds,
-            )
+            async with session.begin_nested():
+                if delete_callback is not None:
+                    await delete_callback(session, sandbox)
+                else:
+                    await _db_only_delete(session, sandbox)
+                await record_audit_event(
+                    session,
+                    action="sandbox.auto_delete",
+                    target_type="sandbox",
+                    target_id=sandbox.id,
+                    actor_type=AuditActorType.SYSTEM.value,
+                    metadata={
+                        "owner_id": sandbox.owner_id,
+                        "auto_delete_interval_minutes": sandbox.auto_delete_interval,
+                        "stopped_seconds": int(stopped_seconds),
+                    },
+                )
+                logger.info(
+                    "Auto-delete: sandbox %s stopped %.0fs > %ds threshold",
+                    sandbox.id,
+                    stopped_seconds,
+                    threshold_seconds,
+                )
         except Exception:
-            logger.exception("Failed to auto-delete sandbox %s", sandbox.id)
+            logger.exception("Failed to auto-delete sandbox %s", sandbox_id)
 
     await session.commit()
 
@@ -183,6 +187,9 @@ async def _db_only_stop(session: AsyncSession, sandbox: Sandbox) -> None:
 async def _db_only_delete(session: AsyncSession, sandbox: Sandbox) -> None:
     """Fallback delete when no K8s callback is available."""
     prev_status = sandbox.status
+    # When no K8s callback is available, finalize the DB state to avoid
+    # leaving sandboxes stuck in DELETING indefinitely. If a CR still exists,
+    # the periodic sync will reconcile it separately.
     sandbox.status = SandboxStatus.DELETED
     sandbox.gmt_deleted = utc_now()
     sandbox.version += 1

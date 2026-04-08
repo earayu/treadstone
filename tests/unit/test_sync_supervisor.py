@@ -1,6 +1,10 @@
 import asyncio
 from collections import deque
+from types import SimpleNamespace
 
+import pytest
+
+from treadstone.core.database import async_session
 from treadstone.services.leader_election import LeadershipState
 from treadstone.services.sync_supervisor import LeaderControlledSyncSupervisor
 
@@ -76,3 +80,64 @@ async def test_supervisor_stops_sync_when_leadership_is_lost():
     await asyncio.gather(supervisor_task, return_exceptions=True)
 
     assert cancelled.is_set()
+
+
+async def test_supervisor_metering_loop_runs_once_before_first_sleep(monkeypatch):
+    calls: list[str] = []
+
+    async def fake_run_metering_tick(session_factory, stop_sandbox_callback) -> None:
+        assert session_factory is async_session
+        assert stop_sandbox_callback is not None
+        calls.append("run")
+
+    async def fake_sleep(_seconds: int) -> None:
+        calls.append("sleep")
+        raise asyncio.CancelledError
+
+    import treadstone.services.metering_tasks as metering_tasks
+    import treadstone.services.sync_supervisor as sync_supervisor
+
+    monkeypatch.setattr(metering_tasks, "run_metering_tick", fake_run_metering_tick)
+    monkeypatch.setattr(sync_supervisor.asyncio, "sleep", fake_sleep)
+
+    supervisor = LeaderControlledSyncSupervisor(
+        elector=SimpleNamespace(),
+        sync_loop_factory=lambda: asyncio.sleep(0),
+        session_factory=async_session,
+    )
+
+    with pytest.raises(asyncio.CancelledError):
+        await supervisor._metering_tick_loop()
+
+    assert calls == ["run", "sleep"]
+
+
+async def test_supervisor_lifecycle_loop_runs_once_before_first_sleep(monkeypatch):
+    calls: list[str] = []
+
+    async def fake_run_lifecycle_tick(session_factory, stop_sandbox_callback, delete_sandbox_callback) -> None:
+        assert session_factory is async_session
+        assert stop_sandbox_callback is not None
+        assert delete_sandbox_callback is not None
+        calls.append("run")
+
+    async def fake_sleep(_seconds: int) -> None:
+        calls.append("sleep")
+        raise asyncio.CancelledError
+
+    import treadstone.services.sandbox_lifecycle_tasks as lifecycle_tasks
+    import treadstone.services.sync_supervisor as sync_supervisor
+
+    monkeypatch.setattr(lifecycle_tasks, "run_lifecycle_tick", fake_run_lifecycle_tick)
+    monkeypatch.setattr(sync_supervisor.asyncio, "sleep", fake_sleep)
+
+    supervisor = LeaderControlledSyncSupervisor(
+        elector=SimpleNamespace(),
+        sync_loop_factory=lambda: asyncio.sleep(0),
+        session_factory=async_session,
+    )
+
+    with pytest.raises(asyncio.CancelledError):
+        await supervisor._lifecycle_tick_loop()
+
+    assert calls == ["run", "sleep"]
