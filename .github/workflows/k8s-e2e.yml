@@ -219,7 +219,6 @@ jobs:
         id: deployment
         if: always() && steps.pages_meta.outputs.ready == 'true'
         uses: actions/deploy-pages@v4
-        environment: github-pages
 
       - name: E2E report GitHub Pages summary
         if: always() && steps.pages_meta.outputs.ready == 'true'
