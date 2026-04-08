@@ -69,6 +69,8 @@ async def validate_cli_flow_secret(
     flow = await _get_flow_or_404(session, flow_id)
     _verify_flow_secret(flow, raw_secret)
     return flow
+
+
 @router.post("/flows")
 async def create_cli_flow(session: AsyncSession = Depends(get_session)):
     """Create a CLI login flow for browser-based authentication."""
