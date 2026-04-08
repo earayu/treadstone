@@ -124,9 +124,7 @@ async def list_audit_events(
         since=since,
         until=until,
     )
-    items_result = await session.execute(
-        base_statement.order_by(*_events_ordering()).limit(limit).offset(offset)
-    )
+    items_result = await session.execute(base_statement.order_by(*_events_ordering()).limit(limit).offset(offset))
     total_statement = _apply_filters(
         select(func.count()).select_from(AuditEvent),
         action=action,
