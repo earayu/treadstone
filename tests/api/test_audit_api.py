@@ -148,6 +148,75 @@ async def test_audit_events_filter_by_actor_email_not_found_returns_empty(admin_
     assert data["items"] == []
 
 
+async def test_admin_api_key_cannot_read_audit_events(db_session):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post("/v1/auth/register", json={"email": "admin@example.com", "password": "Pass123!"})
+        await client.post("/v1/auth/login", json={"email": "admin@example.com", "password": "Pass123!"})
+        key_response = await client.post("/v1/auth/api-keys", json={"name": "audit-reader"})
+        api_key = key_response.json()["key"]
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as api_key_client:
+        response = await api_key_client.get(
+            "/v1/audit/events",
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "forbidden"
+
+
+@pytest.mark.asyncio
+async def test_audit_reads_are_recorded(admin_client):
+    response = await admin_client.get("/v1/audit/events", params={"limit": 5, "result": "success"})
+
+    assert response.status_code == 200
+
+    async with _test_session_factory() as session:
+        events = (
+            (
+                await session.execute(
+                    select(AuditEvent)
+                    .where(AuditEvent.action == "audit.events.read")
+                    .order_by(AuditEvent.created_at.desc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    assert len(events) == 1
+    assert events[0].target_type == "audit_event"
+    assert events[0].credential_type == "cookie"
+    assert events[0].event_metadata["filters"] == {"result": "success"}
+    assert events[0].event_metadata["limit"] == 5
+
+
+@pytest.mark.asyncio
+async def test_audit_filter_options_reads_are_recorded(admin_client):
+    response = await admin_client.get("/v1/audit/filter-options")
+    assert response.status_code == 200
+
+    async with _test_session_factory() as session:
+        events = (
+            (
+                await session.execute(
+                    select(AuditEvent)
+                    .where(AuditEvent.action == "audit.filter_options.read")
+                    .order_by(AuditEvent.created_at.desc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    assert len(events) == 1
+    assert events[0].target_type == "audit_event"
+    assert events[0].credential_type == "cookie"
+    assert events[0].event_metadata["actions"] >= 1
+    assert events[0].event_metadata["target_types"] >= 1
+    assert events[0].event_metadata["results"] >= 1
+
+
 @pytest.mark.asyncio
 async def test_audit_events_filter_by_actor_email_is_case_insensitive_and_trimmed(admin_client):
     await admin_client.post(
