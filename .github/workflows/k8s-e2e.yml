@@ -55,9 +55,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
-      contents: read
-      pages: write
-      id-token: write
+      contents: write
 
     steps:
       - name: Resolve checkout ref
@@ -195,7 +193,7 @@ jobs:
           path: reports/e2e/
           if-no-files-found: ignore
 
-      - name: Decide if GitHub Pages can be published
+      - name: Decide if GitHub Pages site can be updated
         id: pages_meta
         if: always()
         run: |
@@ -205,32 +203,65 @@ jobs:
             echo "ready=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Configure GitHub Pages
+      - name: Checkout gh-pages (historical E2E batches)
+        id: checkout_gh_pages
         if: always() && steps.pages_meta.outputs.ready == 'true'
-        uses: actions/configure-pages@v5
-
-      - name: Upload E2E report to GitHub Pages artifact
-        if: always() && steps.pages_meta.outputs.ready == 'true'
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/checkout@v4
         with:
-          path: reports/e2e/
+          ref: gh-pages
+          path: site
+          fetch-depth: 0
+        continue-on-error: true
 
-      - name: Deploy E2E report to GitHub Pages
-        id: deployment
+      - name: Ensure site layout
         if: always() && steps.pages_meta.outputs.ready == 'true'
-        uses: actions/deploy-pages@v4
+        run: |
+          mkdir -p site/e2e/batches
+          touch site/.nojekyll
+
+      - name: Sync site with remote gh-pages tip
+        if: always() && steps.pages_meta.outputs.ready == 'true' && steps.checkout_gh_pages.outcome == 'success'
+        run: |
+          git -C site fetch origin gh-pages
+          git -C site reset --hard origin/gh-pages
+
+      - name: Merge E2E batch into Pages site
+        if: always() && steps.pages_meta.outputs.ready == 'true'
+        env:
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_WORKFLOW: ${{ github.workflow }}
+        run: |
+          python3 scripts/e2e_site.py merge \
+            --incoming reports/e2e \
+            --site-root site \
+            --batch-id "${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+      # peaceiris publishes publish_dir as the branch root; do not ship the checkout's .git tree.
+      - name: Strip git metadata from publish directory
+        if: always() && steps.pages_meta.outputs.ready == 'true'
+        run: rm -rf site/.git
+
+      - name: Deploy site to gh-pages branch
+        if: always() && steps.pages_meta.outputs.ready == 'true'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
 
       - name: E2E report GitHub Pages summary
         if: always() && steps.pages_meta.outputs.ready == 'true'
         run: |
           {
-            echo "## E2E HTML report (GitHub Pages)"
+            echo "## E2E HTML reports (GitHub Pages)"
             echo ""
-            if [ -n "${{ steps.deployment.outputs.page_url }}" ]; then
-              echo "Published: ${{ steps.deployment.outputs.page_url }}"
-            else
-              echo "Expected URL: \`https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/\`"
-            fi
+            echo "Dashboard (all batches): \`https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/e2e/\`"
+            echo ""
+            echo "This run: \`https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/e2e/batches/${{ github.run_id }}-${{ github.run_attempt }}/\`"
+            echo ""
+            echo "Set **Settings → Pages → Build and deployment → Branch \`gh-pages\` / \`/\`** if you previously used \"GitHub Actions\" as the source."
             echo ""
             echo "Workflow run: ${{ github.run_id }} (attempt ${{ github.run_attempt }})"
           } >> "$GITHUB_STEP_SUMMARY"

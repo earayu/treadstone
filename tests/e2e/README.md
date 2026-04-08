@@ -33,6 +33,10 @@ make test-e2e BASE_URL=http://localhost:8000   # port-forward instead of Ingress
 
 `09-data-plane-proxy.hurl` needs a **running sandbox runtime** in the cluster (agent-sandbox + sandbox-runtime charts). It polls `GET /v1/sandboxes/{id}` until `status == "ready"`, then calls the HTTP proxy. If the workload inside the pod is down or the command times out, you may see `502 sandbox_unreachable` or slow retries—re-run after `kubectl get pods -n treadstone-prod` (or your env namespace) is healthy.
 
+## GitHub Pages (K8s E2E on `main`)
+
+The **K8s E2E** workflow merges each successful HTML report into the **`gh-pages`** branch: one **batch** per workflow run (`e2e/batches/<run_id>-<run_attempt>/`), a dashboard at **`/e2e/`**, and a small root **`/`** index. In the repo **Settings → Pages**, choose **Deploy from branch** → **`gh-pages`** → **`/`** (not “GitHub Actions” as the source, unless you use a different host).
+
 ## Conventions
 
 - **Self-contained files**: each registers its own users (except `08` which relies on `admin_email` from the runner).
