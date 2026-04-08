@@ -405,7 +405,7 @@ def _make_ready_condition(status: str = "False", reason: str = "DependenciesNotR
 class FakeK8sClient:
     """In-memory stub for testing — simulates the agent-sandbox controller behavior."""
 
-    _DEFAULT_IMAGE = "ghcr.io/agent-infra/sandbox:latest"
+    _DEFAULT_IMAGE = "ghcr.io/agent-infra/sandbox:1.0.0.152"
 
     _DEFAULT_TEMPLATES: tuple[dict[str, Any], ...] = (
         {

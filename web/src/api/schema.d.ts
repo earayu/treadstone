@@ -787,7 +787,7 @@ export interface paths {
         put?: never;
         /**
          * Create Feedback
-         * @description Submit support or product feedback (requires login).
+         * @description Submit support or product feedback from an interactive browser session.
          */
         post: operations["support-create_feedback"];
         delete?: never;
@@ -2012,7 +2012,7 @@ export interface components {
             created_at: string;
             /**
              * Image
-             * @example ghcr.io/agent-infra/sandbox:latest
+             * @example ghcr.io/agent-infra/sandbox:1.0.0.152
              */
             image?: string | null;
             /**
@@ -2145,7 +2145,7 @@ export interface components {
             description: string;
             /**
              * Image
-             * @example ghcr.io/agent-infra/sandbox:latest
+             * @example ghcr.io/agent-infra/sandbox:1.0.0.152
              */
             image: string;
             resource_spec: components["schemas"]["ResourceSpec"];
@@ -4055,7 +4055,9 @@ export interface operations {
     "auth-approve_cli_flow": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-flow-secret"?: string | null;
+            };
             path: {
                 flow_id: string;
             };

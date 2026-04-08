@@ -1,8 +1,8 @@
 # Default for local: mainland China mirror (typical pull performance for CN networks).
-# To match prod or if this registry is unreachable, use: ghcr.io/agent-infra/sandbox:latest
+# To match prod or if this registry is unreachable, use: ghcr.io/agent-infra/sandbox:1.0.0.152
 # (see deploy/README.md — Sandbox runtime image (local)).
-# image: ghcr.io/agent-infra/sandbox:latest
-image: enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
+# image: ghcr.io/agent-infra/sandbox:1.0.0.152
+image: enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:1.0.0.152
 containerPort: 8080
 
 sandboxTemplates:
