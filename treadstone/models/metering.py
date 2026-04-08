@@ -132,6 +132,7 @@ class ComputeSession(Base):
     __tablename__ = "compute_session"
     __table_args__ = (
         Index("ix_compute_session_open", "ended_at", postgresql_where=text("ended_at IS NULL")),
+        Index("ix_compute_session_user_period", "user_id", "started_at", "ended_at"),
         Index(
             "uq_compute_session_sandbox_active",
             "sandbox_id",
@@ -165,6 +166,7 @@ class StorageLedger(Base):
     __tablename__ = "storage_ledger"
     __table_args__ = (
         Index("ix_storage_ledger_user_state", "user_id", "storage_state"),
+        Index("ix_storage_ledger_user_period", "user_id", "allocated_at", "released_at"),
         Index("ix_storage_ledger_sandbox", "sandbox_id"),
         Index(
             "ix_storage_ledger_sandbox_active",

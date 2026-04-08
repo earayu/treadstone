@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 import pytest
 from fastapi_users.db import SQLAlchemyUserDatabase
 from httpx import ASGITransport, AsyncClient
@@ -383,3 +385,65 @@ async def test_list_users_admin_email_filter(db_session):
 
         resp_all = await client.get("/v1/auth/users", cookies=cookies, params={"email": "unique@"})
         assert resp_all.json()["total"] == 2
+
+
+@pytest.mark.asyncio
+async def test_list_users_non_admin_respects_offset(db_session):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post("/v1/auth/register", json={"email": "self-only@test.com", "password": "Pass123!"})
+        await client.post("/v1/auth/register", json={"email": "member-only@test.com", "password": "Pass123!"})
+        login = await client.post("/v1/auth/login", json={"email": "member-only@test.com", "password": "Pass123!"})
+
+        resp = await client.get("/v1/auth/users", cookies=login.cookies, params={"limit": 1, "offset": 1})
+
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 1
+    assert resp.json()["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_list_users_admin_pagination_is_stable_when_timestamps_tie(db_session):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post("/v1/auth/register", json={"email": "stable-admin@test.com", "password": "Pass123!"})
+        await client.post("/v1/auth/register", json={"email": "stable-a@test.com", "password": "Pass123!"})
+        await client.post("/v1/auth/register", json={"email": "stable-b@test.com", "password": "Pass123!"})
+        login = await client.post(
+            "/v1/auth/login",
+            json={"email": "stable-admin@test.com", "password": "Pass123!"},
+        )
+        cookies = login.cookies
+
+    tied_created_at = datetime(2026, 1, 1, tzinfo=UTC)
+    async with _test_session_factory() as session:
+        users = (
+            (
+                await session.execute(
+                    select(User).where(
+                        User.email.in_(["stable-admin@test.com", "stable-a@test.com", "stable-b@test.com"])
+                    )
+                )
+            )
+            .unique()
+            .scalars()
+            .all()
+        )
+        for user in users:
+            if user.email == "stable-admin@test.com":
+                user.gmt_created = datetime(2025, 1, 1, tzinfo=UTC)
+            else:
+                user.gmt_created = tied_created_at
+            session.add(user)
+        await session.commit()
+        tied_ids = {user.email: user.id for user in users if user.email != "stable-admin@test.com"}
+
+    expected_first_email = max(tied_ids.items(), key=lambda item: item[1])[0]
+    expected_second_email = min(tied_ids.items(), key=lambda item: item[1])[0]
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        first_page = await client.get("/v1/auth/users", cookies=cookies, params={"limit": 1, "offset": 0})
+        second_page = await client.get("/v1/auth/users", cookies=cookies, params={"limit": 1, "offset": 1})
+
+    assert first_page.status_code == 200
+    assert second_page.status_code == 200
+    assert first_page.json()["items"][0]["email"] == expected_first_email
+    assert second_page.json()["items"][0]["email"] == expected_second_email

@@ -67,6 +67,7 @@ from treadstone.models.sandbox import Sandbox
 from treadstone.models.user import OAuthAccount, Role, User, random_id, utc_now
 from treadstone.services.audit import record_audit_event
 from treadstone.services.browser_login import validate_browser_return_to
+from treadstone.services.cli_login_flow import approve_cli_flow
 
 logger = logging.getLogger(__name__)
 
@@ -162,19 +163,6 @@ async def _validate_cli_flow_pending(session: AsyncSession, cli_flow_id: str) ->
         expires = expires.replace(tzinfo=now.tzinfo)
     if now > expires:
         raise BadRequestError("CLI login flow has expired.")
-
-
-async def _approve_cli_flow(session: AsyncSession, cli_flow_id: str, user: User, provider: str) -> None:
-    """Mark a pre-validated CLI flow as approved. Must call _validate_cli_flow_pending first."""
-    from treadstone.models.cli_login_flow import CliLoginFlow
-
-    result = await session.execute(select(CliLoginFlow).where(CliLoginFlow.id == cli_flow_id))
-    flow = result.scalar_one()
-    flow.status = "approved"
-    flow.user_id = user.id
-    flow.provider = provider
-    flow.gmt_completed = utc_now()
-    session.add(flow)
 
 
 async def _fail_cli_flow(session: AsyncSession, cli_flow_id: str) -> None:
@@ -726,7 +714,15 @@ async def _oauth_callback(
     )
 
     if cli_flow_id_from_state:
-        await _approve_cli_flow(session, cli_flow_id_from_state, user, provider)
+        if not await approve_cli_flow(session, flow_id=cli_flow_id_from_state, user_id=user.id, provider=provider):
+            await session.rollback()
+            response = _cli_oauth_redirect(
+                cli_flow_id_from_state,
+                "failed",
+                "CLI login flow is invalid or already completed.",
+            )
+            _clear_oauth_flow_cookies(response, provider)
+            return response
 
     await session.commit()
 
@@ -818,14 +814,14 @@ async def list_users(
             count_stmt = count_stmt.where(User.email.ilike(pattern))
         total = (await session.execute(count_stmt)).scalar_one()
         result = await session.execute(
-            stmt.order_by(User.gmt_created.desc()).offset(offset).limit(limit),
+            stmt.order_by(User.gmt_created.desc(), User.id.desc()).offset(offset).limit(limit),
         )
         page = list(result.unique().scalars().all())
     else:
         if email_filter and email_filter.lower() not in current_user.email.lower():
             return {"items": [], "total": 0}
         total = 1
-        page = [current_user]
+        page = [current_user] if offset == 0 else []
     return {
         "items": [{"id": u.id, "email": u.email, "role": u.role, "is_active": u.is_active} for u in page],
         "total": total,

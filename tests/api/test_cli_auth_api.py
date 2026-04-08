@@ -164,6 +164,44 @@ async def test_exchange_marks_flow_as_used(db_session, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_exchange_rejects_stale_approved_view_when_flow_was_already_used(db_session, monkeypatch):
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
+        await _register_user(http_client)
+        flow = await _create_flow(http_client)
+
+        await http_client.post(
+            "/v1/auth/cli/login",
+            data={"email": "u@b.com", "password": "Pass123!", "flow_id": flow["flow_id"]},
+        )
+
+    async with _test_session_factory() as session:
+        stale_flow = (
+            await session.execute(select(CliLoginFlow).where(CliLoginFlow.id == flow["flow_id"]))
+        ).scalar_one()
+
+    async with _test_session_factory() as session:
+        live_flow = (await session.execute(select(CliLoginFlow).where(CliLoginFlow.id == flow["flow_id"]))).scalar_one()
+        live_flow.status = "used"
+        session.add(live_flow)
+        await session.commit()
+
+    async def return_stale_flow(_session, _flow_id):
+        return stale_flow
+
+    monkeypatch.setattr(cli_auth_api, "_get_flow_or_404", return_stale_flow)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
+        exchange = await http_client.post(
+            f"/v1/auth/cli/flows/{flow['flow_id']}/exchange",
+            headers={"X-Flow-Secret": flow["flow_secret"]},
+        )
+
+    assert exchange.status_code == 400
+    assert "already been used" in exchange.json()["error"]["message"]
+
+
+@pytest.mark.asyncio
 async def test_exchange_pending_flow_returns_error(db_session, monkeypatch):
     monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
@@ -452,3 +490,40 @@ async def test_session_based_approve_is_not_replayable(db_session, monkeypatch):
         )
         assert second.status_code == 400
         assert "already been used or has expired" in second.json()["error"]["message"]
+
+
+@pytest.mark.asyncio
+async def test_session_based_approve_rejects_stale_pending_view(db_session, monkeypatch):
+    monkeypatch.setattr(cli_auth_api.settings, "app_base_url", "http://test")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
+        reg_resp = await http_client.post("/v1/auth/register", json={"email": "u@b.com", "password": "Pass123!"})
+        session_cookie = reg_resp.cookies.get("session")
+        flow = await _create_flow(http_client)
+
+    async with _test_session_factory() as session:
+        stale_flow = (
+            await session.execute(select(CliLoginFlow).where(CliLoginFlow.id == flow["flow_id"]))
+        ).scalar_one()
+
+    async with _test_session_factory() as session:
+        live_flow = (await session.execute(select(CliLoginFlow).where(CliLoginFlow.id == flow["flow_id"]))).scalar_one()
+        live_flow.status = "approved"
+        live_flow.user_id = reg_resp.json()["id"]
+        live_flow.provider = "session"
+        live_flow.gmt_completed = utc_now()
+        session.add(live_flow)
+        await session.commit()
+
+    async def return_stale_flow(_session, _flow_id):
+        return stale_flow
+
+    monkeypatch.setattr(cli_auth_api, "_get_flow_or_404", return_stale_flow)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
+        resp = await http_client.post(
+            f"/v1/auth/cli/flows/{flow['flow_id']}/approve",
+            cookies={"session": session_cookie},
+        )
+
+    assert resp.status_code == 400
+    assert "already been used or has expired" in resp.json()["error"]["message"]

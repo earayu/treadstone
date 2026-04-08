@@ -407,6 +407,27 @@ class TestSubdomainRouting:
         assert events[0].result == "failure"
         assert events[0].error_code == "sandbox_web_link_invalid"
 
+    async def test_delete_web_link_revokes_existing_open_link_cookie(self, auth_client: AsyncClient, monkeypatch):
+        _enable_subdomain(monkeypatch)
+        sandbox_id = await _create_ready_sandbox(auth_client)
+        open_link = (await auth_client.post(f"/v1/sandboxes/{sandbox_id}/web-link")).json()["open_link"]
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://app.localhost") as browser:
+            first_open = await browser.get(open_link, follow_redirects=True)
+            assert first_open.status_code == 200
+
+            delete_resp = await auth_client.delete(f"/v1/sandboxes/{sandbox_id}/web-link")
+            assert delete_resp.status_code == 204
+
+            followup = await browser.get(
+                f"https://sandbox-{sandbox_id}.sandbox.localhost/",
+                follow_redirects=False,
+            )
+
+        assert followup.status_code == 303
+        location = urlparse(followup.headers["location"])
+        assert location.path == "/v1/browser/bootstrap"
+
     async def test_recreate_web_link_after_delete_returns_new_active_link(self, auth_client: AsyncClient, monkeypatch):
         _enable_subdomain(monkeypatch)
         sandbox_id = await _create_ready_sandbox(auth_client)
@@ -460,6 +481,26 @@ class TestSubdomainRouting:
             signin_loc = urlparse(step2.headers["location"])
             assert signin_loc.path == "/auth/sign-in"
             assert sandbox_url in parse_qs(signin_loc.query)["return_to"][0]
+
+    async def test_browser_bootstrap_preserves_fragment_in_next_redirect(
+        self,
+        auth_client: AsyncClient,
+        monkeypatch,
+    ):
+        _enable_subdomain(monkeypatch)
+        sandbox_id = await _create_ready_sandbox(auth_client)
+        return_to = f"https://sandbox-{sandbox_id}.sandbox.localhost/workbench?tab=logs#cell-7"
+
+        resp = await auth_client.get(
+            "/v1/browser/bootstrap",
+            params={"return_to": return_to},
+            follow_redirects=False,
+        )
+
+        assert resp.status_code == 303
+        redirect_loc = urlparse(resp.headers["location"])
+        assert redirect_loc.path == "/_treadstone/open"
+        assert parse_qs(redirect_loc.query)["next"] == ["/workbench?tab=logs#cell-7"]
 
     async def test_non_sandbox_subdomain_falls_through(self, db_session, monkeypatch):
         _enable_subdomain(monkeypatch)
