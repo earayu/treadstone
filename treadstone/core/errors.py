@@ -195,6 +195,15 @@ class ConcurrentLimitError(TreadstoneError):
         )
 
 
+class FeedbackRateLimitError(TreadstoneError):
+    def __init__(self, wait_seconds: int):
+        super().__init__(
+            code="feedback_rate_limited",
+            message=f"Please wait {wait_seconds} seconds before sending more feedback.",
+            status=429,
+        )
+
+
 class TemplateNotAllowedError(TreadstoneError):
     def __init__(self, tier: str, template: str, allowed_templates: list[str]):
         allowed_str = ", ".join(allowed_templates) if allowed_templates else "none"

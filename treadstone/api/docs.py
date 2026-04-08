@@ -3,10 +3,12 @@
 import logging
 import os
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 from fastapi import APIRouter, Request
 from fastapi.responses import PlainTextResponse, RedirectResponse
 
+from treadstone.config import settings
 from treadstone.docs_manifest import DOCS_DIR, resolve_doc_entry
 
 logger = logging.getLogger(__name__)
@@ -30,6 +32,14 @@ def _read_doc(slug: str) -> str | None:
     if not doc_path.exists():
         return None
     return doc_path.read_text(encoding="utf-8")
+
+
+def _frontend_docs_url(path: str = "") -> str:
+    """Build an absolute docs URL on the public web-app origin."""
+    base = settings.app_base_url.rstrip("/")
+    joined_path = f"{_FRONTEND_DOCS_BASE}{path}"
+    parts = urlsplit(base)
+    return urlunsplit((parts.scheme, parts.netloc, joined_path, "", ""))
 
 
 @router.get("/docs/sitemap.md")
@@ -61,7 +71,7 @@ async def docs_page(slug: str, request: Request):
                 status_code=404,
                 media_type="text/markdown; charset=utf-8",
             )
-        return RedirectResponse(url=_FRONTEND_DOCS_BASE, status_code=302)
+        return RedirectResponse(url=_frontend_docs_url(), status_code=302)
 
     canonical_slug = entry.slug
 
@@ -85,6 +95,6 @@ async def docs_page(slug: str, request: Request):
         )
 
     return RedirectResponse(
-        url=f"{_FRONTEND_DOCS_BASE}/{canonical_slug}",
+        url=_frontend_docs_url(f"/{canonical_slug}"),
         status_code=302,
     )

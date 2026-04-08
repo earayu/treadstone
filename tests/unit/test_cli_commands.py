@@ -514,7 +514,7 @@ def _make_browser_flow_routes(
             {
                 "flow_id": "clf-test",
                 "flow_secret": "secret-abc",
-                "browser_url": "http://test/v1/auth/cli/login?flow_id=clf-test",
+                "browser_url": "http://test/v1/auth/cli/login?flow_id=clf-test&flow_secret=secret-abc",
                 "expires_at": "2099-01-01T00:00:00Z",
                 "poll_interval": 2,
             }
@@ -564,7 +564,7 @@ def test_browser_login_webbrowser_open_failure_still_prints_url(
 
     assert result.exit_code == 0
     assert "Could not open browser" in result.output
-    assert "http://test/v1/auth/cli/login?flow_id=clf-test" in result.output
+    assert "http://test/v1/auth/cli/login?flow_id=clf-test&flow_secret=secret-abc" in result.output
     assert "Login successful" in result.output
 
 

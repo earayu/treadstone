@@ -43,6 +43,12 @@ router = APIRouter(prefix="/v1/usage", tags=["usage"])
 _metering = MeteringService()
 
 
+def _serialize_storage_state(storage_state: str) -> str:
+    if storage_state == "deleted":
+        return "released"
+    return storage_state
+
+
 def _serialize_session(cs: ComputeSession) -> dict:
     now = utc_now()
     end = cs.ended_at or now
@@ -108,7 +114,7 @@ def _serialize_storage_ledger(entry: StorageLedger) -> dict:
         "id": entry.id,
         "sandbox_id": entry.sandbox_id,
         "size_gib": entry.size_gib,
-        "storage_state": entry.storage_state,
+        "storage_state": _serialize_storage_state(entry.storage_state),
         "allocated_at": iso(entry.allocated_at),
         "released_at": iso(entry.released_at),
         "gib_hours_consumed": float(entry.gib_hours_consumed),

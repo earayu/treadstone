@@ -1,3 +1,4 @@
+from treadstone.config import settings
 from treadstone.docs_manifest import load_docs_manifest
 
 
@@ -15,7 +16,7 @@ async def test_docs_route_redirects_to_spa_for_all_manifest_pages(client):
         response = await client.get(f"/docs/{entry.slug}", follow_redirects=False)
 
         assert response.status_code == 302
-        assert response.headers["location"] == f"/docs/{entry.slug}"
+        assert response.headers["location"] == f"{settings.app_base_url}/docs/{entry.slug}"
 
 
 async def test_docs_sitemap_markdown_endpoint_serves_generated_sitemap(client):
@@ -33,7 +34,7 @@ async def test_unknown_slug_returns_markdown_404_and_spa_redirect(client):
     assert markdown_response.status_code == 404
     assert "not-a-real-page" in markdown_response.text
     assert browser_response.status_code == 302
-    assert browser_response.headers["location"] == "/docs"
+    assert browser_response.headers["location"] == f"{settings.app_base_url}/docs"
 
 
 async def test_alias_slug_serves_canonical_content_and_redirect(client):
@@ -44,4 +45,4 @@ async def test_alias_slug_serves_canonical_content_and_redirect(client):
     assert markdown_response.headers["content-location"] == "/docs/quickstart"
     assert "# Quickstart" in markdown_response.text
     assert browser_response.status_code == 302
-    assert browser_response.headers["location"] == "/docs/quickstart"
+    assert browser_response.headers["location"] == f"{settings.app_base_url}/docs/quickstart"
