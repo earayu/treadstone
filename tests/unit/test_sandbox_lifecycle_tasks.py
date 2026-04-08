@@ -279,8 +279,8 @@ async def test_auto_delete_uses_db_fallback_without_callback(mock_audit, mock_no
 
     await check_auto_delete(session, delete_callback=None)
 
-    assert sandbox.status == SandboxStatus.DELETING
-    assert sandbox.gmt_deleted is None
+    assert sandbox.status == SandboxStatus.DELETED
+    assert sandbox.gmt_deleted is not None
     session.commit.assert_called_once()
 
 
