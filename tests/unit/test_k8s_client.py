@@ -115,10 +115,25 @@ async def test_create_and_get_sandbox_claim():
     claim = await client.create_sandbox_claim("my-sb", "aio-sandbox-tiny", "treadstone-local")
     assert claim["kind"] == "SandboxClaim"
     assert claim["spec"]["sandboxTemplateRef"]["name"] == "aio-sandbox-tiny"
-    assert claim["status"]["sandbox"]["Name"] == "my-sb"
+    assert claim["status"]["sandbox"]["name"] == "my-sb"
 
     fetched = await client.get_sandbox_claim("my-sb", "treadstone-local")
     assert fetched is not None
+
+
+async def test_simulate_claim_adoption_rekeys_sandbox_and_sets_owner_reference():
+    client = FakeK8sClient()
+    await client.create_sandbox_claim("my-sb", "aio-sandbox-tiny", "treadstone-local")
+
+    client.simulate_claim_adoption("my-sb", "treadstone-local", "aio-sandbox-tiny-pool-7dpvv")
+
+    claim = await client.get_sandbox_claim("my-sb", "treadstone-local")
+    sandbox = await client.get_sandbox("aio-sandbox-tiny-pool-7dpvv", "treadstone-local")
+
+    assert claim["status"]["sandbox"]["name"] == "aio-sandbox-tiny-pool-7dpvv"
+    assert sandbox["metadata"]["name"] == "aio-sandbox-tiny-pool-7dpvv"
+    assert sandbox["metadata"]["ownerReferences"][0]["kind"] == "SandboxClaim"
+    assert sandbox["metadata"]["ownerReferences"][0]["name"] == "my-sb"
 
 
 async def test_create_claim_also_creates_sandbox():

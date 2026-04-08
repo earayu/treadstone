@@ -17,7 +17,7 @@ from treadstone.services.sandbox_lifecycle_tasks import (
     check_idle_auto_stop,
     run_lifecycle_tick,
 )
-from treadstone.services.sync_supervisor import _k8s_delete_sandbox
+from treadstone.services.sync_supervisor import _k8s_delete_sandbox, _k8s_stop_sandbox
 
 FIXED_NOW = datetime(2026, 3, 15, 10, 0, 0, tzinfo=UTC)
 REAL_FIXED_NOW = datetime(2026, 3, 15, 10, 0, 0)
@@ -387,6 +387,49 @@ async def test_auto_delete_k8s_path_stays_trackable_until_watch_finishes(
         sandbox = await session.get(Sandbox, sandbox_id)
         assert sandbox.status == SandboxStatus.DELETED
         assert sandbox.gmt_deleted is not None
+
+
+@patch("treadstone.services.k8s_client.get_k8s_client")
+async def test_k8s_stop_sandbox_uses_actual_adopted_sandbox_name(mock_get_k8s_client):
+    """Lifecycle stop must scale the real adopted Sandbox, not the claim name."""
+    k8s = AsyncMock()
+    mock_get_k8s_client.return_value = k8s
+    sandbox = _make_sandbox(
+        status=SandboxStatus.READY,
+        provision_mode="claim",
+        k8s_sandbox_claim_name="claim-sb",
+        k8s_sandbox_name="aio-sandbox-tiny-pool-7dpvv",
+    )
+
+    await _k8s_stop_sandbox(None, sandbox)
+
+    k8s.scale_sandbox.assert_called_once_with(
+        name="aio-sandbox-tiny-pool-7dpvv",
+        namespace="treadstone-local",
+        replicas=0,
+    )
+
+
+@patch("treadstone.services.k8s_client.get_k8s_client")
+@patch("treadstone.services.sync_supervisor.utc_now", return_value=REAL_FIXED_NOW)
+async def test_k8s_delete_sandbox_claim_path_uses_claim_name_after_adoption(mock_now, mock_get_k8s_client):
+    """Lifecycle delete must delete the SandboxClaim for claim-path sandboxes."""
+    k8s = AsyncMock()
+    mock_get_k8s_client.return_value = k8s
+    session = AsyncMock()
+    session.execute.return_value = Mock(scalar_one_or_none=Mock(return_value=None))
+    session.add = Mock()
+    sandbox = _make_sandbox(
+        status=SandboxStatus.STOPPED,
+        provision_mode="claim",
+        k8s_sandbox_claim_name="claim-sb",
+        k8s_sandbox_name="aio-sandbox-tiny-pool-7dpvv",
+    )
+
+    await _k8s_delete_sandbox(session, sandbox)
+
+    k8s.delete_sandbox_claim.assert_called_once_with(name="claim-sb", namespace="treadstone-local")
+    k8s.delete_sandbox.assert_not_called()
 
 
 # ═══════════════════════════════════════════════════

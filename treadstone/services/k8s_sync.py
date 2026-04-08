@@ -81,18 +81,44 @@ def _reconcile_tried_cr_keys(sandbox: Sandbox) -> str:
     return ", ".join(keys)
 
 
-def _pop_sandbox_cr_for_reconcile(cr_map: dict[str, dict], sandbox: Sandbox) -> dict | None:
+def _sandbox_claim_owner_name(cr: dict) -> str | None:
+    """Return the controlling SandboxClaim name for a Sandbox CR, if present.
+
+    Newer agent-sandbox warm-pool adoption can bind a claim to a Sandbox whose
+    ``metadata.name`` differs from the claim name. In that case the adopted
+    Sandbox uses the claim as its controller owner reference.
+    """
+    for owner_ref in cr.get("metadata", {}).get("ownerReferences", []):
+        if owner_ref.get("kind") == "SandboxClaim" and owner_ref.get("name") and owner_ref.get("controller", True):
+            return owner_ref["name"]
+    return None
+
+
+def _pop_sandbox_cr_for_reconcile(
+    cr_map: dict[str, dict],
+    claim_owner_map: dict[str, str],
+    sandbox: Sandbox,
+) -> dict | None:
     """Pop the Sandbox CR from the List response keyed by ``metadata.name``.
 
     ``handle_watch_event`` matches rows when the event's CR name equals either
     ``k8s_sandbox_name`` or ``k8s_sandbox_claim_name``. Reconcile tries those names in the
     same order, and additionally ``sandbox.id`` when the CR's ``metadata.name`` is the
-    sandbox id (e.g. direct provisioning) — Watch does not query by ``id``, but List keys
-    may still be the id string.
+    sandbox id (e.g. direct provisioning). Warm-pool adoption can also attach a
+    SandboxClaim to a Sandbox with a different name, so reconcile falls back to
+    the Sandbox's controlling claim owner reference as well.
     """
     for k in (sandbox.k8s_sandbox_name, sandbox.k8s_sandbox_claim_name, sandbox.id):
         if k and k in cr_map:
-            return cr_map.pop(k)
+            cr = cr_map.pop(k)
+            claim_owner_name = _sandbox_claim_owner_name(cr)
+            if claim_owner_name:
+                claim_owner_map.pop(claim_owner_name, None)
+            return cr
+    claim_name = sandbox.k8s_sandbox_claim_name
+    if claim_name and claim_name in claim_owner_map:
+        cr_name = claim_owner_map.pop(claim_name)
+        return cr_map.pop(cr_name, None)
     return None
 
 
@@ -145,14 +171,18 @@ async def handle_watch_event(
     cr_name = cr_object.get("metadata", {}).get("name")
     cr_namespace = cr_object.get("metadata", {}).get("namespace", settings.sandbox_namespace)
     cr_rv = cr_object.get("metadata", {}).get("resourceVersion")
+    claim_owner_name = _sandbox_claim_owner_name(cr_object)
 
     if not cr_name:
         return
 
     async with session_factory() as session:
+        name_filters = [Sandbox.k8s_sandbox_name == cr_name, Sandbox.k8s_sandbox_claim_name == cr_name]
+        if claim_owner_name and claim_owner_name != cr_name:
+            name_filters.append(Sandbox.k8s_sandbox_claim_name == claim_owner_name)
         result = await session.execute(
             select(Sandbox).where(
-                ((Sandbox.k8s_sandbox_name == cr_name) | (Sandbox.k8s_sandbox_claim_name == cr_name)),
+                or_(*name_filters),
                 Sandbox.k8s_namespace == cr_namespace,
                 _sync_visible_sandbox_clause(),
             )
@@ -205,7 +235,7 @@ async def handle_watch_event(
             new_status, message = derive_status_from_sandbox_cr(cr_object)
 
             dirty = False
-            if sandbox.k8s_sandbox_name is None:
+            if sandbox.k8s_sandbox_name != cr_name:
                 sandbox.k8s_sandbox_name = cr_name
                 dirty = True
 
@@ -221,6 +251,8 @@ async def handle_watch_event(
             if sandbox.status == new_status:
                 if sandbox.k8s_resource_version != cr_rv:
                     await _update_sync_metadata(session, sandbox.id, cr_rv)
+                    dirty = True
+                if dirty:
                     await session.commit()
                 return
 
@@ -273,10 +305,14 @@ async def reconcile(
     sandbox_crs = list_response.get("items", [])
 
     cr_map: dict[str, dict] = {}
+    claim_owner_map: dict[str, str] = {}
     for cr in sandbox_crs:
         name = cr.get("metadata", {}).get("name")
         if name:
             cr_map[name] = cr
+            claim_owner_name = _sandbox_claim_owner_name(cr)
+            if claim_owner_name:
+                claim_owner_map[claim_owner_name] = name
 
     async with session_factory() as session:
         result = await session.execute(
@@ -285,7 +321,7 @@ async def reconcile(
         sandboxes = result.scalars().all()
 
         for sandbox in sandboxes:
-            cr = _pop_sandbox_cr_for_reconcile(cr_map, sandbox)
+            cr = _pop_sandbox_cr_for_reconcile(cr_map, claim_owner_map, sandbox)
             tried_keys = _reconcile_tried_cr_keys(sandbox)
 
             if cr is None:
@@ -353,6 +389,18 @@ async def reconcile(
                 continue
 
             new_status, message = derive_status_from_sandbox_cr(cr)
+            cr_name = cr.get("metadata", {}).get("name")
+            service_fqdn = cr.get("status", {}).get("serviceFQDN", "")
+            dirty = False
+            if cr_name and sandbox.k8s_sandbox_name != cr_name:
+                sandbox.k8s_sandbox_name = cr_name
+                dirty = True
+            if service_fqdn and sandbox.endpoints.get("service_fqdn") != service_fqdn:
+                sandbox.endpoints = {**sandbox.endpoints, "service_fqdn": service_fqdn}
+                dirty = True
+            if dirty:
+                session.add(sandbox)
+                await session.flush()
 
             # Skip only when both the resource version AND the derived status already
             # match what is stored in the DB.  Checking resource version alone is not
@@ -360,6 +408,8 @@ async def reconcile(
             # failed to update the status (e.g. due to an optimistic-lock conflict or
             # because the transition was previously blocked by the state machine).
             if sandbox.k8s_resource_version == cr_rv and new_status == sandbox.status:
+                if dirty:
+                    await session.commit()
                 continue
 
             if new_status != sandbox.status and is_valid_transition(sandbox.status, new_status):
