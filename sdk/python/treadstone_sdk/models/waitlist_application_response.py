@@ -26,7 +26,6 @@ class WaitlistApplicationResponse:
         company (None | str | Unset):
         github_or_portfolio_url (None | str | Unset):
         use_case (None | str | Unset):
-        user_id (None | str | Unset):
         processed_at (datetime.datetime | None | Unset):
     """
 
@@ -39,7 +38,6 @@ class WaitlistApplicationResponse:
     company: None | str | Unset = UNSET
     github_or_portfolio_url: None | str | Unset = UNSET
     use_case: None | str | Unset = UNSET
-    user_id: None | str | Unset = UNSET
     processed_at: datetime.datetime | None | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -74,12 +72,6 @@ class WaitlistApplicationResponse:
         else:
             use_case = self.use_case
 
-        user_id: None | str | Unset
-        if isinstance(self.user_id, Unset):
-            user_id = UNSET
-        else:
-            user_id = self.user_id
-
         processed_at: None | str | Unset
         if isinstance(self.processed_at, Unset):
             processed_at = UNSET
@@ -106,8 +98,6 @@ class WaitlistApplicationResponse:
             field_dict["github_or_portfolio_url"] = github_or_portfolio_url
         if use_case is not UNSET:
             field_dict["use_case"] = use_case
-        if user_id is not UNSET:
-            field_dict["user_id"] = user_id
         if processed_at is not UNSET:
             field_dict["processed_at"] = processed_at
 
@@ -155,15 +145,6 @@ class WaitlistApplicationResponse:
 
         use_case = _parse_use_case(d.pop("use_case", UNSET))
 
-        def _parse_user_id(data: object) -> None | str | Unset:
-            if data is None:
-                return data
-            if isinstance(data, Unset):
-                return data
-            return cast(None | str | Unset, data)
-
-        user_id = _parse_user_id(d.pop("user_id", UNSET))
-
         def _parse_processed_at(data: object) -> datetime.datetime | None | Unset:
             if data is None:
                 return data
@@ -191,7 +172,6 @@ class WaitlistApplicationResponse:
             company=company,
             github_or_portfolio_url=github_or_portfolio_url,
             use_case=use_case,
-            user_id=user_id,
             processed_at=processed_at,
         )
 

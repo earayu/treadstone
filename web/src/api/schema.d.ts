@@ -2943,11 +2943,6 @@ export interface components {
             /** Use Case */
             use_case?: string | null;
             /**
-             * User Id
-             * @example userabc123
-             */
-            user_id?: string | null;
-            /**
              * Status
              * @example pending
              */

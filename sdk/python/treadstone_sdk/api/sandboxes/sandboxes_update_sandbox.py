@@ -8,19 +8,29 @@ from ... import errors
 from ...client import AuthenticatedClient, Client
 from ...models.http_validation_error import HTTPValidationError
 from ...models.sandbox_detail_response import SandboxDetailResponse
+from ...models.update_sandbox_request import UpdateSandboxRequest
 from ...types import Response
 
 
 def _get_kwargs(
     sandbox_id: str,
+    *,
+    body: UpdateSandboxRequest,
 ) -> dict[str, Any]:
+    headers: dict[str, Any] = {}
+
     _kwargs: dict[str, Any] = {
-        "method": "get",
+        "method": "patch",
         "url": "/v1/sandboxes/{sandbox_id}".format(
             sandbox_id=quote(str(sandbox_id), safe=""),
         ),
     }
 
+    _kwargs["json"] = body.to_dict()
+
+    headers["Content-Type"] = "application/json"
+
+    _kwargs["headers"] = headers
     return _kwargs
 
 
@@ -58,14 +68,14 @@ def sync_detailed(
     sandbox_id: str,
     *,
     client: AuthenticatedClient,
+    body: UpdateSandboxRequest,
 ) -> Response[HTTPValidationError | SandboxDetailResponse]:
-    """Get Sandbox
-
-     Return DB-backed sandbox detail. K8s state is synced by Watch/reconcile only (no read-path K8s API
-    calls).
+    """Update Sandbox
 
     Args:
         sandbox_id (str):
+        body (UpdateSandboxRequest): Partial update for sandbox metadata (control plane).
+            Immutable fields: template, persist, storage.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -77,6 +87,7 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         sandbox_id=sandbox_id,
+        body=body,
     )
 
     response = client.get_httpx_client().request(
@@ -90,14 +101,14 @@ def sync(
     sandbox_id: str,
     *,
     client: AuthenticatedClient,
+    body: UpdateSandboxRequest,
 ) -> HTTPValidationError | SandboxDetailResponse | None:
-    """Get Sandbox
-
-     Return DB-backed sandbox detail. K8s state is synced by Watch/reconcile only (no read-path K8s API
-    calls).
+    """Update Sandbox
 
     Args:
         sandbox_id (str):
+        body (UpdateSandboxRequest): Partial update for sandbox metadata (control plane).
+            Immutable fields: template, persist, storage.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -110,6 +121,7 @@ def sync(
     return sync_detailed(
         sandbox_id=sandbox_id,
         client=client,
+        body=body,
     ).parsed
 
 
@@ -117,14 +129,14 @@ async def asyncio_detailed(
     sandbox_id: str,
     *,
     client: AuthenticatedClient,
+    body: UpdateSandboxRequest,
 ) -> Response[HTTPValidationError | SandboxDetailResponse]:
-    """Get Sandbox
-
-     Return DB-backed sandbox detail. K8s state is synced by Watch/reconcile only (no read-path K8s API
-    calls).
+    """Update Sandbox
 
     Args:
         sandbox_id (str):
+        body (UpdateSandboxRequest): Partial update for sandbox metadata (control plane).
+            Immutable fields: template, persist, storage.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -136,6 +148,7 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         sandbox_id=sandbox_id,
+        body=body,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -147,14 +160,14 @@ async def asyncio(
     sandbox_id: str,
     *,
     client: AuthenticatedClient,
+    body: UpdateSandboxRequest,
 ) -> HTTPValidationError | SandboxDetailResponse | None:
-    """Get Sandbox
-
-     Return DB-backed sandbox detail. K8s state is synced by Watch/reconcile only (no read-path K8s API
-    calls).
+    """Update Sandbox
 
     Args:
         sandbox_id (str):
+        body (UpdateSandboxRequest): Partial update for sandbox metadata (control plane).
+            Immutable fields: template, persist, storage.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -168,5 +181,6 @@ async def asyncio(
         await asyncio_detailed(
             sandbox_id=sandbox_id,
             client=client,
+            body=body,
         )
     ).parsed

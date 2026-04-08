@@ -680,7 +680,6 @@ def _serialize_waitlist_application(app: WaitlistApplication) -> dict:
         "company": app.company,
         "github_or_portfolio_url": app.github_or_portfolio_url,
         "use_case": app.use_case,
-        "user_id": app.user_id,
         "status": app.status,
         "processed_at": app.processed_at,
         "gmt_created": app.gmt_created,
