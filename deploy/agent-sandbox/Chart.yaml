@@ -3,4 +3,4 @@ name: agent-sandbox
 description: Thin Helm wrapper around upstream kubernetes-sigs/agent-sandbox controller
 type: application
 version: 0.1.0
-appVersion: "v0.2.1"
+appVersion: "v0.3.10"
