@@ -3,7 +3,7 @@
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Query, Request, status
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from treadstone.api.deps import get_current_control_plane_user
@@ -25,6 +25,7 @@ from treadstone.core.errors import (
 )
 from treadstone.core.public_base_url import public_control_plane_base_url
 from treadstone.core.request_context import set_request_context
+from treadstone.models.sandbox import Sandbox
 from treadstone.models.sandbox_web_link import SandboxWebLink
 from treadstone.models.user import User, utc_now
 from treadstone.services.audit import record_audit_event
@@ -119,10 +120,48 @@ async def _load_active_web_link(session: AsyncSession, sandbox_id: str) -> Sandb
     result = await session.execute(
         select(SandboxWebLink).where(SandboxWebLink.sandbox_id == sandbox_id, SandboxWebLink.gmt_deleted.is_(None))
     )
-    link = result.scalar_one_or_none()
-    if link is None or link.is_expired():
+    return _normalize_active_web_link(result.scalar_one_or_none())
+
+
+def _normalize_active_web_link(link: SandboxWebLink | None) -> SandboxWebLink | None:
+    if link is None or link.gmt_deleted is not None or link.is_expired():
         return None
     return link
+
+
+async def _get_owned_sandbox_with_web_link_row(
+    session: AsyncSession,
+    sandbox_id: str,
+    owner_id: str,
+) -> tuple[Sandbox | None, SandboxWebLink | None]:
+    result = await session.execute(
+        select(Sandbox, SandboxWebLink)
+        .outerjoin(
+            SandboxWebLink,
+            and_(
+                SandboxWebLink.sandbox_id == Sandbox.id,
+                SandboxWebLink.gmt_deleted.is_(None),
+            ),
+        )
+        .where(
+            Sandbox.id == sandbox_id,
+            Sandbox.owner_id == owner_id,
+            Sandbox.gmt_deleted.is_(None),
+        )
+    )
+    row = result.one_or_none()
+    if row is None:
+        return None, None
+    return row
+
+
+async def _get_owned_sandbox_with_active_web_link(
+    session: AsyncSession,
+    sandbox_id: str,
+    owner_id: str,
+) -> tuple[Sandbox | None, SandboxWebLink | None]:
+    sandbox, link = await _get_owned_sandbox_with_web_link_row(session, sandbox_id, owner_id)
+    return sandbox, _normalize_active_web_link(link)
 
 
 async def _load_active_web_links(session: AsyncSession, sandbox_ids: list[str]) -> dict[str, SandboxWebLink]:
@@ -143,9 +182,13 @@ async def _upsert_web_link(
     session: AsyncSession,
     sandbox,
     user_id: str,
+    *,
+    existing_link: SandboxWebLink | None = None,
 ) -> SandboxWebLink:
-    result = await session.execute(select(SandboxWebLink).where(SandboxWebLink.sandbox_id == sandbox.id))
-    link = result.scalar_one_or_none()
+    link = existing_link
+    if link is None:
+        result = await session.execute(select(SandboxWebLink).where(SandboxWebLink.sandbox_id == sandbox.id))
+        link = result.scalar_one_or_none()
     link_id = build_open_link_token()
 
     if link is None:
@@ -172,10 +215,11 @@ async def _ensure_active_web_link(
     sandbox,
     user_id: str,
 ) -> SandboxWebLink:
-    link = await _load_active_web_link(session, sandbox.id)
+    _, existing_link = await _get_owned_sandbox_with_web_link_row(session, sandbox.id, sandbox.owner_id)
+    link = _normalize_active_web_link(existing_link)
     if link is not None:
         return link
-    return await _upsert_web_link(session, sandbox, user_id)
+    return await _upsert_web_link(session, sandbox, user_id, existing_link=existing_link)
 
 
 def _parse_label_filters(labels: list[str]) -> dict[str, str]:
@@ -282,12 +326,10 @@ async def get_sandbox(
     session: AsyncSession = Depends(get_session),
 ):
     """Return DB-backed sandbox detail. K8s state is synced by Watch/reconcile only (no read-path K8s API calls)."""
-    service = SandboxService(session=session)
-    sandbox = await service.get(sandbox_id=sandbox_id, owner_id=user.id)
+    sandbox, web_link = await _get_owned_sandbox_with_active_web_link(session, sandbox_id, user.id)
     if sandbox is None:
         raise SandboxNotFoundError(sandbox_id)
     set_request_context(request, sandbox_id=sandbox.id)
-    web_link = await _load_active_web_link(session, sandbox.id) if settings.sandbox_domain else None
     return _to_detail(sandbox, public_control_plane_base_url(request), web_link)
 
 
@@ -389,16 +431,15 @@ async def create_sandbox_web_link(
     user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
 ):
-    service = SandboxService(session=session)
-    sandbox = await service.get(sandbox_id=sandbox_id, owner_id=user.id)
+    sandbox, existing_link = await _get_owned_sandbox_with_web_link_row(session, sandbox_id, user.id)
     if sandbox is None:
         raise SandboxNotFoundError(sandbox_id)
     set_request_context(request, sandbox_id=sandbox.id)
 
     web_url = _get_web_url(sandbox, public_control_plane_base_url(request))
-    link = await _load_active_web_link(session, sandbox.id)
+    link = _normalize_active_web_link(existing_link)
     if link is None:
-        link = await _upsert_web_link(session, sandbox, user.id)
+        link = await _upsert_web_link(session, sandbox, user.id, existing_link=existing_link)
         await record_audit_event(
             session,
             action="sandbox.web_link.create",
@@ -422,14 +463,12 @@ async def get_sandbox_web_link(
     user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
 ):
-    service = SandboxService(session=session)
-    sandbox = await service.get(sandbox_id=sandbox_id, owner_id=user.id)
+    sandbox, link = await _get_owned_sandbox_with_active_web_link(session, sandbox_id, user.id)
     if sandbox is None:
         raise SandboxNotFoundError(sandbox_id)
     set_request_context(request, sandbox_id=sandbox.id)
 
     web_url = _get_web_url(sandbox, public_control_plane_base_url(request))
-    link = await _load_active_web_link(session, sandbox.id)
     if link is None:
         return {"web_url": web_url, "enabled": False, "expires_at": None, "last_used_at": None}
     return {
@@ -447,16 +486,11 @@ async def delete_sandbox_web_link(
     user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
 ):
-    service = SandboxService(session=session)
-    sandbox = await service.get(sandbox_id=sandbox_id, owner_id=user.id)
+    sandbox, link = await _get_owned_sandbox_with_active_web_link(session, sandbox_id, user.id)
     if sandbox is None:
         raise SandboxNotFoundError(sandbox_id)
     set_request_context(request, sandbox_id=sandbox.id)
 
-    result = await session.execute(
-        select(SandboxWebLink).where(SandboxWebLink.sandbox_id == sandbox.id, SandboxWebLink.gmt_deleted.is_(None))
-    )
-    link = result.scalar_one_or_none()
     if link is not None:
         link.gmt_deleted = utc_now()
         link.gmt_updated = utc_now()

@@ -223,6 +223,32 @@ async def test_google_callback_provider_denied_redirects_back_to_browser_login(d
 
 
 @pytest.mark.asyncio
+async def test_google_callback_preserves_fragment_in_browser_return_to(db_session, monkeypatch):
+    _enable_browser_flow(monkeypatch)
+    client = FakeOAuthClient("google")
+    monkeypatch.setattr(auth_api, "get_google_oauth_client", lambda: client, raising=False)
+
+    return_to = "https://sandbox-demo.sandbox.localhost/workbench?tab=preview#cell-9"
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
+        authorize = await http_client.get(
+            "/v1/auth/google/authorize",
+            params={"return_to": return_to},
+            follow_redirects=False,
+        )
+        state = _extract_state(authorize.headers["location"])
+        callback = await http_client.get(
+            "/v1/auth/google/callback",
+            params={"code": "oauth-code", "state": state},
+            follow_redirects=False,
+        )
+
+    assert callback.status_code == 303
+    assert callback.headers["location"].startswith("/v1/browser/bootstrap?")
+    assert parse_qs(urlparse(callback.headers["location"]).query)["return_to"] == [return_to]
+
+
+@pytest.mark.asyncio
 async def test_google_callback_invalid_state_returns_treadstone_error(db_session, monkeypatch):
     monkeypatch.setattr(auth_api.settings, "app_base_url", "http://test")
     client = FakeOAuthClient("google")
