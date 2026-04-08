@@ -183,7 +183,12 @@ async def test_exchange_rejects_stale_approved_view_when_flow_was_already_used(d
 
         await http_client.post(
             "/v1/auth/cli/login",
-            data={"email": "u@b.com", "password": "Pass123!", "flow_id": flow["flow_id"]},
+            data={
+                "email": "u@b.com",
+                "password": "Pass123!",
+                "flow_id": flow["flow_id"],
+                "flow_secret": flow["flow_secret"],
+            },
         )
 
     async with _test_session_factory() as session:
@@ -596,6 +601,7 @@ async def test_session_based_approve_rejects_stale_pending_view(db_session, monk
         resp = await http_client.post(
             f"/v1/auth/cli/flows/{flow['flow_id']}/approve",
             cookies={"session": session_cookie},
+            headers={"X-Flow-Secret": flow["flow_secret"]},
         )
 
     assert resp.status_code == 400
