@@ -56,6 +56,8 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
+      pages: write
+      id-token: write
 
     steps:
       - name: Resolve checkout ref
@@ -192,6 +194,47 @@ jobs:
           name: e2e-report-${{ github.run_id }}
           path: reports/e2e/
           if-no-files-found: ignore
+
+      - name: Decide if GitHub Pages can be published
+        id: pages_meta
+        if: always()
+        run: |
+          if [ -f reports/e2e/index.html ] && [ -d reports/e2e/store ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure GitHub Pages
+        if: always() && steps.pages_meta.outputs.ready == 'true'
+        uses: actions/configure-pages@v5
+
+      - name: Upload E2E report to GitHub Pages artifact
+        if: always() && steps.pages_meta.outputs.ready == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: reports/e2e/
+
+      - name: Deploy E2E report to GitHub Pages
+        id: deployment
+        if: always() && steps.pages_meta.outputs.ready == 'true'
+        uses: actions/deploy-pages@v4
+        environment: github-pages
+
+      - name: E2E report GitHub Pages summary
+        if: always() && steps.pages_meta.outputs.ready == 'true'
+        run: |
+          {
+            echo "## E2E HTML report (GitHub Pages)"
+            echo ""
+            if [ -n "${{ steps.deployment.outputs.page_url }}" ]; then
+              echo "Published: ${{ steps.deployment.outputs.page_url }}"
+            else
+              echo "Expected URL: \`https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/\`"
+            fi
+            echo ""
+            echo "Workflow run: ${{ github.run_id }} (attempt ${{ github.run_attempt }})"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Collect diagnostics
         if: failure()

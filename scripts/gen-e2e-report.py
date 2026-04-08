@@ -19,36 +19,59 @@ from pathlib import Path
 
 # ── Parsing ────────────────────────────────────────────────────────────────────
 
+# Hurl 5.x: detail HTML lives under report_dir/store/; index links use store/<uuid>-*.html.
+# Some versions or merges may omit data-timestamp; treat as 0 so rows still group.
+_TR_RE = re.compile(r"<tr(?:\s[^>]*)?>.*?</tr>", re.DOTALL)
+
+_SOURCE_HREF_RES = (
+    re.compile(r'href="(store/[^"]+source\.html)"'),
+    re.compile(r'href="([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}-source\.html)"'),
+)
+
+_TIMELINE_HREF_RES = (
+    re.compile(r'href="(store/[^"]+timeline\.html)"'),
+    re.compile(r'href="([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}-timeline\.html)"'),
+)
+
+
+def _first_href(cell: str, patterns: tuple[re.Pattern[str], ...]) -> str:
+    for pat in patterns:
+        m = pat.search(cell)
+        if m:
+            return m.group(1)
+    return ""
+
 
 def parse_rows(html: str) -> list[dict]:
     rows = []
-    for tr_match in re.finditer(r"<tr\s[^>]+>.*?</tr>", html, re.DOTALL):
+    for tr_match in _TR_RE.finditer(html):
         tr = tr_match.group()
 
         def attr(name: str) -> str:
             m = re.search(rf'data-{name}="([^"]+)"', tr)
             return m.group(1) if m else ""
 
-        timestamp = attr("timestamp")
-        if not timestamp:
-            continue
+        ts_raw = attr("timestamp")
+        timestamp = int(ts_raw) if ts_raw != "" else 0
 
         cells = re.findall(r"<td[^>]*>(.*?)</td>", tr, re.DOTALL)
         if len(cells) < 4:
             continue
 
-        src_m = re.search(r'href="(store/[^"]+source\.html)"', cells[0])
-        tl_m = re.search(r'href="(store/[^"]+timeline\.html)"', cells[1])
+        source_href = _first_href(cells[0], _SOURCE_HREF_RES)
+        timeline_href = _first_href(cells[1], _TIMELINE_HREF_RES)
+        if not source_href or not timeline_href:
+            continue
 
         rows.append(
             {
-                "timestamp": int(timestamp),
+                "timestamp": timestamp,
                 "status": attr("status"),
                 "filename": attr("filename"),
                 "short_name": Path(attr("filename")).name,
                 "duration_ms": int(attr("duration") or 0),
-                "source_href": src_m.group(1) if src_m else "",
-                "timeline_href": tl_m.group(1) if tl_m else "",
+                "source_href": source_href,
+                "timeline_href": timeline_href,
                 "start_time": re.sub(r"<[^>]+>", "", cells[2]).strip(),
                 "duration_s": re.sub(r"<[^>]+>", "", cells[3]).strip(),
             }
@@ -444,9 +467,10 @@ def main() -> None:
         print(f"[gen-e2e-report] Nothing to do: {index} not found", file=sys.stderr)
         sys.exit(0)
 
-    rows = parse_rows(index.read_text(encoding="utf-8"))
+    raw = index.read_text(encoding="utf-8")
+    rows = parse_rows(raw)
     if not rows:
-        print("[gen-e2e-report] No test rows found in report.", file=sys.stderr)
+        print("[gen-e2e-report] No test rows found in report (keeping Hurl index.html unchanged).", file=sys.stderr)
         sys.exit(0)
 
     index.write_text(render(rows), encoding="utf-8")
