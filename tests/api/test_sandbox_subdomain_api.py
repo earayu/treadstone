@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import UTC, datetime
 from io import StringIO
 from unittest.mock import AsyncMock, patch
 from urllib.parse import parse_qs, urlparse
@@ -129,6 +130,62 @@ async def _create_ready_sandbox(auth_client: AsyncClient, name: str = "mybox") -
     return sandbox_id
 
 
+async def _set_sandbox_last_active(sandbox_id: str, when: datetime | None) -> None:
+    async with _test_session_factory() as session:
+        sandbox = await session.get(Sandbox, sandbox_id)
+        sandbox.gmt_last_active = when
+        session.add(sandbox)
+        await session.commit()
+
+
+async def _get_sandbox_last_active(sandbox_id: str) -> datetime | None:
+    async with _test_session_factory() as session:
+        sandbox = await session.get(Sandbox, sandbox_id)
+        return sandbox.gmt_last_active
+
+
+def _assert_timestamp_advanced(updated: datetime | None, previous: datetime) -> None:
+    assert updated is not None
+    if updated.tzinfo is None:
+        updated = updated.replace(tzinfo=UTC)
+    assert updated > previous
+
+
+def _make_ws_scope(path: str, headers: list[tuple[bytes, bytes]], query_string: bytes = b"") -> dict:
+    return {
+        "type": "websocket",
+        "path": path,
+        "raw_path": path.encode(),
+        "root_path": "",
+        "scheme": "ws",
+        "query_string": query_string,
+        "headers": headers,
+        "subprotocols": [],
+        "extensions": {},
+        "state": {},
+    }
+
+
+async def _run_ws_asgi(scope: dict) -> list[dict]:
+    import asyncio
+
+    sends: list[dict] = []
+    connected = False
+
+    async def receive():
+        nonlocal connected
+        if not connected:
+            connected = True
+            return {"type": "websocket.connect"}
+        await asyncio.sleep(999)
+
+    async def send_fn(msg: dict) -> None:
+        sends.append(msg)
+
+    await app(scope, receive, send_fn)
+    return sends
+
+
 class TestSubdomainDisabled:
     async def test_normal_routes_work_when_disabled(self, db_session, monkeypatch):
         monkeypatch.setenv("TREADSTONE_SANDBOX_DOMAIN", "")
@@ -200,6 +257,27 @@ class TestSubdomainRouting:
         cookie_header = {k.lower(): v for k, v in captured["headers"].items()}.get("cookie", "")
         assert "ts_bui=" not in cookie_header
 
+    async def test_bootstrap_ticket_refreshes_last_active(self, auth_client: AsyncClient, monkeypatch):
+        _enable_subdomain(monkeypatch)
+        sandbox_id = await _create_ready_sandbox(auth_client, name="bootstrap-activity")
+        previous = datetime(2026, 3, 15, 9, 0, 0, tzinfo=UTC)
+        await _set_sandbox_last_active(sandbox_id, previous)
+
+        first_hop = await auth_client.get(
+            f"https://sandbox-{sandbox_id}.sandbox.localhost/",
+            follow_redirects=False,
+        )
+        assert first_hop.status_code == 303
+
+        bootstrap = await auth_client.get(first_hop.headers["location"], follow_redirects=False)
+        assert bootstrap.status_code == 303
+
+        open_hop = await auth_client.get(bootstrap.headers["location"], follow_redirects=False)
+        assert open_hop.status_code == 303
+
+        updated = await _get_sandbox_last_active(sandbox_id)
+        _assert_timestamp_advanced(updated, previous)
+
     async def test_open_link_allows_unauthenticated_browser_access(self, auth_client: AsyncClient, monkeypatch):
         _enable_subdomain(monkeypatch)
         sandbox_id = await _create_ready_sandbox(auth_client)
@@ -234,6 +312,58 @@ class TestSubdomainRouting:
         assert len(events) == 1
         assert events[0].result == "success"
         assert events[0].target_id == sandbox_id
+
+    async def test_subdomain_http_proxy_refreshes_last_active(self, auth_client: AsyncClient, monkeypatch):
+        _enable_subdomain(monkeypatch)
+        sandbox_id = await _create_ready_sandbox(auth_client, name="http-activity")
+        previous = datetime(2026, 3, 15, 9, 0, 0, tzinfo=UTC)
+        await _set_sandbox_last_active(sandbox_id, previous)
+
+        from treadstone.services.browser_auth import issue_sandbox_web_cookie
+
+        cookie_val = issue_sandbox_web_cookie(sandbox_id=sandbox_id, issued_via="test")
+        mock_client, _ = _capture_mock()
+
+        with patch("treadstone.services.sandbox_proxy._http_client", mock_client):
+            with patch("treadstone.middleware.sandbox_subdomain.get_http_client", return_value=mock_client):
+                async with AsyncClient(transport=ASGITransport(app=app), base_url="https://app.localhost") as browser:
+                    browser.cookies.set(
+                        "ts_bui",
+                        cookie_val,
+                        domain=f"sandbox-{sandbox_id}.sandbox.localhost",
+                        path="/",
+                    )
+                    resp = await browser.get(f"https://sandbox-{sandbox_id}.sandbox.localhost/", follow_redirects=False)
+
+        assert resp.status_code == 200
+        updated = await _get_sandbox_last_active(sandbox_id)
+        _assert_timestamp_advanced(updated, previous)
+
+    async def test_subdomain_websocket_refreshes_last_active(self, auth_client: AsyncClient, monkeypatch):
+        _enable_subdomain(monkeypatch)
+        sandbox_id = await _create_ready_sandbox(auth_client, name="ws-activity")
+        previous = datetime(2026, 3, 15, 9, 0, 0, tzinfo=UTC)
+        await _set_sandbox_last_active(sandbox_id, previous)
+
+        from treadstone.services.browser_auth import issue_sandbox_web_cookie
+
+        cookie_val = issue_sandbox_web_cookie(sandbox_id=sandbox_id, issued_via="test")
+        headers = [
+            (b"host", f"sandbox-{sandbox_id}.sandbox.localhost".encode()),
+            (b"cookie", f"ts_bui={cookie_val}".encode()),
+        ]
+        scope = _make_ws_scope("/", headers=headers)
+
+        async def capturing_proxy_websocket(**kwargs):
+            return None
+
+        with patch("treadstone.middleware.sandbox_subdomain.proxy_websocket", side_effect=capturing_proxy_websocket):
+            sends = await _run_ws_asgi(scope)
+
+        accept_msgs = [msg for msg in sends if msg.get("type") == "websocket.accept"]
+        assert accept_msgs
+        updated = await _get_sandbox_last_active(sandbox_id)
+        _assert_timestamp_advanced(updated, previous)
 
     async def test_enabling_existing_web_link_returns_same_link(self, auth_client: AsyncClient, monkeypatch):
         _enable_subdomain(monkeypatch)
