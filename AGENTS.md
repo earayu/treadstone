@@ -184,4 +184,4 @@ Run `make help` for the full list. Key commands:
 
 ## Cursor Cloud specific instructions
 
-See [`.agents/cursor-cloud.md`](.agents/cursor-cloud.md) for the full guide. Key points: K8s is unavailable (cgroupv2 limitation); use `make test` + `make lint` locally and rely on GitHub Actions `K8s E2E` workflow for full-stack validation.
+See [`.cursor/cursor-cloud.md`](.cursor/cursor-cloud.md) for the full guide. Key points: K8s is unavailable (cgroupv2 limitation); use `make test` + `make lint` locally and rely on GitHub Actions `K8s E2E` workflow for full-stack validation.
