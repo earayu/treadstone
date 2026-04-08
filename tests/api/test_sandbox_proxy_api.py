@@ -1,12 +1,13 @@
 """API tests for the sandbox proxy router at /v1/sandboxes/{id}/proxy/."""
 
+from contextlib import contextmanager
 from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
 from fastapi_users.db import SQLAlchemyUserDatabase
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from treadstone.core.database import Base, get_session
@@ -15,12 +16,28 @@ from treadstone.main import app
 from treadstone.models.user import OAuthAccount, User
 
 _test_session_factory = None
+_test_engine = None
+
+
+@contextmanager
+def _capture_sql():
+    statements: list[str] = []
+
+    def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    event.listen(_test_engine.sync_engine, "before_cursor_execute", before_cursor_execute)
+    try:
+        yield statements
+    finally:
+        event.remove(_test_engine.sync_engine, "before_cursor_execute", before_cursor_execute)
 
 
 @pytest.fixture
 async def db_session():
-    global _test_session_factory
+    global _test_engine, _test_session_factory
     test_engine = create_async_engine("sqlite+aiosqlite://", echo=False)
+    _test_engine = test_engine
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
@@ -47,6 +64,7 @@ async def db_session():
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
     await test_engine.dispose()
+    _test_engine = None
 
 
 @pytest.fixture
@@ -446,3 +464,46 @@ async def test_proxy_ws_token_param_auth(auth_client, monkeypatch):
     assert "token=" not in upstream_path
     # other query params must survive
     assert "sessionId=xyz" in upstream_path
+
+
+async def test_proxy_selected_scope_hits_single_grant_lookup(auth_client):
+    create_resp = await auth_client.post(
+        "/v1/sandboxes",
+        json={"template": "aio-sandbox-tiny", "name": "proxy-selected-query-shape"},
+    )
+    sandbox_id = create_resp.json()["id"]
+
+    async with _test_session_factory() as session:
+        from treadstone.models.sandbox import Sandbox
+
+        sb = await session.get(Sandbox, sandbox_id)
+        sb.status = "ready"
+        session.add(sb)
+        await session.commit()
+
+    key_resp = await auth_client.post(
+        "/v1/auth/api-keys",
+        json={
+            "name": "proxy-selected-query-shape",
+            "scope": {
+                "control_plane": False,
+                "data_plane": {"mode": "selected", "sandbox_ids": [sandbox_id]},
+            },
+        },
+    )
+    api_key = key_resp.json()["key"]
+    mock_client = _mock_upstream(body=b'{"selected": true}', headers={"content-type": "application/json"})
+
+    with patch("treadstone.services.sandbox_proxy._http_client", mock_client):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            with _capture_sql() as statements:
+                resp = await client.get(
+                    f"/v1/sandboxes/{sandbox_id}/proxy/healthz",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                )
+
+    assert resp.status_code == 200
+    selects = [statement for statement in statements if statement.lstrip().upper().startswith("SELECT")]
+    assert len(selects) == 3
+    grant_selects = [statement for statement in selects if "api_key_sandbox_grant" in statement]
+    assert len(grant_selects) == 1

@@ -546,6 +546,18 @@ class SandboxService:
                 sandbox_id,
                 sandbox.status_message,
             )
+            return sandbox
+
+        if self._metering is not None:
+            try:
+                await self._metering.close_compute_session(self.session, sandbox.id)
+                await self.session.commit()
+            except Exception:
+                await self.session.rollback()
+                logger.exception(
+                    "Failed to close compute session after stopping sandbox %s; reconcile will repair it",
+                    sandbox_id,
+                )
 
         return sandbox
 
