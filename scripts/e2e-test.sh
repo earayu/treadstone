@@ -131,7 +131,11 @@ if [ -n "$TARGET_FILE" ]; then
         hurl_cmd+=(--jobs "$HURL_JOBS")
     fi
     hurl_cmd+=(--report-html "$REPORT_DIR" "$E2E_DIR/$TARGET_FILE")
+    # Do not let hurl failure skip post-process: styled report must run for GitHub Pages even when tests fail.
+    set +e
     "${hurl_cmd[@]}"
+    hurl_status=$?
+    set -e
 else
     hurl_files=()
     while IFS= read -r f; do
@@ -148,7 +152,10 @@ else
     fi
     hurl_cmd+=(--report-html "$REPORT_DIR")
     hurl_cmd+=("${hurl_files[@]}")
+    set +e
     "${hurl_cmd[@]}"
+    hurl_status=$?
+    set -e
 fi
 
 # ── Post-process: group by run, improve visual design ────────────────────────
@@ -156,3 +163,4 @@ fi
 python3 "$ROOT_DIR/scripts/gen-e2e-report.py" "$REPORT_DIR"
 
 printf "\nHTML report: %s/index.html\n" "$REPORT_DIR"
+exit "${hurl_status:-0}"
