@@ -90,6 +90,15 @@ class StorageBackendNotReadyError(TreadstoneError):
         )
 
 
+class SandboxTemplateCatalogUnavailableError(TreadstoneError):
+    def __init__(self, message: str = "Sandbox template catalog is temporarily unavailable."):
+        super().__init__(
+            code="sandbox_template_catalog_unavailable",
+            message=message,
+            status=503,
+        )
+
+
 class SandboxNameConflictError(TreadstoneError):
     def __init__(self, name: str):
         super().__init__(
