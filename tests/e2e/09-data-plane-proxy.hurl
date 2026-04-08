@@ -73,11 +73,12 @@ sandbox_id: jsonpath "$.id"
 
 
 # ── Wait until ready (async provisioning) ───────────────────────────────────
+# CI / loaded clusters may keep status "creating" longer than ~60s; allow ~3 min.
 
 GET {{base_url}}/v1/sandboxes/{{sandbox_id}}
 Authorization: Bearer {{api_key}}
 [Options]
-retry: 30
+retry: 90
 retry-interval: 2s
 HTTP 200
 [Asserts]
