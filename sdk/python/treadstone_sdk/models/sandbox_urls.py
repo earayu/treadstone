@@ -16,16 +16,21 @@ class SandboxUrls:
     """
     Attributes:
         proxy (str):
+        mcp (str): MCP server endpoint. Connect MCP clients (Cursor, Claude Desktop, scripts) directly to this URL.
+            Authenticates via API key header.
         web (None | str | Unset): Recommended browser entry URL. When a sandbox web link is enabled, this is the
             shareable hand-off URL.
     """
 
     proxy: str
+    mcp: str
     web: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         proxy = self.proxy
+
+        mcp = self.mcp
 
         web: None | str | Unset
         if isinstance(self.web, Unset):
@@ -38,6 +43,7 @@ class SandboxUrls:
         field_dict.update(
             {
                 "proxy": proxy,
+                "mcp": mcp,
             }
         )
         if web is not UNSET:
@@ -50,6 +56,8 @@ class SandboxUrls:
         d = dict(src_dict)
         proxy = d.pop("proxy")
 
+        mcp = d.pop("mcp")
+
         def _parse_web(data: object) -> None | str | Unset:
             if data is None:
                 return data
@@ -61,6 +69,7 @@ class SandboxUrls:
 
         sandbox_urls = cls(
             proxy=proxy,
+            mcp=mcp,
             web=web,
         )
 

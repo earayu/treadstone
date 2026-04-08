@@ -67,7 +67,7 @@ def sync_detailed(
 ) -> Response[CreateFeedbackResponse | HTTPValidationError]:
     """Create Feedback
 
-     Submit support or product feedback (requires login).
+     Submit support or product feedback from an interactive browser session.
 
     Args:
         body (CreateFeedbackRequest):
@@ -98,7 +98,7 @@ def sync(
 ) -> CreateFeedbackResponse | HTTPValidationError | None:
     """Create Feedback
 
-     Submit support or product feedback (requires login).
+     Submit support or product feedback from an interactive browser session.
 
     Args:
         body (CreateFeedbackRequest):
@@ -124,7 +124,7 @@ async def asyncio_detailed(
 ) -> Response[CreateFeedbackResponse | HTTPValidationError]:
     """Create Feedback
 
-     Submit support or product feedback (requires login).
+     Submit support or product feedback from an interactive browser session.
 
     Args:
         body (CreateFeedbackRequest):
@@ -153,7 +153,7 @@ async def asyncio(
 ) -> CreateFeedbackResponse | HTTPValidationError | None:
     """Create Feedback
 
-     Submit support or product feedback (requires login).
+     Submit support or product feedback from an interactive browser session.
 
     Args:
         body (CreateFeedbackRequest):

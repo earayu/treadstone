@@ -78,6 +78,8 @@ from .tier_template_list_response import TierTemplateListResponse
 from .update_api_key_request import UpdateApiKeyRequest
 from .update_plan_request import UpdatePlanRequest
 from .update_plan_request_overrides_type_0 import UpdatePlanRequestOverridesType0
+from .update_sandbox_request import UpdateSandboxRequest
+from .update_sandbox_request_labels_type_0 import UpdateSandboxRequestLabelsType0
 from .update_tier_template_request import UpdateTierTemplateRequest
 from .update_tier_template_response import UpdateTierTemplateResponse
 from .update_user_status_request import UpdateUserStatusRequest
@@ -177,6 +179,8 @@ __all__ = (
     "UpdateApiKeyRequest",
     "UpdatePlanRequest",
     "UpdatePlanRequestOverridesType0",
+    "UpdateSandboxRequest",
+    "UpdateSandboxRequestLabelsType0",
     "UpdateTierTemplateRequest",
     "UpdateTierTemplateResponse",
     "UpdateUserStatusRequest",

@@ -8,12 +8,18 @@ from ... import errors
 from ...client import AuthenticatedClient, Client
 from ...models.auth_approve_cli_flow_response_auth_approve_cli_flow import AuthApproveCliFlowResponseAuthApproveCliFlow
 from ...models.http_validation_error import HTTPValidationError
-from ...types import Response
+from ...types import UNSET, Response, Unset
 
 
 def _get_kwargs(
     flow_id: str,
+    *,
+    x_flow_secret: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
+    headers: dict[str, Any] = {}
+    if not isinstance(x_flow_secret, Unset):
+        headers["x-flow-secret"] = x_flow_secret
+
     _kwargs: dict[str, Any] = {
         "method": "post",
         "url": "/v1/auth/cli/flows/{flow_id}/approve".format(
@@ -21,6 +27,7 @@ def _get_kwargs(
         ),
     }
 
+    _kwargs["headers"] = headers
     return _kwargs
 
 
@@ -58,6 +65,7 @@ def sync_detailed(
     flow_id: str,
     *,
     client: AuthenticatedClient,
+    x_flow_secret: None | str | Unset = UNSET,
 ) -> Response[AuthApproveCliFlowResponseAuthApproveCliFlow | HTTPValidationError]:
     """Approve Cli Flow
 
@@ -65,6 +73,7 @@ def sync_detailed(
 
     Args:
         flow_id (str):
+        x_flow_secret (None | str | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -76,6 +85,7 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         flow_id=flow_id,
+        x_flow_secret=x_flow_secret,
     )
 
     response = client.get_httpx_client().request(
@@ -89,6 +99,7 @@ def sync(
     flow_id: str,
     *,
     client: AuthenticatedClient,
+    x_flow_secret: None | str | Unset = UNSET,
 ) -> AuthApproveCliFlowResponseAuthApproveCliFlow | HTTPValidationError | None:
     """Approve Cli Flow
 
@@ -96,6 +107,7 @@ def sync(
 
     Args:
         flow_id (str):
+        x_flow_secret (None | str | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -108,6 +120,7 @@ def sync(
     return sync_detailed(
         flow_id=flow_id,
         client=client,
+        x_flow_secret=x_flow_secret,
     ).parsed
 
 
@@ -115,6 +128,7 @@ async def asyncio_detailed(
     flow_id: str,
     *,
     client: AuthenticatedClient,
+    x_flow_secret: None | str | Unset = UNSET,
 ) -> Response[AuthApproveCliFlowResponseAuthApproveCliFlow | HTTPValidationError]:
     """Approve Cli Flow
 
@@ -122,6 +136,7 @@ async def asyncio_detailed(
 
     Args:
         flow_id (str):
+        x_flow_secret (None | str | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -133,6 +148,7 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         flow_id=flow_id,
+        x_flow_secret=x_flow_secret,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -144,6 +160,7 @@ async def asyncio(
     flow_id: str,
     *,
     client: AuthenticatedClient,
+    x_flow_secret: None | str | Unset = UNSET,
 ) -> AuthApproveCliFlowResponseAuthApproveCliFlow | HTTPValidationError | None:
     """Approve Cli Flow
 
@@ -151,6 +168,7 @@ async def asyncio(
 
     Args:
         flow_id (str):
+        x_flow_secret (None | str | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -164,5 +182,6 @@ async def asyncio(
         await asyncio_detailed(
             flow_id=flow_id,
             client=client,
+            x_flow_secret=x_flow_secret,
         )
     ).parsed
