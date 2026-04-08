@@ -94,6 +94,7 @@ def _make_plan(
     tier: str = "pro",
     monthly_limit: Decimal = Decimal("100"),
     monthly_used: Decimal = Decimal("0"),
+    compute_units_overage: Decimal = Decimal("0"),
     grace_period_seconds: int = 1800,
     grace_period_started_at: datetime | None = None,
     warning_80_notified_at: datetime | None = None,
@@ -115,6 +116,7 @@ def _make_plan(
         warning_100_notified_at=warning_100_notified_at,
         period_start=datetime(2026, 3, 1, 0, 0, 0, tzinfo=UTC),
         period_end=period_end or datetime(2026, 4, 1, 0, 0, 0, tzinfo=UTC),
+        compute_units_overage=compute_units_overage,
     )
 
 
@@ -169,6 +171,14 @@ class _MockDistinct:
 
     def all(self):
         return [(i,) for i in self._items]
+
+
+class _MockRows:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def all(self):
+        return self._rows
 
 
 def _make_tick_session(open_sessions, update_rowcount=1, capture_update_stmts: list | None = None):
@@ -416,20 +426,28 @@ class TestCheckWarningThresholds:
         plan = _make_plan(monthly_limit=Decimal("100"), monthly_used=Decimal("85"))
 
         session = AsyncMock()
-        session.execute = AsyncMock(return_value=_MockDistinct(["user_01"]))
+        execute_results = [
+            _MockDistinct(["user_01"]),
+            _MockScalars([plan]),
+            _MockRows([("user_01", Decimal("0"))]),
+        ]
+        session.execute = AsyncMock(side_effect=execute_results)
         session.add = MagicMock()
         session.commit = AsyncMock()
 
         with patch("treadstone.services.metering_tasks._metering") as mock_metering:
-            mock_metering.get_user_plan = AsyncMock(return_value=plan)
-            mock_metering.get_total_compute_remaining = AsyncMock(return_value=Decimal("15"))
-            mock_metering.get_extra_compute_remaining = AsyncMock(return_value=Decimal("0"))
+            mock_metering.get_user_plan = AsyncMock()
+            mock_metering.get_total_compute_remaining = AsyncMock()
+            mock_metering.get_extra_compute_remaining = AsyncMock()
             with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
                 mock_audit.return_value = MagicMock()
                 await check_warning_thresholds(session)
 
                 mock_audit.assert_awaited_once()
                 assert mock_audit.call_args.kwargs["action"] == "metering.compute_warning_80"
+            mock_metering.get_user_plan.assert_not_awaited()
+            mock_metering.get_total_compute_remaining.assert_not_awaited()
+            mock_metering.get_extra_compute_remaining.assert_not_awaited()
 
         assert plan.warning_80_notified_at is not None
 
@@ -440,20 +458,28 @@ class TestCheckWarningThresholds:
         plan = _make_plan(monthly_limit=Decimal("100"), monthly_used=Decimal("100"))
 
         session = AsyncMock()
-        session.execute = AsyncMock(return_value=_MockDistinct(["user_01"]))
+        execute_results = [
+            _MockDistinct(["user_01"]),
+            _MockScalars([plan]),
+            _MockRows([("user_01", Decimal("0"))]),
+        ]
+        session.execute = AsyncMock(side_effect=execute_results)
         session.add = MagicMock()
         session.commit = AsyncMock()
 
         with patch("treadstone.services.metering_tasks._metering") as mock_metering:
-            mock_metering.get_user_plan = AsyncMock(return_value=plan)
-            mock_metering.get_total_compute_remaining = AsyncMock(return_value=Decimal("-5"))
-            mock_metering.get_extra_compute_remaining = AsyncMock(return_value=Decimal("0"))
+            mock_metering.get_user_plan = AsyncMock()
+            mock_metering.get_total_compute_remaining = AsyncMock()
+            mock_metering.get_extra_compute_remaining = AsyncMock()
             with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
                 mock_audit.return_value = MagicMock()
                 await check_warning_thresholds(session)
 
                 mock_audit.assert_awaited_once()
                 assert mock_audit.call_args.kwargs["action"] == "metering.compute_warning_100"
+            mock_metering.get_user_plan.assert_not_awaited()
+            mock_metering.get_total_compute_remaining.assert_not_awaited()
+            mock_metering.get_extra_compute_remaining.assert_not_awaited()
 
         assert plan.warning_100_notified_at is not None
 
@@ -468,14 +494,19 @@ class TestCheckWarningThresholds:
         )
 
         session = AsyncMock()
-        session.execute = AsyncMock(return_value=_MockDistinct(["user_01"]))
+        execute_results = [
+            _MockDistinct(["user_01"]),
+            _MockScalars([plan]),
+            _MockRows([("user_01", Decimal("0"))]),
+        ]
+        session.execute = AsyncMock(side_effect=execute_results)
         session.add = MagicMock()
         session.commit = AsyncMock()
 
         with patch("treadstone.services.metering_tasks._metering") as mock_metering:
-            mock_metering.get_user_plan = AsyncMock(return_value=plan)
-            mock_metering.get_total_compute_remaining = AsyncMock(return_value=Decimal("15"))
-            mock_metering.get_extra_compute_remaining = AsyncMock(return_value=Decimal("0"))
+            mock_metering.get_user_plan = AsyncMock()
+            mock_metering.get_total_compute_remaining = AsyncMock()
+            mock_metering.get_extra_compute_remaining = AsyncMock()
             with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
                 mock_audit.return_value = MagicMock()
                 await check_warning_thresholds(session)
@@ -493,22 +524,30 @@ class TestCheckGracePeriods:
     async def test_starts_grace_period_on_first_exhaustion(self, mock_now):
         from treadstone.services.metering_tasks import check_grace_periods
 
-        plan = _make_plan(grace_period_started_at=None)
+        plan = _make_plan(monthly_used=Decimal("100"), compute_units_overage=Decimal("1"), grace_period_started_at=None)
 
         session = AsyncMock()
-        session.execute = AsyncMock(return_value=_MockDistinct(["user_01"]))
+        execute_results = [
+            _MockDistinct(["user_01"]),
+            _MockScalars([plan]),
+            _MockRows([]),
+            _MockScalars([_make_sandbox()]),
+        ]
+        session.execute = AsyncMock(side_effect=execute_results)
         session.add = MagicMock()
         session.commit = AsyncMock()
 
         with patch("treadstone.services.metering_tasks._metering") as mock_metering:
-            mock_metering.get_user_plan = AsyncMock(return_value=plan)
-            mock_metering.get_total_compute_remaining = AsyncMock(return_value=Decimal("-1"))
+            mock_metering.get_user_plan = AsyncMock()
+            mock_metering.get_total_compute_remaining = AsyncMock()
             with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
                 mock_audit.return_value = MagicMock()
                 await check_grace_periods(session)
 
                 mock_audit.assert_awaited_once()
                 assert mock_audit.call_args.kwargs["action"] == "metering.grace_period_started"
+            mock_metering.get_user_plan.assert_not_awaited()
+            mock_metering.get_total_compute_remaining.assert_not_awaited()
 
         assert plan.grace_period_started_at == FIXED_NOW
 
@@ -517,29 +556,29 @@ class TestCheckGracePeriods:
         from treadstone.services.metering_tasks import check_grace_periods
 
         grace_start = FIXED_NOW - timedelta(seconds=2000)
-        plan = _make_plan(grace_period_seconds=1800, grace_period_started_at=grace_start)
+        plan = _make_plan(
+            monthly_used=Decimal("100"),
+            compute_units_overage=Decimal("5"),
+            grace_period_seconds=1800,
+            grace_period_started_at=grace_start,
+        )
         sandbox = _make_sandbox(status=SandboxStatus.READY)
 
         session = AsyncMock()
-        call_count = 0
-
-        async def mock_execute(stmt):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return _MockDistinct(["user_01"])
-            if call_count == 2:
-                return _MockScalars([sandbox])
-            return _MockScalars([])
-
-        session.execute = AsyncMock(side_effect=mock_execute)
+        session.execute = AsyncMock(
+            side_effect=[
+                _MockDistinct(["user_01"]),
+                _MockScalars([plan]),
+                _MockRows([]),
+                _MockScalars([sandbox]),
+                _MockScalars([]),
+            ]
+        )
         session.get = AsyncMock(return_value=sandbox)
         session.add = MagicMock()
         session.commit = AsyncMock()
 
         with patch("treadstone.services.metering_tasks._metering") as mock_metering:
-            mock_metering.get_user_plan = AsyncMock(return_value=plan)
-            mock_metering.get_total_compute_remaining = AsyncMock(return_value=Decimal("-5"))
             mock_metering.close_compute_session = AsyncMock(return_value=None)
             with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
                 mock_audit.return_value = MagicMock()
@@ -561,31 +600,27 @@ class TestCheckGracePeriods:
         grace_start = FIXED_NOW - timedelta(seconds=60)
         plan = _make_plan(
             monthly_limit=Decimal("100"),
+            monthly_used=Decimal("100"),
+            compute_units_overage=Decimal("25"),
             grace_period_seconds=1800,
             grace_period_started_at=grace_start,
         )
         sandbox = _make_sandbox()
 
         session = AsyncMock()
-        call_count = 0
-
-        async def mock_execute(stmt):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return _MockDistinct(["user_01"])
-            if call_count == 2:
-                return _MockScalars([sandbox])
-            return _MockScalars([])
-
-        session.execute = AsyncMock(side_effect=mock_execute)
+        session.execute = AsyncMock(
+            side_effect=[
+                _MockDistinct(["user_01"]),
+                _MockScalars([plan]),
+                _MockRows([]),
+                _MockScalars([sandbox]),
+                _MockScalars([]),
+            ]
+        )
         session.add = MagicMock()
         session.commit = AsyncMock()
 
-        overage = Decimal("25")
         with patch("treadstone.services.metering_tasks._metering") as mock_metering:
-            mock_metering.get_user_plan = AsyncMock(return_value=plan)
-            mock_metering.get_total_compute_remaining = AsyncMock(return_value=-overage)
             mock_metering.close_compute_session = AsyncMock(return_value=None)
             with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
                 mock_audit.return_value = MagicMock()
@@ -604,13 +639,17 @@ class TestCheckGracePeriods:
         plan = _make_plan(grace_period_started_at=FIXED_NOW - timedelta(minutes=10))
 
         session = AsyncMock()
-        session.execute = AsyncMock(return_value=_MockDistinct(["user_01"]))
+        execute_results = [
+            _MockDistinct(["user_01"]),
+            _MockScalars([plan]),
+            _MockRows([]),
+            _MockScalars([_make_sandbox()]),
+        ]
+        session.execute = AsyncMock(side_effect=execute_results)
         session.add = MagicMock()
         session.commit = AsyncMock()
 
-        with patch("treadstone.services.metering_tasks._metering") as mock_metering:
-            mock_metering.get_user_plan = AsyncMock(return_value=plan)
-            mock_metering.get_total_compute_remaining = AsyncMock(return_value=Decimal("50"))
+        with patch("treadstone.services.metering_tasks._metering"):
             with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
                 mock_audit.return_value = MagicMock()
                 await check_grace_periods(session)
@@ -624,30 +663,31 @@ class TestCheckGracePeriods:
         from treadstone.services.metering_tasks import check_grace_periods
 
         grace_start = FIXED_NOW - timedelta(seconds=2000)
-        plan = _make_plan(grace_period_seconds=1800, grace_period_started_at=grace_start)
+        plan = _make_plan(
+            monthly_used=Decimal("100"),
+            compute_units_overage=Decimal("5"),
+            grace_period_seconds=1800,
+            grace_period_started_at=grace_start,
+        )
         sandbox = _make_sandbox()
 
         stop_callback = AsyncMock()
 
         session = AsyncMock()
-        call_count = 0
-
-        async def mock_execute(stmt):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return _MockDistinct(["user_01"])
-            if call_count == 2:
-                return _MockScalars([sandbox])
-            return _MockScalars([])
-
-        session.execute = AsyncMock(side_effect=mock_execute)
+        session.execute = AsyncMock(
+            side_effect=[
+                _MockDistinct(["user_01"]),
+                _MockScalars([plan]),
+                _MockRows([]),
+                _MockScalars([sandbox]),
+                _MockScalars([]),
+            ]
+        )
         session.add = MagicMock()
         session.commit = AsyncMock()
 
         with patch("treadstone.services.metering_tasks._metering") as mock_metering:
-            mock_metering.get_user_plan = AsyncMock(return_value=plan)
-            mock_metering.get_total_compute_remaining = AsyncMock(return_value=Decimal("-5"))
+            mock_metering.close_compute_session = AsyncMock(return_value=None)
             with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
                 mock_audit.return_value = MagicMock()
                 await check_grace_periods(session, stop_sandbox_callback=stop_callback)
@@ -659,25 +699,29 @@ class TestCheckGracePeriods:
         from treadstone.services.metering_tasks import check_grace_periods
 
         grace_start = FIXED_NOW - timedelta(seconds=2000)
-        plan = _make_plan(grace_period_seconds=1800, grace_period_started_at=grace_start)
+        plan = _make_plan(
+            monthly_used=Decimal("100"),
+            compute_units_overage=Decimal("5"),
+            grace_period_seconds=1800,
+            grace_period_started_at=grace_start,
+        )
         sandbox = _make_sandbox()
 
         stop_callback = AsyncMock()
         session = AsyncMock()
-        results = iter(
-            [
+        session.execute = AsyncMock(
+            side_effect=[
                 _MockDistinct(["user_01"]),
+                _MockScalars([plan]),
+                _MockRows([]),
                 _MockScalars([sandbox]),
                 _MockScalars([]),
             ]
         )
-        session.execute = AsyncMock(side_effect=lambda stmt: next(results))
         session.add = MagicMock()
         session.commit = AsyncMock()
 
         with patch("treadstone.services.metering_tasks._metering") as mock_metering:
-            mock_metering.get_user_plan = AsyncMock(return_value=plan)
-            mock_metering.get_total_compute_remaining = AsyncMock(return_value=Decimal("-5"))
             mock_metering.close_compute_session = AsyncMock(side_effect=RuntimeError("metering failed"))
             with patch(
                 "treadstone.services.metering_tasks.record_audit_event",
@@ -694,7 +738,7 @@ class TestCheckGracePeriods:
         from treadstone.services.metering_tasks import check_grace_periods
 
         session = AsyncMock()
-        session.execute = AsyncMock(return_value=_MockDistinct([]))
+        session.execute = AsyncMock(side_effect=[_MockDistinct([])])
         session.commit = AsyncMock()
 
         with patch("treadstone.services.metering_tasks._metering"):
@@ -710,19 +754,24 @@ class TestCheckGracePeriods:
         grace_start = FIXED_NOW - timedelta(seconds=60)
         plan = _make_plan(
             monthly_limit=Decimal("100"),
+            monthly_used=Decimal("100"),
+            compute_units_overage=Decimal("5"),
             grace_period_seconds=1800,
             grace_period_started_at=grace_start,
         )
 
         session = AsyncMock()
-        session.execute = AsyncMock(return_value=_MockDistinct(["user_01"]))
+        execute_results = [
+            _MockDistinct(["user_01"]),
+            _MockScalars([plan]),
+            _MockRows([]),
+            _MockScalars([_make_sandbox()]),
+        ]
+        session.execute = AsyncMock(side_effect=execute_results)
         session.add = MagicMock()
         session.commit = AsyncMock()
 
-        overage = Decimal("5")
-        with patch("treadstone.services.metering_tasks._metering") as mock_metering:
-            mock_metering.get_user_plan = AsyncMock(return_value=plan)
-            mock_metering.get_total_compute_remaining = AsyncMock(return_value=-overage)
+        with patch("treadstone.services.metering_tasks._metering"):
             with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
                 mock_audit.return_value = MagicMock()
                 await check_grace_periods(session)
@@ -829,18 +878,18 @@ class TestResetMonthlyCredits:
         )
 
         session = AsyncMock()
-        call_count = 0
-
-        async def mock_execute(stmt):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return _MockScalars([plan])
-            return _MockScalars([])
-
-        session.execute = AsyncMock(side_effect=mock_execute)
+        sandbox = _make_sandbox()
+        open_session = _make_open_session()
+        session.execute = AsyncMock(
+            side_effect=[
+                _MockScalars([plan]),
+                _MockScalars([open_session]),
+                _MockScalars([sandbox]),
+            ]
+        )
         session.add = MagicMock()
         session.commit = AsyncMock()
+        session.get = AsyncMock()
 
         with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
             mock_audit.return_value = MagicMock()
@@ -850,6 +899,7 @@ class TestResetMonthlyCredits:
         assert plan.compute_units_monthly_used == Decimal("0")
         assert plan.warning_80_notified_at is None
         assert plan.warning_100_notified_at is None
+        session.get.assert_not_awaited()
         session.commit.assert_awaited_once()
 
 
