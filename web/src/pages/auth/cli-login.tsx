@@ -73,14 +73,17 @@ export function CliLoginPage() {
 
   async function handleApprove(e: React.FormEvent) {
     e.preventDefault()
-    if (!flowId) return
+    if (!flowId || !flowSecret) {
+      setFormError("Missing flow secret. Re-run login from the CLI.")
+      return
+    }
     setFormError(null)
     setSubmitting(true)
     try {
       const res = await fetch("/v1/auth/cli/login", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ email, password, flow_id: flowId }),
+        body: new URLSearchParams({ email, password, flow_id: flowId, flow_secret: flowSecret }),
         credentials: "include",
       })
 
@@ -101,12 +104,16 @@ export function CliLoginPage() {
   }
 
   async function handleSessionApprove() {
-    if (!flowId) return
+    if (!flowId || !flowSecret) {
+      setFormError("Missing flow secret. Re-run login from the CLI.")
+      return
+    }
     setFormError(null)
     setSubmitting(true)
     try {
       const res = await fetch(`/v1/auth/cli/flows/${encodeURIComponent(flowId)}/approve`, {
         method: "POST",
+        headers: { "X-Flow-Secret": flowSecret },
         credentials: "include",
       })
       if (res.ok) {
@@ -159,8 +166,8 @@ export function CliLoginPage() {
               {pollError && <p className="mt-2 text-sm text-destructive">{pollError}</p>}
               {!flowSecret && !oauthResult && displayStatus === "pending" && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Polling requires <span className="font-mono">flow_secret</span> in the URL (optional). You can
-                  still approve below.
+                  This page now requires <span className="font-mono">flow_secret</span> in the URL. Re-run login from
+                  the CLI if it is missing.
                 </p>
               )}
             </div>
@@ -235,7 +242,7 @@ export function CliLoginPage() {
                     <div className="flex flex-col gap-2">
                       {googleOAuthEnabled && (
                         <a
-                          href={`/v1/auth/google/authorize?cli_flow_id=${encodeURIComponent(flowId)}`}
+                          href={`/v1/auth/google/authorize?cli_flow_id=${encodeURIComponent(flowId)}&cli_flow_secret=${encodeURIComponent(flowSecret)}`}
                           className="flex h-10 items-center justify-center border border-border/40 text-sm font-medium text-foreground hover:bg-accent"
                         >
                           Continue with Google
@@ -243,7 +250,7 @@ export function CliLoginPage() {
                       )}
                       {githubOAuthEnabled && (
                         <a
-                          href={`/v1/auth/github/authorize?cli_flow_id=${encodeURIComponent(flowId)}`}
+                          href={`/v1/auth/github/authorize?cli_flow_id=${encodeURIComponent(flowId)}&cli_flow_secret=${encodeURIComponent(flowSecret)}`}
                           className="flex h-10 items-center justify-center border border-border/40 text-sm font-medium text-foreground hover:bg-accent"
                         >
                           Continue with GitHub
