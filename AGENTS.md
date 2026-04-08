@@ -196,19 +196,25 @@ The standard development workflow uses `make local` to bring up a full Kind clus
 
 See `deploy/README.md` for details on the layer-by-layer Helm deployment.
 
-### Kind cannot run in Cursor Cloud VMs
+### No K8s distribution works in Cursor Cloud VMs
 
-**`make local` currently fails** in Cursor Cloud because Kind nodes require systemd as PID 1 inside their containers, which fails in this nested-container environment. Root causes:
+**`make local` and all Docker-based K8s (Kind, k3d/k3s, minikube) fail** in Cursor Cloud. The Cursor Cloud VM is a container inside Firecracker, and the host cgroup hierarchy is not properly delegable, which blocks any container runtime (runc/containerd) from creating Pod cgroups.
+
+**Kind** fails at systemd init: `could not find a log line that matches "Reached target .*Multi-User System.*"` — Kind nodes need systemd as PID 1, which can't start because cgroup delegation is incomplete.
+
+**k3s/k3d** bypasses the systemd issue (k3s API server does start), but **Pods stay in `ContainerCreating`** forever. runc fails with: `cannot enter cgroupv2 "/sys/fs/cgroup/k8s.io" with domain controllers -- it is in an invalid state`. This happens at the OCI runtime level, below any kubelet or containerd config.
+
+Root cause (shared by all K8s distributions):
 
 | Factor | GitHub Actions (`ubuntu-24.04`) | Cursor Cloud VM |
 |--------|-------------------------------|-----------------|
 | Host PID 1 | `systemd` (real VM) | `pod-daemon` (container inside Firecracker) |
-| `/run/systemd/system` | exists | missing |
-| cgroupv2 subtree delegation | all controllers (`cpu io memory pids cpuset hugetlb`) | partial (`cpuset cpu pids` only; `memory`/`io` not delegable — `ENOTSUP`) |
+| cgroupv2 subtree delegation | all controllers (`cpu io memory pids cpuset hugetlb`) | partial (`cpuset cpu pids` only; `+memory`/`+io` → `ENOTSUP`) |
+| Root cgroup process evacuation | PID 1 movable to `init.scope` | `ENOTSUP` — can't move PID 1 out of root |
 | Docker storage driver | native `overlay2` | `fuse-overlayfs` (required workaround) |
 | ip6tables `raw` table | supported | not supported (kernel limitation) |
 
-The Kind node entrypoint calls `exec /sbin/init` (→ systemd) which needs: (a) a functional cgroup tree with all controllers delegated, and (b) the ability to start as PID 1 in a properly initialized environment. Both fail here. The symptom is: `could not find a log line that matches "Reached target .*Multi-User System.*|detected cgroup v1"`.
+The fundamental blocker is: cgroupv2 requires **all processes moved out of the root cgroup** before children can function as resource domains. In Cursor Cloud, PID 1 (`pod-daemon`) cannot be moved (`ENOTSUP`), and additional controllers (`memory`, `io`) cannot be delegated. This prevents runc from setting up Pod cgroups regardless of which K8s distribution is used.
 
 ### Fallback: `make dev-api` + `make dev-web`
 
