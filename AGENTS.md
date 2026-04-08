@@ -184,32 +184,54 @@ Run `make help` for the full list. Key commands:
 
 ## Cursor Cloud specific instructions
 
-### Environment
+### Preferred development mode: `make local` (Kind K8s)
 
-- Python 3.12 is available at `/usr/bin/python3.12`. `uv` is at `~/.local/bin/uv`.
-- Node 20 via nvm; `pnpm` installed globally. Source nvm before using: `export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"`.
-- The update script runs `uv sync` and `cd web && pnpm install --frozen-lockfile` on startup. After that, dependencies are ready.
+The standard development workflow uses `make local` to bring up a full Kind cluster with all Helm charts deployed. This is how CI (`k8s-e2e.yml`) validates the stack. Key steps:
+
+1. Ensure `.env.local` exists (see "Environment files" below).
+2. `make local` — creates Kind cluster, builds images, deploys all Helm charts.
+3. Verify: `curl http://api.localhost/health` and `http://app.localhost` for the web UI.
+4. E2E tests: `make test-e2e` (Hurl, against `http://api.localhost`).
+5. Tear down: `make destroy-local`.
+
+See `deploy/README.md` for details on the layer-by-layer Helm deployment.
+
+### Kind cannot run in Cursor Cloud VMs
+
+**`make local` currently fails** in Cursor Cloud because Kind nodes require systemd as PID 1 inside their containers, which fails in this nested-container environment. Root causes:
+
+| Factor | GitHub Actions (`ubuntu-24.04`) | Cursor Cloud VM |
+|--------|-------------------------------|-----------------|
+| Host PID 1 | `systemd` (real VM) | `pod-daemon` (container inside Firecracker) |
+| `/run/systemd/system` | exists | missing |
+| cgroupv2 subtree delegation | all controllers (`cpu io memory pids cpuset hugetlb`) | partial (`cpuset cpu pids` only; `memory`/`io` not delegable — `ENOTSUP`) |
+| Docker storage driver | native `overlay2` | `fuse-overlayfs` (required workaround) |
+| ip6tables `raw` table | supported | not supported (kernel limitation) |
+
+The Kind node entrypoint calls `exec /sbin/init` (→ systemd) which needs: (a) a functional cgroup tree with all controllers delegated, and (b) the ability to start as PID 1 in a properly initialized environment. Both fail here. The symptom is: `could not find a log line that matches "Reached target .*Multi-User System.*|detected cgroup v1"`.
+
+### Fallback: `make dev-api` + `make dev-web`
+
+When Kind is unavailable, use the bare dev servers for API/web development:
+
+- **API**: `make dev-api` (port 8000, hot reload). Needs `.env` file.
+- **Web**: `make dev-web` (port 5173, hot reload).
+- Unit/API tests work without K8s: `make test` (uses in-memory SQLite + `FakeK8sClient`).
+
+### Environment files
+
+- `.env` (for `make dev-api`): created from `.env.example`. Set `TREADSTONE_DATABASE_URL`, `TREADSTONE_JWT_SECRET` (≥ 32 chars), `TREADSTONE_LEADER_ELECTION_ENABLED=false`, `TREADSTONE_APP_BASE_URL=http://localhost:8000`.
+- `.env.local` (for `make local`): created from `.env.example`. Set `TREADSTONE_LEADER_ELECTION_ENABLED=true` and `TREADSTONE_APP_BASE_URL=http://app.localhost`. All env files are gitignored.
 
 ### Running tests
 
-- **Unset `TREADSTONE_JWT_SECRET` and `TREADSTONE_DEBUG`** before running `make test`. The injected Cloud Agent secret is too short (< 32 chars) and `TREADSTONE_DEBUG=true` from the environment causes `test_settings_defaults` to fail. The test conftest provides its own safe values when these env vars are absent.
+- **Unset `TREADSTONE_JWT_SECRET` and `TREADSTONE_DEBUG`** before running `make test`. The injected Cloud Agent env vars conflict with test fixtures (JWT too short, DEBUG overrides defaults). The test conftest provides its own safe values when these are absent.
 - Command: `unset TREADSTONE_JWT_SECRET TREADSTONE_DEBUG && make test`
 - Web tests: `cd web && pnpm test`
-
-### Running dev servers
-
-- **API**: `unset TREADSTONE_JWT_SECRET TREADSTONE_DEBUG && make dev-api` — the `.env` file supplies the real DB URL and a generated JWT secret. Unset the shell env vars so `.env` values are used.
-- **Web**: `make dev-web` (port 5173).
-- Both servers support hot reload.
-
-### .env configuration
-
-- `.env` is created from `.env.example`. Key fields: `TREADSTONE_DATABASE_URL` (from Neon), `TREADSTONE_JWT_SECRET` (must be ≥ 32 chars), `TREADSTONE_LEADER_ELECTION_ENABLED=false` (no K8s in bare dev), `TREADSTONE_APP_BASE_URL=http://localhost:8000`.
-- `.env` is gitignored; it must be recreated per environment.
-- The `TREADSTONE_DATABASE_URL` and `TREADSTONE_JWT_SECRET` secrets are injected as environment variables. The JWT secret may be too short — generate a longer one for `.env`.
+- Lint: `make lint` (Python ruff + web ESLint).
 
 ### Gotchas
 
-- `pnpm install --frozen-lockfile` may warn about esbuild build scripts being ignored. Run `pnpm approve-builds` interactively once, or add `"pnpm": {"onlyBuiltDependencies": ["esbuild"]}` to `web/package.json`. The esbuild binary in the pnpm store still works for vite even without explicit approval.
-- The database is Neon (cloud SaaS) — no local Postgres needed. Unit/API tests use in-memory SQLite via aiosqlite; integration tests need the real Neon DB.
-- Lint: `make lint` (runs both `lint-py` and `lint-web`). See Makefile for individual targets.
+- `pnpm install --frozen-lockfile` may warn about esbuild build scripts being ignored. The esbuild binary in the pnpm store still works for vite even without explicit approval.
+- Database is Neon (cloud SaaS) — no local Postgres. Unit/API tests use aiosqlite; integration tests need real Neon DB.
+- Docker + `fuse-overlayfs` + `iptables-legacy` are needed in Cursor Cloud; see system prompt for install steps. IPv6 must be disabled in `/etc/docker/daemon.json` (`"ipv6": false, "ip6tables": false`).
