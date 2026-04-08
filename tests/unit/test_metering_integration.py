@@ -395,6 +395,37 @@ class TestSandboxServiceStartWithMetering:
         k8s.scale_sandbox.assert_called_once()
 
 
+class TestSandboxServiceStopWithMetering:
+    async def test_stop_closes_compute_session_after_successful_scale(self):
+        from treadstone.services.sandbox_service import SandboxService
+
+        sb = _make_sandbox(status=SandboxStatus.READY)
+        session = _mock_session(sb)
+        k8s = _mock_k8s_client()
+        metering = _mock_metering()
+        service = SandboxService(session=session, k8s_client=k8s, metering=metering)
+
+        result = await service.stop(sandbox_id=sb.id, owner_id=sb.owner_id)
+
+        assert result.status == SandboxStatus.STOPPED
+        metering.close_compute_session.assert_awaited_once_with(session, sb.id)
+
+    async def test_stop_k8s_failure_does_not_close_compute_session_early(self):
+        from treadstone.services.sandbox_service import SandboxService
+
+        sb = _make_sandbox(status=SandboxStatus.READY)
+        session = _mock_session(sb)
+        k8s = _mock_k8s_client()
+        k8s.scale_sandbox = AsyncMock(side_effect=RuntimeError("k8s unavailable"))
+        metering = _mock_metering()
+        service = SandboxService(session=session, k8s_client=k8s, metering=metering)
+
+        result = await service.stop(sandbox_id=sb.id, owner_id=sb.owner_id)
+
+        assert result.status == SandboxStatus.ERROR
+        metering.close_compute_session.assert_not_awaited()
+
+
 class TestSandboxServiceDeleteWithMetering:
     async def test_delete_persist_does_not_release_storage_early(self):
         """Storage release moved to K8s Watch/Reconcile — delete() must NOT call it."""

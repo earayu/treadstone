@@ -80,15 +80,22 @@ def _make_plan(user_id: str = "user01", tier: str = "free", **kwargs) -> UserPla
 class _MockResult:
     """Minimal mock for SQLAlchemy async Result."""
 
-    def __init__(self, value=None, scalars_list=None):
+    def __init__(self, value=None, scalars_list=None, one_value=None):
         self._value = value
         self._scalars_list = scalars_list
+        self._one_value = one_value if one_value is not None else value
 
     def scalar_one_or_none(self):
         return self._value
 
     def scalar_one(self):
         return self._value
+
+    def one_or_none(self):
+        return self._one_value
+
+    def one(self):
+        return self._one_value
 
     def scalars(self):
         return self
@@ -821,6 +828,20 @@ class TestCheckComputeQuota:
             await svc.check_compute_quota(AsyncMock(), "user01")
         assert "extra remaining: 0.0" in exc_info.value.message
 
+    async def test_outstanding_overage_blocks_even_with_partial_extra_recovery(self):
+        plan = _make_plan(
+            "user01",
+            compute_units_monthly_limit=Decimal("50"),
+            compute_units_monthly_used=Decimal("50"),
+            compute_units_overage=Decimal("8"),
+        )
+        svc = MeteringService()
+        svc.get_user_plan = AsyncMock(return_value=plan)
+        svc.get_extra_compute_remaining = AsyncMock(return_value=Decimal("5"))
+
+        with pytest.raises(ComputeQuotaExceededError):
+            await svc.check_compute_quota(AsyncMock(), "user01")
+
 
 class TestGetTotalComputeRemaining:
     async def test_monthly_plus_extra(self):
@@ -1048,6 +1069,103 @@ class TestGetCurrentStorageUsed:
 
         result = await svc.get_current_storage_used(session, "user01")
         assert result == 0
+
+
+class TestUsageSummaryQueries:
+    async def test_snapshot_batches_usage_rollups(self, monkeypatch):
+        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
+        plan = _make_plan("user01", storage_capacity_limit_gib=10, max_concurrent_running=3)
+        svc = MeteringService()
+        session = _mock_session(
+            _MockResult(one_value=(plan, 5, 2, 1, Decimal("7.5"))),
+        )
+
+        snapshot = await svc._get_usage_summary_snapshot(session, "user01")
+
+        assert snapshot == (plan, 5, 2, 1, Decimal("7.5"))
+        assert session.execute.await_count == 1
+
+    async def test_snapshot_creates_plan_then_retries(self):
+        plan = _make_plan("user01")
+        svc = MeteringService()
+        svc.ensure_user_plan = AsyncMock(return_value=plan)
+        session = _mock_session(
+            _MockResult(one_value=None),
+            _MockResult(one_value=(plan, 0, 0, 0, Decimal("0"))),
+        )
+
+        snapshot = await svc._get_usage_summary_snapshot(session, "user01")
+
+        assert snapshot == (plan, 0, 0, 0, Decimal("0"))
+        svc.ensure_user_plan.assert_awaited_once_with(session, "user01")
+        assert session.execute.await_count == 2
+
+    async def test_compute_usage_combines_aggregate_and_boundary_rows(self, monkeypatch):
+        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
+        svc = MeteringService()
+        session = _mock_session(
+            _MockResult(one_value=(Decimal("4"), Decimal("8"))),
+            _MockResult(
+                scalars_list=None,
+                one_value=None,
+            ),
+        )
+        session.execute = AsyncMock(
+            side_effect=[
+                _MockResult(one_value=(Decimal("4"), Decimal("8"))),
+                MagicMock(
+                    all=MagicMock(
+                        return_value=[
+                            (
+                                datetime(2026, 2, 28, 23, 0, 0, tzinfo=UTC),
+                                datetime(2026, 3, 1, 1, 0, 0, tzinfo=UTC),
+                                Decimal("2"),
+                                Decimal("4"),
+                            )
+                        ]
+                    )
+                ),
+            ]
+        )
+
+        result = await svc.get_compute_unit_hours_for_period(
+            session,
+            "user01",
+            datetime(2026, 3, 1, 0, 0, 0, tzinfo=UTC),
+            datetime(2026, 4, 1, 0, 0, 0, tzinfo=UTC),
+        )
+
+        assert result == Decimal("3.7500")
+
+    async def test_storage_usage_aggregates_released_rows_and_clips_boundary_rows(self, monkeypatch):
+        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
+        svc = MeteringService()
+        session = AsyncMock()
+        session.execute = AsyncMock(
+            side_effect=[
+                _MockResult(value=Decimal("10")),
+                MagicMock(
+                    all=MagicMock(
+                        return_value=[
+                            (
+                                5,
+                                datetime(2026, 2, 28, 23, 0, 0, tzinfo=UTC),
+                                datetime(2026, 3, 1, 1, 0, 0, tzinfo=UTC),
+                            )
+                        ]
+                    )
+                ),
+            ]
+        )
+
+        result = await svc.get_storage_gib_hours_for_period(
+            session,
+            "user01",
+            datetime(2026, 3, 1, 0, 0, 0, tzinfo=UTC),
+            datetime(2026, 4, 1, 0, 0, 0, tzinfo=UTC),
+        )
+
+        assert result == Decimal("15.0000")
 
 
 # ═══════════════════════════════════════════════════════
