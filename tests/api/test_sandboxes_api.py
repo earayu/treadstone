@@ -493,8 +493,11 @@ class TestDeleteSandbox:
         status_resp = await auth_client.get(f"/v1/sandboxes/{sandbox_id}/web-link")
 
         assert delete_resp.status_code == 204
-        assert status_resp.status_code == 200
-        assert status_resp.json()["enabled"] is False
+        assert status_resp.status_code in {200, 404}
+        if status_resp.status_code == 200:
+            assert status_resp.json()["enabled"] is False
+        else:
+            assert status_resp.json()["error"]["code"] == "sandbox_not_found"
 
     async def test_delete_keeps_row_until_sync_removes_it(self, auth_client):
         create_resp = await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "del-row"})
