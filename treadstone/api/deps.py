@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from treadstone.core.database import get_session
 from treadstone.core.errors import AuthInvalidError, AuthRequiredError, ForbiddenError
-from treadstone.core.request_context import set_request_context
+from treadstone.core.request_context import get_request_context, set_request_context
 from treadstone.core.users import fastapi_users
 from treadstone.models.api_key import ApiKey, ApiKeyDataPlaneMode, ApiKeySandboxGrant, hash_api_key_secret
 from treadstone.models.user import Role, User
@@ -126,4 +126,13 @@ async def get_current_data_plane_user(
 async def get_current_admin(user: User = Depends(get_current_control_plane_user)) -> User:
     if user.role != Role.ADMIN.value:
         raise ForbiddenError("Admin required")
+    return user
+
+
+async def get_current_admin_session(
+    request: Request,
+    user: User = Depends(get_current_admin),
+) -> User:
+    if get_request_context(request, "credential_type") != "cookie":
+        raise AuthInvalidError("Admin session cookie required.")
     return user

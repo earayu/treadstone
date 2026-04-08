@@ -10,11 +10,13 @@ from decimal import Decimal
 import pytest
 from fastapi_users.db import SQLAlchemyUserDatabase
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
+from treadstone.models.audit_event import AuditEvent
 from treadstone.models.metering import TierTemplate
 from treadstone.models.user import OAuthAccount, User
 from treadstone.models.user_feedback import UserFeedback  # noqa: F401 — register model for SQLite metadata
@@ -123,6 +125,25 @@ async def anon_client(db_session):
 
 def _get_user_id(client: AsyncClient) -> str:
     return client._admin_user_id  # type: ignore[attr-defined]
+
+
+async def _create_control_plane_api_key(client: AsyncClient, name: str) -> str:
+    response = await client.post("/v1/auth/api-keys", json={"name": name})
+    assert response.status_code == 201
+    return response.json()["key"]
+
+
+async def _list_audit_events(action: str) -> list[AuditEvent]:
+    async with _test_session_factory() as session:
+        return (
+            (
+                await session.execute(
+                    select(AuditEvent).where(AuditEvent.action == action).order_by(AuditEvent.created_at)
+                )
+            )
+            .scalars()
+            .all()
+        )
 
 
 # ── GET /v1/admin/tier-templates ─────────────────────────────────────────────
@@ -471,6 +492,25 @@ async def test_lookup_user_by_email_requires_admin(member_client):
     assert resp.status_code == 403
 
 
+@pytest.mark.parametrize(
+    ("method", "path", "kwargs"),
+    [
+        ("GET", "/v1/admin/users/lookup-by-email", {"params": {"email": "admin@example.com"}}),
+        ("POST", "/v1/admin/users/resolve-emails", {"json": {"emails": ["admin@example.com"]}}),
+        ("GET", "/v1/admin/waitlist", {}),
+        ("GET", "/v1/admin/support/feedback", {}),
+    ],
+)
+async def test_sensitive_admin_reads_reject_api_keys(admin_client, method, path, kwargs):
+    api_key = await _create_control_plane_api_key(admin_client, f"key-for-{path.rsplit('/', 1)[-1]}")
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.request(method, path, headers={"Authorization": f"Bearer {api_key}"}, **kwargs)
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "auth_invalid"
+
+
 # ── POST /v1/admin/users/resolve-emails ──────────────────────────────────────
 
 
@@ -645,3 +685,41 @@ async def test_list_feedback_filter_by_email(admin_client, member_client):
     resp_empty = await admin_client.get("/v1/admin/support/feedback", params={"email": "nomatch@example.com"})
     assert resp_empty.status_code == 200
     assert resp_empty.json()["total"] == 0
+
+
+async def test_sensitive_admin_reads_record_audit_events(admin_client, anon_client, member_client):
+    await anon_client.post("/v1/waitlist", json=_WAITLIST_BODY)
+    await member_client.post("/v1/support/feedback", json={"body": "audit marker"})
+
+    lookup_resp = await admin_client.get("/v1/admin/users/lookup-by-email", params={"email": "admin@example.com"})
+    resolve_resp = await admin_client.post(
+        "/v1/admin/users/resolve-emails",
+        json={"emails": ["admin@example.com", "missing@example.com"]},
+    )
+    waitlist_resp = await admin_client.get("/v1/admin/waitlist", params={"status": "pending"})
+    feedback_resp = await admin_client.get("/v1/admin/support/feedback", params={"email": "member@example.com"})
+
+    assert lookup_resp.status_code == 200
+    assert resolve_resp.status_code == 200
+    assert waitlist_resp.status_code == 200
+    assert feedback_resp.status_code == 200
+
+    lookup_events = await _list_audit_events("admin.user.lookup_by_email")
+    resolve_events = await _list_audit_events("admin.user.resolve_emails")
+    waitlist_events = await _list_audit_events("admin.waitlist.read")
+    feedback_events = await _list_audit_events("admin.feedback.read")
+
+    assert lookup_events[-1].target_id == _get_user_id(admin_client)
+    assert lookup_events[-1].event_metadata["email"] == "admin@example.com"
+
+    assert resolve_events[-1].event_metadata == {
+        "requested_count": 2,
+        "unique_email_count": 2,
+        "resolved_count": 1,
+    }
+
+    assert waitlist_events[-1].event_metadata["status"] == "pending"
+    assert waitlist_events[-1].event_metadata["result_count"] >= 1
+
+    assert feedback_events[-1].event_metadata["email_filter"] == "member@example.com"
+    assert feedback_events[-1].event_metadata["result_count"] >= 1
