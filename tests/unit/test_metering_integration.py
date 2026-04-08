@@ -98,7 +98,7 @@ def _mock_k8s_client():
         return_value=[
             {
                 "name": "aio-sandbox-small",
-                "image": "ghcr.io/agent-infra/sandbox:latest",
+                "image": "ghcr.io/agent-infra/sandbox:1.0.0.152",
                 "resource_spec": {"cpu": "500m", "memory": "1Gi"},
             },
         ]
