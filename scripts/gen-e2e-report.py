@@ -15,6 +15,7 @@ Env:
     same run (default 300). Rows are merged into one collapsible section per run cluster.
 """
 
+import json
 import os
 import re
 import sys
@@ -505,8 +506,20 @@ def main() -> None:
         sys.exit(0)
 
     gap = _run_gap_seconds()
+    run_groups = cluster_rows_into_runs(rows, gap)
     index.write_text(render(rows, gap_seconds=gap), encoding="utf-8")
-    n_runs = len(cluster_rows_into_runs(rows, gap))
+    n_runs = len(run_groups)
+    all_passed = sum(1 for r in rows if r["status"] == "success")
+    all_failed = len(rows) - all_passed
+    meta = {
+        "schema": 1,
+        "hurl_files": len(rows),
+        "passed": all_passed,
+        "failed": all_failed,
+        "run_groups": n_runs,
+        "styled": True,
+    }
+    (report_dir / "batch-meta.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
     print(f"[gen-e2e-report] Rewrote {index} ({len(rows)} rows, {n_runs} run group(s), gap={gap}s)")
 
 
