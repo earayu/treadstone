@@ -1,0 +1,31 @@
+# Scenario: stateful-burst-20
+# Goal: Verify that sandboxes with persistent volumes (PVCs) can be provisioned
+#       under moderate concurrency. Uses aio-sandbox-large with 5Gi storage.
+#
+# NOTE: This scenario is a placeholder for the second benchmark round.
+#       Persistent sandboxes go through the "direct" provisioning path (PVC + Sandbox CR),
+#       which is slower and more expensive than stateless. Adjust count accordingly.
+#       Run stateless_burst.yaml first to baseline the environment.
+
+name: "stateful-burst-20"
+description: >
+  Concurrently create 20 sandboxes with 5Gi persistent volumes to validate
+  direct provisioning (Sandbox CR + PVC) under moderate concurrency.
+  Expected: >=90% reach ready status within the timeout window.
+
+matrix:
+  - template: aio-sandbox-large
+    count: 20
+    persist: true
+    storage_size: "5Gi"
+
+concurrency: 5           # lower concurrency — PVC provisioning is heavier
+ready_timeout_sec: 1800  # 30 min per sandbox; PVC + image pull can take longer
+poll_interval_sec: 15
+
+auto_stop_interval: 60
+auto_delete_interval: -1
+
+cleanup:
+  after_run: true
+  on_failure: true

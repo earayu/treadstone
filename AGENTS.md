@@ -16,6 +16,7 @@ Use the matching local skill before you act:
 | Refresh an existing audit report against the latest code | `audit-report-refresh` |
 | Trace runtime architecture and end-to-end data flow | `architecture-data-flow-trace` |
 | Plan, write, or validate public docs, docs IA, `llms.txt`, or the docs manifest | [`treadstone-public-docs`](.agents/skills/treadstone-public-docs/SKILL.md) |
+| Run, design, or analyze sandbox benchmark / load tests | [`benchmark`](.agents/skills/benchmark/SKILL.md) |
 
 Skills live under `.agents/skills/*/SKILL.md`. AGENTS.md defines repo facts and guardrails; skills define procedures.
 
@@ -67,6 +68,7 @@ scripts/           # Helper scripts (release, install, deploy, E2E)
 | `audit-report-refresh` | Re-auditing a subsystem and updating an existing report against the latest code |
 | `architecture-data-flow-trace` | Tracing runtime architecture, state transitions, and end-to-end data flow |
 | [`treadstone-public-docs`](.agents/skills/treadstone-public-docs/SKILL.md) | Public docs system, docs IA, manifest-driven delivery, `llms.txt` / sitemap / robots, control vs data plane narratives, dual human/agent quality |
+| [`benchmark`](.agents/skills/benchmark/SKILL.md) | Run, design, or analyze sandbox benchmark / load tests in `tests/benchmark/` |
 
 For Kubernetes deployment, use **`make local`**, **`make destroy-local`**, and **`make prod`** (context checks before Helm); details in [`deploy/README.md`](deploy/README.md).
 

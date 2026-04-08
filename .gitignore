@@ -41,3 +41,8 @@ Thumbs.db
 xiaohongshu_feed_sample/
 .worktrees/
 kubectl
+
+# Benchmark: results and cached binary (config example is committed, actual config is not)
+tests/benchmark/results/
+tests/benchmark/.bin/
+tests/benchmark/benchmark.config.yaml
