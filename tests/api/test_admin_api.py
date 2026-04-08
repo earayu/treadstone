@@ -13,6 +13,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from treadstone.api import admin as admin_api
 from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
@@ -450,6 +451,64 @@ async def test_batch_grants_empty_user_ids_rejected(admin_client):
         },
     )
     assert resp.status_code == 422
+
+
+async def test_batch_compute_grants_preloads_existing_users_once(admin_client, anon_client, monkeypatch):
+    second = await anon_client.post("/v1/auth/register", json={"email": "second@example.com", "password": "Pass123!"})
+    second_user_id = second.json()["id"]
+    seen_user_ids: list[list[str]] = []
+    original = admin_api._load_existing_user_ids
+
+    async def spy(session: AsyncSession, user_ids: list[str]) -> set[str]:
+        seen_user_ids.append(list(user_ids))
+        return await original(session, user_ids)
+
+    monkeypatch.setattr(admin_api, "_load_existing_user_ids", spy)
+
+    resp = await admin_client.post(
+        "/v1/admin/compute-grants/batch",
+        json={
+            "user_ids": [_get_user_id(admin_client), second_user_id, "nonexistent_user"],
+            "amount": 25,
+            "grant_type": "campaign",
+        },
+    )
+
+    assert resp.status_code == 200
+    assert seen_user_ids == [[_get_user_id(admin_client), second_user_id, "nonexistent_user"]]
+    data = resp.json()
+    assert data["succeeded"] == 2
+    assert data["failed"] == 1
+
+
+async def test_batch_storage_grants_preloads_existing_users_once(admin_client, anon_client, monkeypatch):
+    second = await anon_client.post(
+        "/v1/auth/register", json={"email": "storage-second@example.com", "password": "Pass123!"}
+    )
+    second_user_id = second.json()["id"]
+    seen_user_ids: list[list[str]] = []
+    original = admin_api._load_existing_user_ids
+
+    async def spy(session: AsyncSession, user_ids: list[str]) -> set[str]:
+        seen_user_ids.append(list(user_ids))
+        return await original(session, user_ids)
+
+    monkeypatch.setattr(admin_api, "_load_existing_user_ids", spy)
+
+    resp = await admin_client.post(
+        "/v1/admin/storage-grants/batch",
+        json={
+            "user_ids": [_get_user_id(admin_client), second_user_id, "nonexistent_user"],
+            "size_gib": 5,
+            "grant_type": "campaign",
+        },
+    )
+
+    assert resp.status_code == 200
+    assert seen_user_ids == [[_get_user_id(admin_client), second_user_id, "nonexistent_user"]]
+    data = resp.json()
+    assert data["succeeded"] == 2
+    assert data["failed"] == 1
 
 
 # ── GET /v1/admin/users/lookup-by-email ──────────────────────────────────────

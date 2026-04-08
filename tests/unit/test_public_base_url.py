@@ -41,6 +41,22 @@ def test_no_forwarded_headers_uses_scope_base_url() -> None:
     assert public_control_plane_base_url(req) == "http://test/"
 
 
+def test_public_app_base_url_overrides_spoofed_forwarded_headers(monkeypatch) -> None:
+    from treadstone.core.public_base_url import public_control_plane_base_url
+
+    monkeypatch.setattr("treadstone.core.public_base_url.settings.app_base_url", "https://app.treadstone-ai.dev")
+    req = Request(
+        _minimal_scope(
+            headers=[
+                (b"x-forwarded-proto", b"https"),
+                (b"x-forwarded-host", b"evil.example.com"),
+                (b"host", b"evil.example.com"),
+            ],
+        )
+    )
+    assert public_control_plane_base_url(req) == "https://app.treadstone-ai.dev/"
+
+
 def test_forwarded_https_and_host() -> None:
     from treadstone.core.public_base_url import public_control_plane_base_url
 
@@ -96,3 +112,19 @@ def test_non_http_forwarded_proto_falls_back_to_request_base_url() -> None:
         )
     )
     assert public_control_plane_base_url(req) == str(req.base_url)
+
+
+def test_local_app_base_url_still_allows_forwarded_host(monkeypatch) -> None:
+    from treadstone.core.public_base_url import public_control_plane_base_url
+
+    monkeypatch.setattr("treadstone.core.public_base_url.settings.app_base_url", "http://localhost:5173")
+    req = Request(
+        _minimal_scope(
+            headers=[
+                (b"x-forwarded-proto", b"https"),
+                (b"x-forwarded-host", b"api.example.com"),
+                (b"host", b"internal.local:8000"),
+            ],
+        )
+    )
+    assert public_control_plane_base_url(req) == "https://api.example.com/"
