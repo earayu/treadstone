@@ -10,6 +10,7 @@ from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
 from treadstone.models.user import OAuthAccount, User
+from treadstone.services.k8s_client import FakeK8sClient, set_k8s_client
 
 _test_session_factory = None
 
@@ -84,3 +85,73 @@ async def test_template_has_expected_fields(auth_client):
     assert "image" in tmpl
     assert "resource_spec" in tmpl
     assert "runtime_type" not in tmpl
+
+
+async def test_list_templates_returns_stably_sorted_names(auth_client):
+    k8s = FakeK8sClient()
+    k8s._templates = [  # noqa: SLF001 - test-only fixture shaping
+        {
+            "name": "z-template",
+            "display_name": "Z",
+            "description": "",
+            "image": "ghcr.io/agent-infra/sandbox:latest",
+            "resource_spec": {"cpu": "1", "memory": "1Gi"},
+            "allowed_storage_sizes": ["5Gi"],
+        },
+        {
+            "name": "a-template",
+            "display_name": "A",
+            "description": "",
+            "image": "ghcr.io/agent-infra/sandbox:latest",
+            "resource_spec": {"cpu": "1", "memory": "1Gi"},
+            "allowed_storage_sizes": ["5Gi"],
+        },
+    ]
+    set_k8s_client(k8s)
+
+    resp = await auth_client.get("/v1/sandbox-templates")
+
+    assert resp.status_code == 200
+    assert [item["name"] for item in resp.json()["items"]] == ["a-template", "z-template"]
+
+
+async def test_list_templates_skips_malformed_templates(auth_client):
+    k8s = FakeK8sClient()
+    k8s._templates = [  # noqa: SLF001 - test-only fixture shaping
+        {
+            "name": "valid-template",
+            "display_name": "Valid",
+            "description": "",
+            "image": "ghcr.io/agent-infra/sandbox:latest",
+            "resource_spec": {"cpu": "1", "memory": "1Gi"},
+            "allowed_storage_sizes": ["5Gi"],
+        },
+        {
+            "name": "broken-template",
+            "display_name": "Broken",
+            "description": "",
+            "image": "ghcr.io/agent-infra/sandbox:latest",
+            "resource_spec": {"cpu": "1"},
+            "allowed_storage_sizes": ["5Gi"],
+        },
+    ]
+    set_k8s_client(k8s)
+
+    resp = await auth_client.get("/v1/sandbox-templates")
+
+    assert resp.status_code == 200
+    assert [item["name"] for item in resp.json()["items"]] == ["valid-template"]
+
+
+async def test_list_templates_returns_503_when_catalog_backend_fails(auth_client):
+    class FailingK8sClient:
+        async def list_sandbox_templates(self, namespace: str) -> list[dict]:
+            raise RuntimeError(f"boom:{namespace}")
+
+    set_k8s_client(FailingK8sClient())
+
+    resp = await auth_client.get("/v1/sandbox-templates")
+
+    assert resp.status_code == 503
+    data = resp.json()
+    assert data["error"]["code"] == "sandbox_template_catalog_unavailable"

@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from treadstone.api.deps import get_current_admin
+from treadstone.api.deps import get_current_admin, get_current_admin_session
 from treadstone.api.metering_serializers import (
     serialize_compute_grant,
     serialize_plan,
@@ -78,6 +78,35 @@ logger = logging.getLogger(__name__)
 def _sql_like_escape_fragment(value: str) -> str:
     """Escape `\\`, `%`, and `_` for use in PostgreSQL ILIKE with ESCAPE '\\'."""
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+async def _record_sensitive_admin_read(
+    session: AsyncSession,
+    *,
+    request: Request,
+    action: str,
+    target_type: str,
+    target_id: str | None = None,
+    metadata: dict | None = None,
+) -> None:
+    await record_audit_event(
+        session,
+        action=action,
+        target_type=target_type,
+        target_id=target_id,
+        metadata=metadata,
+        request=request,
+    )
+
+
+async def _load_existing_user_ids(session: AsyncSession, user_ids: list[str]) -> set[str]:
+    """Resolve batch user existence with a single query."""
+    unique_user_ids = {user_id for user_id in user_ids}
+    if not unique_user_ids:
+        return set()
+
+    result = await session.execute(select(User.id).where(User.id.in_(unique_user_ids)))
+    return set(result.scalars().all())
 
 
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
@@ -220,21 +249,42 @@ async def update_tier_template(
 
 @router.get("/users/lookup-by-email", response_model=UserLookupResponse)
 async def admin_lookup_user_by_email(
+    request: Request,
     email: str = Query(..., description="Email address to look up."),
-    _admin: User = Depends(get_current_admin),
+    _admin: User = Depends(get_current_admin_session),
     session: AsyncSession = Depends(get_session),
 ):
     result = await session.execute(select(User).where(User.email == email))
     user = result.unique().scalar_one_or_none()
     if user is None:
+        await record_audit_event(
+            session,
+            action="admin.user.lookup_by_email",
+            target_type="user",
+            result="failure",
+            error_code="not_found",
+            metadata={"email": email},
+            request=request,
+        )
+        await session.commit()
         raise NotFoundError("User", email)
+    await _record_sensitive_admin_read(
+        session,
+        request=request,
+        action="admin.user.lookup_by_email",
+        target_type="user",
+        target_id=user.id,
+        metadata={"email": user.email},
+    )
+    await session.commit()
     return {"user_id": user.id, "email": user.email}
 
 
 @router.post("/users/resolve-emails", response_model=ResolveEmailsResponse)
 async def admin_resolve_emails(
+    request: Request,
     body: ResolveEmailsRequest,
-    _admin: User = Depends(get_current_admin),
+    _admin: User = Depends(get_current_admin_session),
     session: AsyncSession = Depends(get_session),
 ):
     unique_emails = list(dict.fromkeys(body.emails))
@@ -247,6 +297,18 @@ async def admin_resolve_emails(
             results.append({"email": email, "user_id": None, "error": "User not found"})
         else:
             results.append({"email": email, "user_id": user.id, "error": None})
+    await _record_sensitive_admin_read(
+        session,
+        request=request,
+        action="admin.user.resolve_emails",
+        target_type="user_batch_lookup",
+        metadata={
+            "requested_count": len(body.emails),
+            "unique_email_count": len(unique_emails),
+            "resolved_count": sum(1 for item in results if item["user_id"] is not None),
+        },
+    )
+    await session.commit()
     return {"results": results}
 
 
@@ -394,10 +456,10 @@ async def admin_batch_compute_grants(
     results: list[dict] = []
     succeeded = 0
     failed = 0
+    existing_user_ids = await _load_existing_user_ids(session, body.user_ids)
 
     for uid in body.user_ids:
-        user_result = await session.execute(select(User).where(User.id == uid))
-        if user_result.unique().scalar_one_or_none() is None:
+        if uid not in existing_user_ids:
             results.append({"user_id": uid, "grant_id": None, "status": "failed", "error": "User not found"})
             failed += 1
             continue
@@ -456,10 +518,10 @@ async def admin_batch_storage_grants(
     results: list[dict] = []
     succeeded = 0
     failed = 0
+    existing_user_ids = await _load_existing_user_ids(session, body.user_ids)
 
     for uid in body.user_ids:
-        user_result = await session.execute(select(User).where(User.id == uid))
-        if user_result.unique().scalar_one_or_none() is None:
+        if uid not in existing_user_ids:
             results.append({"user_id": uid, "grant_id": None, "status": "failed", "error": "User not found"})
             failed += 1
             continue
@@ -520,7 +582,8 @@ def _require_non_production_email_backend() -> None:
 @router.get("/users/{user_id}/verification-token", include_in_schema=False)
 async def get_user_verification_token(
     user_id: str,
-    admin: User = Depends(get_current_admin),
+    request: Request,
+    admin: User = Depends(get_current_admin_session),
     session: AsyncSession = Depends(get_session),
 ):
     """Return the latest verification token for a user (admin only, non-production)."""
@@ -542,6 +605,16 @@ async def get_user_verification_token(
     if latest is None:
         raise NotFoundError("verification token", user_id)
 
+    await _record_sensitive_admin_read(
+        session,
+        request=request,
+        action="admin.verification_token.read",
+        target_type="user",
+        target_id=latest.user_id,
+        metadata={"email": latest.email},
+    )
+    await session.commit()
+
     return {
         "user_id": latest.user_id,
         "email": latest.email,
@@ -553,8 +626,9 @@ async def get_user_verification_token(
 
 @router.get("/verification-token-by-email", include_in_schema=False)
 async def get_verification_token_by_email(
+    request: Request,
     email: str = Query(..., description="Email address to look up."),
-    admin: User = Depends(get_current_admin),
+    admin: User = Depends(get_current_admin_session),
     session: AsyncSession = Depends(get_session),
 ):
     """Return the latest verification token for an email (admin only, non-production).
@@ -574,6 +648,16 @@ async def get_verification_token_by_email(
 
     if latest is None:
         raise NotFoundError("verification token", email)
+
+    await _record_sensitive_admin_read(
+        session,
+        request=request,
+        action="admin.verification_token.read",
+        target_type="user",
+        target_id=latest.user_id,
+        metadata={"email": latest.email},
+    )
+    await session.commit()
 
     return {
         "user_id": latest.user_id,
@@ -605,11 +689,12 @@ def _serialize_waitlist_application(app: WaitlistApplication) -> dict:
 
 @router.get("/waitlist", response_model=WaitlistApplicationListResponse)
 async def list_waitlist_applications(
+    request: Request,
     tier: str | None = Query(default=None, description="Filter by target tier (pro, ultra)"),
     status: str | None = Query(default=None, description="Filter by status (pending, approved, rejected)"),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    _admin: User = Depends(get_current_admin),
+    _admin: User = Depends(get_current_admin_session),
     session: AsyncSession = Depends(get_session),
 ) -> WaitlistApplicationListResponse:
     """List waitlist applications with optional filters."""
@@ -631,26 +716,36 @@ async def list_waitlist_applications(
         .scalars()
         .all()
     )
+    await _record_sensitive_admin_read(
+        session,
+        request=request,
+        action="admin.waitlist.read",
+        target_type="waitlist_application",
+        metadata={"tier": tier, "status": status, "limit": limit, "offset": offset, "result_count": len(rows)},
+    )
+    await session.commit()
 
     return {"items": [_serialize_waitlist_application(r) for r in rows], "total": total}
 
 
 @router.get("/support/feedback", response_model=FeedbackListResponse)
 async def list_user_feedback(
+    request: Request,
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     email: str | None = Query(
         default=None,
         description="Optional case-insensitive substring match on submitter email.",
     ),
-    _admin: User = Depends(get_current_admin),
+    _admin: User = Depends(get_current_admin_session),
     session: AsyncSession = Depends(get_session),
 ) -> FeedbackListResponse:
     """List user-submitted support feedback (newest first)."""
     count_query = select(func.count()).select_from(UserFeedback)
     query = select(UserFeedback)
-    if email and (trimmed := email.strip()):
-        pattern = f"%{_sql_like_escape_fragment(trimmed)}%"
+    trimmed_email = email.strip() if email else None
+    if trimmed_email:
+        pattern = f"%{_sql_like_escape_fragment(trimmed_email)}%"
         email_filter = UserFeedback.email.ilike(pattern, escape="\\")
         count_query = count_query.where(email_filter)
         query = query.where(email_filter)
@@ -671,6 +766,19 @@ async def list_user_feedback(
         )
         for r in rows
     ]
+    await _record_sensitive_admin_read(
+        session,
+        request=request,
+        action="admin.feedback.read",
+        target_type="user_feedback",
+        metadata={
+            "email_filter": trimmed_email,
+            "limit": limit,
+            "offset": offset,
+            "result_count": len(items),
+        },
+    )
+    await session.commit()
     return FeedbackListResponse(items=items, total=total)
 
 

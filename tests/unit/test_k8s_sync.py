@@ -119,7 +119,11 @@ class TestHandleWatchEvent:
             assert sb.k8s_resource_version == "100"
 
     async def test_deleted_from_deleting_marks_deleted(self, session_factory):
-        await _create_sandbox(session_factory, status=SandboxStatus.DELETING)
+        await _create_sandbox(
+            session_factory,
+            status=SandboxStatus.DELETING,
+            gmt_deleted=utc_now(),
+        )
         cr = {"metadata": {"name": "test-sb", "namespace": "treadstone-local", "resourceVersion": "200"}}
         await handle_watch_event("DELETED", cr, session_factory)
 
@@ -229,7 +233,11 @@ class TestReconcile:
             assert sb.version == 1
 
     async def test_reconcile_missing_cr_deleting_marks_deleted(self, session_factory):
-        await _create_sandbox(session_factory, status=SandboxStatus.DELETING)
+        await _create_sandbox(
+            session_factory,
+            status=SandboxStatus.DELETING,
+            gmt_deleted=utc_now(),
+        )
         k8s = FakeK8sClient()
 
         await reconcile("treadstone-local", k8s, session_factory)

@@ -67,6 +67,11 @@ _CR_MISSING_POLICY: dict[str, str] = {
 }
 
 
+def _sync_visible_sandbox_clause():
+    """Rows the sync loop must still converge, including pending deletes hidden from reads."""
+    return or_(Sandbox.gmt_deleted.is_(None), Sandbox.status == SandboxStatus.DELETING)
+
+
 def _reconcile_tried_cr_keys(sandbox: Sandbox) -> str:
     """Build a comma-separated list of CR name candidates for logging (List snapshot lookup)."""
     keys: list[str] = []
@@ -149,7 +154,7 @@ async def handle_watch_event(
             select(Sandbox).where(
                 ((Sandbox.k8s_sandbox_name == cr_name) | (Sandbox.k8s_sandbox_claim_name == cr_name)),
                 Sandbox.k8s_namespace == cr_namespace,
-                Sandbox.gmt_deleted.is_(None),
+                _sync_visible_sandbox_clause(),
             )
         )
         sandbox = result.scalar_one_or_none()
@@ -275,7 +280,7 @@ async def reconcile(
 
     async with session_factory() as session:
         result = await session.execute(
-            select(Sandbox).where(Sandbox.k8s_namespace == namespace, Sandbox.gmt_deleted.is_(None))
+            select(Sandbox).where(Sandbox.k8s_namespace == namespace, _sync_visible_sandbox_clause())
         )
         sandboxes = result.scalars().all()
 

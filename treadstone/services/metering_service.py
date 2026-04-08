@@ -30,7 +30,7 @@ import logging
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, not_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -83,6 +83,68 @@ ALLOWED_PLAN_OVERRIDES = frozenset(
 
 class MeteringService:
     """Core metering service for quota management and resource tracking."""
+
+    async def _get_usage_summary_snapshot(
+        self,
+        session: AsyncSession,
+        user_id: str,
+    ) -> tuple[UserPlan, int, int, int, Decimal]:
+        now = utc_now()
+        statement = select(
+            UserPlan,
+            select(func.coalesce(func.sum(StorageQuotaGrant.size_gib), 0))
+            .where(
+                StorageQuotaGrant.user_id == user_id,
+                or_(
+                    StorageQuotaGrant.expires_at.is_(None),
+                    StorageQuotaGrant.expires_at > now,
+                ),
+            )
+            .scalar_subquery()
+            .label("extra_storage"),
+            select(func.coalesce(func.sum(StorageLedger.size_gib), 0))
+            .where(
+                StorageLedger.user_id == user_id,
+                StorageLedger.storage_state == StorageState.ACTIVE,
+            )
+            .scalar_subquery()
+            .label("current_storage_used"),
+            select(func.count())
+            .select_from(Sandbox)
+            .where(
+                Sandbox.owner_id == user_id,
+                Sandbox.status.in_([SandboxStatus.CREATING, SandboxStatus.READY]),
+            )
+            .scalar_subquery()
+            .label("running_count"),
+            select(func.coalesce(func.sum(ComputeGrant.remaining_amount), 0))
+            .where(
+                ComputeGrant.user_id == user_id,
+                ComputeGrant.remaining_amount > 0,
+                or_(
+                    ComputeGrant.expires_at.is_(None),
+                    ComputeGrant.expires_at > now,
+                ),
+            )
+            .scalar_subquery()
+            .label("extra_compute_remaining"),
+        ).where(UserPlan.user_id == user_id)
+
+        result = await session.execute(statement)
+        row = result.one_or_none()
+        if row is None:
+            await self.ensure_user_plan(session, user_id)
+            result = await session.execute(statement)
+            row = result.one()
+
+        plan, extra_storage, current_storage_used, running_count, extra_compute_remaining = row
+        return (
+            plan,
+            int(extra_storage or 0),
+            int(current_storage_used or 0),
+            int(running_count or 0),
+            Decimal(str(extra_compute_remaining or 0)),
+        )
 
     @staticmethod
     def _period_overlap_ratio(
@@ -535,7 +597,7 @@ class MeteringService:
         plan = await self.get_user_plan(session, user_id)
         monthly_remaining = plan.compute_units_monthly_limit - plan.compute_units_monthly_used
         extra_remaining = await self.get_extra_compute_remaining(session, user_id)
-        total_remaining = monthly_remaining + extra_remaining
+        total_remaining = monthly_remaining + extra_remaining - (plan.compute_units_overage or Decimal("0"))
         if total_remaining <= Decimal("0"):
             raise ComputeQuotaExceededError(
                 monthly_used=float(plan.compute_units_monthly_used),
@@ -781,24 +843,49 @@ class MeteringService:
     ) -> Decimal:
         """Sum per-session Compute Unit hours clipped to the billing period overlap."""
         now = utc_now()
-        result = await session.execute(
-            select(ComputeSession).where(
-                ComputeSession.user_id == user_id,
-                ComputeSession.started_at < period_end,
-                or_(ComputeSession.ended_at.is_(None), ComputeSession.ended_at > period_start),
-            )
+        tzinfo = now.tzinfo
+        normalized_period_end = period_end if period_end.tzinfo is not None else period_end.replace(tzinfo=tzinfo)
+        overlapping = and_(
+            ComputeSession.user_id == user_id,
+            ComputeSession.started_at < period_end,
+            or_(ComputeSession.ended_at.is_(None), ComputeSession.ended_at > period_start),
         )
-        total_compute_unit_hours = Decimal("0")
-        for compute_session in result.scalars().all():
+        active_sessions_are_fully_contained = now <= normalized_period_end
+        fully_contained = and_(
+            ComputeSession.started_at >= period_start,
+            or_(
+                ComputeSession.ended_at <= period_end,
+                and_(ComputeSession.ended_at.is_(None), active_sessions_are_fully_contained),
+            ),
+        )
+        aggregate_result = await session.execute(
+            select(
+                func.coalesce(func.sum(ComputeSession.vcpu_hours), 0),
+                func.coalesce(func.sum(ComputeSession.memory_gib_hours), 0),
+            ).where(overlapping, fully_contained)
+        )
+        full_vcpu_hours, full_memory_gib_hours = aggregate_result.one()
+        total_compute_unit_hours = CU_VCPU_WEIGHT * Decimal(str(full_vcpu_hours or 0)) + CU_MEMORY_WEIGHT * Decimal(
+            str(full_memory_gib_hours or 0)
+        )
+        result = await session.execute(
+            select(
+                ComputeSession.started_at,
+                ComputeSession.ended_at,
+                ComputeSession.vcpu_hours,
+                ComputeSession.memory_gib_hours,
+            ).where(overlapping, not_(fully_contained))
+        )
+        for started_at, ended_at, vcpu_hours, memory_gib_hours in result.all():
             overlap_ratio = self._period_overlap_ratio(
-                compute_session.started_at,
-                compute_session.ended_at,
+                started_at,
+                ended_at,
                 now=now,
                 period_start=period_start,
                 period_end=period_end,
             )
-            session_compute_unit_hours = (
-                CU_VCPU_WEIGHT * compute_session.vcpu_hours + CU_MEMORY_WEIGHT * compute_session.memory_gib_hours
+            session_compute_unit_hours = CU_VCPU_WEIGHT * Decimal(str(vcpu_hours)) + CU_MEMORY_WEIGHT * Decimal(
+                str(memory_gib_hours)
             )
             total_compute_unit_hours += session_compute_unit_hours * overlap_ratio
 
@@ -812,30 +899,39 @@ class MeteringService:
         period_end: datetime,
     ) -> Decimal:
         """Calculate GiB-hours for the given billing period with proper clipping."""
-        result = await session.execute(
-            select(StorageLedger).where(
-                StorageLedger.user_id == user_id,
-                StorageLedger.allocated_at < period_end,
-                or_(StorageLedger.released_at.is_(None), StorageLedger.released_at > period_start),
+        now = utc_now()
+        overlapping = and_(
+            StorageLedger.user_id == user_id,
+            StorageLedger.allocated_at < period_end,
+            or_(StorageLedger.released_at.is_(None), StorageLedger.released_at > period_start),
+        )
+        fully_contained_released = and_(
+            StorageLedger.allocated_at >= period_start,
+            StorageLedger.released_at.is_not(None),
+            StorageLedger.released_at <= period_end,
+        )
+        aggregate_result = await session.execute(
+            select(func.coalesce(func.sum(StorageLedger.gib_hours_consumed), 0)).where(
+                overlapping,
+                fully_contained_released,
             )
         )
-        ledgers = result.scalars().all()
-
-        now = utc_now()
+        total = Decimal(str(aggregate_result.scalar_one() or 0))
+        result = await session.execute(
+            select(
+                StorageLedger.size_gib,
+                StorageLedger.allocated_at,
+                StorageLedger.released_at,
+            ).where(overlapping, not_(fully_contained_released))
+        )
         tzinfo = now.tzinfo
         normalized_period_start = (
             period_start if period_start.tzinfo is not None else period_start.replace(tzinfo=tzinfo)
         )
         normalized_period_end = period_end if period_end.tzinfo is not None else period_end.replace(tzinfo=tzinfo)
 
-        total = Decimal("0")
-        for ledger in ledgers:
-            allocated_at = (
-                ledger.allocated_at
-                if ledger.allocated_at.tzinfo is not None
-                else ledger.allocated_at.replace(tzinfo=tzinfo)
-            )
-            released_at = ledger.released_at
+        for size_gib, allocated_at, released_at in result.all():
+            allocated_at = allocated_at if allocated_at.tzinfo is not None else allocated_at.replace(tzinfo=tzinfo)
             if released_at is not None and released_at.tzinfo is None:
                 released_at = released_at.replace(tzinfo=tzinfo)
 
@@ -843,25 +939,29 @@ class MeteringService:
             effective_end = min(released_at or now, normalized_period_end, now)
             elapsed_seconds = (effective_end - effective_start).total_seconds()
             if elapsed_seconds > 0:
-                total += Decimal(str(ledger.size_gib)) * Decimal(str(elapsed_seconds)) / Decimal("3600")
+                total += Decimal(str(size_gib)) * Decimal(str(elapsed_seconds)) / Decimal("3600")
 
         return total.quantize(Decimal("0.0001"))
 
     async def get_usage_summary(self, session: AsyncSession, user_id: str) -> dict:
         """Assemble the complete usage overview for GET /v1/usage."""
-        plan = await self.get_user_plan(session, user_id)
-        extra_storage = await self.get_extra_storage_quota(session, user_id)
+        (
+            plan,
+            extra_storage,
+            current_storage_used,
+            running_count,
+            extra_compute_remaining,
+        ) = await self._get_usage_summary_snapshot(session, user_id)
         total_storage_quota = plan.storage_capacity_limit_gib + extra_storage
-        current_storage_used = await self.get_current_storage_used(session, user_id)
-        running_count = await self._count_running_sandboxes(session, user_id)
 
         compute_unit_hours = await self.get_compute_unit_hours_for_period(
             session, user_id, plan.period_start, plan.period_end
         )
 
-        extra_compute_remaining = await self.get_extra_compute_remaining(session, user_id)
         monthly_remaining = max(Decimal("0"), plan.compute_units_monthly_limit - plan.compute_units_monthly_used)
-        total_compute_remaining = await self.get_total_compute_remaining(session, user_id)
+        total_compute_remaining = (
+            monthly_remaining + extra_compute_remaining - (plan.compute_units_overage or Decimal("0"))
+        )
 
         storage_gib_hours = await self.get_storage_gib_hours_for_period(
             session, user_id, plan.period_start, plan.period_end

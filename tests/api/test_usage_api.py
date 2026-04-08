@@ -216,15 +216,14 @@ async def test_get_usage_clips_cross_period_cumulative_usage(user_client, monkey
     assert data["storage"]["gib_hours"] == 5.0
 
 
-async def test_get_usage_exposes_negative_total_remaining_during_overage(user_client):
-    await user_client.get("/v1/usage")
-
+async def test_get_usage_surfaces_negative_total_remaining_when_user_has_overage(user_client):
     async with _test_session_factory() as session:
         user = (await session.execute(select(User).where(User.email == "user@example.com"))).unique().scalar_one()
-        plan = (await session.execute(select(UserPlan).where(UserPlan.user_id == user.id))).scalar_one()
-        plan.compute_units_monthly_used = Decimal("10")
-        plan.compute_units_overage = Decimal("2")
-        session.add(plan)
+        user_plan = (await session.execute(select(UserPlan).where(UserPlan.user_id == user.id))).scalar_one()
+        user_plan.compute_units_monthly_used = Decimal("10")
+        user_plan.compute_units_overage = Decimal("2.5")
+        user_plan.grace_period_started_at = datetime(2026, 3, 15, 9, 0, 0, tzinfo=UTC)
+        session.add(user_plan)
         await session.commit()
 
     resp = await user_client.get("/v1/usage")
@@ -232,7 +231,8 @@ async def test_get_usage_exposes_negative_total_remaining_during_overage(user_cl
     assert resp.status_code == 200
     data = resp.json()
     assert data["compute"]["monthly_remaining"] == 0.0
-    assert data["compute"]["total_remaining"] == -2.0
+    assert data["compute"]["extra_remaining"] == 0.0
+    assert data["compute"]["total_remaining"] == -2.5
 
 
 async def test_grants_exactly_at_expiry_align_with_usage_summary(user_client, monkeypatch):
@@ -401,3 +401,39 @@ async def test_list_storage_ledger_pagination(user_client):
     data = resp.json()
     assert data["limit"] == 5
     assert data["offset"] == 0
+
+
+async def test_list_storage_ledger_released_status_serializes_released(user_client):
+    async with _test_session_factory() as session:
+        user = (await session.execute(select(User).where(User.email == "user@example.com"))).unique().scalar_one()
+        sandbox = Sandbox(
+            id="sbreleasedledger001",
+            name="released-ledger",
+            owner_id=user.id,
+            template="aio-sandbox-small",
+            k8s_namespace="test",
+            status=SandboxStatus.DELETED,
+            endpoints={},
+        )
+        session.add(sandbox)
+        session.add(
+            StorageLedger(
+                id="slreleasedledger001",
+                user_id=user.id,
+                sandbox_id=sandbox.id,
+                size_gib=5,
+                storage_state=StorageState.DELETED,
+                allocated_at=datetime(2026, 3, 2, 0, 0, 0, tzinfo=UTC),
+                released_at=datetime(2026, 3, 3, 0, 0, 0, tzinfo=UTC),
+                gib_hours_consumed=Decimal("120"),
+                last_metered_at=datetime(2026, 3, 3, 0, 0, 0, tzinfo=UTC),
+            )
+        )
+        await session.commit()
+
+    resp = await user_client.get("/v1/usage/storage-ledger", params={"status": "released"})
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 1
+    assert data["items"][0]["storage_state"] == "released"
