@@ -571,6 +571,7 @@ class TestCheckGracePeriods:
                 _MockScalars([plan]),
                 _MockRows([]),
                 _MockScalars([sandbox]),
+                _MockScalars([]),
             ]
         )
         session.get = AsyncMock(return_value=sandbox)
@@ -613,6 +614,7 @@ class TestCheckGracePeriods:
                 _MockScalars([plan]),
                 _MockRows([]),
                 _MockScalars([sandbox]),
+                _MockScalars([]),
             ]
         )
         session.add = MagicMock()
@@ -678,12 +680,14 @@ class TestCheckGracePeriods:
                 _MockScalars([plan]),
                 _MockRows([]),
                 _MockScalars([sandbox]),
+                _MockScalars([]),
             ]
         )
         session.add = MagicMock()
         session.commit = AsyncMock()
 
-        with patch("treadstone.services.metering_tasks._metering"):
+        with patch("treadstone.services.metering_tasks._metering") as mock_metering:
+            mock_metering.close_compute_session = AsyncMock(return_value=None)
             with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
                 mock_audit.return_value = MagicMock()
                 await check_grace_periods(session, stop_sandbox_callback=stop_callback)
@@ -695,25 +699,29 @@ class TestCheckGracePeriods:
         from treadstone.services.metering_tasks import check_grace_periods
 
         grace_start = FIXED_NOW - timedelta(seconds=2000)
-        plan = _make_plan(grace_period_seconds=1800, grace_period_started_at=grace_start)
+        plan = _make_plan(
+            monthly_used=Decimal("100"),
+            compute_units_overage=Decimal("5"),
+            grace_period_seconds=1800,
+            grace_period_started_at=grace_start,
+        )
         sandbox = _make_sandbox()
 
         stop_callback = AsyncMock()
         session = AsyncMock()
-        results = iter(
-            [
+        session.execute = AsyncMock(
+            side_effect=[
                 _MockDistinct(["user_01"]),
+                _MockScalars([plan]),
+                _MockRows([]),
                 _MockScalars([sandbox]),
                 _MockScalars([]),
             ]
         )
-        session.execute = AsyncMock(side_effect=lambda stmt: next(results))
         session.add = MagicMock()
         session.commit = AsyncMock()
 
         with patch("treadstone.services.metering_tasks._metering") as mock_metering:
-            mock_metering.get_user_plan = AsyncMock(return_value=plan)
-            mock_metering.get_total_compute_remaining = AsyncMock(return_value=Decimal("-5"))
             mock_metering.close_compute_session = AsyncMock(side_effect=RuntimeError("metering failed"))
             with patch(
                 "treadstone.services.metering_tasks.record_audit_event",
