@@ -2,7 +2,7 @@ replicaCount: 1
 
 image:
   repository: ghcr.io/earayu/treadstone
-  tag: 0.8.5
+  tag: 0.8.6
   pullPolicy: Always
 
 envSecretRef: treadstone-secrets
