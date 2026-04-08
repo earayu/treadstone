@@ -698,12 +698,16 @@ async def test_create_feedback_rate_limits_repeat_submissions(member_client):
 
     async with _test_session_factory() as session:
         events = (
-            await session.execute(
-                select(AuditEvent)
-                .where(AuditEvent.action == "feedback.create")
-                .order_by(AuditEvent.created_at.asc())
+            (
+                await session.execute(
+                    select(AuditEvent)
+                    .where(AuditEvent.action == "feedback.create")
+                    .order_by(AuditEvent.created_at.asc())
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
     assert len(events) == 2
     assert events[0].result == "success"
