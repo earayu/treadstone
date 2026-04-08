@@ -20,6 +20,8 @@ async def load_sandbox_template_catalog(k8s: K8sClientProtocol, namespace: str) 
         raw_templates = await k8s.list_sandbox_templates(namespace=namespace)
     except Exception as exc:
         logger.exception("Failed to load sandbox template catalog from namespace %s", namespace)
+        if isinstance(exc, (TypeError, ValueError, AttributeError)):
+            raise
         raise SandboxTemplateCatalogUnavailableError() from exc
 
     templates: list[dict[str, Any]] = []
