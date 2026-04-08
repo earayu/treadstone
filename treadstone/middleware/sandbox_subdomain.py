@@ -13,7 +13,7 @@ import logging
 from http.cookies import SimpleCookie
 from urllib.parse import urlencode
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from starlette.requests import Request
 from starlette.responses import RedirectResponse, Response, StreamingResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -213,6 +213,18 @@ class SandboxSubdomainMiddleware:
             )
             return result.scalar_one_or_none()
 
+    async def _touch_last_active(self, sandbox_id: str) -> None:
+        try:
+            async with async_session() as session:
+                await session.execute(
+                    update(Sandbox)
+                    .where(Sandbox.id == sandbox_id, Sandbox.gmt_deleted.is_(None))
+                    .values(gmt_last_active=utc_now())
+                )
+                await session.commit()
+        except Exception:
+            logger.warning("Failed to refresh last active timestamp for sandbox %s", sandbox_id, exc_info=True)
+
     def _build_return_to(self, scope: Scope, host: str) -> str:
         path = scope.get("path", "/")
         query_string = scope.get("query_string", b"").decode("latin-1")
@@ -227,16 +239,52 @@ class SandboxSubdomainMiddleware:
         return f"{settings.app_base_url.rstrip('/')}/v1/browser/bootstrap?{urlencode({'return_to': return_to})}"
 
     @staticmethod
-    def _set_sandbox_cookie(response: Response, sandbox_id: str, issued_via: str) -> None:
+    def _set_sandbox_cookie(response: Response, sandbox_id: str, issued_via: str, link_id: str | None = None) -> None:
         response.set_cookie(
             key=SANDBOX_WEB_COOKIE_NAME,
-            value=issue_sandbox_web_cookie(sandbox_id=sandbox_id, issued_via=issued_via),
+            value=issue_sandbox_web_cookie(sandbox_id=sandbox_id, issued_via=issued_via, link_id=link_id),
             max_age=SANDBOX_WEB_COOKIE_TTL_SECONDS,
             httponly=True,
             samesite="lax",
             secure=not settings.debug,
             path="/",
         )
+
+    async def _load_active_web_link(self, sandbox_id: str) -> SandboxWebLink | None:
+        async with async_session() as session:
+            result = await session.execute(
+                select(SandboxWebLink).where(
+                    SandboxWebLink.sandbox_id == sandbox_id,
+                    SandboxWebLink.gmt_deleted.is_(None),
+                )
+            )
+            link = result.scalar_one_or_none()
+            if link is None or link.is_expired():
+                return None
+            return link
+
+    async def _validate_sandbox_cookie(self, scope: Scope, sandbox: Sandbox, token: str | None) -> bool:
+        if not token:
+            return False
+
+        payload = verify_sandbox_web_cookie(token)
+        if payload is None or payload.get("sandbox_id") != sandbox.id:
+            return False
+
+        if payload.get("issued_via") != "open_link":
+            return True
+
+        link_id = payload.get("link_id")
+        if not isinstance(link_id, str) or not link_id:
+            set_scope_context(scope, error_code="sandbox_web_link_cookie_invalid")
+            return False
+
+        active_link = await self._load_active_web_link(sandbox.id)
+        if active_link is None or active_link.id != link_id:
+            set_scope_context(scope, error_code="sandbox_web_link_cookie_revoked")
+            return False
+
+        return True
 
     async def _exchange_open_credentials(self, request: Request, sandbox: Sandbox) -> Response:
         set_request_context(request, sandbox_id=sandbox.id)
@@ -249,6 +297,7 @@ class SandboxSubdomainMiddleware:
             if payload is None or payload.get("sandbox_id") != sandbox.id:
                 return Response("Invalid or expired bootstrap ticket.", status_code=401)
             next_path = _sanitize_next_path(str(payload.get("next_path", next_path)))
+            await self._touch_last_active(sandbox.id)
             response = RedirectResponse(url=next_path, status_code=303)
             self._set_sandbox_cookie(response, sandbox.id, "bootstrap")
             return response
@@ -293,7 +342,7 @@ class SandboxSubdomainMiddleware:
                 await session.commit()
 
             response = RedirectResponse(url=next_path, status_code=303)
-            self._set_sandbox_cookie(response, sandbox.id, "open_link")
+            self._set_sandbox_cookie(response, sandbox.id, "open_link", link_id=link.id)
             return response
 
         return Response("Missing sandbox web credential.", status_code=400)
@@ -350,8 +399,7 @@ class SandboxSubdomainMiddleware:
             return
 
         token = request.cookies.get(SANDBOX_WEB_COOKIE_NAME)
-        payload = verify_sandbox_web_cookie(token) if token else None
-        if payload is None or payload.get("sandbox_id") != sandbox.id:
+        if not await self._validate_sandbox_cookie(scope, sandbox, token):
             response = RedirectResponse(url=self._build_bootstrap_redirect(scope, host), status_code=303)
             await response(scope, receive, send)
             return
@@ -360,6 +408,7 @@ class SandboxSubdomainMiddleware:
             await _html_starting()(scope, receive, send)
             return
 
+        await self._touch_last_active(sandbox.id)
         await self._proxy_http(request, scope, receive, send, sandbox)
 
     async def _handle_websocket(self, scope: Scope, receive: Receive, send: Send, sandbox_id: str) -> None:
@@ -371,10 +420,11 @@ class SandboxSubdomainMiddleware:
 
         websocket = WebSocket(scope, receive, send)
         token = websocket.cookies.get(SANDBOX_WEB_COOKIE_NAME)
-        payload = verify_sandbox_web_cookie(token) if token else None
-        if payload is None or payload.get("sandbox_id") != sandbox.id:
+        if not await self._validate_sandbox_cookie(scope, sandbox, token):
             await websocket.close(code=1008)
             return
+
+        await self._touch_last_active(sandbox.id)
 
         path = scope.get("path", "/")
         query_string = scope.get("query_string", b"").decode("latin-1")

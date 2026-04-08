@@ -2,6 +2,8 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+import pytest
+
 import treadstone.main as main
 from treadstone.core.database import async_session
 
@@ -96,3 +98,50 @@ async def test_lifespan_starts_metering_loop_when_leader_election_disabled(monke
     assert sync_cancelled.is_set()
     assert metering_cancelled.is_set()
     close_http_client.assert_awaited_once()
+
+
+async def test_run_metering_loop_runs_once_before_first_sleep(monkeypatch):
+    calls: list[str] = []
+
+    async def fake_run_metering_tick(session_factory, stop_sandbox_callback) -> None:
+        assert session_factory is async_session
+        assert stop_sandbox_callback is not None
+        calls.append("run")
+
+    async def fake_sleep(_seconds: int) -> None:
+        calls.append("sleep")
+        raise asyncio.CancelledError
+
+    import treadstone.services.metering_tasks as metering_tasks
+
+    monkeypatch.setattr(metering_tasks, "run_metering_tick", fake_run_metering_tick)
+    monkeypatch.setattr(main.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        await main._run_metering_loop(async_session)
+
+    assert calls == ["run", "sleep"]
+
+
+async def test_run_lifecycle_loop_runs_once_before_first_sleep(monkeypatch):
+    calls: list[str] = []
+
+    async def fake_run_lifecycle_tick(session_factory, stop_sandbox_callback, delete_sandbox_callback) -> None:
+        assert session_factory is async_session
+        assert stop_sandbox_callback is not None
+        assert delete_sandbox_callback is not None
+        calls.append("run")
+
+    async def fake_sleep(_seconds: int) -> None:
+        calls.append("sleep")
+        raise asyncio.CancelledError
+
+    import treadstone.services.sandbox_lifecycle_tasks as lifecycle_tasks
+
+    monkeypatch.setattr(lifecycle_tasks, "run_lifecycle_tick", fake_run_lifecycle_tick)
+    monkeypatch.setattr(main.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        await main._run_lifecycle_loop(async_session)
+
+    assert calls == ["run", "sleep"]

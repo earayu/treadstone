@@ -290,6 +290,16 @@ async def test_admin_can_get_verification_token_by_email(db_session):
     assert "token" in data
     assert len(data["token"]) > 0
 
+    async with _test_session_factory() as session:
+        events = (
+            (await session.execute(select(AuditEvent).where(AuditEvent.action == "admin.verification_token.read")))
+            .scalars()
+            .all()
+        )
+    assert len(events) == 1
+    assert events[0].target_type == "user"
+    assert events[0].event_metadata["email"] == "user@example.com"
+
 
 async def test_non_admin_cannot_access_verification_token(db_session):
     """Non-admin user gets 403 when trying to access admin verification endpoint."""
@@ -301,6 +311,25 @@ async def test_non_admin_cannot_access_verification_token(db_session):
         resp = await client.get("/v1/admin/verification-token-by-email?email=user@example.com")
 
     assert resp.status_code == 403
+
+
+async def test_admin_api_key_cannot_access_verification_token(db_session):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await _register(client, "admin@example.com")
+        await _register(client, "user@example.com")
+        await _login(client, "admin@example.com")
+        api_key_response = await client.post("/v1/auth/api-keys", json={"name": "verification-read-key"})
+        api_key = api_key_response.json()["key"]
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get(
+            "/v1/admin/verification-token-by-email",
+            params={"email": "user@example.com"},
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+
+    assert resp.status_code == 401
+    assert resp.json()["error"]["code"] == "auth_invalid"
 
 
 async def test_confirm_invalid_token_records_audit_event(db_session):
