@@ -685,8 +685,7 @@ async def _load_user_metering_snapshots(
         .group_by(ComputeGrant.user_id)
     )
     extra_remaining_by_user = {
-        user_id: Decimal(str(remaining_amount))
-        for user_id, remaining_amount in grants_result.all()
+        user_id: Decimal(str(remaining_amount)) for user_id, remaining_amount in grants_result.all()
     }
 
     snapshots: dict[str, _UserMeteringSnapshot] = {}
