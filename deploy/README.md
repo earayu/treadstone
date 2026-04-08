@@ -151,6 +151,21 @@ make deploy-web ENV=local       # Web frontend
 `deploy-api` automatically creates a K8s Secret (`treadstone-secrets`) from `.env.local`, and runs the database migration in a Helm pre-install/pre-upgrade hook.
 Persistent sandboxes use `TREADSTONE_SANDBOX_STORAGE_CLASS` from the environment file and default to a 5 GiB workspace.
 
+### Persistent sandboxes on ACK virtual nodes
+
+For ACK clusters, direct sandboxes with PVC-backed workspaces can also use virtual nodes after the cluster-side prerequisite is enabled in `kube-system/eci-profile`:
+
+- keep the workspace `StorageClass` on `WaitForFirstConsumer`
+- add `WaitForFirstConsumer=true` to `eci-profile.data.featureGates`
+- keep `sandbox-direct-acs-overflow` as the only owner of ACS scheduling labels / QoS
+
+Placement rules are different for **new** and **existing** PVCs:
+
+- **New persistent sandboxes:** if ECS has headroom, the first pod still lands on ECS and the disk is created in that zone. If ECS is full and the pod overflows to a virtual node, the first placement may use any zone configured in `eci-profile`.
+- **Existing persistent sandboxes:** after the PVC/PV already exists, later stop/start cycles do **not** randomly pick a zone. The bound PV carries topology-aware `nodeAffinity`, so the scheduler can only restart the sandbox in the PV's original zone.
+
+This rollout does **not** migrate existing PVCs across zones. If `best-effort` is enabled in the direct overflow policy, expect possible preemption during bursts; the sandbox should still restart against the same PVC afterward.
+
 ### Sandbox runtime image (local)
 
 `deploy/sandbox-runtime/values-local.yaml` defaults to a **mainland China** mirror for the all-in-one sandbox image (see the `image:` field). This matches typical developer networks in China. If you are outside mainland China or the mirror is unreachable, switch the `image` value to `ghcr.io/agent-infra/sandbox:1.0.0.152` (same as `values-prod.yaml`) and redeploy the runtime chart. You can also `docker pull` + `kind load docker-image` that tag before creating sandboxes.
