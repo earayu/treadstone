@@ -34,6 +34,7 @@ spec:
                     default: Retain
                     enum:
                     - Delete
+                    - DeleteForeground
                     - Retain
                     type: string
                   shutdownTime:
@@ -47,6 +48,9 @@ spec:
                 required:
                 - name
                 type: object
+              warmpool:
+                default: default
+                type: string
             required:
             - sandboxTemplateRef
             type: object
@@ -90,8 +94,12 @@ spec:
                 type: array
               sandbox:
                 properties:
-                  Name:
+                  name:
                     type: string
+                  podIPs:
+                    items:
+                      type: string
+                    type: array
                 type: object
             type: object
         required:
@@ -3909,6 +3917,10 @@ spec:
                                             type: integer
                                           signerName:
                                             type: string
+                                          userAnnotations:
+                                            additionalProperties:
+                                              type: string
+                                            type: object
                                         required:
                                         - keyType
                                         - signerName
@@ -4103,6 +4115,18 @@ spec:
                         x-kubernetes-list-map-keys:
                         - name
                         x-kubernetes-list-type: map
+                      workloadRef:
+                        properties:
+                          name:
+                            type: string
+                          podGroup:
+                            type: string
+                          podGroupReplicaKey:
+                            type: string
+                        required:
+                        - name
+                        - podGroup
+                        type: object
                     required:
                     - containers
                     type: object
@@ -4182,6 +4206,8 @@ spec:
               replicas:
                 format: int32
                 type: integer
+              selector:
+                type: string
             type: object
         required:
         - spec
@@ -4190,6 +4216,7 @@ spec:
     storage: true
     subresources:
       scale:
+        labelSelectorPath: .status.selector
         specReplicasPath: .spec.replicas
         statusReplicasPath: .status.replicas
       status: {}
@@ -4200,13 +4227,6 @@ kind: ClusterRole
 metadata:
   name: agent-sandbox-controller-extensions
 rules:
-- apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - create
-  - patch
 - apiGroups:
   - ""
   resources:
@@ -4243,6 +4263,13 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - events.k8s.io
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
 - apiGroups:
   - extensions.agents.x-k8s.io
   resources:
@@ -4281,15 +4308,6 @@ rules:
   - patch
   - update
   - watch
----
-# VENDOR PATCH: The Deployment that originally appeared here has been removed.
-# Upstream uses `kubectl apply` sequentially (manifest.yaml then extensions.yaml),
-# which updates the existing Deployment with --extensions. Our Helm chart applies
-# both files in one install, so we merged --extensions into manifest.yaml instead
-# and removed the duplicate Deployment block to avoid "already exists" conflict.
-# When upgrading upstream version: diff the new extensions.yaml Deployment against
-# manifest.yaml to check for any new args, then re-apply the merge.
-
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
