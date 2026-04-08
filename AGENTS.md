@@ -181,3 +181,7 @@ Run `make help` for the full list. Key commands:
 | `make local` / `make destroy-local` / `make prod` | Local Kind up/down and prod deploy (`TREADSTONE_PROD_CONTEXT` for `make prod`; see `deploy/README.md`) |
 | `make ship MSG=x` | git add + commit + push (feature branches only) |
 | Release | GitHub → **Actions** → **Release** → **Run workflow** → version `x.y.z` (no `v`; matches image tags) |
+
+## Cursor Cloud specific instructions
+
+See [`.cursor/cursor-cloud.md`](.cursor/cursor-cloud.md) for the full guide. Key points: K8s is unavailable (cgroupv2 limitation); use `make test` + `make lint` locally and rely on GitHub Actions `K8s E2E` workflow for full-stack validation.
