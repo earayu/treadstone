@@ -15,6 +15,10 @@ from treadstone.models.user import User
 router = APIRouter(prefix="/v1/audit", tags=["audit"])
 
 
+def _events_ordering():
+    return AuditEvent.created_at.desc(), AuditEvent.id.desc()
+
+
 def _apply_filters(
     statement,
     *,
@@ -98,10 +102,13 @@ async def list_audit_events(
     offset: int = Query(default=0, ge=0),
 ):
     resolved_actor_user_id = actor_user_id
-    if actor_email and not actor_user_id:
-        user_row = await session.execute(select(User).where(User.email == actor_email))
+    if actor_email:
+        normalized_actor_email = actor_email.strip().lower()
+        user_row = await session.execute(select(User).where(func.lower(User.email) == normalized_actor_email))
         user = user_row.unique().scalar_one_or_none()
         if user:
+            if actor_user_id and actor_user_id != user.id:
+                return {"items": [], "total": 0}
             resolved_actor_user_id = user.id
         else:
             return {"items": [], "total": 0}
@@ -118,7 +125,7 @@ async def list_audit_events(
         until=until,
     )
     items_result = await session.execute(
-        base_statement.order_by(AuditEvent.created_at.desc()).limit(limit).offset(offset)
+        base_statement.order_by(*_events_ordering()).limit(limit).offset(offset)
     )
     total_statement = _apply_filters(
         select(func.count()).select_from(AuditEvent),
