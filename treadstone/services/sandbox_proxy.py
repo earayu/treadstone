@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import httpx
@@ -150,6 +151,14 @@ async def proxy_http_request(
     return resp.status_code, resp_headers, resp
 
 
+WS_ACTIVITY_TOUCH_INTERVAL = 30
+"""Seconds between periodic ``gmt_last_active`` touches during a WebSocket
+session.  Chosen to be well below the minimum ``auto_stop_interval`` of
+1 minute so even the shortest idle threshold cannot fire while the
+connection is alive, while keeping DB traffic to ~2 writes/min per
+connection."""
+
+
 async def proxy_websocket(
     *,
     client_ws: WebSocket,
@@ -157,12 +166,25 @@ async def proxy_websocket(
     path: str,
     namespace: str | None = None,
     port: int | None = None,
+    on_activity: Callable[[], Awaitable[None]] | None = None,
 ) -> None:
-    """Bidirectional WebSocket proxy between the client and a sandbox pod."""
+    """Bidirectional WebSocket proxy between the client and a sandbox pod.
+
+    *on_activity* is called once when the upstream connection is established
+    and then every ``WS_ACTIVITY_TOUCH_INTERVAL`` seconds while the relay
+    is running.  Callers use it to bump ``gmt_last_active`` so long-lived
+    sessions prevent idle auto-stop.  Failures in the callback are logged
+    but never tear down the WebSocket session.
+    """
     target_url = build_sandbox_url(sandbox_id, path, namespace=namespace, port=port, scheme="ws")
     logger.debug("WS proxy to %s", target_url)
 
     async with websockets.asyncio.client.connect(target_url) as upstream:
+        if on_activity is not None:
+            try:
+                await on_activity()
+            except Exception:
+                logger.debug("Initial activity touch failed for WS proxy to %s", sandbox_id)
 
         async def client_to_upstream() -> None:
             try:
@@ -187,8 +209,26 @@ async def proxy_websocket(
             except websockets.exceptions.ConnectionClosed:
                 pass
 
+        async def periodic_activity_touch() -> None:
+            """Periodically refresh gmt_last_active so the sandbox is not
+            mistaken for idle during a long-lived WebSocket session."""
+            try:
+                while True:
+                    await asyncio.sleep(WS_ACTIVITY_TOUCH_INTERVAL)
+                    if on_activity is not None:
+                        try:
+                            await on_activity()
+                        except Exception:
+                            logger.debug("Periodic activity touch failed for WS proxy to %s", sandbox_id)
+            except asyncio.CancelledError:
+                pass
+
         done, pending = await asyncio.wait(
-            [asyncio.create_task(client_to_upstream()), asyncio.create_task(upstream_to_client())],
+            [
+                asyncio.create_task(client_to_upstream()),
+                asyncio.create_task(upstream_to_client()),
+                asyncio.create_task(periodic_activity_touch()),
+            ],
             return_when=asyncio.FIRST_COMPLETED,
         )
         for task in pending:

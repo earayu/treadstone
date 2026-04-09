@@ -110,7 +110,8 @@ async def check_auto_delete(
     now = utc_now()
     result = await session.execute(
         select(Sandbox).where(
-            Sandbox.status == SandboxStatus.STOPPED,
+            Sandbox.status.in_([SandboxStatus.STOPPED, SandboxStatus.COLD]),
+            Sandbox.pending_operation.is_(None),
             Sandbox.auto_delete_interval > 0,
             Sandbox.gmt_stopped.isnot(None),
         )

@@ -370,13 +370,8 @@ class SandboxSubdomainMiddleware:
         client = await get_http_client()
         outgoing = _strip_internal_auth(headers)
 
-        try:
-            req = client.build_request(method=request.method, url=target_url, headers=outgoing, content=body)
-            resp = await client.send(req, stream=True)
-        except Exception:
-            logger.exception("Subdomain proxy failed for sandbox %s", sandbox.id)
-            await _html_starting()(scope, receive, send)
-            return
+        req = client.build_request(method=request.method, url=target_url, headers=outgoing, content=body)
+        resp = await client.send(req, stream=True)
 
         resp_headers = _filter_response_headers(resp.headers)
         streaming = StreamingResponse(
@@ -408,8 +403,13 @@ class SandboxSubdomainMiddleware:
             await _html_starting()(scope, receive, send)
             return
 
+        try:
+            await self._proxy_http(request, scope, receive, send, sandbox)
+        except Exception:
+            logger.exception("Subdomain proxy failed for sandbox %s", sandbox.id)
+            await _html_starting()(scope, receive, send)
+            return
         await self._touch_last_active(sandbox.id)
-        await self._proxy_http(request, scope, receive, send, sandbox)
 
     async def _handle_websocket(self, scope: Scope, receive: Receive, send: Send, sandbox_id: str) -> None:
         sandbox = await self._load_sandbox(sandbox_id)
@@ -424,8 +424,6 @@ class SandboxSubdomainMiddleware:
             await websocket.close(code=1008)
             return
 
-        await self._touch_last_active(sandbox.id)
-
         path = scope.get("path", "/")
         query_string = scope.get("query_string", b"").decode("latin-1")
         if query_string:
@@ -438,6 +436,7 @@ class SandboxSubdomainMiddleware:
                 client_ws=websocket,
                 sandbox_id=sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.id,
                 path=path,
+                on_activity=lambda: self._touch_last_active(sandbox.id),
             )
         except Exception:
             try:

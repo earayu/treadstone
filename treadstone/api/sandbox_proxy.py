@@ -55,10 +55,6 @@ async def http_proxy(
     if sandbox.status != SandboxStatus.READY:
         raise SandboxNotReadyError(sandbox_id, sandbox.status)
 
-    sandbox.gmt_last_active = utc_now()
-    session.add(sandbox)
-    await session.commit()
-
     headers = dict(request.headers)
     try:
         routing = resolve_routing(
@@ -87,6 +83,11 @@ async def http_proxy(
     except Exception:
         logger.exception("Proxy failed for sandbox %s", sandbox_id)
         raise SandboxUnreachableError(sandbox_id)
+
+    from sqlalchemy import update as sa_update
+
+    await session.execute(sa_update(Sandbox).where(Sandbox.id == sandbox_id).values(gmt_last_active=utc_now()))
+    await session.commit()
 
     return StreamingResponse(
         content=resp.aiter_bytes(),
@@ -163,10 +164,6 @@ async def ws_proxy(
             await websocket.close(code=1008, reason="Sandbox is not ready.")
             return
 
-        sandbox.gmt_last_active = utc_now()
-        session.add(sandbox)
-        await session.commit()
-
     # Populate structured request context for audit logging (mirrors HTTP proxy).
     set_scope_context(
         websocket.scope,
@@ -197,6 +194,15 @@ async def ws_proxy(
         await websocket.close(code=1008, reason=str(exc))
         return
 
+    async def _touch_activity() -> None:
+        async with async_session() as touch_session:
+            from sqlalchemy import update as sa_update
+
+            await touch_session.execute(
+                sa_update(Sandbox).where(Sandbox.id == sandbox_id).values(gmt_last_active=utc_now())
+            )
+            await touch_session.commit()
+
     try:
         await proxy_websocket(
             client_ws=websocket,
@@ -204,6 +210,7 @@ async def ws_proxy(
             path=full_path,
             namespace=routing["namespace"],
             port=routing["port"],
+            on_activity=_touch_activity,
         )
     except Exception:
         logger.exception("WebSocket proxy failed for sandbox %s", sandbox_id)

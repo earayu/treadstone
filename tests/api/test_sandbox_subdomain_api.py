@@ -354,8 +354,9 @@ class TestSubdomainRouting:
         ]
         scope = _make_ws_scope("/", headers=headers)
 
-        async def capturing_proxy_websocket(**kwargs):
-            return None
+        async def capturing_proxy_websocket(*, client_ws, sandbox_id, path, on_activity=None, **kwargs):
+            if on_activity is not None:
+                await on_activity()
 
         with patch("treadstone.middleware.sandbox_subdomain.proxy_websocket", side_effect=capturing_proxy_websocket):
             sends = await _run_ws_asgi(scope)

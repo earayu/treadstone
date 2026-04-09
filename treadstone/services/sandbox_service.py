@@ -602,19 +602,36 @@ class SandboxService:
 
                 actual_status, msg = derive_status_from_sandbox_cr(cr)
                 if actual_status == SandboxStatus.READY:
-                    cr_rv = cr.get("metadata", {}).get("resourceVersion")
-                    refreshed = await self.get(sandbox_id, owner_id)
-                    if refreshed is not None and is_valid_transition(refreshed.status, SandboxStatus.READY):
-                        logger.info("Sandbox %s already READY in K8s after start, updating DB immediately", sandbox_id)
-                        refreshed.status = SandboxStatus.READY
-                        refreshed.status_message = msg
-                        refreshed.version += 1
-                        refreshed.gmt_started = utc_now()
-                        refreshed.k8s_resource_version = cr_rv
-                        self.session.add(refreshed)
-                        await self.session.commit()
-                        await self.session.refresh(refreshed)
-                        return refreshed
+                    # After a scale-up the controller may not have processed the
+                    # spec change yet, leaving a stale Ready=True condition from
+                    # the previous observation.  Detect this by checking whether
+                    # the condition message still describes a non-running state
+                    # (e.g. "Pod does not exist" or "replicas is 0").  In that
+                    # case skip the fast-path and let Watch/reconcile converge.
+                    msg_lower = (msg or "").lower()
+                    if "does not exist" in msg_lower or "replicas is 0" in msg_lower:
+                        logger.info(
+                            "Sandbox %s CR reports READY but message indicates stale condition (%s), "
+                            "deferring to Watch/reconcile",
+                            sandbox_id,
+                            msg,
+                        )
+                    else:
+                        cr_rv = cr.get("metadata", {}).get("resourceVersion")
+                        refreshed = await self.get(sandbox_id, owner_id)
+                        if refreshed is not None and is_valid_transition(refreshed.status, SandboxStatus.READY):
+                            logger.info(
+                                "Sandbox %s already READY in K8s after start, updating DB immediately", sandbox_id
+                            )
+                            refreshed.status = SandboxStatus.READY
+                            refreshed.status_message = msg
+                            refreshed.version += 1
+                            refreshed.gmt_started = utc_now()
+                            refreshed.k8s_resource_version = cr_rv
+                            self.session.add(refreshed)
+                            await self.session.commit()
+                            await self.session.refresh(refreshed)
+                            return refreshed
         except Exception:
             logger.debug("Post-start K8s status check failed for %s; Watch/reconcile will sync later", sandbox_id)
 

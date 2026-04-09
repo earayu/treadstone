@@ -37,9 +37,14 @@ async def _k8s_delete_sandbox(session, sandbox) -> None:
     in-memory state and re-raises so the outer handler does NOT commit a
     broken DELETING status.
     The watch/reconcile loop transitions to DELETED once the CR is gone.
+
+    COLD sandboxes have no running K8s compute resources — only VolumeSnapshot
+    assets.  For these we clean up snapshot resources and finalize immediately
+    to DELETED since there is no CR for watch/reconcile to observe.
     """
     from sqlalchemy import select
 
+    from treadstone.models.sandbox import StorageBackendMode
     from treadstone.models.sandbox_web_link import SandboxWebLink
     from treadstone.services.k8s_client import get_k8s_client
 
@@ -54,6 +59,42 @@ async def _k8s_delete_sandbox(session, sandbox) -> None:
         link.gmt_deleted = utc_now()
         link.gmt_updated = utc_now()
         session.add(link)
+
+    if sandbox.status == SandboxStatus.COLD or sandbox.storage_backend_mode == StorageBackendMode.STANDARD_SNAPSHOT:
+        from treadstone.services.metering_service import MeteringService
+        from treadstone.services.storage_snapshot_orchestrator import StorageSnapshotOrchestrator
+
+        k8s = get_k8s_client()
+        storage = StorageSnapshotOrchestrator(session=session, k8s_client=k8s)
+        try:
+            await storage.backend.delete_bound_snapshot(sandbox)
+            storage._clear_snapshot_binding(sandbox)
+        except Exception:
+            logger.exception("Failed to clean up snapshot for cold sandbox %s during auto-delete", sandbox.id)
+            sandbox.status = SandboxStatus.ERROR
+            sandbox.status_message = "Auto-delete failed: could not clean up cold snapshot asset"
+            sandbox.version += 1
+            session.add(sandbox)
+            raise
+        try:
+            metering = MeteringService()
+            await metering.record_storage_release(session, sandbox.id)
+        except Exception:
+            logger.exception("Failed to release storage ledger for cold sandbox %s during auto-delete", sandbox.id)
+            sandbox.status = SandboxStatus.ERROR
+            sandbox.status_message = "Auto-delete failed: could not release storage ledger"
+            sandbox.version += 1
+            session.add(sandbox)
+            raise
+        sandbox.status = SandboxStatus.DELETED
+        sandbox.gmt_deleted = utc_now()
+        sandbox.version += 1
+        session.add(sandbox)
+        logger.info(
+            "Sandbox %s status cold -> deleted (source=lifecycle_auto_delete)",
+            sandbox.id,
+        )
+        return
 
     prev_status = sandbox.status
     sandbox.status = SandboxStatus.DELETING
