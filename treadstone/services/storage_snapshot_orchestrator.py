@@ -204,6 +204,12 @@ class StorageSnapshotOrchestrator:
                 await self._fail_snapshot(sandbox, "Workspace PVC is not available for snapshot.")
                 return
             try:
+                logger.info(
+                    "Creating cold snapshot for sandbox %s from PVC %s in namespace %s",
+                    sandbox.id,
+                    sandbox.k8s_workspace_pvc_name,
+                    sandbox.k8s_namespace,
+                )
                 sandbox.snapshot_k8s_volume_snapshot_name = await self.backend.create_snapshot(
                     sandbox,
                     sandbox.k8s_workspace_pvc_name,
@@ -232,6 +238,13 @@ class StorageSnapshotOrchestrator:
         if content is not None:
             sandbox.snapshot_k8s_volume_snapshot_content_name = content.get("metadata", {}).get("name")
             sandbox.snapshot_provider_id = content.get("status", {}).get("snapshotHandle")
+        logger.info(
+            "Cold snapshot became ready for sandbox %s (snapshot=%s content=%s provider_id=%s)",
+            sandbox.id,
+            sandbox.snapshot_k8s_volume_snapshot_name,
+            sandbox.snapshot_k8s_volume_snapshot_content_name,
+            sandbox.snapshot_provider_id,
+        )
         sandbox.gmt_snapshotted = utc_now()
 
         try:
@@ -446,14 +459,31 @@ class StorageSnapshotOrchestrator:
                 await self.k8s.delete_persistent_volume_claim(sandbox.k8s_workspace_pvc_name, sandbox.k8s_namespace)
 
     async def _refresh_workspace_binding(self, sandbox: Sandbox) -> bool:
+        discovery_strategy = "label_selector"
         pvcs = await self.k8s.list_persistent_volume_claims(
             sandbox.k8s_namespace,
             labels={LABEL_SANDBOX_ID: sandbox.id, LABEL_STORAGE_ROLE: STORAGE_ROLE_WORKSPACE},
         )
         pvc = _choose_workspace_pvc(pvcs)
-        if pvc is None and sandbox.k8s_workspace_pvc_name:
-            pvc = await self.k8s.get_persistent_volume_claim(sandbox.k8s_workspace_pvc_name, sandbox.k8s_namespace)
         if pvc is None:
+            for candidate_name in _workspace_pvc_candidate_names(sandbox):
+                pvc = await self.k8s.get_persistent_volume_claim(candidate_name, sandbox.k8s_namespace)
+                if pvc is not None:
+                    discovery_strategy = f"name:{candidate_name}"
+                    break
+        if pvc is None:
+            all_pvcs = await self.k8s.list_persistent_volume_claims(sandbox.k8s_namespace)
+            pvc = _choose_workspace_pvc([item for item in all_pvcs if _pvc_owned_by_sandbox(item, sandbox)])
+            if pvc is not None:
+                discovery_strategy = "owner_reference"
+        if pvc is None:
+            logger.warning(
+                "Workspace PVC discovery failed for sandbox %s in namespace %s (known_pvc=%s candidates=%s)",
+                sandbox.id,
+                sandbox.k8s_namespace,
+                sandbox.k8s_workspace_pvc_name,
+                _workspace_pvc_candidate_names(sandbox),
+            )
             return False
 
         sandbox.k8s_workspace_pvc_name = pvc.get("metadata", {}).get("name")
@@ -466,10 +496,20 @@ class StorageSnapshotOrchestrator:
                 sandbox.workspace_volume_handle = pv.get("spec", {}).get("csi", {}).get("volumeHandle")
                 sandbox.workspace_zone = _extract_zone_from_pv(pv)
 
+        if discovery_strategy != "label_selector":
+            logger.info(
+                "Resolved workspace PVC for sandbox %s via %s (pvc=%s pv=%s)",
+                sandbox.id,
+                discovery_strategy,
+                sandbox.k8s_workspace_pvc_name,
+                sandbox.k8s_workspace_pv_name,
+            )
+
         self.session.add(sandbox)
         return True
 
     async def _fail_snapshot(self, sandbox: Sandbox, message: str) -> None:
+        logger.warning("Cold snapshot failed for sandbox %s: %s", sandbox.id, message)
         sandbox.pending_operation = None
         sandbox.pending_operation_target_status = None
         sandbox.status = SandboxStatus.STOPPED
@@ -478,6 +518,7 @@ class StorageSnapshotOrchestrator:
         self.session.add(sandbox)
 
     async def _fail_restore(self, sandbox: Sandbox, message: str) -> None:
+        logger.warning("Cold restore failed for sandbox %s: %s", sandbox.id, message)
         sandbox.pending_operation = None
         sandbox.pending_operation_target_status = None
         sandbox.status = SandboxStatus.COLD
@@ -552,6 +593,31 @@ def _choose_workspace_pvc(pvcs: Sequence[dict]) -> dict | None:
     if not pvcs:
         return None
     return sorted(pvcs, key=lambda pvc: pvc.get("metadata", {}).get("name", ""))[0]
+
+
+def _workspace_pvc_candidate_names(sandbox: Sandbox) -> list[str]:
+    names: list[str] = []
+    for candidate in (
+        sandbox.k8s_workspace_pvc_name,
+        f"{STORAGE_ROLE_WORKSPACE}-{sandbox.k8s_sandbox_name or sandbox.id}",
+        f"{STORAGE_ROLE_WORKSPACE}-{sandbox.id}",
+        f"{sandbox.k8s_sandbox_name or sandbox.id}-{STORAGE_ROLE_WORKSPACE}",
+        f"{sandbox.id}-{STORAGE_ROLE_WORKSPACE}",
+    ):
+        if candidate and candidate not in names:
+            names.append(candidate)
+    return names
+
+
+def _pvc_owned_by_sandbox(pvc: dict, sandbox: Sandbox) -> bool:
+    expected_names = {sandbox.id}
+    if sandbox.k8s_sandbox_name:
+        expected_names.add(sandbox.k8s_sandbox_name)
+    owner_refs = pvc.get("metadata", {}).get("ownerReferences", [])
+    for owner_ref in owner_refs:
+        if owner_ref.get("kind") == "Sandbox" and owner_ref.get("name") in expected_names:
+            return True
+    return False
 
 
 def _extract_zone_from_pv(pv: dict) -> str | None:
