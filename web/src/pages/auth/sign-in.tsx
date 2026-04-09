@@ -159,7 +159,7 @@ export function SignInPage() {
           <Link to="/" className="transition-colors hover:text-foreground">
             Home
           </Link>
-          <a href="/#install-cli" className="transition-colors hover:text-foreground">
+          <a href="/#quickstart-step-1" className="transition-colors hover:text-foreground">
             Install CLI
           </a>
         </div>

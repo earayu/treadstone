@@ -56,7 +56,7 @@ export function PublicLayout() {
           </Link>
           <nav className="flex items-center gap-7">
             <a
-              href="/#install"
+              href="/#quickstart-step-1"
               className="text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               Install CLI
@@ -71,7 +71,7 @@ export function PublicLayout() {
               href="/#pricing"
               className="text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
-              Pricing
+              Free Trial
             </a>
           </nav>
         </div>
@@ -113,10 +113,10 @@ export function PublicLayout() {
             </Link>
           ) : (
             <Link
-              to="/auth/sign-in"
+              to="/auth/sign-up"
               className="rounded border border-border px-4 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              Sign In
+              Sign up
             </Link>
           )}
         </div>
