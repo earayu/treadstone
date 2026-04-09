@@ -98,6 +98,47 @@ const HOW_STEPS = [
   },
 ]
 
+// ── Quickstart steps data ─────────────────────────────────────────────────────
+
+const QUICKSTART_STEPS = [
+  {
+    n: "01",
+    title: "Install the CLI",
+    desc: "One command installs the treadstone CLI on macOS, Linux, or via pip.",
+    cmd: INSTALL_SH,
+    cmdLabel: "macOS / Linux — curl installer",
+    output: "✓ installed: treadstone CLI",
+    outputNote: `Also available: pip install treadstone-cli  ·  Windows: irm https://treadstone-ai.dev/install.ps1 | iex`,
+  },
+  {
+    n: "02",
+    title: "Authenticate",
+    desc: "Log in interactively, or set TREADSTONE_API_KEY in your environment for headless agent use.",
+    cmd: "treadstone auth login",
+    cmdLabel: "bash",
+    output: "✓ Logged in as you@example.com",
+    outputNote: null,
+  },
+  {
+    n: "03",
+    title: "Create a sandbox",
+    desc: "Spin up an isolated environment. The JSON response includes a urls object with proxy, MCP, and web endpoints.",
+    cmd: `treadstone --json sandboxes create \\\n  --template aio-sandbox-tiny \\\n  --name my-sandbox`,
+    cmdLabel: "bash",
+    output: `{"id":"sb_3kx9m2p","status":"running","urls":{"proxy":"https://api.treadstone-ai.dev/v1/sandboxes/sb_3kx9m2p/proxy","web":"https://sandbox-sb_3kx9m2p.treadstone-ai.dev/…"}}`,
+    outputNote: null,
+  },
+  {
+    n: "04",
+    title: "Use the sandbox or hand off to a browser",
+    desc: "Route agent traffic through urls.proxy, or issue a short-lived browser hand-off link for human review.",
+    cmd: `# Route traffic through the proxy\ncurl https://api.treadstone-ai.dev/v1/sandboxes/sb_3kx9m2p/proxy/\n\n# Or enable browser hand-off\ntreadstone --json sandboxes web enable sb_3kx9m2p`,
+    cmdLabel: "bash",
+    output: `{"open_link":"https://sandbox-sb_3kx9m2p.treadstone-ai.dev/_treadstone/open?token=…","expires_at":"…"}`,
+    outputNote: null,
+  },
+]
+
 // ── Plans data ───────────────────────────────────────────────────────────────
 
 const PLANS = [
@@ -544,6 +585,75 @@ function InstallCard({ os, hint, cmd, first }: { os: string; hint: string; cmd: 
   )
 }
 
+function QuickstartStepCard({
+  step,
+  isLast,
+}: {
+  step: (typeof QUICKSTART_STEPS)[number]
+  isLast: boolean
+}) {
+  const [copied, setCopied] = useState(false)
+
+  const rawCmd = step.cmd.replace(/\\\n/g, "\\\n")
+
+  const triggerCopy = () => {
+    navigator.clipboard.writeText(step.cmd.replace(/\\?\n/g, " ").replace(/\s+/g, " ").trim()).catch(() => {})
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1600)
+  }
+
+  return (
+    <div className="flex gap-5 sm:gap-8">
+      {/* Left: step number + connecting line */}
+      <div className="flex flex-col items-center pt-0.5">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/[0.08] font-mono text-[11px] font-bold text-primary">
+          {step.n}
+        </div>
+        {!isLast && <div className="mt-3 w-px flex-1 bg-border/20" />}
+      </div>
+
+      {/* Right: content */}
+      <div className={["flex-1", isLast ? "pb-0" : "pb-10"].join(" ")}>
+        <div className="text-[15px] font-semibold tracking-[-0.01em]">{step.title}</div>
+        <p className="mt-1.5 mb-4 text-[13.5px] leading-[1.6] text-muted-foreground">{step.desc}</p>
+
+        {/* Code block */}
+        <div className="overflow-hidden rounded-xl border border-border/20 bg-background">
+          <div className="flex items-center justify-between border-b border-border/20 bg-white/[0.03] px-5 py-2.5">
+            <span className="font-mono text-[11px] text-muted-foreground/50">{step.cmdLabel}</span>
+            <CopyButton copied={copied} onCopy={triggerCopy} />
+          </div>
+          <pre className="overflow-x-auto px-5 py-4 font-mono text-[12.5px] leading-[1.7]">
+            {rawCmd.split("\n").map((line, i) => (
+              <div key={i}>
+                {line.startsWith("#") ? (
+                  <span className="text-zinc-400">{line}</span>
+                ) : (
+                  <>
+                    {!line.startsWith(" ") && !line.startsWith("\\") && line.length > 0 && (
+                      <span className="text-primary">$ </span>
+                    )}
+                    <span className="text-foreground/85">{line}</span>
+                  </>
+                )}
+              </div>
+            ))}
+          </pre>
+        </div>
+
+        {/* Output */}
+        <div className="mt-3 rounded-lg border border-border/10 bg-white/[0.015] px-4 py-3 font-mono text-[12px] leading-[1.6] text-primary/80">
+          {step.output}
+        </div>
+
+        {step.outputNote && (
+          <p className="mt-2.5 font-mono text-[11px] leading-[1.5] text-muted-foreground/50">{step.outputNote}</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Animated terminal ─────────────────────────────────────────────────────────
 
 type RenderedLine =
@@ -746,20 +856,27 @@ export function LandingPage() {
             <span className="text-primary">that don't wait for humans.</span>
           </h1>
 
-          <div className="mt-5 mx-auto w-full max-w-[min(36rem,100%)] space-y-3 text-center">
-            <p className="text-[17px] leading-[1.65] text-muted-foreground">
-              Isolated sandboxes for coding, browsing, 
-              <br />
-              testing, and long-running tasks.
-            </p>
-            <p className="text-[17px] leading-[1.65] text-muted-foreground">
-              Built so agents can drive Treadstone from the CLI, SDK, or API—
-              <br />
-              launching and managing sandboxes on their own.
-            </p>
+          <p className="mt-5 mx-auto w-full max-w-[min(34rem,100%)] text-center text-[17px] leading-[1.65] text-muted-foreground">
+            Run isolated sandboxes for coding, browsing, and long-running tasks—driven entirely by your agent via CLI, SDK, or API.
+          </p>
+
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+            {[
+              { label: "Agent-native" },
+              { label: "CLI / SDK / API" },
+              { label: "Browser hand-off" },
+            ].map((badge) => (
+              <span
+                key={badge.label}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border/25 bg-white/[0.04] px-3 py-1 font-mono text-[11px] text-muted-foreground"
+              >
+                <span className="size-[5px] rounded-full bg-primary/70" />
+                {badge.label}
+              </span>
+            ))}
           </div>
 
-          <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             {isLoggedIn ? (
               <Link
                 to="/app"
@@ -778,13 +895,12 @@ export function LandingPage() {
             <button
               type="button"
               onClick={() => {
-                setWaitlistTier("pro")
-                document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth", block: "start" })
-                window.history.replaceState(null, "", "#pricing")
+                document.getElementById("quickstart")?.scrollIntoView({ behavior: "smooth", block: "start" })
+                window.history.replaceState(null, "", "#quickstart")
               }}
               className="rounded-[10px] border border-border/30 px-7 py-3.5 text-[15px] font-semibold text-muted-foreground transition-colors hover:border-border/50 hover:bg-white/[0.04] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              Apply for Early Access
+              CLI Quickstart ↓
             </button>
           </div>
 
@@ -794,15 +910,51 @@ export function LandingPage() {
         </div>
       </section>
 
+      {/* ── CLI Quickstart ────────────────────────────────────── */}
+      <section id="quickstart" className="scroll-mt-20 border-t border-border/20 bg-white/[0.015]">
+        <div className="mx-auto max-w-[1080px] px-10 py-24">
+          <span className="font-mono text-[11.5px] tracking-[0.08em] text-primary">// quickstart</span>
+          <h2 className="mt-3 font-mono text-[clamp(1.75rem,3.5vw,2.75rem)] font-semibold leading-[1.1] tracking-[-0.04em]">
+            Get running in 4 steps.
+          </h2>
+          <p className="mt-3 mb-12 max-w-[520px] text-base leading-[1.65] text-muted-foreground">
+            Install the CLI, create a sandbox, and start sending requests—or hand the browser off to a human. Each
+            step is copy-pasteable.
+          </p>
+
+          <div className="max-w-[680px]">
+            {QUICKSTART_STEPS.map((step, i) => (
+              <QuickstartStepCard key={step.n} step={step} isLast={i === QUICKSTART_STEPS.length - 1} />
+            ))}
+          </div>
+
+          <div className="mt-10 flex flex-wrap gap-4">
+            <Link
+              to="/docs/quickstart"
+              className="inline-flex items-center gap-1.5 font-mono text-[12.5px] text-primary underline underline-offset-2 hover:text-primary/80"
+            >
+              Full Quickstart guide →
+            </Link>
+            <Link
+              to="/docs/cli-guide"
+              className="inline-flex items-center gap-1.5 font-mono text-[12.5px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            >
+              CLI reference →
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* ── How It Works ──────────────────────────────────────── */}
       <section className="mx-auto max-w-[1080px] px-10 py-24">
-        <span className="font-mono text-[11.5px] tracking-[0.08em] text-primary">// execution model</span>
+        <span className="font-mono text-[11.5px] tracking-[0.08em] text-primary">// how it fits together</span>
         <h2 className="mt-3 font-mono text-[clamp(1.75rem,3.5vw,2.75rem)] font-semibold leading-[1.1] tracking-[-0.04em]">
-          Built for autonomous agent workflows.
+          How it fits together.
         </h2>
         <p className="mt-3 mb-12 max-w-[520px] text-base leading-[1.65] text-muted-foreground">
-          One control plane for lifecycle and keys; each sandbox exposes <span className="font-mono text-[13px] text-foreground/80">urls</span> for
-          proxy, MCP, and browser access. Agents run work in the sandbox and hand off to humans when needed.
+          One control plane manages lifecycle and keys. Each sandbox returns a{" "}
+          <span className="font-mono text-[13px] text-foreground/80">urls</span> object—proxy, MCP, and web—so agents
+          route traffic or hand off to humans without leaving the sandbox.
         </p>
 
         <div className="grid grid-cols-1 overflow-hidden rounded-xl border border-border/20 sm:grid-cols-2 lg:grid-cols-4">
@@ -886,13 +1038,7 @@ export function LandingPage() {
             Up in seconds.
           </h2>
           <p className="mt-3 mb-12 max-w-[560px] text-base leading-[1.65] text-muted-foreground">
-            Install the CLI with curl, PowerShell, or pip—the same commands as the{" "}
-            <Link to="/docs/quickstart" className="text-primary underline underline-offset-2 hover:text-primary/90">
-              Quickstart
-            </Link>
-            . Then run{" "}
-            <code className="rounded-sm bg-white/[0.06] px-1.5 py-0.5 font-mono text-[13px]">treadstone auth login</code> and
-            create an API key when you automate. The Python SDK and REST API only need{" "}
+            Install on macOS, Linux, or Windows. The SDK and REST API only need{" "}
             <code className="rounded-sm bg-white/[0.06] px-1.5 py-0.5 font-mono text-[13px]">TREADSTONE_API_KEY</code>.
           </p>
 
