@@ -170,7 +170,6 @@ class StorageSnapshotOrchestrator:
 
         if sandbox.storage_backend_mode == StorageBackendMode.STANDARD_SNAPSHOT:
             sandbox.pending_operation = None
-            sandbox.pending_operation_target_status = None
             sandbox.status = SandboxStatus.COLD
             sandbox.status_message = None
             self.session.add(sandbox)
@@ -275,7 +274,6 @@ class StorageSnapshotOrchestrator:
 
         sandbox.status = SandboxStatus.COLD
         sandbox.pending_operation = None
-        sandbox.pending_operation_target_status = None
         sandbox.storage_backend_mode = StorageBackendMode.STANDARD_SNAPSHOT
         sandbox.status_message = None
         sandbox.workspace_zone = None
@@ -306,14 +304,12 @@ class StorageSnapshotOrchestrator:
             await self._fail_restore(sandbox, "Cold sandbox has no bound snapshot to restore from.")
             return
 
-        target_status = sandbox.pending_operation_target_status or SandboxStatus.STOPPED
-        target_replicas = 1 if target_status == SandboxStatus.READY else 0
         cr_name = sandbox.k8s_sandbox_name or sandbox.id
         cr = await self.k8s.get_sandbox(cr_name, sandbox.k8s_namespace)
 
         if cr is None:
             try:
-                await self._create_restored_sandbox(sandbox, replicas=target_replicas)
+                await self._create_restored_sandbox(sandbox, replicas=1)
                 sandbox.status_message = "Restoring sandbox from cold storage."
                 self.session.add(sandbox)
             except Exception as exc:
@@ -321,46 +317,42 @@ class StorageSnapshotOrchestrator:
             return
 
         await self._refresh_workspace_binding(sandbox)
-        if sandbox.k8s_workspace_pvc_name is None or sandbox.k8s_workspace_pv_name is None:
-            sandbox.status_message = "Waiting for restored workspace disk."
-            self.session.add(sandbox)
-            return
-
         from treadstone.services.k8s_sync import derive_status_from_sandbox_cr
 
         derived_status, message = derive_status_from_sandbox_cr(cr)
         if derived_status == SandboxStatus.ERROR:
             await self._complete_restore_to_live_disk(
                 sandbox,
-                target_status=SandboxStatus.STOPPED,
+                final_status=SandboxStatus.STOPPED,
                 status_message=message or "Restore materialized the workspace, but the sandbox failed to become ready.",
             )
             return
-        if target_status == SandboxStatus.READY and derived_status != SandboxStatus.READY:
-            sandbox.status_message = message or "Waiting for restored sandbox to become ready."
-            self.session.add(sandbox)
-            return
-        if target_status == SandboxStatus.STOPPED and derived_status != SandboxStatus.STOPPED:
-            sandbox.status_message = message or "Waiting for restored sandbox workspace to materialize."
+
+        if sandbox.k8s_workspace_pvc_name is None or sandbox.k8s_workspace_pv_name is None:
+            sandbox.status_message = "Waiting for restored workspace disk."
             self.session.add(sandbox)
             return
 
-        await self._complete_restore_to_live_disk(sandbox, target_status=target_status)
+        if derived_status != SandboxStatus.READY:
+            sandbox.status_message = message or "Waiting for restored sandbox to become ready."
+            self.session.add(sandbox)
+            return
+
+        await self._complete_restore_to_live_disk(sandbox, final_status=SandboxStatus.READY)
 
     async def _complete_restore_to_live_disk(
         self,
         sandbox: Sandbox,
         *,
-        target_status: str,
+        final_status: str,
         status_message: str | None = None,
     ) -> None:
-        sandbox.status = target_status
+        sandbox.status = final_status
         sandbox.pending_operation = None
-        sandbox.pending_operation_target_status = None
         sandbox.storage_backend_mode = StorageBackendMode.LIVE_DISK
         sandbox.status_message = status_message
         sandbox.gmt_restored = utc_now()
-        if target_status == SandboxStatus.READY:
+        if final_status == SandboxStatus.READY:
             sandbox.gmt_started = sandbox.gmt_started or utc_now()
         await self._metering.update_storage_backend_mode(
             self.session,
@@ -374,7 +366,7 @@ class StorageSnapshotOrchestrator:
         except Exception:
             logger.exception("Failed to clean up snapshot after restoring sandbox %s", sandbox.id)
             cleanup_prefix = status_message or (
-                "Restored sandbox." if target_status == SandboxStatus.READY else "Restored sandbox workspace."
+                "Restored sandbox." if final_status == SandboxStatus.READY else "Restored sandbox workspace."
             )
             sandbox.status_message = f"{cleanup_prefix} Snapshot cleanup is pending."
             self.session.add(sandbox)
@@ -518,7 +510,6 @@ class StorageSnapshotOrchestrator:
     async def _fail_snapshot(self, sandbox: Sandbox, message: str) -> None:
         logger.warning("Cold snapshot failed for sandbox %s: %s", sandbox.id, message)
         sandbox.pending_operation = None
-        sandbox.pending_operation_target_status = None
         sandbox.status = SandboxStatus.STOPPED
         sandbox.storage_backend_mode = sandbox.storage_backend_mode or StorageBackendMode.LIVE_DISK
         sandbox.status_message = message
@@ -527,7 +518,6 @@ class StorageSnapshotOrchestrator:
     async def _fail_restore(self, sandbox: Sandbox, message: str) -> None:
         logger.warning("Cold restore failed for sandbox %s: %s", sandbox.id, message)
         sandbox.pending_operation = None
-        sandbox.pending_operation_target_status = None
         sandbox.status = SandboxStatus.COLD
         sandbox.storage_backend_mode = sandbox.storage_backend_mode or StorageBackendMode.STANDARD_SNAPSHOT
         sandbox.status_message = message

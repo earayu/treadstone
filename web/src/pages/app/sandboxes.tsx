@@ -20,7 +20,6 @@ import {
   useStartSandbox,
   useStopSandbox,
   useDeleteSandbox,
-  useRestoreSandbox,
   useSnapshotSandbox,
   type Sandbox,
 } from "@/api/sandboxes"
@@ -195,7 +194,6 @@ function SandboxRowActions({ sandbox }: { sandbox: Sandbox }) {
   const stopSandbox = useStopSandbox()
   const startSandbox = useStartSandbox()
   const snapshotSandbox = useSnapshotSandbox()
-  const restoreSandbox = useRestoreSandbox()
 
   const isReady = sandbox.status === "ready"
   const isCreating = sandbox.status === "creating"
@@ -204,7 +202,6 @@ function SandboxRowActions({ sandbox }: { sandbox: Sandbox }) {
   const canStart = !isBusy && (sandbox.status === "stopped" || sandbox.status === "error" || isCold)
   const canDelete = !isBusy && (isCreating || sandbox.status === "stopped" || sandbox.status === "error" || isCold)
   const canSnapshot = !isBusy && sandbox.persist && (isReady || sandbox.status === "stopped")
-  const canRestoreOnly = !isBusy && isCold
 
   async function handleStop() {
     try {
@@ -230,15 +227,6 @@ function SandboxRowActions({ sandbox }: { sandbox: Sandbox }) {
       toast.success("Sandbox is moving to cold storage…")
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to snapshot sandbox.")
-    }
-  }
-
-  async function handleRestoreOnly() {
-    try {
-      await restoreSandbox.mutateAsync(sandbox.id)
-      toast.success("Sandbox restore queued.")
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to restore sandbox.")
     }
   }
 
@@ -300,17 +288,6 @@ function SandboxRowActions({ sandbox }: { sandbox: Sandbox }) {
                 Snapshot to Cold Storage
               </DropdownMenu.Item>
             )}
-            {canRestoreOnly && (
-              <DropdownMenu.Item
-                onClick={() => void handleRestoreOnly()}
-                disabled={restoreSandbox.isPending}
-                className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs text-foreground outline-none hover:bg-accent focus:bg-accent disabled:pointer-events-none disabled:opacity-40"
-              >
-                <HardDrive className="size-3.5 text-muted-foreground" />
-                Restore Only
-              </DropdownMenu.Item>
-            )}
-
             {canDelete && (
               <>
                 {(isReady || canStart) && (

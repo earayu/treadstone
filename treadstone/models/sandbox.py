@@ -98,7 +98,6 @@ class Sandbox(Base):
 
     status: Mapped[str] = mapped_column(String(32), nullable=False, default=SandboxStatus.CREATING, index=True)
     pending_operation: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
-    pending_operation_target_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     status_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     endpoints: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     storage_backend_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)

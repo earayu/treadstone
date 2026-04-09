@@ -659,29 +659,6 @@ class TestColdSnapshotRoutes:
         assert data["pending_operation"] == "snapshotting"
         assert data["storage"]["mode"] == "live_disk"
 
-    async def test_restore_route_accepts_cold_sandbox(self, auth_client):
-        create = await auth_client.post(
-            "/v1/sandboxes",
-            json={"template": "aio-sandbox-tiny", "name": "cold-restore", "persist": True, "storage_size": "5Gi"},
-        )
-        sandbox_id = create.json()["id"]
-
-        async with _test_session_factory() as session:
-            sandbox = await session.get(Sandbox, sandbox_id)
-            sandbox.status = SandboxStatus.COLD
-            sandbox.storage_backend_mode = StorageBackendMode.STANDARD_SNAPSHOT
-            sandbox.snapshot_k8s_volume_snapshot_name = f"{sandbox_id}-workspace-snapshot"
-            sandbox.snapshot_k8s_volume_snapshot_content_name = f"vsc-{sandbox_id}-workspace-snapshot"
-            sandbox.pending_operation = None
-            session.add(sandbox)
-            await session.commit()
-
-        resp = await auth_client.post(f"/v1/sandboxes/{sandbox_id}/restore")
-        assert resp.status_code == 202
-        data = resp.json()
-        assert data["status"] == "cold"
-        assert data["pending_operation"] == "restoring"
-
     async def test_start_route_on_cold_sandbox_queues_restore_and_records_audit(self, auth_client):
         create = await auth_client.post(
             "/v1/sandboxes",
@@ -721,3 +698,13 @@ class TestColdSnapshotRoutes:
         actions = {event.action for event in events}
         assert "sandbox.restore_on_start" in actions
         assert "sandbox.start" in actions
+
+    async def test_restore_route_is_not_available(self, auth_client):
+        create = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": "no-restore-route", "persist": True, "storage_size": "5Gi"},
+        )
+        sandbox_id = create.json()["id"]
+
+        resp = await auth_client.post(f"/v1/sandboxes/{sandbox_id}/restore")
+        assert resp.status_code == 404

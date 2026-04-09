@@ -6,7 +6,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   useSandbox,
   useDeleteSandbox,
-  useRestoreSandbox,
   useSnapshotSandbox,
   useStartSandbox,
   useStopSandbox,
@@ -527,7 +526,6 @@ export function SandboxDetailPage() {
   const { data: templatesData } = useSandboxTemplates()
   const { data: usage } = useUsageOverview()
   const deleteSandbox = useDeleteSandbox()
-  const restoreSandbox = useRestoreSandbox()
   const snapshotSandbox = useSnapshotSandbox()
   const stopSandbox = useStopSandbox()
   const startSandbox = useStartSandbox()
@@ -573,7 +571,6 @@ export function SandboxDetailPage() {
       sandbox?.status === "error" ||
       isCold)
   const canSnapshot = !isBusy && !!sandbox?.persist && (isReady || sandbox?.status === "stopped")
-  const canRestoreOnly = !isBusy && isCold
 
   async function handleRecreateLink() {
     if (!id) return
@@ -634,17 +631,6 @@ export function SandboxDetailPage() {
       await qc.invalidateQueries({ queryKey: ["sandboxes", id] })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to snapshot sandbox.")
-    }
-  }
-
-  async function handleRestoreOnly() {
-    if (!id) return
-    try {
-      await restoreSandbox.mutateAsync(id)
-      toast.success("Sandbox restore queued.")
-      await qc.invalidateQueries({ queryKey: ["sandboxes", id] })
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to restore sandbox.")
     }
   }
 
@@ -756,16 +742,6 @@ export function SandboxDetailPage() {
                     className="rounded-md border border-border/40 bg-secondary px-3 py-1.5 text-xs font-semibold text-secondary-foreground transition-[transform,background-color] hover:bg-secondary/80 active:scale-[0.97] disabled:opacity-40"
                   >
                     Snapshot to Cold Storage
-                  </button>
-                )}
-                {canRestoreOnly && (
-                  <button
-                    type="button"
-                    onClick={() => void handleRestoreOnly()}
-                    disabled={restoreSandbox.isPending}
-                    className="rounded-md border border-border/40 bg-secondary px-3 py-1.5 text-xs font-semibold text-secondary-foreground transition-[transform,background-color] hover:bg-secondary/80 active:scale-[0.97] disabled:opacity-40"
-                  >
-                    Restore Only
                   </button>
                 )}
                 {canDelete && (

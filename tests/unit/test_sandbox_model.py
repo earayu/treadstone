@@ -41,7 +41,6 @@ def test_sandbox_fields_exist():
         "last_synced_at",
         "status",
         "pending_operation",
-        "pending_operation_target_status",
         "status_message",
         "storage_backend_mode",
         "k8s_workspace_pvc_name",

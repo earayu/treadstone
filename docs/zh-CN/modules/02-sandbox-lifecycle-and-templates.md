@@ -102,7 +102,6 @@
 - `GET /v1/sandboxes/{sandbox_id}`
 - `DELETE /v1/sandboxes/{sandbox_id}`
 - `POST /v1/sandboxes/{sandbox_id}/snapshot`
-- `POST /v1/sandboxes/{sandbox_id}/restore`
 - `POST /v1/sandboxes/{sandbox_id}/start`
 - `POST /v1/sandboxes/{sandbox_id}/stop`
 
