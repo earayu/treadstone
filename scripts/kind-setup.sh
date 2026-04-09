@@ -2,6 +2,8 @@
 set -euo pipefail
 
 CLUSTER_NAME="treadstone"
+# Always target this Kind cluster; do not rely on kubectl's current-context (may point at prod).
+KIND_CTX="kind-${CLUSTER_NAME}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 KIND_CONFIG="${SCRIPT_DIR}/../deploy/kind/kind-config.yaml"
 
@@ -44,7 +46,7 @@ check_prerequisites() {
 create_cluster() {
     if kind get clusters 2>/dev/null | grep -qx "$CLUSTER_NAME"; then
         echo "Kind cluster '$CLUSTER_NAME' already exists."
-        kubectl cluster-info --context "kind-$CLUSTER_NAME"
+        kubectl cluster-info --context "$KIND_CTX"
         return 0
     fi
 
@@ -55,7 +57,7 @@ create_cluster() {
     env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY \
         kind create cluster --config "$KIND_CONFIG"
     echo ""
-    kubectl cluster-info --context "kind-$CLUSTER_NAME"
+    kubectl cluster-info --context "$KIND_CTX"
 }
 
 preload_infra_images() {
@@ -76,17 +78,17 @@ preload_infra_images() {
 }
 
 install_ingress_nginx() {
-    if kubectl get namespace ingress-nginx &>/dev/null && \
-       kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --no-headers 2>/dev/null | grep -q Running; then
+    if kubectl --context "$KIND_CTX" get namespace ingress-nginx &>/dev/null && \
+       kubectl --context "$KIND_CTX" get pods -n ingress-nginx -l app.kubernetes.io/component=controller --no-headers 2>/dev/null | grep -q Running; then
         echo "ingress-nginx controller already running, skipping install."
         return 0
     fi
 
     echo ""
     echo "Installing ingress-nginx controller (${INGRESS_NGINX_VERSION}) ..."
-    kubectl apply -f "https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-${INGRESS_NGINX_VERSION}/deploy/static/provider/kind/deploy.yaml"
+    kubectl --context "$KIND_CTX" apply -f "https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-${INGRESS_NGINX_VERSION}/deploy/static/provider/kind/deploy.yaml"
     echo "Waiting for ingress-nginx to be ready (timeout 300s) ..."
-    kubectl wait --namespace ingress-nginx \
+    kubectl --context "$KIND_CTX" wait --namespace ingress-nginx \
         --for=condition=ready pod \
         --selector=app.kubernetes.io/component=controller \
         --timeout=300s
@@ -94,8 +96,8 @@ install_ingress_nginx() {
 }
 
 install_local_path_provisioner() {
-    if kubectl get namespace local-path-storage &>/dev/null && \
-       kubectl get deployment -n local-path-storage local-path-provisioner &>/dev/null; then
+    if kubectl --context "$KIND_CTX" get namespace local-path-storage &>/dev/null && \
+       kubectl --context "$KIND_CTX" get deployment -n local-path-storage local-path-provisioner &>/dev/null; then
         echo ""
         echo "local-path-provisioner already running, skipping install."
         return 0
@@ -103,9 +105,9 @@ install_local_path_provisioner() {
 
     echo ""
     echo "Installing local-path-provisioner (${LOCAL_PATH_PROVISIONER_VERSION}) ..."
-    kubectl apply -f "https://raw.githubusercontent.com/rancher/local-path-provisioner/${LOCAL_PATH_PROVISIONER_VERSION}/deploy/local-path-storage.yaml"
+    kubectl --context "$KIND_CTX" apply -f "https://raw.githubusercontent.com/rancher/local-path-provisioner/${LOCAL_PATH_PROVISIONER_VERSION}/deploy/local-path-storage.yaml"
     echo "Waiting for local-path-provisioner to be ready (timeout 300s) ..."
-    kubectl wait --namespace local-path-storage \
+    kubectl --context "$KIND_CTX" wait --namespace local-path-storage \
         --for=condition=available deployment/local-path-provisioner \
         --timeout=300s
     echo "local-path-provisioner is ready."
@@ -114,7 +116,7 @@ install_local_path_provisioner() {
 verify_cluster() {
     echo ""
     echo "Verifying cluster nodes ..."
-    kubectl get nodes
+    kubectl --context "$KIND_CTX" get nodes
     echo ""
     echo "Kind cluster '$CLUSTER_NAME' is ready."
 }

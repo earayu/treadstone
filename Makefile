@@ -143,7 +143,9 @@ clean-web: ## Remove web build artifacts
 	rm -rf web/dist web/.vite
 
 # ── Deploy (Helm) ────────────────────────────────────────────────────────────
-# Prefer `make local` / `make prod` / `make destroy-local` so scripts/check-k8s-context.sh runs first.
+# Prefer `make local` / `make prod` / `make destroy-local`. For `local`, context guard runs in
+# scripts/up.sh after kind-setup (not before), so a fresh Kind cluster can be created while kubectl
+# still points at another context.
 
 ENV ?= local
 # StorageClass is cluster-scoped, not per-ENV: local → local-path, any other ENV → ack.
@@ -227,8 +229,7 @@ undeploy-env: undeploy-api undeploy-web undeploy-runtime ## Undeploy namespace-s
 
 # ── Environment Lifecycle ─────────────────────────────────────────────────────
 
-local: ## Local Kind + build + deploy (optional TREADSTONE_PROD_CONTEXT to block prod context)
-	@bash scripts/check-k8s-context.sh local
+local: ## Local Kind + build + deploy (context check in up.sh after kind-setup, before Helm)
 	@bash scripts/up.sh local
 
 prod: ## Deploy all Helm layers to prod (needs TREADSTONE_PROD_CONTEXT matching current context)

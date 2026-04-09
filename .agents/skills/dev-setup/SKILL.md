@@ -130,4 +130,4 @@ Pure API development (`make dev-api`) does not require a K8s cluster.
 - Confirm `.env.local` exists
 - Confirm `TREADSTONE_JWT_SECRET` is set
 - Confirm `TREADSTONE_LEADER_ELECTION_ENABLED=true` for the K8s environment
-- Optional: set `TREADSTONE_PROD_CONTEXT` to your prod context name so `make local` / `destroy-local` are refused while kubectl points at prod (see `deploy/README.md`)
+- Optional: set `TREADSTONE_PROD_CONTEXT` so `destroy-local` is refused while kubectl points at prod; `make local` runs the context check **after** Kind setup and **before** Helm (see `deploy/README.md`). If Kind already exists but kubectl still points at prod, switch with `kubectl config use-context kind-treadstone`

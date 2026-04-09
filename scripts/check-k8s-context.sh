@@ -2,6 +2,10 @@
 # Guard kubectl context for prod vs local workflows (no auto-switch).
 # Usage: check-k8s-context.sh prod | local
 #
+# For local: `make local` runs this from scripts/up.sh AFTER kind-setup and BEFORE Helm, so a fresh
+# Kind cluster can be created while kubectl still pointed at another context. Makefile destroy-local
+# and make prod still invoke this where appropriate.
+#
 # TREADSTONE_PROD_CONTEXT — kubeconfig context name for your **production** cluster (not "whatever is current").
 #
 #   prod:  required. Refuse unless kubectl current-context equals TREADSTONE_PROD_CONTEXT.

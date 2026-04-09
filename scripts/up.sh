@@ -46,5 +46,5 @@ NS="treadstone-${ENV}"
 echo ""
 echo "Up complete (ENV=$ENV)."
 if [ "$ENV" = "local" ]; then
-    echo "Verify with: kubectl get pods -n $NS"
+    echo "Verify with: kubectl --context kind-${CLUSTER_NAME} get pods -n $NS"
 fi
