@@ -159,6 +159,13 @@ class SandboxUrls(BaseModel):
     )
 
 
+class SandboxStorageResponse(BaseModel):
+    mode: str = Field(..., examples=["live_disk"])
+    size: str = Field(..., examples=["5Gi"])
+    snapshot_created_at: datetime | None = Field(default=None, examples=["2026-03-21T12:00:00+00:00"])
+    zone: str | None = Field(default=None, examples=["ap-southeast-1a"])
+
+
 class SandboxResponse(BaseModel):
     id: str = Field(..., examples=["sb-abc123def456"])
     name: str = Field(..., examples=["my-sandbox"])
@@ -179,6 +186,8 @@ class SandboxResponse(BaseModel):
         examples=["5Gi"],
         description="Persistent volume size when persist=true.",
     )
+    pending_operation: str | None = Field(default=None, examples=[None, "snapshotting"])
+    storage: SandboxStorageResponse | None = Field(default=None)
     urls: SandboxUrls
     created_at: datetime = Field(..., examples=["2026-03-21T12:00:00+00:00"])
 

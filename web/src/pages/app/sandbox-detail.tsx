@@ -6,6 +6,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   useSandbox,
   useDeleteSandbox,
+  useRestoreSandbox,
+  useSnapshotSandbox,
   useStartSandbox,
   useStopSandbox,
   useUpdateSandbox,
@@ -318,6 +320,18 @@ function SandboxSettingsEditor({
             <ConfigReadonly label="Status">
               <span className="capitalize">{sandbox.status}</span>
             </ConfigReadonly>
+            <ConfigReadonly label="Pending operation">
+              <span className="capitalize">{sandbox.pending_operation ?? "—"}</span>
+            </ConfigReadonly>
+            <ConfigReadonly label="Storage mode">
+              <span>{sandbox.storage?.mode ?? "—"}</span>
+            </ConfigReadonly>
+            <ConfigReadonly label="Storage zone">
+              <span>{sandbox.storage?.zone ?? "—"}</span>
+            </ConfigReadonly>
+            <ConfigReadonly label="Snapshot created">
+              <span>{formatDateTime(sandbox.storage?.snapshot_created_at)}</span>
+            </ConfigReadonly>
             <ConfigReadonly label="Auto-stop interval">
               <span>{autoStopViewLabel(sandbox)}</span>
             </ConfigReadonly>
@@ -513,6 +527,8 @@ export function SandboxDetailPage() {
   const { data: templatesData } = useSandboxTemplates()
   const { data: usage } = useUsageOverview()
   const deleteSandbox = useDeleteSandbox()
+  const restoreSandbox = useRestoreSandbox()
+  const snapshotSandbox = useSnapshotSandbox()
   const stopSandbox = useStopSandbox()
   const startSandbox = useStartSandbox()
 
@@ -547,11 +563,17 @@ export function SandboxDetailPage() {
 
   const isReady = sandbox?.status === "ready"
   const isCreating = sandbox?.status === "creating"
-  const canStart = sandbox?.status === "stopped" || sandbox?.status === "error"
+  const isCold = sandbox?.status === "cold"
+  const isBusy = !!sandbox?.pending_operation
+  const canStart = !isBusy && (sandbox?.status === "stopped" || sandbox?.status === "error" || isCold)
   const canDelete =
-    sandbox?.status === "creating" ||
-    sandbox?.status === "stopped" ||
-    sandbox?.status === "error"
+    !isBusy &&
+    (sandbox?.status === "creating" ||
+      sandbox?.status === "stopped" ||
+      sandbox?.status === "error" ||
+      isCold)
+  const canSnapshot = !isBusy && !!sandbox?.persist && (isReady || sandbox?.status === "stopped")
+  const canRestoreOnly = !isBusy && isCold
 
   async function handleRecreateLink() {
     if (!id) return
@@ -604,6 +626,28 @@ export function SandboxDetailPage() {
     }
   }
 
+  async function handleSnapshot() {
+    if (!id) return
+    try {
+      await snapshotSandbox.mutateAsync(id)
+      toast.success("Sandbox is moving to cold storage…")
+      await qc.invalidateQueries({ queryKey: ["sandboxes", id] })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to snapshot sandbox.")
+    }
+  }
+
+  async function handleRestoreOnly() {
+    if (!id) return
+    try {
+      await restoreSandbox.mutateAsync(id)
+      toast.success("Sandbox restore queued.")
+      await qc.invalidateQueries({ queryKey: ["sandboxes", id] })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to restore sandbox.")
+    }
+  }
+
   async function handleDelete() {
     if (!id || !sandbox) return
     const confirmMsg =
@@ -651,6 +695,7 @@ export function SandboxDetailPage() {
                   "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold",
                   isReady && "border-primary/40 bg-primary/10 text-foreground",
                   isCreating && "border-amber-500/40 bg-amber-500/10 text-foreground",
+                  isCold && "border-sky-500/40 bg-sky-500/10 text-foreground",
                   !isReady && !isCreating && "border-border/50 bg-muted/30 text-muted-foreground",
                 )}
               >
@@ -659,6 +704,7 @@ export function SandboxDetailPage() {
                     "inline-block size-1.5 rounded-full",
                     isReady && "bg-primary",
                     isCreating && "bg-amber-500",
+                    isCold && "bg-sky-500",
                     !isReady && !isCreating && "bg-muted-foreground/60",
                   )}
                 />
@@ -700,6 +746,26 @@ export function SandboxDetailPage() {
                     className="rounded-md border border-border/40 bg-secondary px-3 py-1.5 text-xs font-semibold text-secondary-foreground transition-[transform,background-color] hover:bg-secondary/80 active:scale-[0.97] disabled:opacity-40"
                   >
                     Start
+                  </button>
+                )}
+                {canSnapshot && (
+                  <button
+                    type="button"
+                    onClick={() => void handleSnapshot()}
+                    disabled={snapshotSandbox.isPending}
+                    className="rounded-md border border-border/40 bg-secondary px-3 py-1.5 text-xs font-semibold text-secondary-foreground transition-[transform,background-color] hover:bg-secondary/80 active:scale-[0.97] disabled:opacity-40"
+                  >
+                    Snapshot to Cold Storage
+                  </button>
+                )}
+                {canRestoreOnly && (
+                  <button
+                    type="button"
+                    onClick={() => void handleRestoreOnly()}
+                    disabled={restoreSandbox.isPending}
+                    className="rounded-md border border-border/40 bg-secondary px-3 py-1.5 text-xs font-semibold text-secondary-foreground transition-[transform,background-color] hover:bg-secondary/80 active:scale-[0.97] disabled:opacity-40"
+                  >
+                    Restore Only
                   </button>
                 )}
                 {canDelete && (

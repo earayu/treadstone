@@ -71,6 +71,17 @@ async def _run_lifecycle_loop(session_factory) -> None:
         await asyncio.sleep(LIFECYCLE_TICK_INTERVAL)
 
 
+async def _run_storage_snapshot_loop(session_factory) -> None:
+    from treadstone.services.storage_snapshot_orchestrator import SNAPSHOT_TICK_INTERVAL, run_storage_snapshot_tick
+
+    while True:
+        try:
+            await run_storage_snapshot_tick(session_factory)
+        except Exception:
+            logger.exception("Storage snapshot tick failed")
+        await asyncio.sleep(SNAPSHOT_TICK_INTERVAL)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from treadstone.core.database import async_session
@@ -117,18 +128,22 @@ async def lifespan(app: FastAPI):
     sync_task = asyncio.create_task(start_sync_loop(settings.sandbox_namespace, get_k8s_client(), async_session))
     metering_task = asyncio.create_task(_run_metering_loop(async_session))
     lifecycle_task = asyncio.create_task(_run_lifecycle_loop(async_session))
+    snapshot_task = asyncio.create_task(_run_storage_snapshot_loop(async_session))
     try:
         yield
     finally:
         sync_task.cancel()
         metering_task.cancel()
         lifecycle_task.cancel()
+        snapshot_task.cancel()
         with suppress(asyncio.CancelledError):
             await sync_task
         with suppress(asyncio.CancelledError):
             await metering_task
         with suppress(asyncio.CancelledError):
             await lifecycle_task
+        with suppress(asyncio.CancelledError):
+            await snapshot_task
         await close_http_client()
 
 

@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from treadstone.core.database import Base
-from treadstone.models.sandbox import Sandbox, SandboxStatus
+from treadstone.models.sandbox import Sandbox, SandboxPendingOperation, SandboxStatus
 from treadstone.models.user import User, utc_now
 from treadstone.services.k8s_client import FakeK8sClient
 from treadstone.services.k8s_sync import derive_status_from_sandbox_cr, handle_watch_event, reconcile, watch_loop
@@ -182,6 +182,42 @@ class TestHandleWatchEvent:
             "status": {"conditions": [_cond("True", "DependenciesReady")]},
         }
         await handle_watch_event("ADDED", cr, session_factory)
+
+    async def test_pending_restore_suppresses_status_transition(self, session_factory):
+        await _create_sandbox(
+            session_factory,
+            status=SandboxStatus.COLD,
+            pending_operation=SandboxPendingOperation.RESTORING,
+            version=4,
+        )
+        cr = {
+            "metadata": {"name": "test-sb", "namespace": "treadstone-local", "resourceVersion": "505"},
+            "spec": {"replicas": 1},
+            "status": {"conditions": [_cond("True", "DependenciesReady", "ok")]},
+        }
+
+        await handle_watch_event("MODIFIED", cr, session_factory)
+
+        async with session_factory() as session:
+            sb = await session.get(Sandbox, "sb00000000test1234")
+            assert sb.status == SandboxStatus.COLD
+            assert sb.pending_operation == SandboxPendingOperation.RESTORING
+            assert sb.k8s_resource_version == "505"
+
+    async def test_deleted_during_snapshotting_is_not_marked_error(self, session_factory):
+        await _create_sandbox(
+            session_factory,
+            status=SandboxStatus.STOPPED,
+            pending_operation=SandboxPendingOperation.SNAPSHOTTING,
+        )
+        cr = {"metadata": {"name": "test-sb", "namespace": "treadstone-local", "resourceVersion": "506"}}
+
+        await handle_watch_event("DELETED", cr, session_factory)
+
+        async with session_factory() as session:
+            sb = await session.get(Sandbox, "sb00000000test1234")
+            assert sb.status == SandboxStatus.STOPPED
+            assert sb.pending_operation == SandboxPendingOperation.SNAPSHOTTING
 
     async def test_modified_ready_adopted_sandbox_matches_by_claim_owner(self, session_factory):
         await _create_sandbox(

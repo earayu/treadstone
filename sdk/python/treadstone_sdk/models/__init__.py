@@ -62,6 +62,7 @@ from .sandbox_response import SandboxResponse
 from .sandbox_response_labels import SandboxResponseLabels
 from .sandbox_stats import SandboxStats
 from .sandbox_status_count import SandboxStatusCount
+from .sandbox_storage_response import SandboxStorageResponse
 from .sandbox_template_list_response import SandboxTemplateListResponse
 from .sandbox_template_response import SandboxTemplateResponse
 from .sandbox_urls import SandboxUrls
@@ -163,6 +164,7 @@ __all__ = (
     "SandboxResponseLabels",
     "SandboxStats",
     "SandboxStatusCount",
+    "SandboxStorageResponse",
     "SandboxTemplateListResponse",
     "SandboxTemplateResponse",
     "SandboxUrls",

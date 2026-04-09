@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     sandbox_port: int = 8080
     sandbox_proxy_timeout: float = 180.0
     sandbox_storage_class: str = "treadstone-workspace"
+    sandbox_volume_snapshot_class: str = "treadstone-workspace-snapshot"
     sandbox_default_storage_size: Literal["5Gi", "10Gi", "20Gi"] = "5Gi"
 
     # Metering — enforcement (quota checks) can be disabled independently of recording

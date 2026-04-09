@@ -26,6 +26,8 @@ SANDBOX_API_GROUP = "agents.x-k8s.io"
 SANDBOX_API_VERSION = "v1alpha1"
 TEMPLATE_API_GROUP = "extensions.agents.x-k8s.io"
 TEMPLATE_API_VERSION = "v1alpha1"
+SNAPSHOT_API_GROUP = "snapshot.storage.k8s.io"
+SNAPSHOT_API_VERSION = "v1"
 
 WATCH_TIMEOUT_SECONDS = 300
 
@@ -85,6 +87,7 @@ class K8sClientProtocol(Protocol):
         image: str,
         container_port: int,
         resources: dict[str, Any],
+        replicas: int = 1,
         startup_probe: dict[str, Any] | None = None,
         readiness_probe: dict[str, Any] | None = None,
         liveness_probe: dict[str, Any] | None = None,
@@ -110,6 +113,37 @@ class K8sClientProtocol(Protocol):
     async def scale_sandbox(self, name: str, namespace: str, replicas: int) -> bool: ...
 
     async def get_storage_class(self, name: str) -> dict[str, Any] | None: ...
+    async def get_volume_snapshot_class(self, name: str) -> dict[str, Any] | None: ...
+
+    async def create_volume_snapshot(
+        self,
+        name: str,
+        namespace: str,
+        source_pvc_name: str,
+        snapshot_class_name: str,
+        labels: dict[str, str] | None = None,
+        annotations: dict[str, str] | None = None,
+    ) -> dict[str, Any]: ...
+
+    async def get_volume_snapshot(self, name: str, namespace: str) -> dict[str, Any] | None: ...
+
+    async def delete_volume_snapshot(self, name: str, namespace: str) -> bool: ...
+
+    async def get_volume_snapshot_content(self, name: str) -> dict[str, Any] | None: ...
+
+    async def delete_volume_snapshot_content(self, name: str) -> bool: ...
+
+    async def set_volume_snapshot_content_deletion_policy(self, name: str, deletion_policy: str) -> bool: ...
+
+    async def list_persistent_volume_claims(
+        self, namespace: str, labels: dict[str, str] | None = None
+    ) -> list[dict[str, Any]]: ...
+
+    async def get_persistent_volume_claim(self, name: str, namespace: str) -> dict[str, Any] | None: ...
+
+    async def delete_persistent_volume_claim(self, name: str, namespace: str) -> bool: ...
+
+    async def get_persistent_volume(self, name: str) -> dict[str, Any] | None: ...
 
     # ── SandboxTemplate (extensions.agents.x-k8s.io) — read only ──
     async def list_sandbox_templates(self, namespace: str) -> list[dict[str, Any]]: ...
@@ -191,6 +225,7 @@ class Kr8sClient:
         image: str,
         container_port: int,
         resources: dict[str, Any],
+        replicas: int = 1,
         startup_probe: dict[str, Any] | None = None,
         readiness_probe: dict[str, Any] | None = None,
         liveness_probe: dict[str, Any] | None = None,
@@ -263,7 +298,7 @@ class Kr8sClient:
             "kind": "Sandbox",
             "metadata": cr_metadata,
             "spec": {
-                "replicas": 1,
+                "replicas": replicas,
                 "podTemplate": pod_template,
             },
         }
@@ -367,6 +402,121 @@ class Kr8sClient:
         except Exception:
             return None
 
+    async def get_volume_snapshot_class(self, name: str) -> dict[str, Any] | None:
+        api = await self._get_api()
+        url = f"/apis/{SNAPSHOT_API_GROUP}/{SNAPSHOT_API_VERSION}/volumesnapshotclasses/{name}"
+        try:
+            async with api.call_api("GET", base=url, version="") as resp:
+                return resp.json()
+        except Exception:
+            return None
+
+    async def create_volume_snapshot(
+        self,
+        name: str,
+        namespace: str,
+        source_pvc_name: str,
+        snapshot_class_name: str,
+        labels: dict[str, str] | None = None,
+        annotations: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        api = await self._get_api()
+        metadata: dict[str, Any] = {"name": name, "namespace": namespace}
+        if labels:
+            metadata["labels"] = labels
+        if annotations:
+            metadata["annotations"] = annotations
+        manifest: dict[str, Any] = {
+            "apiVersion": f"{SNAPSHOT_API_GROUP}/{SNAPSHOT_API_VERSION}",
+            "kind": "VolumeSnapshot",
+            "metadata": metadata,
+            "spec": {
+                "volumeSnapshotClassName": snapshot_class_name,
+                "source": {"persistentVolumeClaimName": source_pvc_name},
+            },
+        }
+        url = f"/apis/{SNAPSHOT_API_GROUP}/{SNAPSHOT_API_VERSION}/namespaces/{namespace}/volumesnapshots"
+        async with api.call_api("POST", base=url, version="", json=manifest) as resp:
+            return resp.json()
+
+    async def get_volume_snapshot(self, name: str, namespace: str) -> dict[str, Any] | None:
+        api = await self._get_api()
+        url = f"/apis/{SNAPSHOT_API_GROUP}/{SNAPSHOT_API_VERSION}/namespaces/{namespace}/volumesnapshots/{name}"
+        try:
+            async with api.call_api("GET", base=url, version="") as resp:
+                return resp.json()
+        except Exception:
+            return None
+
+    async def delete_volume_snapshot(self, name: str, namespace: str) -> bool:
+        api = await self._get_api()
+        url = f"/apis/{SNAPSHOT_API_GROUP}/{SNAPSHOT_API_VERSION}/namespaces/{namespace}/volumesnapshots/{name}"
+        async with api.call_api("DELETE", base=url, version="") as resp:
+            return resp.status_code < 400
+
+    async def get_volume_snapshot_content(self, name: str) -> dict[str, Any] | None:
+        api = await self._get_api()
+        url = f"/apis/{SNAPSHOT_API_GROUP}/{SNAPSHOT_API_VERSION}/volumesnapshotcontents/{name}"
+        try:
+            async with api.call_api("GET", base=url, version="") as resp:
+                return resp.json()
+        except Exception:
+            return None
+
+    async def delete_volume_snapshot_content(self, name: str) -> bool:
+        api = await self._get_api()
+        url = f"/apis/{SNAPSHOT_API_GROUP}/{SNAPSHOT_API_VERSION}/volumesnapshotcontents/{name}"
+        async with api.call_api("DELETE", base=url, version="") as resp:
+            return resp.status_code < 400
+
+    async def set_volume_snapshot_content_deletion_policy(self, name: str, deletion_policy: str) -> bool:
+        api = await self._get_api()
+        url = f"/apis/{SNAPSHOT_API_GROUP}/{SNAPSHOT_API_VERSION}/volumesnapshotcontents/{name}"
+        body = {"spec": {"deletionPolicy": deletion_policy}}
+        async with api.call_api(
+            "PATCH",
+            base=url,
+            version="",
+            json=body,
+            headers={"Content-Type": "application/merge-patch+json"},
+        ) as resp:
+            return resp.status_code < 400
+
+    async def list_persistent_volume_claims(
+        self, namespace: str, labels: dict[str, str] | None = None
+    ) -> list[dict[str, Any]]:
+        api = await self._get_api()
+        url = f"/api/v1/namespaces/{namespace}/persistentvolumeclaims"
+        params: dict[str, str] = {}
+        if labels:
+            params["labelSelector"] = ",".join(f"{k}={v}" for k, v in sorted(labels.items()))
+        async with api.call_api("GET", base=url, version="", params=params or None) as resp:
+            return resp.json().get("items", [])
+
+    async def get_persistent_volume_claim(self, name: str, namespace: str) -> dict[str, Any] | None:
+        api = await self._get_api()
+        url = f"/api/v1/namespaces/{namespace}/persistentvolumeclaims/{name}"
+        try:
+            async with api.call_api("GET", base=url, version="") as resp:
+                return resp.json()
+        except Exception:
+            return None
+
+    async def delete_persistent_volume_claim(self, name: str, namespace: str) -> bool:
+        api = await self._get_api()
+        url = f"/api/v1/namespaces/{namespace}/persistentvolumeclaims/{name}"
+        async with api.call_api("DELETE", base=url, version="") as resp:
+            return resp.status_code < 400
+
+    async def get_persistent_volume(self, name: str) -> dict[str, Any] | None:
+        api = await self._get_api()
+        url = f"/api/v1/persistentvolumes/{name}"
+        try:
+            async with api.call_api("GET", base=url, version="") as resp:
+                return resp.json()
+        except Exception:
+            return None
+
     # ── SandboxTemplate ──
 
     async def list_sandbox_templates(self, namespace: str) -> list[dict[str, Any]]:
@@ -386,9 +536,11 @@ LABEL_OWNER_ID = "treadstone-ai.dev/owner-id"
 LABEL_TEMPLATE = "treadstone-ai.dev/template"
 LABEL_PROVISION_MODE = "treadstone-ai.dev/provision-mode"
 LABEL_WORKLOAD = "treadstone-ai.dev/workload"
+LABEL_STORAGE_ROLE = "treadstone-ai.dev/storage-role"
 WORKLOAD_SANDBOX = "sandbox"
 PROVISION_MODE_CLAIM = "claim"
 PROVISION_MODE_DIRECT = "direct"
+STORAGE_ROLE_WORKSPACE = "workspace"
 ANNOTATION_SANDBOX_NAME = "treadstone-ai.dev/sandbox-name"
 ANNOTATION_CREATED_AT = "treadstone-ai.dev/created-at"
 
@@ -530,12 +682,25 @@ class FakeK8sClient:
         self._templates: list[dict[str, Any]] = deepcopy(list(self._DEFAULT_TEMPLATES))
         self._claims: dict[str, dict[str, Any]] = {}
         self._sandboxes: dict[str, dict[str, Any]] = {}
+        self._pvcs: dict[str, dict[str, Any]] = {}
+        self._pvs: dict[str, dict[str, Any]] = {}
+        self._volume_snapshots: dict[str, dict[str, Any]] = {}
+        self._volume_snapshot_contents: dict[str, dict[str, Any]] = {}
         self._storage_classes: dict[str, dict[str, Any]] = {
             "treadstone-workspace": {
                 "apiVersion": "storage.k8s.io/v1",
                 "kind": "StorageClass",
                 "metadata": {"name": "treadstone-workspace"},
                 "provisioner": "test.fake.provisioner",
+            }
+        }
+        self._volume_snapshot_classes: dict[str, dict[str, Any]] = {
+            "treadstone-workspace-snapshot": {
+                "apiVersion": f"{SNAPSHOT_API_GROUP}/{SNAPSHOT_API_VERSION}",
+                "kind": "VolumeSnapshotClass",
+                "metadata": {"name": "treadstone-workspace-snapshot"},
+                "driver": "test.fake.provisioner",
+                "deletionPolicy": "Retain",
             }
         }
         self._watch_queue: asyncio.Queue[tuple[str, dict[str, Any]] | None] = asyncio.Queue()
@@ -616,6 +781,7 @@ class FakeK8sClient:
         image: str,
         container_port: int,
         resources: dict[str, Any],
+        replicas: int = 1,
         startup_probe: dict[str, Any] | None = None,
         readiness_probe: dict[str, Any] | None = None,
         liveness_probe: dict[str, Any] | None = None,
@@ -649,7 +815,7 @@ class FakeK8sClient:
             "kind": "Sandbox",
             "metadata": sb_metadata,
             "spec": {
-                "replicas": 1,
+                "replicas": replicas,
                 "podTemplate": pod_template,
             },
             "status": {
@@ -661,9 +827,15 @@ class FakeK8sClient:
         }
         if volume_claim_templates:
             sandbox["spec"]["volumeClaimTemplates"] = volume_claim_templates
+            self._materialize_volume_claims(namespace, name, volume_claim_templates)
         if shutdown_time:
             sandbox["spec"]["shutdownTime"] = format_shutdown_time(shutdown_time)
         self._sandboxes[key] = sandbox
+        if replicas == 0:
+            sandbox["status"]["conditions"] = [
+                _make_ready_condition("True", "DependenciesReady", "Pod does not exist, replicas is 0")
+            ]
+            sandbox["status"]["replicas"] = 0
         return sandbox
 
     async def delete_sandbox(self, name: str, namespace: str) -> bool:
@@ -726,6 +898,116 @@ class FakeK8sClient:
     async def get_storage_class(self, name: str) -> dict[str, Any] | None:
         return self._storage_classes.get(name)
 
+    async def get_volume_snapshot_class(self, name: str) -> dict[str, Any] | None:
+        return self._volume_snapshot_classes.get(name)
+
+    async def create_volume_snapshot(
+        self,
+        name: str,
+        namespace: str,
+        source_pvc_name: str,
+        snapshot_class_name: str,
+        labels: dict[str, str] | None = None,
+        annotations: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        pvc = await self.get_persistent_volume_claim(source_pvc_name, namespace)
+        if pvc is None:
+            raise KeyError(f"PVC {namespace}/{source_pvc_name} not found")
+
+        content_name = f"vsc-{name}"
+        snapshot_handle = f"snap-{name}"
+        snapshot_metadata: dict[str, Any] = {"name": name, "namespace": namespace, "resourceVersion": "1"}
+        if labels:
+            snapshot_metadata["labels"] = labels
+        if annotations:
+            snapshot_metadata["annotations"] = annotations
+        snapshot = {
+            "apiVersion": f"{SNAPSHOT_API_GROUP}/{SNAPSHOT_API_VERSION}",
+            "kind": "VolumeSnapshot",
+            "metadata": snapshot_metadata,
+            "spec": {
+                "volumeSnapshotClassName": snapshot_class_name,
+                "source": {"persistentVolumeClaimName": source_pvc_name},
+            },
+            "status": {
+                "readyToUse": True,
+                "boundVolumeSnapshotContentName": content_name,
+                "restoreSize": pvc.get("spec", {}).get("resources", {}).get("requests", {}).get("storage"),
+            },
+        }
+        content = {
+            "apiVersion": f"{SNAPSHOT_API_GROUP}/{SNAPSHOT_API_VERSION}",
+            "kind": "VolumeSnapshotContent",
+            "metadata": {"name": content_name, "resourceVersion": "1"},
+            "spec": {
+                "volumeSnapshotClassName": snapshot_class_name,
+                "deletionPolicy": self._volume_snapshot_classes[snapshot_class_name]["deletionPolicy"],
+                "source": {"volumeHandle": pvc.get("spec", {}).get("volumeName", "")},
+                "volumeSnapshotRef": {"name": name, "namespace": namespace},
+            },
+            "status": {"readyToUse": True, "snapshotHandle": snapshot_handle},
+        }
+        self._volume_snapshots[f"{namespace}/{name}"] = snapshot
+        self._volume_snapshot_contents[content_name] = content
+        return snapshot
+
+    async def get_volume_snapshot(self, name: str, namespace: str) -> dict[str, Any] | None:
+        return self._volume_snapshots.get(f"{namespace}/{name}")
+
+    async def delete_volume_snapshot(self, name: str, namespace: str) -> bool:
+        key = f"{namespace}/{name}"
+        snapshot = self._volume_snapshots.pop(key, None)
+        if snapshot is None:
+            return False
+        content_name = snapshot.get("status", {}).get("boundVolumeSnapshotContentName")
+        content = self._volume_snapshot_contents.get(content_name)
+        if content and content.get("spec", {}).get("deletionPolicy") == "Delete":
+            self._volume_snapshot_contents.pop(content_name, None)
+        return True
+
+    async def get_volume_snapshot_content(self, name: str) -> dict[str, Any] | None:
+        return self._volume_snapshot_contents.get(name)
+
+    async def delete_volume_snapshot_content(self, name: str) -> bool:
+        return self._volume_snapshot_contents.pop(name, None) is not None
+
+    async def set_volume_snapshot_content_deletion_policy(self, name: str, deletion_policy: str) -> bool:
+        content = self._volume_snapshot_contents.get(name)
+        if content is None:
+            return False
+        content["spec"]["deletionPolicy"] = deletion_policy
+        rv = str(int(content["metadata"].get("resourceVersion", "1")) + 1)
+        content["metadata"]["resourceVersion"] = rv
+        return True
+
+    async def list_persistent_volume_claims(
+        self, namespace: str, labels: dict[str, str] | None = None
+    ) -> list[dict[str, Any]]:
+        pvcs = [pvc for key, pvc in self._pvcs.items() if key.startswith(f"{namespace}/")]
+        if not labels:
+            return pvcs
+        items: list[dict[str, Any]] = []
+        for pvc in pvcs:
+            pvc_labels = pvc.get("metadata", {}).get("labels", {})
+            if all(pvc_labels.get(k) == v for k, v in labels.items()):
+                items.append(pvc)
+        return items
+
+    async def get_persistent_volume_claim(self, name: str, namespace: str) -> dict[str, Any] | None:
+        return self._pvcs.get(f"{namespace}/{name}")
+
+    async def delete_persistent_volume_claim(self, name: str, namespace: str) -> bool:
+        pvc = self._pvcs.pop(f"{namespace}/{name}", None)
+        if pvc is None:
+            return False
+        pv_name = pvc.get("spec", {}).get("volumeName")
+        if pv_name:
+            self._pvs.pop(pv_name, None)
+        return True
+
+    async def get_persistent_volume(self, name: str) -> dict[str, Any] | None:
+        return self._pvs.get(name)
+
     async def list_sandbox_templates(self, namespace: str) -> list[dict[str, Any]]:
         return list(self._templates)
 
@@ -768,6 +1050,73 @@ class FakeK8sClient:
 
     def remove_storage_class(self, name: str) -> None:
         self._storage_classes.pop(name, None)
+
+    def remove_volume_snapshot_class(self, name: str) -> None:
+        self._volume_snapshot_classes.pop(name, None)
+
+    def _materialize_volume_claims(
+        self,
+        namespace: str,
+        sandbox_name: str,
+        volume_claim_templates: list[dict[str, Any]],
+    ) -> None:
+        for index, template in enumerate(volume_claim_templates, start=1):
+            claim_name = f"{sandbox_name}-{template['metadata']['name']}"
+            pv_name = f"pv-{sandbox_name}-{index}"
+            labels = deepcopy(template.get("metadata", {}).get("labels", {}))
+            annotations = deepcopy(template.get("metadata", {}).get("annotations", {}))
+            storage_request = template.get("spec", {}).get("resources", {}).get("requests", {}).get("storage")
+            pvc = {
+                "apiVersion": "v1",
+                "kind": "PersistentVolumeClaim",
+                "metadata": {
+                    "name": claim_name,
+                    "namespace": namespace,
+                    "resourceVersion": "1",
+                    "labels": labels,
+                    "annotations": annotations,
+                },
+                "spec": {
+                    "accessModes": deepcopy(template.get("spec", {}).get("accessModes", [])),
+                    "resources": {"requests": {"storage": storage_request}},
+                    "storageClassName": template.get("spec", {}).get("storageClassName"),
+                    "volumeName": pv_name,
+                    "dataSource": deepcopy(template.get("spec", {}).get("dataSource")),
+                },
+                "status": {"phase": "Bound"},
+            }
+            pv = {
+                "apiVersion": "v1",
+                "kind": "PersistentVolume",
+                "metadata": {
+                    "name": pv_name,
+                    "resourceVersion": "1",
+                    "labels": deepcopy(labels),
+                },
+                "spec": {
+                    "capacity": {"storage": storage_request},
+                    "storageClassName": template.get("spec", {}).get("storageClassName"),
+                    "csi": {"volumeHandle": f"disk-{sandbox_name}-{index}"},
+                    "nodeAffinity": {
+                        "required": {
+                            "nodeSelectorTerms": [
+                                {
+                                    "matchExpressions": [
+                                        {
+                                            "key": "topology.diskplugin.csi.alibabacloud.com/zone",
+                                            "operator": "In",
+                                            "values": ["fake-zone-a"],
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                },
+                "status": {"phase": "Bound"},
+            }
+            self._pvcs[f"{namespace}/{claim_name}"] = pvc
+            self._pvs[pv_name] = pv
 
 
 # ──────────────────────────────────────────────────────────────────────────────

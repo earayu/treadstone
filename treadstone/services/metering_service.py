@@ -27,7 +27,7 @@ eventual consistency.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import and_, func, not_, or_, select
@@ -79,6 +79,12 @@ ALLOWED_PLAN_OVERRIDES = frozenset(
         "grace_period_seconds",
     }
 )
+
+
+def _coerce_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 class MeteringService:
@@ -457,7 +463,7 @@ class MeteringService:
             return None
 
         now = utc_now()
-        elapsed_seconds = (now - cs.last_metered_at).total_seconds()
+        elapsed_seconds = (now - _coerce_utc(cs.last_metered_at)).total_seconds()
 
         if elapsed_seconds > MAX_CLOSE_DELTA_SECONDS:
             logger.warning(
@@ -495,6 +501,8 @@ class MeteringService:
         user_id: str,
         sandbox_id: str,
         size_gib: int,
+        *,
+        backend_mode: str = "live_disk",
     ) -> StorageLedger:
         """Record a new storage allocation for a persistent sandbox.
 
@@ -512,6 +520,11 @@ class MeteringService:
         )
         existing = result.scalar_one_or_none()
         if existing is not None:
+            if existing.backend_mode != backend_mode:
+                existing.backend_mode = backend_mode
+                existing.gmt_updated = utc_now()
+                session.add(existing)
+                await session.flush()
             return existing
 
         now = utc_now()
@@ -520,9 +533,37 @@ class MeteringService:
             sandbox_id=sandbox_id,
             size_gib=size_gib,
             storage_state=StorageState.ACTIVE,
+            backend_mode=backend_mode,
             allocated_at=now,
             last_metered_at=now,
         )
+        session.add(ledger)
+        await session.flush()
+        return ledger
+
+    async def update_storage_backend_mode(
+        self,
+        session: AsyncSession,
+        sandbox_id: str,
+        backend_mode: str,
+    ) -> StorageLedger | None:
+        result = await session.execute(
+            select(StorageLedger)
+            .where(
+                StorageLedger.sandbox_id == sandbox_id,
+                StorageLedger.storage_state == StorageState.ACTIVE,
+            )
+            .with_for_update()
+        )
+        ledger = result.scalar_one_or_none()
+        if ledger is None:
+            return None
+
+        if ledger.backend_mode == backend_mode:
+            return ledger
+
+        ledger.backend_mode = backend_mode
+        ledger.gmt_updated = utc_now()
         session.add(ledger)
         await session.flush()
         return ledger
@@ -552,7 +593,7 @@ class MeteringService:
             return None
 
         now = utc_now()
-        elapsed_seconds = (now - ledger.last_metered_at).total_seconds()
+        elapsed_seconds = (now - _coerce_utc(ledger.last_metered_at)).total_seconds()
         if elapsed_seconds > 0:
             final_gib_hours = Decimal(str(ledger.size_gib)) * Decimal(str(elapsed_seconds)) / Decimal("3600")
             ledger.gib_hours_consumed += final_gib_hours.quantize(Decimal("0.0001"))

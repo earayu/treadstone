@@ -22,6 +22,7 @@
 
 - [CU 加权公式与 Sandbox 模板资源方案 C](./modules/07-compute-unit-template-resources-plan-c.md) — 计费公式（加权累加）与五档模板 request/limit 的设计与实施对齐说明
 - [服务端日志打印审计](./modules/08-logging-audit.md) — 日志位置与级别评估、Debug/Info/Warning/Error 分级准则、重复与关联字段缺口
+- [Persistent Sandbox 冷存快照与恢复](./modules/09-cold-snapshot-restore.md) — `cold` 状态、`snapshot/restore` 接口、VolumeSnapshot 编排、失败补偿与当前边界
 
 ## 这次重组覆盖了什么
 
@@ -51,4 +52,3 @@
 1. 先判断改动属于哪个模块。
 2. 直接更新对应模块文档，而不是再新增日期型设计稿。
 3. 如果改动跨模块，再更新本总览中的模块边界说明。
-

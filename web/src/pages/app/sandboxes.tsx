@@ -15,7 +15,15 @@ import {
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
 import * as Dialog from "@radix-ui/react-dialog"
 import { toast } from "sonner"
-import { useSandboxes, useStartSandbox, useStopSandbox, useDeleteSandbox, type Sandbox } from "@/api/sandboxes"
+import {
+  useSandboxes,
+  useStartSandbox,
+  useStopSandbox,
+  useDeleteSandbox,
+  useRestoreSandbox,
+  useSnapshotSandbox,
+  type Sandbox,
+} from "@/api/sandboxes"
 import { cn } from "@/lib/utils"
 import { formatMinutes } from "@/lib/format-time"
 import { SandboxEndpointsCell } from "@/components/sandbox-endpoints"
@@ -41,6 +49,7 @@ function formatRelativeTime(dateStr: string): string {
 function StatusDot({ status }: { status: string }) {
   const isReady = status === "ready"
   const isCreating = status === "creating"
+  const isCold = status === "cold"
   const isActiveLabel = isReady || isCreating
   return (
     <div className="flex items-center gap-2">
@@ -49,6 +58,7 @@ function StatusDot({ status }: { status: string }) {
           "inline-block size-1.5 rounded-full",
           isReady && "bg-primary",
           isCreating && "bg-amber-500",
+          isCold && "bg-sky-500",
           !isReady && !isCreating && "bg-muted-foreground/60",
         )}
       />
@@ -184,11 +194,17 @@ function SandboxRowActions({ sandbox }: { sandbox: Sandbox }) {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const stopSandbox = useStopSandbox()
   const startSandbox = useStartSandbox()
+  const snapshotSandbox = useSnapshotSandbox()
+  const restoreSandbox = useRestoreSandbox()
 
   const isReady = sandbox.status === "ready"
   const isCreating = sandbox.status === "creating"
-  const canStart = sandbox.status === "stopped" || sandbox.status === "error"
-  const canDelete = isCreating || sandbox.status === "stopped" || sandbox.status === "error"
+  const isCold = sandbox.status === "cold"
+  const isBusy = !!sandbox.pending_operation
+  const canStart = !isBusy && (sandbox.status === "stopped" || sandbox.status === "error" || isCold)
+  const canDelete = !isBusy && (isCreating || sandbox.status === "stopped" || sandbox.status === "error" || isCold)
+  const canSnapshot = !isBusy && sandbox.persist && (isReady || sandbox.status === "stopped")
+  const canRestoreOnly = !isBusy && isCold
 
   async function handleStop() {
     try {
@@ -205,6 +221,24 @@ function SandboxRowActions({ sandbox }: { sandbox: Sandbox }) {
       toast.success("Starting sandbox…")
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to start sandbox.")
+    }
+  }
+
+  async function handleSnapshot() {
+    try {
+      await snapshotSandbox.mutateAsync(sandbox.id)
+      toast.success("Sandbox is moving to cold storage…")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to snapshot sandbox.")
+    }
+  }
+
+  async function handleRestoreOnly() {
+    try {
+      await restoreSandbox.mutateAsync(sandbox.id)
+      toast.success("Sandbox restore queued.")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to restore sandbox.")
     }
   }
 
@@ -254,6 +288,26 @@ function SandboxRowActions({ sandbox }: { sandbox: Sandbox }) {
               >
                 <Play className="size-3.5 text-muted-foreground" />
                 Start
+              </DropdownMenu.Item>
+            )}
+            {canSnapshot && (
+              <DropdownMenu.Item
+                onClick={() => void handleSnapshot()}
+                disabled={snapshotSandbox.isPending}
+                className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs text-foreground outline-none hover:bg-accent focus:bg-accent disabled:pointer-events-none disabled:opacity-40"
+              >
+                <HardDrive className="size-3.5 text-muted-foreground" />
+                Snapshot to Cold Storage
+              </DropdownMenu.Item>
+            )}
+            {canRestoreOnly && (
+              <DropdownMenu.Item
+                onClick={() => void handleRestoreOnly()}
+                disabled={restoreSandbox.isPending}
+                className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs text-foreground outline-none hover:bg-accent focus:bg-accent disabled:pointer-events-none disabled:opacity-40"
+              >
+                <HardDrive className="size-3.5 text-muted-foreground" />
+                Restore Only
               </DropdownMenu.Item>
             )}
 

@@ -11,7 +11,7 @@ from treadstone.models.metering import (
     TierTemplate,
     UserPlan,
 )
-from treadstone.models.sandbox import Sandbox, SandboxStatus
+from treadstone.models.sandbox import Sandbox, SandboxPendingOperation, SandboxStatus, StorageBackendMode
 from treadstone.models.sandbox_web_link import SandboxWebLink
 from treadstone.models.user import OAuthAccount, Role, User
 from treadstone.models.user_feedback import UserFeedback
@@ -37,7 +37,9 @@ __all__ = [
     "ApiKeyDataPlaneMode",
     "ApiKeySandboxGrant",
     "Sandbox",
+    "SandboxPendingOperation",
     "SandboxStatus",
+    "StorageBackendMode",
     "SandboxWebLink",
     "ApplicationStatus",
     "UserFeedback",

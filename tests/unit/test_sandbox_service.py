@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from treadstone.core.errors import InvalidTransitionError, StorageBackendNotReadyError, TemplateNotFoundError
-from treadstone.models.sandbox import Sandbox, SandboxStatus
+from treadstone.models.sandbox import Sandbox, SandboxStatus, StorageBackendMode
 
 
 def _make_sandbox(**overrides) -> Sandbox:
@@ -58,6 +58,14 @@ def _mock_k8s_client():
     k8s.delete_sandbox = AsyncMock(return_value=True)
     k8s.scale_sandbox = AsyncMock(return_value=True)
     k8s.get_storage_class = AsyncMock(return_value={"metadata": {"name": "treadstone-workspace"}})
+    k8s.get_volume_snapshot_class = AsyncMock(return_value={"metadata": {"name": "treadstone-workspace-snapshot"}})
+    k8s.get_volume_snapshot = AsyncMock(return_value=None)
+    k8s.get_volume_snapshot_content = AsyncMock(return_value=None)
+    k8s.set_volume_snapshot_content_deletion_policy = AsyncMock(return_value=True)
+    k8s.delete_volume_snapshot = AsyncMock(return_value=True)
+    k8s.delete_volume_snapshot_content = AsyncMock(return_value=True)
+    k8s.get_persistent_volume_claim = AsyncMock(return_value=None)
+    k8s.get_persistent_volume = AsyncMock(return_value=None)
     k8s.get_sandbox = AsyncMock(return_value=None)
     k8s.get_sandbox_claim = AsyncMock(return_value=None)
     k8s.list_sandbox_templates = AsyncMock(
@@ -199,6 +207,29 @@ class TestSandboxServiceDelete:
         await service.delete(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
 
         k8s.delete_sandbox_claim.assert_called_once_with(name="claim-sb", namespace="treadstone-local")
+        k8s.delete_sandbox.assert_not_called()
+
+    async def test_delete_live_disk_aborts_when_bound_snapshot_cleanup_fails(self):
+        from treadstone.services.sandbox_service import SandboxService
+
+        sb = _make_sandbox(
+            status=SandboxStatus.READY,
+            provision_mode="direct",
+            persist=True,
+            storage_backend_mode=StorageBackendMode.LIVE_DISK,
+            snapshot_k8s_volume_snapshot_name="sb1234567890abcdef-workspace-snapshot",
+            snapshot_k8s_volume_snapshot_content_name="vsc-sb1234567890abcdef-workspace-snapshot",
+        )
+        session = _mock_session(sb)
+        k8s = _mock_k8s_client()
+        k8s.get_volume_snapshot.return_value = {"metadata": {"name": sb.snapshot_k8s_volume_snapshot_name}}
+        k8s.delete_volume_snapshot.side_effect = RuntimeError("delete failed")
+        service = SandboxService(session=session, k8s_client=k8s)
+
+        result = await service.delete(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
+
+        assert result.status == SandboxStatus.ERROR
+        assert result.status_message == "Failed to delete bound snapshot during sandbox delete"
         k8s.delete_sandbox.assert_not_called()
 
 

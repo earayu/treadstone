@@ -6,3 +6,7 @@ storageClass:
   parameters:
     type: gp3
     fsType: ext4
+
+snapshotClass:
+  enabled: true
+  driver: ebs.csi.aws.com

@@ -7,3 +7,7 @@ storageClass:
     type: cloud_essd
     performanceLevel: PL0
     fstype: ext4
+
+snapshotClass:
+  enabled: true
+  driver: diskplugin.csi.alibabacloud.com

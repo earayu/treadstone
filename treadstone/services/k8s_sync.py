@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from treadstone.config import settings
 from treadstone.models.audit_event import AuditActorType
-from treadstone.models.sandbox import Sandbox, SandboxStatus, is_valid_transition
+from treadstone.models.sandbox import Sandbox, SandboxPendingOperation, SandboxStatus, is_valid_transition
 from treadstone.services.audit import record_audit_event
 from treadstone.services.k8s_client import K8sClientProtocol, WatchExpiredError
 from treadstone.services.metering_helpers import sync_template_specs_from_k8s, validate_template_specs
@@ -62,6 +62,7 @@ _CR_MISSING_POLICY: dict[str, str] = {
     SandboxStatus.DELETING: "delete",
     SandboxStatus.CREATING: "skip",
     SandboxStatus.STOPPED: "warn_only",
+    SandboxStatus.COLD: "warn_only",
     SandboxStatus.READY: "warn_only",
     SandboxStatus.ERROR: "warn_only",
 }
@@ -70,6 +71,13 @@ _CR_MISSING_POLICY: dict[str, str] = {
 def _sync_visible_sandbox_clause():
     """Rows the sync loop must still converge, including pending deletes hidden from reads."""
     return or_(Sandbox.gmt_deleted.is_(None), Sandbox.status == SandboxStatus.DELETING)
+
+
+def _suppress_status_sync(sandbox: Sandbox) -> bool:
+    return sandbox.pending_operation in (
+        SandboxPendingOperation.SNAPSHOTTING,
+        SandboxPendingOperation.RESTORING,
+    )
 
 
 def _reconcile_tried_cr_keys(sandbox: Sandbox) -> str:
@@ -194,6 +202,18 @@ async def handle_watch_event(
             return
 
         if event_type == "DELETED":
+            if (
+                sandbox.pending_operation == SandboxPendingOperation.SNAPSHOTTING
+                or sandbox.status == SandboxStatus.COLD
+            ):
+                logger.info(
+                    "Expected DELETED during cold-storage transition: sandbox_id=%s pending_operation=%s cr=%s/%s",
+                    sandbox.id,
+                    sandbox.pending_operation,
+                    cr_namespace,
+                    cr_name,
+                )
+                return
             await _try_close_compute_session(session, sandbox.id)
             if sandbox.persist:
                 await _try_release_storage_ledger(session, sandbox.id)
@@ -247,6 +267,14 @@ async def handle_watch_event(
             if dirty:
                 session.add(sandbox)
                 await session.flush()
+
+            if _suppress_status_sync(sandbox):
+                if cr_rv and sandbox.k8s_resource_version != cr_rv:
+                    await _update_sync_metadata(session, sandbox.id, cr_rv)
+                    dirty = True
+                if dirty:
+                    await session.commit()
+                return
 
             if sandbox.status == new_status:
                 if sandbox.k8s_resource_version != cr_rv:
@@ -401,6 +429,14 @@ async def reconcile(
             if dirty:
                 session.add(sandbox)
                 await session.flush()
+
+            if _suppress_status_sync(sandbox):
+                if cr_rv != sandbox.k8s_resource_version:
+                    await _update_sync_metadata(session, sandbox.id, cr_rv)
+                    await session.commit()
+                elif dirty:
+                    await session.commit()
+                continue
 
             # Skip only when both the resource version AND the derived status already
             # match what is stored in the DB.  Checking resource version alone is not
@@ -618,6 +654,7 @@ async def _apply_metering_on_transition(
 
         elif old_status == SandboxStatus.READY and new_status in (
             SandboxStatus.STOPPED,
+            SandboxStatus.COLD,
             SandboxStatus.ERROR,
             SandboxStatus.DELETING,
         ):
@@ -745,7 +782,13 @@ async def reconcile_storage_metering(
             logger.warning("Persistent sandbox %s has no ACTIVE storage ledger, creating one", sandbox.id)
             try:
                 size_gib = parse_storage_size_gib(sandbox.storage_size)
-                await _metering.record_storage_allocation(session, sandbox.owner_id, sandbox.id, size_gib)
+                await _metering.record_storage_allocation(
+                    session,
+                    sandbox.owner_id,
+                    sandbox.id,
+                    size_gib,
+                    backend_mode=sandbox.storage_backend_mode or "live_disk",
+                )
             except Exception:
                 logger.exception("Failed to create storage ledger for sandbox %s during reconciliation", sandbox.id)
 

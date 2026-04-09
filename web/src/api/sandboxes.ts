@@ -6,6 +6,7 @@ export type Sandbox = components["schemas"]["SandboxResponse"]
 export type CreateSandboxBody = components["schemas"]["CreateSandboxRequest"]
 
 const TRANSITIONING_STATUSES = new Set(["creating", "starting", "stopping", "deleting"])
+const TRANSITIONING_OPERATIONS = new Set(["snapshotting", "restoring"])
 
 export function useSandboxes() {
   return useQuery({
@@ -17,7 +18,9 @@ export function useSandboxes() {
     refetchInterval: (query) => {
       const data = query.state.data
       if (!data) return 30_000
-      const hasTransitioning = data.items?.some((s) => TRANSITIONING_STATUSES.has(s.status))
+      const hasTransitioning = data.items?.some(
+        (s) => TRANSITIONING_STATUSES.has(s.status) || (s.pending_operation && TRANSITIONING_OPERATIONS.has(s.pending_operation)),
+      )
       return hasTransitioning ? 5_000 : 30_000
     },
   })
@@ -36,7 +39,9 @@ export function useSandbox(id: string) {
     refetchInterval: (query) => {
       const data = query.state.data
       if (!data) return 30_000
-      return TRANSITIONING_STATUSES.has(data.status) ? 5_000 : 30_000
+      return TRANSITIONING_STATUSES.has(data.status) || (data.pending_operation && TRANSITIONING_OPERATIONS.has(data.pending_operation))
+        ? 5_000
+        : 30_000
     },
   })
 }
@@ -87,6 +92,38 @@ export function useStopSandbox() {
       return data!
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sandboxes"] }),
+  })
+}
+
+export function useSnapshotSandbox() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data } = await client.POST("/v1/sandboxes/{sandbox_id}/snapshot", {
+        params: { path: { sandbox_id: id } },
+      })
+      return data!
+    },
+    onSuccess: (_data, id) => {
+      void qc.invalidateQueries({ queryKey: ["sandboxes"] })
+      void qc.invalidateQueries({ queryKey: ["sandboxes", id] })
+    },
+  })
+}
+
+export function useRestoreSandbox() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data } = await client.POST("/v1/sandboxes/{sandbox_id}/restore", {
+        params: { path: { sandbox_id: id } },
+      })
+      return data!
+    },
+    onSuccess: (_data, id) => {
+      void qc.invalidateQueries({ queryKey: ["sandboxes"] })
+      void qc.invalidateQueries({ queryKey: ["sandboxes", id] })
+    },
   })
 }
 
