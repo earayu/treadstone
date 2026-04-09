@@ -16,4 +16,7 @@ snapshotClass:
   annotations: {}
   labels: {}
   driver: ""
+  # Retain keeps the provider snapshot if the K8s snapshot objects are removed unexpectedly.
+  # Treadstone explicitly patches the bound VolumeSnapshotContent to Delete when a sandbox is
+  # restored or deleted, so explicit sandbox cleanup still removes all snapshot assets.
   deletionPolicy: Retain
