@@ -132,6 +132,30 @@ def _rewrite_workspace_pvc(
     pv["spec"]["claimRef"]["name"] = pvc_name
 
 
+class DeferredWorkspaceCleanupFakeK8sClient(FakeK8sClient):
+    def __init__(self) -> None:
+        super().__init__()
+        self._deferred_pvc_key: str | None = None
+
+    async def delete_persistent_volume_claim(self, name: str, namespace: str) -> bool:
+        key = f"{namespace}/{name}"
+        if key not in self._pvcs:
+            return False
+        self._deferred_pvc_key = key
+        return True
+
+    def complete_workspace_cleanup(self) -> None:
+        if self._deferred_pvc_key is None:
+            return
+        pvc = self._pvcs.pop(self._deferred_pvc_key, None)
+        self._deferred_pvc_key = None
+        if pvc is None:
+            return
+        pv_name = pvc.get("spec", {}).get("volumeName")
+        if pv_name:
+            self._pvs.pop(pv_name, None)
+
+
 async def test_snapshot_tick_moves_persistent_sandbox_to_cold_storage():
     engine, factory = await _create_factory()
     k8s = FakeK8sClient()
@@ -243,6 +267,48 @@ async def test_snapshot_tick_finds_workspace_pvc_by_owner_reference_when_name_is
         assert sandbox.status == SandboxStatus.COLD
         assert sandbox.pending_operation is None
         assert sandbox.snapshot_k8s_volume_snapshot_name is not None
+
+    await engine.dispose()
+
+
+async def test_snapshot_tick_completes_cold_cutover_after_cleanup_finishes_on_later_tick():
+    engine, factory = await _create_factory()
+    k8s = DeferredWorkspaceCleanupFakeK8sClient()
+    sandbox_id = "sbcleanupcutover001"
+    await _create_live_sandbox(factory, k8s, sandbox_id=sandbox_id, status=SandboxStatus.STOPPED)
+
+    async with factory() as session:
+        sandbox = await session.get(Sandbox, sandbox_id)
+        sandbox.pending_operation = SandboxPendingOperation.SNAPSHOTTING
+        session.add(sandbox)
+        await session.commit()
+
+    await run_storage_snapshot_tick(factory, k8s)
+    await run_storage_snapshot_tick(factory, k8s)
+
+    async with factory() as session:
+        sandbox = await session.get(Sandbox, sandbox_id)
+        assert sandbox.pending_operation == SandboxPendingOperation.SNAPSHOTTING
+        assert sandbox.status == SandboxStatus.STOPPED
+        assert sandbox.status_message == "Waiting for live disk cleanup."
+        assert sandbox.snapshot_k8s_volume_snapshot_name is not None
+
+    assert await k8s.get_sandbox(sandbox_id, "treadstone-local") is None
+    assert (
+        await k8s.get_persistent_volume_claim(f"{sandbox_id}-{STORAGE_ROLE_WORKSPACE}", "treadstone-local") is not None
+    )
+
+    k8s.complete_workspace_cleanup()
+    await run_storage_snapshot_tick(factory, k8s)
+
+    async with factory() as session:
+        sandbox = await session.get(Sandbox, sandbox_id)
+        assert sandbox.status == SandboxStatus.COLD
+        assert sandbox.pending_operation is None
+        assert sandbox.storage_backend_mode == StorageBackendMode.STANDARD_SNAPSHOT
+        assert sandbox.status_message is None
+        assert sandbox.k8s_workspace_pvc_name is None
+        assert sandbox.k8s_workspace_pv_name is None
 
     await engine.dispose()
 

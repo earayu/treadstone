@@ -176,27 +176,27 @@ class StorageSnapshotOrchestrator:
             self.session.add(sandbox)
             return
 
-        from treadstone.services.k8s_sync import derive_status_from_sandbox_cr
-
-        cr_name = sandbox.k8s_sandbox_name or sandbox.id
-        cr = await self.k8s.get_sandbox(cr_name, sandbox.k8s_namespace)
-        if cr is None:
-            await self._fail_snapshot(sandbox, "Sandbox CR disappeared before the sandbox stopped for snapshot.")
-            return
-
-        derived_status, message = derive_status_from_sandbox_cr(cr)
-        if derived_status == SandboxStatus.ERROR:
-            await self._fail_snapshot(
-                sandbox,
-                message or "Sandbox entered an error state while waiting to stop for snapshot.",
-            )
-            return
-        if derived_status != SandboxStatus.STOPPED:
-            sandbox.status_message = message or "Waiting for sandbox to stop before snapshot."
-            self.session.add(sandbox)
-            return
-
         if sandbox.snapshot_k8s_volume_snapshot_name is None:
+            from treadstone.services.k8s_sync import derive_status_from_sandbox_cr
+
+            cr_name = sandbox.k8s_sandbox_name or sandbox.id
+            cr = await self.k8s.get_sandbox(cr_name, sandbox.k8s_namespace)
+            if cr is None:
+                await self._fail_snapshot(sandbox, "Sandbox CR disappeared before the sandbox stopped for snapshot.")
+                return
+
+            derived_status, message = derive_status_from_sandbox_cr(cr)
+            if derived_status == SandboxStatus.ERROR:
+                await self._fail_snapshot(
+                    sandbox,
+                    message or "Sandbox entered an error state while waiting to stop for snapshot.",
+                )
+                return
+            if derived_status != SandboxStatus.STOPPED:
+                sandbox.status_message = message or "Waiting for sandbox to stop before snapshot."
+                self.session.add(sandbox)
+                return
+
             if not await self._refresh_workspace_binding(sandbox):
                 await self._fail_snapshot(sandbox, "Failed to locate workspace PVC for snapshot.")
                 return
@@ -282,6 +282,12 @@ class StorageSnapshotOrchestrator:
         sandbox.workspace_volume_handle = None
         sandbox.k8s_workspace_pv_name = None
         sandbox.k8s_workspace_pvc_name = None
+        logger.info(
+            "Cold snapshot cutover completed for sandbox %s (snapshot=%s provider_id=%s)",
+            sandbox.id,
+            sandbox.snapshot_k8s_volume_snapshot_name,
+            sandbox.snapshot_provider_id,
+        )
         await self._metering.update_storage_backend_mode(
             self.session,
             sandbox.id,
@@ -452,7 +458,8 @@ class StorageSnapshotOrchestrator:
         if cr is not None:
             await self.k8s.delete_sandbox(cr_name, sandbox.k8s_namespace)
 
-        await self._refresh_workspace_binding(sandbox)
+        if sandbox.k8s_workspace_pvc_name is None:
+            await self._refresh_workspace_binding(sandbox)
         if sandbox.k8s_workspace_pvc_name:
             pvc = await self.k8s.get_persistent_volume_claim(sandbox.k8s_workspace_pvc_name, sandbox.k8s_namespace)
             if pvc is not None:
