@@ -295,8 +295,7 @@ async def test_snapshot_tick_completes_cold_cutover_after_cleanup_finishes_on_la
 
     assert await k8s.get_sandbox(sandbox_id, "treadstone-local") is None
     assert (
-        await k8s.get_persistent_volume_claim(f"{sandbox_id}-{STORAGE_ROLE_WORKSPACE}", "treadstone-local")
-        is not None
+        await k8s.get_persistent_volume_claim(f"{sandbox_id}-{STORAGE_ROLE_WORKSPACE}", "treadstone-local") is not None
     )
 
     k8s.complete_workspace_cleanup()
