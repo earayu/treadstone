@@ -144,6 +144,14 @@ class StorageSnapshotOrchestrator:
             await self._process_restoring(sandbox)
 
     async def _process_snapshotting(self, sandbox: Sandbox) -> None:
+        if sandbox.persist and sandbox.storage_backend_mode is None:
+            logger.warning(
+                "Sandbox %s has persist=True but storage_backend_mode is NULL; defaulting to live_disk",
+                sandbox.id,
+            )
+            sandbox.storage_backend_mode = StorageBackendMode.LIVE_DISK
+            self.session.add(sandbox)
+
         try:
             await self.backend.ensure_ready()
         except Exception as exc:
@@ -159,7 +167,6 @@ class StorageSnapshotOrchestrator:
             try:
                 await self.backend.delete_bound_snapshot(sandbox)
                 self._clear_snapshot_binding(sandbox)
-                self.session.add(sandbox)
             except Exception as exc:
                 logger.exception("Failed to clean up stale snapshot binding for sandbox %s", sandbox.id)
                 await self._fail_snapshot(
@@ -167,6 +174,13 @@ class StorageSnapshotOrchestrator:
                     f"Failed to clean up previous snapshot before creating a new one: {exc}",
                 )
                 return
+            # Advance gmt_snapshotted so the stale condition
+            # (gmt_restored >= gmt_snapshotted) no longer holds on the next
+            # tick.  Without this the snapshot created by the next tick would
+            # be mistaken for a stale leftover and deleted, ad infinitum.
+            sandbox.gmt_snapshotted = utc_now()
+            self.session.add(sandbox)
+            return
 
         if sandbox.storage_backend_mode == StorageBackendMode.STANDARD_SNAPSHOT:
             sandbox.pending_operation = None
@@ -359,6 +373,13 @@ class StorageSnapshotOrchestrator:
             sandbox.id,
             StorageBackendMode.LIVE_DISK,
         )
+        if final_status == SandboxStatus.READY:
+            try:
+                await self._metering.open_compute_session(self.session, sandbox.id, sandbox.owner_id, sandbox.template)
+            except Exception:
+                logger.exception(
+                    "Failed to open compute session for restored sandbox %s; reconcile will repair", sandbox.id
+                )
         self.session.add(sandbox)
 
         try:
