@@ -353,6 +353,8 @@ delete 路径会先尝试清理残留的 bound snapshot。
   - 生成后的 `openapi.json`、`openapi-public.json`、`web/src/api/schema.d.ts`、`sdk/python/` 已不再暴露 `/v1/sandboxes/{sandbox_id}/restore`
   - Web 页面和 CLI 已删掉 `Restore Only` / `treadstone sandboxes restore`
   - 测试里保留了一条显式 `404` 校验，确保后续不会误把这个路由加回来
+  - 额外用运行态 `FastAPI app.routes` 和 `app.openapi()` 做了一次检查，`/v1/sandboxes/{sandbox_id}/restore` 都返回不存在
+  - 额外用 `CliRunner` 检查 `sandboxes --help`，确认输出里已经没有 `restore` 子命令
 - **数据库与状态机**
   - `Sandbox` 模型已移除 `pending_operation_target_status`
   - 新迁移 `4b3f2f3fd7d8_remove_restore_only_target_status.py` 会在 drop column 前，把旧的 `restore-only` 进行中记录重置回 `cold`
