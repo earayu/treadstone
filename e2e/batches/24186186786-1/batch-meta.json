@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "result": "pass",
+  "github": {
+    "run_id": 24186186786,
+    "run_attempt": 1,
+    "repository": "earayu/treadstone",
+    "workflow": "K8s E2E",
+    "run_url": "https://github.com/earayu/treadstone/actions/runs/24186186786"
+  },
+  "git": {
+    "sha": "89f3584700147ed40f2275f31712926ce8d0716c",
+    "sha_short": "89f3584",
+    "ref_name": "main",
+    "commit_url": "https://github.com/earayu/treadstone/commit/89f3584700147ed40f2275f31712926ce8d0716c"
+  },
+  "published_at": "2026-04-09T10:57:37Z"
+}
