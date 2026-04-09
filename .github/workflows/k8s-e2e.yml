@@ -156,7 +156,6 @@ jobs:
           RT_VALUES_EXTRA: /tmp/ci-sandbox-runtime-image.yaml
         run: |
           set -euo pipefail
-          bash scripts/check-k8s-context.sh local
           bash scripts/kind-setup.sh
           make image-api
           kind load docker-image treadstone:latest --name treadstone

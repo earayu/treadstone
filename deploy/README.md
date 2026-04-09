@@ -6,13 +6,15 @@ This document describes how to deploy Treadstone to Kubernetes and perform basic
 
 The deployment consists of five layers of Helm charts, ordered by dependency from bottom to top:
 
-| Layer | Chart | Description |
-|-------|-------|-------------|
+
+| Layer   | Chart                    | Description                                                           |
+| ------- | ------------------------ | --------------------------------------------------------------------- |
 | Storage | `deploy/cluster-storage` | Cluster-scoped StorageClass aliases for persistent sandbox workspaces |
-| Infra | `deploy/agent-sandbox` | Sandbox CRD + controller (cluster-scoped, deploy once) |
-| Runtime | `deploy/sandbox-runtime` | SandboxTemplate + WarmPool (namespace-scoped) |
-| API | `deploy/treadstone` | FastAPI API service + Ingress + RBAC + Migration Job |
-| Web | `deploy/treadstone-web` | React web frontend + Service + Ingress |
+| Infra   | `deploy/agent-sandbox`   | Sandbox CRD + controller (cluster-scoped, deploy once)                |
+| Runtime | `deploy/sandbox-runtime` | SandboxTemplate + WarmPool (namespace-scoped)                         |
+| API     | `deploy/treadstone`      | FastAPI API service + Ingress + RBAC + Migration Job                  |
+| Web     | `deploy/treadstone-web`  | React web frontend + Service + Ingress                                |
+
 
 The API/web/runtime layers use the `ENV` variable (`local`, `demo`, `prod`). Cluster storage uses `CLUSTER_PROFILE`
 (`local`, `ack`, `aws`) because `StorageClass` resources are cluster-scoped rather than namespace-scoped.
@@ -28,18 +30,20 @@ The API/web/runtime layers use the `ENV` variable (`local`, `demo`, `prod`). Clu
 
 ## Primary workflow (recommended)
 
-Use these Makefile targets so [`scripts/check-k8s-context.sh`](../scripts/check-k8s-context.sh) runs **before** any Helm install:
+Use these Makefile targets so `[scripts/check-k8s-context.sh](../scripts/check-k8s-context.sh)` runs **before** any Helm install (for `make local`, the check runs **inside** `[scripts/up.sh](../scripts/up.sh)` **after** Kind setup and **before** `deploy-all`, not at the very start of `make local`):
 
-| Goal | Command |
-|------|---------|
-| Local Kind: cluster + images + full stack | `make local` |
-| Tear down local Kind | `make destroy-local` |
-| Production | `make prod` (requires `TREADSTONE_PROD_CONTEXT` and matching `kubectl` context) |
 
-**Do not** run `helm upgrade` or `make deploy-*` / `make deploy-all` directly for routine local or prod work—wrong `kubectl` contexts can deploy to the wrong cluster. Those lower-level targets exist for [advanced incremental deploys](#advanced-incremental-layer-deployment) or automation.
+| Goal                                      | Command                                                                         |
+| ----------------------------------------- | ------------------------------------------------------------------------------- |
+| Local Kind: cluster + images + full stack | `make local`                                                                    |
+| Tear down local Kind                      | `make destroy-local`                                                            |
+| Production                                | `make prod` (requires `TREADSTONE_PROD_CONTEXT` and matching `kubectl` context) |
+
+
+**Do not** run `helm upgrade` or `make deploy-`* / `make deploy-all` directly for routine local or prod work—wrong `kubectl` contexts can deploy to the wrong cluster. Those lower-level targets exist for [advanced incremental deploys](#advanced-incremental-layer-deployment) or automation.
 
 - `make prod` runs the prod context check, then `deploy-all ENV=prod` (default `CLUSTER_PROFILE=ack`).
-- `make local` runs `scripts/up.sh local`, which builds/loads images and runs `deploy-all ENV=local CLUSTER_PROFILE=local`.
+- `make local` runs `scripts/up.sh local`: Kind cluster setup (`[scripts/kind-setup.sh](../scripts/kind-setup.sh)` pins `kubectl` to `kind-treadstone`), image build/load, then the local context check, then `deploy-all ENV=local CLUSTER_PROFILE=local`.
 
 ## Environment Configuration Files
 
@@ -66,19 +70,22 @@ For OAuth provider setup, register callback URLs that match `TREADSTONE_APP_BASE
 
 Helm and `kubectl` use **whatever context is currently selected** in your kubeconfig.
 
-Set **`TREADSTONE_PROD_CONTEXT`** to the **kubeconfig context name of your production cluster** (the string shown by `kubectl config get-contexts` for prod — not a generic “current context” placeholder).
+Set `**TREADSTONE_PROD_CONTEXT`** to the **kubeconfig context name of your production cluster** (the string shown by `kubectl config get-contexts` for prod — not a generic “current context” placeholder).
 
-| Command | Role of `TREADSTONE_PROD_CONTEXT` |
-|---------|-------------------------------------|
-| **`make prod`** | **Required.** Refused unless `kubectl config current-context` **equals** `TREADSTONE_PROD_CONTEXT`, so you only deploy to prod when explicitly pointed at prod. |
-| **`make local`** / **`make destroy-local`** | **Optional.** If set, these commands are **refused** when the current context **equals** `TREADSTONE_PROD_CONTEXT` (avoids Kind / local teardown while kubectl still points at production). If unset, this guard is skipped — better for contributors who do not know your prod context name. |
 
-[`scripts/check-k8s-context.sh`](../scripts/check-k8s-context.sh) implements the above; it does **not** change your context automatically.
+| Command                  | Role of `TREADSTONE_PROD_CONTEXT`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `**make prod`**          | **Required.** Refused unless `kubectl config current-context` **equals** `TREADSTONE_PROD_CONTEXT`, so you only deploy to prod when explicitly pointed at prod.                                                                                                                                                                                                                                                                                                                                                          |
+| `**make destroy-local`** | **Optional.** Same as above: if set, refused when current context equals `TREADSTONE_PROD_CONTEXT`.                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `**make local`**         | **Optional** for the guard: the check runs **after** Kind setup in `up.sh`. If `TREADSTONE_PROD_CONTEXT` is set, you are still refused **before Helm** when `kubectl config current-context` equals production—unless you have switched away (see below). Creating a **new** Kind cluster usually updates kubeconfig and sets current-context to `kind-treadstone`, so you can run `make local` even if you had previously pointed kubectl at production (for example after `make destroy-local` and switching to prod). |
 
-For local Kind, switch to your Kind context manually (typically `kind-treadstone` when the cluster name is `treadstone`):
+
+`[scripts/check-k8s-context.sh](../scripts/check-k8s-context.sh)` implements the above; it does **not** change your context automatically.
+
+**Edge case:** Kind cluster **already exists** but `kubectl config current-context` still points at production. The pre-Helm check will refuse. Point kubectl at Kind before deploy:
 
 ```bash
-kubectl config use-context kind-treadstone
+kubectl config use-context kind-treadstone   # cluster name treadstone → context kind-treadstone
 make local
 ```
 
@@ -109,7 +116,7 @@ There is **no** `make` target to destroy prod or remote namespaces; use explicit
 
 ### What `make local` does
 
-`make local` performs the steps below (Kind, images, `deploy-all`) with the local context guard. Prefer it over running `deploy-all` by hand.
+`make local` runs `scripts/up.sh local`: Kind setup (with `kubectl --context kind-treadstone` in `[scripts/kind-setup.sh](../scripts/kind-setup.sh)`), images, **then** the local context guard, **then** `deploy-all`. Prefer it over running `deploy-all` by hand.
 
 For more granular control, you can deploy layer by layer—see [Advanced: incremental layer deployment](#advanced-incremental-layer-deployment).
 
@@ -132,7 +139,7 @@ kind load docker-image treadstone-web:latest --name treadstone
 
 ### 3. Deploy all charts (local)
 
-Use **`make local`** so images and `deploy-all` run together with the correct context check. If you must invoke Helm manually (e.g. debugging), the equivalent is:
+Use `**make local**` so images and `deploy-all` run together with the correct context check. If you must invoke Helm manually (e.g. debugging), the equivalent is:
 
 ```bash
 make deploy-all ENV=local CLUSTER_PROFILE=local
@@ -182,10 +189,12 @@ kubectl -n treadstone-local rollout status deploy/treadstone-local-treadstone --
 
 Use `make deploy-*` / `make deploy-all` only when you need a **partial** upgrade (for example `deploy-api` only) or to deploy environments **without** `make local` / `make prod` (for example **demo**). There is no context guard—**verify `kubectl config current-context`** before every command.
 
-| Target | Typical use |
-|--------|-------------|
-| `make deploy-all ENV=<env> CLUSTER_PROFILE=<profile>` | Full stack for `local` / `demo` / manual prod (prefer `make local` / `make prod` when available) |
-| `make deploy-storage`, `deploy-infra`, `deploy-runtime`, `deploy-api`, `deploy-web` | Single layer; see `Makefile` and `make help` |
+
+| Target                                                                              | Typical use                                                                                      |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `make deploy-all ENV=<env> CLUSTER_PROFILE=<profile>`                               | Full stack for `local` / `demo` / manual prod (prefer `make local` / `make prod` when available) |
+| `make deploy-storage`, `deploy-infra`, `deploy-runtime`, `deploy-api`, `deploy-web` | Single layer; see `Makefile` and `make help`                                                     |
+
 
 ## Accessing the Service
 
@@ -210,7 +219,7 @@ curl http://localhost:8000/health
 
 ## Basic Validation (Smoke Test)
 
-**Automated**: Run `make test-e2e` to execute the full E2E test suite against the deployed API (default `BASE_URL=http://api.localhost`). Override with `make test-e2e BASE_URL=http://localhost:8000` when using port-forward. Scenario list and data-plane prerequisites: [`tests/e2e/README.md`](../tests/e2e/README.md).
+**Automated**: Run `make test-e2e` to execute the full E2E test suite against the deployed API (default `BASE_URL=http://api.localhost`). Override with `make test-e2e BASE_URL=http://localhost:8000` when using port-forward. Scenario list and data-plane prerequisites: `[tests/e2e/README.md](../tests/e2e/README.md)`.
 
 **Manual**: Use `BASE_URL=http://api.localhost` with Ingress, or `BASE_URL=http://localhost:8000` with port-forward.
 
@@ -269,10 +278,12 @@ After the Sandbox is running, you can reach its **Web UI** in a browser. The exa
 
 Each sandbox exposes its internal HTTP server (default port 8080) through two paths:
 
-| Path | Auth | Use for |
-|------|------|---------|
-| `https://api.<domain>/v1/sandboxes/{id}/proxy/mcp` | API Key (`Authorization: Bearer sk-…`) | MCP clients (Cursor, Claude Desktop, scripts) — HTTP/SSE and WebSocket both supported |
-| `https://sandbox-{id}.<sandbox_domain>/mcp` | Browser session cookie (with `/_treadstone/open` bootstrap) | Human-facing browser tools |
+
+| Path                                               | Auth                                                        | Use for                                                                               |
+| -------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `https://api.<domain>/v1/sandboxes/{id}/proxy/mcp` | API Key (`Authorization: Bearer sk-…`)                      | MCP clients (Cursor, Claude Desktop, scripts) — HTTP/SSE and WebSocket both supported |
+| `https://sandbox-{id}.<sandbox_domain>/mcp`        | Browser session cookie (with `/_treadstone/open` bootstrap) | Human-facing browser tools                                                            |
+
 
 For WebSocket-based MCP clients that cannot set HTTP headers, pass the key as a query param: `wss://api.<domain>/v1/sandboxes/{id}/proxy/mcp?token=sk-…`.
 
@@ -301,6 +312,7 @@ ingress:
 ```
 
 You will also need:
+
 - A wildcard TLS certificate for `*.mycompany.com` (reference it via `ingress.tls` or the ALB `certificate-id` annotation).
 - A DNS wildcard record `*.mycompany.com → <load balancer>` at your DNS provider.
 
@@ -346,18 +358,20 @@ make kind-delete
 
 ## Environment Differences
 
-| Config | local | demo | prod |
-|--------|-------|------|------|
-| K8s Namespace | `treadstone-local` | `treadstone-demo` | `treadstone-prod` |
-| Helm release (api) | `treadstone-local` | `treadstone-demo` | `treadstone-prod` |
-| Helm release (web) | `treadstone-web-local` | `treadstone-web-demo` | `treadstone-web-prod` |
-| Helm release (runtime) | `sandbox-runtime-local` | `sandbox-runtime-demo` | `sandbox-runtime-prod` |
-| Image source | Local build | `ghcr.io/earayu/treadstone` | Specified by CI/CD |
-| Replicas | 1 | 1 | 2 |
-| HPA | Off | Off | On (2–10) |
-| Ingress | `api.localhost` (API) + `app.localhost` (Web) + `*.sandbox.localhost` | `demo.treadstone-ai.dev` | `api.treadstone-ai.dev` + TLS |
-| ALB Group | — | `treadstone` (order 2) | `treadstone` (order 1) |
-| DB migration | Auto (Helm hook) | Auto | Auto |
+
+| Config                 | local                                                                 | demo                        | prod                          |
+| ---------------------- | --------------------------------------------------------------------- | --------------------------- | ----------------------------- |
+| K8s Namespace          | `treadstone-local`                                                    | `treadstone-demo`           | `treadstone-prod`             |
+| Helm release (api)     | `treadstone-local`                                                    | `treadstone-demo`           | `treadstone-prod`             |
+| Helm release (web)     | `treadstone-web-local`                                                | `treadstone-web-demo`       | `treadstone-web-prod`         |
+| Helm release (runtime) | `sandbox-runtime-local`                                               | `sandbox-runtime-demo`      | `sandbox-runtime-prod`        |
+| Image source           | Local build                                                           | `ghcr.io/earayu/treadstone` | Specified by CI/CD            |
+| Replicas               | 1                                                                     | 1                           | 2                             |
+| HPA                    | Off                                                                   | Off                         | On (2–10)                     |
+| Ingress                | `api.localhost` (API) + `app.localhost` (Web) + `*.sandbox.localhost` | `demo.treadstone-ai.dev`    | `api.treadstone-ai.dev` + TLS |
+| ALB Group              | —                                                                     | `treadstone` (order 2)      | `treadstone` (order 1)        |
+| DB migration           | Auto (Helm hook)                                                      | Auto                        | Auto                          |
+
 
 ### Multi-Environment Isolation
 
@@ -375,14 +389,16 @@ with the ACM certificate ARN for `api.treadstone-ai.dev`.
 
 ## Troubleshooting
 
-| Symptom | Cause | Solution |
-|---------|-------|----------|
-| Templates API returns `python-dev` / `nodejs-dev` | `TREADSTONE_DEBUG=true` in `.env` | Set to `false` and recreate the Secret |
-| API returns 500 + `column "xxx" does not exist` | Database is missing new columns | Migration Job should run automatically; manual fix: `kubectl -n treadstone-<ENV> exec deploy/treadstone-<ENV>-treadstone -- uv run alembic upgrade head` |
-| Pod stuck not Ready | Image pull failure | For local: run `kind load docker-image` first; for remote: check image registry permissions |
-| `curl http://api.localhost` connection refused | ingress-nginx not ready or port 80 conflict | Rebuild cluster with `make kind-delete && make kind-create`, or use `make port-forward-api` |
-| 403 Forbidden in pod logs | Insufficient RBAC permissions | Confirm the Helm chart deployed ClusterRole + ClusterRoleBinding |
-| Sandbox Pod in CrashLoopBackOff | Kind cannot pull sandbox image | `docker pull <image> && kind load docker-image <image> --name treadstone` |
+
+| Symptom                                           | Cause                                       | Solution                                                                                                                                                 |
+| ------------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Templates API returns `python-dev` / `nodejs-dev` | `TREADSTONE_DEBUG=true` in `.env`           | Set to `false` and recreate the Secret                                                                                                                   |
+| API returns 500 + `column "xxx" does not exist`   | Database is missing new columns             | Migration Job should run automatically; manual fix: `kubectl -n treadstone-<ENV> exec deploy/treadstone-<ENV>-treadstone -- uv run alembic upgrade head` |
+| Pod stuck not Ready                               | Image pull failure                          | For local: run `kind load docker-image` first; for remote: check image registry permissions                                                              |
+| `curl http://api.localhost` connection refused    | ingress-nginx not ready or port 80 conflict | Rebuild cluster with `make kind-delete && make kind-create`, or use `make port-forward-api`                                                              |
+| 403 Forbidden in pod logs                         | Insufficient RBAC permissions               | Confirm the Helm chart deployed ClusterRole + ClusterRoleBinding                                                                                         |
+| Sandbox Pod in CrashLoopBackOff                   | Kind cannot pull sandbox image              | `docker pull <image> && kind load docker-image <image> --name treadstone`                                                                                |
+
 
 ## Makefile Command Reference
 
@@ -410,3 +426,4 @@ make port-forward-api  # Forward the API to localhost:8000
 make undeploy-env      # Uninstall namespace-scoped layers
 make test-e2e          # Run E2E tests against deployed service
 ```
+
