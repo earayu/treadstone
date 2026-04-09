@@ -3,9 +3,8 @@ import { Link } from "react-router"
 import { useCurrentUser } from "@/hooks/use-auth"
 import { useSubmitWaitlistApplication } from "@/api/admin"
 import { TreadstoneSymbol } from "@/components/brand/logo"
-import { CodeBlockFrame } from "@/components/code/code-block-frame"
 import { CopyButton } from "@/components/code/copy-button"
-import { INTEGRATION_SURFACE_CODE_FRAME_HEADERS } from "@/lib/integration-surface-code-frame-headers"
+import { LANDING_PAGE_TITLE, attachLandingJsonLd } from "@/lib/landing-seo"
 
 const GITHUB_URL = "https://github.com/earayu/treadstone"
 const DISCORD_URL = "https://discord.gg/ygSP9tT5RB"
@@ -145,8 +144,8 @@ echo $TREADSTONE_SANDBOX_JSON`,
   },
   {
     n: "04",
-    title: "Open the Web UI for a human",
-    desc: "Print the Web UI URL (same shell as step 3 so TREADSTONE_WEB_URL is set).",
+    title: "Web UI: hand-off in the browser (urls.web)",
+    desc: "Human-facing entry only—not the HTTP proxy. Print the signed `urls.web` link (same shell as step 3).",
     blocks: [
       {
         headerLabel: "bash",
@@ -160,8 +159,8 @@ https://sandbox-${EXAMPLE_SANDBOX_ID}.treadstone-ai.dev/_treadstone/open?token=�
   },
   {
     n: "05",
-    title: "Fetch the Hacker News front page inside the sandbox",
-    desc: "Run the fetch inside the sandbox via shell/exec; pipe the JSON through jq to print the story list (not the raw API body).",
+    title: "HTTP proxy: REST into the sandbox (urls.proxy)",
+    desc: "Issue HTTPS requests to `TREADSTONE_PROXY_URL` with a data-plane key—here `POST /v1/shell/exec` runs curl + jq inside the box; pipe the response through jq to show stdout only (sample: Algolia HN front page).",
     blocks: [
       {
         headerLabel: "bash",
@@ -190,8 +189,8 @@ https://news.ycombinator.com/item?id=47654062
   },
   {
     n: "06",
-    title: "Point your MCP client at the sandbox",
-    desc: "Emit a `mcpServers` JSON block: `urls.mcp` from step 3 and a data-plane API key in `Authorization`.",
+    title: "MCP: connect over urls.mcp",
+    desc: "MCP over HTTPS at `urls.mcp` (distinct from the HTTP proxy base). Emit a generic `mcpServers` snippet with that URL and `Authorization: Bearer …`.",
     blocks: [
       {
         headerLabel: "bash",
@@ -306,132 +305,6 @@ const PLANS = [
     waitlistTier: null as string | null,
   },
 ]
-
-// ── Code tab content (syntax-highlighted via spans) ──────────────────────────
-
-import { CodeLines, cm, pr, fg, ok, js, kw, fn, type CodeLine } from "@/components/code/code-lines"
-const CLI_LINES: CodeLine[] = [
-  [{ cls: cm, text: "# 1. Authenticate (or set TREADSTONE_API_KEY in env)" }],
-  [{ cls: pr, text: "$ " }, { cls: fg, text: "treadstone auth login --email agent@example.com --password ••••••••" }],
-  [{ cls: ok, text: "✓ Logged in as agent@example.com" }],
-  [],
-  [{ cls: cm, text: "# 2. Install the agent skill (Cursor, Codex, …)" }],
-  [{ cls: pr, text: "$ " }, { cls: fg, text: "treadstone skills install" }],
-  [{ cls: ok, text: "Installed: ~/.agents/skills/treadstone-cli/SKILL.md" }],
-  [],
-  [{ cls: cm, text: "# 3. See available templates" }],
-  [{ cls: pr, text: "$ " }, { cls: fg, text: "treadstone --json templates list" }],
-  [{ cls: js, text: '{"items": [{"name": "aio-sandbox-tiny", "cpu": "0.25", "memory": "512Mi"}, ...]}' }],
-  [],
-  [{ cls: cm, text: "# 4. Create a sandbox — read id and urls from JSON" }],
-  [{ cls: pr, text: "$ " }, { cls: fg, text: "treadstone --json sandboxes create --template aio-sandbox-tiny --name agent-demo" }],
-  [
-    {
-      cls: js,
-      text: '{"id": "sb_3kx9m2p", "status": "running", "urls": {"proxy": "https://api.treadstone-ai.dev/v1/sandboxes/sb_3kx9m2p/proxy", "web": "https://sandbox-sb_3kx9m2p.treadstone-ai.dev/…"}}',
-    },
-  ],
-  [],
-  [{ cls: cm, text: "# 5. Hand the browser off to a human" }],
-  [{ cls: pr, text: "$ " }, { cls: fg, text: "treadstone --json sandboxes web enable sb_3kx9m2p" }],
-  [
-    {
-      cls: js,
-      text: '{"open_link": "https://sandbox-sb_3kx9m2p.treadstone-ai.dev/_treadstone/open?token=...", "expires_at": "2026-03-30T18:00:00Z"}',
-    },
-  ],
-]
-
-const SDK_LINES: CodeLine[] = [
-  [{ cls: kw, text: "from " }, { cls: fg, text: "treadstone_sdk " }, { cls: kw, text: "import " }, { cls: fg, text: "AuthenticatedClient" }],
-  [{ cls: kw, text: "from " }, { cls: fg, text: "treadstone_sdk.api.sandboxes " }, { cls: kw, text: "import " }, { cls: fg, text: "sandboxes_create_sandbox, sandboxes_create_sandbox_web_link" }],
-  [{ cls: kw, text: "from " }, { cls: fg, text: "treadstone_sdk.models.create_sandbox_request " }, { cls: kw, text: "import " }, { cls: fg, text: "CreateSandboxRequest" }],
-  [],
-  [{ cls: fg, text: "client = AuthenticatedClient(" }],
-  [{ cls: fg, text: '    base_url=' }, { cls: ok, text: '"https://api.treadstone-ai.dev"' }, { cls: fg, text: "," }],
-  [{ cls: fg, text: '    token=' }, { cls: ok, text: '"sk-..."' }],
-  [{ cls: fg, text: ")" }],
-  [],
-  [{ cls: cm, text: "# Create a sandbox" }],
-  [{ cls: fg, text: "sandbox = sandboxes_create_sandbox." }, { cls: fn, text: "sync" }, { cls: fg, text: "(" }],
-  [{ cls: fg, text: "    client=client," }],
-  [{ cls: fg, text: "    body=CreateSandboxRequest(" }],
-  [{ cls: fg, text: '        template=' }, { cls: ok, text: '"aio-sandbox-tiny"' }, { cls: fg, text: "," }],
-  [{ cls: fg, text: '        name=' }, { cls: ok, text: '"agent-demo"' }],
-  [{ cls: fg, text: "    )" }],
-  [{ cls: fg, text: ")" }],
-  [{ cls: fn, text: "print" }, { cls: fg, text: "(sandbox.id)            " }, { cls: cm, text: '# "sb_3kx9m2p"' }],
-  [
-    { cls: fn, text: "print" },
-    { cls: fg, text: "(sandbox.urls.proxy)    " },
-    { cls: cm, text: '# "https://api.treadstone-ai.dev/v1/sandboxes/sb_3kx9m2p/proxy"' },
-  ],
-  [],
-  [{ cls: cm, text: "# Generate a browser hand-off URL for a human" }],
-  [{ cls: fg, text: "session = sandboxes_create_sandbox_web_link." }, { cls: fn, text: "sync" }, { cls: fg, text: "(sandbox.id, client=client)" }],
-  [
-    { cls: fn, text: "print" },
-    { cls: fg, text: "(session.open_link)     " },
-    {
-      cls: cm,
-      text: '# "https://sandbox-sb_3kx9m2p.treadstone-ai.dev/_treadstone/open?token=..."',
-    },
-  ],
-]
-
-const REST_LINES: CodeLine[] = [
-  [{ cls: cm, text: "# Create a sandbox" }],
-  [{ cls: pr, text: "$ " }, { cls: fg, text: "curl -X POST https://api.treadstone-ai.dev/v1/sandboxes \\" }],
-  [{ cls: fg, text: "    -H " }, { cls: ok, text: '"Authorization: Bearer $TREADSTONE_API_KEY"' }, { cls: fg, text: " \\" }],
-  [{ cls: fg, text: "    -H " }, { cls: ok, text: '"Content-Type: application/json"' }, { cls: fg, text: " \\" }],
-  [{ cls: fg, text: "    -d " }, { cls: ok, text: `'{"name": "agent-demo", "template": "aio-sandbox-tiny"}'` }],
-  [],
-  [{ cls: js, text: "{" }],
-  [{ cls: js, text: '  "id": "sb_3kx9m2p",' }],
-  [{ cls: js, text: '  "name": "agent-demo",' }],
-  [{ cls: js, text: '  "status": "running",' }],
-  [{ cls: js, text: '  "urls": {' }],
-  [
-    {
-      cls: js,
-      text: '    "proxy": "https://api.treadstone-ai.dev/v1/sandboxes/sb_3kx9m2p/proxy",',
-    },
-  ],
-  [
-    {
-      cls: js,
-      text: '    "web": "https://sandbox-sb_3kx9m2p.treadstone-ai.dev/…"',
-    },
-  ],
-  [{ cls: js, text: "  }" }],
-  [{ cls: js, text: "}" }],
-  [],
-  [{ cls: cm, text: "# Enable browser hand-off for a human" }],
-  [{ cls: pr, text: "$ " }, { cls: fg, text: "curl -X POST https://api.treadstone-ai.dev/v1/sandboxes/sb_3kx9m2p/web-link \\" }],
-  [{ cls: fg, text: "    -H " }, { cls: ok, text: '"Authorization: Bearer $TREADSTONE_API_KEY"' }],
-  [],
-  [{ cls: js, text: "{" }],
-  [
-    {
-      cls: js,
-      text: '  "open_link": "https://sandbox-sb_3kx9m2p.treadstone-ai.dev/_treadstone/open?token=...",',
-    },
-  ],
-  [{ cls: js, text: '  "expires_at": "2026-03-30T18:00:00Z"' }],
-  [{ cls: js, text: "}" }],
-]
-
-function CliCode() {
-  return <CodeLines lines={CLI_LINES} />
-}
-
-function SdkCode() {
-  return <CodeLines lines={SDK_LINES} />
-}
-
-function RestCode() {
-  return <CodeLines lines={REST_LINES} />
-}
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -623,10 +496,13 @@ function WaitlistDialog({ tier, onClose }: WaitlistDialogProps) {
 function QuickstartStepCard({
   step,
   isLast,
+  endGroup,
   anchorId,
 }: {
   step: (typeof QUICKSTART_STEPS)[number]
   isLast: boolean
+  /** When true, no vertical connector below this step (e.g. end of the first group before the next section). */
+  endGroup?: boolean
   /** Deep-link target for “Install CLI” (step 01). */
   anchorId?: string
 }) {
@@ -648,7 +524,7 @@ function QuickstartStepCard({
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/[0.08] font-mono text-[11px] font-bold text-primary">
           {step.n}
         </div>
-        {!isLast && (
+        {!isLast && !endGroup && (
           <div
             className="mt-3 min-h-[2rem] w-px flex-1 basis-0 bg-gradient-to-b from-primary/35 via-border/50 to-border/40"
             aria-hidden
@@ -842,50 +718,26 @@ export function LandingPage() {
   const { data: user, isLoading } = useCurrentUser()
   const isLoggedIn = !isLoading && !!user
   const [waitlistTier, setWaitlistTier] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<"cli" | "sdk" | "rest">("cli")
 
-  const cliCode = [
-    "# 1. Authenticate (or set TREADSTONE_API_KEY in env)",
-    "$ treadstone auth login --email agent@example.com --password ••••••••",
-    "✓ Logged in as agent@example.com",
-    "",
-    "# 2. Install the agent skill (Cursor, Codex, …)",
-    "$ treadstone skills install",
-    "Installed: ~/.agents/skills/treadstone-cli/SKILL.md",
-    "",
-    "# 3. See available templates",
-    "$ treadstone --json templates list",
-    '{"items": [{"name": "aio-sandbox-tiny", "cpu": "0.25", "memory": "512Mi"}, ...]}',
-    "",
-    "# 4. Create a sandbox — read id and urls from JSON",
-    "$ treadstone --json sandboxes create --template aio-sandbox-tiny --name agent-demo",
-    '{"id":"sb_3kx9m2p","status":"running","urls":{"proxy":"https://api.treadstone-ai.dev/v1/sandboxes/sb_3kx9m2p/proxy","web":"https://sandbox-sb_3kx9m2p.treadstone-ai.dev/…"}}',
-    "",
-    "# 5. Hand the browser off to a human",
-    "$ treadstone --json sandboxes web enable sb_3kx9m2p",
-    '{"open_link":"https://sandbox-sb_3kx9m2p.treadstone-ai.dev/_treadstone/open?token=...","expires_at":"2026-03-30T18:00:00Z"}',
-  ].join("\n")
-  const sdkCode =
-    'from treadstone_sdk import AuthenticatedClient\nfrom treadstone_sdk.api.sandboxes import sandboxes_create_sandbox, sandboxes_create_sandbox_web_link\nfrom treadstone_sdk.models.create_sandbox_request import CreateSandboxRequest\n\nclient = AuthenticatedClient(base_url="https://api.treadstone-ai.dev", token="sk-...")\nsandbox = sandboxes_create_sandbox.sync(client=client, body=CreateSandboxRequest(template="aio-sandbox-tiny", name="agent-demo"))\nprint(sandbox.urls.proxy)  # https://api.treadstone-ai.dev/v1/sandboxes/sb_3kx9m2p/proxy\nsession = sandboxes_create_sandbox_web_link.sync(sandbox.id, client=client)\nprint(session.open_link)'
-  const restCode = [
-    "curl -X POST https://api.treadstone-ai.dev/v1/sandboxes \\",
-    '  -H "Authorization: Bearer $TREADSTONE_API_KEY" \\',
-    '  -H "Content-Type: application/json" \\',
-    "  -d '{\"name\": \"agent-demo\", \"template\": \"aio-sandbox-tiny\"}'",
-    "",
-    "# … then enable browser hand-off",
-    "curl -X POST https://api.treadstone-ai.dev/v1/sandboxes/sb_3kx9m2p/web-link \\",
-    '  -H "Authorization: Bearer $TREADSTONE_API_KEY"',
-  ].join("\n")
-
-  const tabCopyText = { cli: cliCode, sdk: sdkCode, rest: restCode }
+  useEffect(() => {
+    const detachJsonLd = attachLandingJsonLd()
+    const previousTitle = document.title
+    document.title = LANDING_PAGE_TITLE
+    return () => {
+      detachJsonLd()
+      document.title = previousTitle
+    }
+  }, [])
 
   return (
-    <div>
+    <main>
       {waitlistTier && <WaitlistDialog tier={waitlistTier} onClose={() => setWaitlistTier(null)} />}
 
       {/* ── Hero ──────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden px-6 pb-7 pt-10 sm:px-8 sm:pb-9 sm:pt-14">
+      <section
+        className="relative overflow-hidden px-6 pb-7 pt-10 sm:px-8 sm:pb-9 sm:pt-14"
+        aria-labelledby="landing-hero-heading"
+      >
         {/* Glow */}
         <div
           className="pointer-events-none absolute left-1/2 top-0 -z-0 h-[600px] w-[700px] -translate-x-1/2 -translate-y-1/4"
@@ -913,7 +765,10 @@ export function LandingPage() {
               </span>
             </div>
 
-            <h1 className="text-balance font-mono text-[clamp(2.25rem,4.8vw,3.75rem)] font-semibold leading-[1.08] tracking-[-0.04em]">
+            <h1
+              id="landing-hero-heading"
+              className="text-balance font-mono text-[clamp(2.25rem,4.8vw,3.75rem)] font-semibold leading-[1.08] tracking-[-0.04em]"
+            >
               Sandboxes for agents
               <br />
               <span className="text-primary">that don't wait for humans.</span>
@@ -923,22 +778,6 @@ export function LandingPage() {
               Run isolated sandboxes for coding, browsing, and long-running tasks—driven entirely by your agent via CLI,
               SDK, or API.
             </p>
-
-            <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-              {[
-                { label: "Agent-native" },
-                { label: "CLI / SDK / API" },
-                { label: "Browser hand-off" },
-              ].map((badge) => (
-                <span
-                  key={badge.label}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-border/25 bg-white/[0.04] px-3 py-1 font-mono text-[11px] text-muted-foreground"
-                >
-                  <span className="size-[5px] rounded-full bg-primary/70" />
-                  {badge.label}
-                </span>
-              ))}
-            </div>
 
             <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
               {isLoggedIn ? (
@@ -980,22 +819,46 @@ export function LandingPage() {
       </section>
 
       {/* ── CLI Quickstart ────────────────────────────────────── */}
-      <section id="quickstart" className="scroll-mt-20 border-t border-border/20 bg-white/[0.015]">
+      <section id="quickstart" className="scroll-mt-20 bg-white/[0.015]" aria-label="Quickstart">
         <div className="mx-auto max-w-[1200px] px-6 pb-16 pt-6 sm:px-10 sm:pb-20 sm:pt-8">
           <div className="mx-auto max-w-[960px] text-center">
             <span className="font-mono text-[11.5px] tracking-[0.08em] text-primary">// quickstart</span>
-            <h2 className="mt-2 font-mono text-[clamp(1.75rem,3.5vw,2.75rem)] font-semibold leading-[1.1] tracking-[-0.04em]">
-              Get running in 6 steps.
+            <p className="mx-auto mt-2 max-w-[520px] text-[13.5px] leading-[1.55] text-muted-foreground">
+              Install, create a sandbox, then use it—six steps in two groups below.
+            </p>
+          </div>
+
+          <div className="mx-auto mt-10 max-w-[960px] text-center">
+            <h2 className="font-mono text-[clamp(1.35rem,2.6vw,1.9rem)] font-semibold leading-[1.12] tracking-[-0.03em]">
+              Start a sandbox in 3 steps
             </h2>
           </div>
 
-          <div className="mx-auto mt-8 min-w-0 max-w-[960px]">
-            {QUICKSTART_STEPS.map((step, i) => (
+          <div className="mx-auto mt-6 min-w-0 max-w-[960px]">
+            {QUICKSTART_STEPS.slice(0, 3).map((step, i) => (
               <QuickstartStepCard
                 key={step.n}
                 step={step}
-                isLast={i === QUICKSTART_STEPS.length - 1}
+                isLast={false}
+                endGroup={i === 2}
                 anchorId={i === 0 ? "quickstart-step-1" : undefined}
+              />
+            ))}
+          </div>
+
+          <div className="mx-auto mt-14 max-w-[960px] text-center">
+            <h2 className="font-mono text-[clamp(1.35rem,2.6vw,1.9rem)] font-semibold leading-[1.12] tracking-[-0.03em]">
+              Use your sandbox in 3 ways
+            </h2>
+          </div>
+
+          <div className="mx-auto mt-6 min-w-0 max-w-[960px]">
+            {QUICKSTART_STEPS.slice(3, 6).map((step, i) => (
+              <QuickstartStepCard
+                key={step.n}
+                step={step}
+                isLast={i === 2}
+                endGroup={false}
               />
             ))}
           </div>
@@ -1017,67 +880,8 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* ── Code Tabs ─────────────────────────────────────────── */}
-      <div id="integrate" className="border-y border-border/20 bg-white/[0.015] px-10 py-24">
-        <div className="mx-auto max-w-[1080px]">
-          <div className="mx-auto max-w-[960px] text-center">
-            <span className="font-mono text-[11.5px] tracking-[0.08em] text-primary">// integrate</span>
-            <h2 className="mt-2 font-mono text-[clamp(1.75rem,3.5vw,2.75rem)] font-semibold leading-[1.1] tracking-[-0.04em]">
-              Three ways in.
-            </h2>
-            <p className="mx-auto mt-3 mb-6 max-w-[560px] text-base leading-[1.65] text-muted-foreground">
-              CLI, Python SDK, or raw HTTP against the same control plane. Use{" "}
-              <code className="rounded-sm bg-white/[0.06] px-1.5 py-0.5 font-mono text-[13px]">--json</code> for stable
-              CLI output; sandbox detail includes <span className="font-mono text-[13px] text-foreground/80">urls</span> for
-              the data plane (
-              <Link to="/docs/sandbox-endpoints" className="text-primary underline underline-offset-2 hover:text-primary/90">
-                Sandbox endpoints
-              </Link>
-              ).
-            </p>
-          </div>
-
-          {/* Tab bar */}
-          <div className="mb-6 flex justify-center">
-            <div className="flex w-fit overflow-hidden rounded-lg border border-border/20">
-              {(
-                [
-                  { id: "cli", label: "CLI", color: "bg-primary" },
-                  { id: "sdk", label: "Python SDK", color: "bg-sky-400" },
-                  { id: "rest", label: "REST API", color: "bg-purple-400" },
-                ] as const
-              ).map((tab, i, arr) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={[
-                    "flex items-center gap-2 px-5 py-2.5 font-mono text-[12.5px] font-medium transition-colors",
-                    i < arr.length - 1 ? "border-r border-border/20" : "",
-                    activeTab === tab.id
-                      ? "bg-white/[0.06] text-foreground"
-                      : "text-muted-foreground hover:bg-white/[0.03]",
-                  ].join(" ")}
-                >
-                  <span className={`size-[7px] rounded-full ${tab.color}`} />
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <CodeBlockFrame
-            headerLabel={INTEGRATION_SURFACE_CODE_FRAME_HEADERS[activeTab]}
-            headerRight={<CopyButton text={tabCopyText[activeTab]} />}
-          >
-            {activeTab === "cli" && <CliCode />}
-            {activeTab === "sdk" && <SdkCode />}
-            {activeTab === "rest" && <RestCode />}
-          </CodeBlockFrame>
-        </div>
-      </div>
-
       {/* ── Plans (anchor id stays `pricing` for nav / #pricing links) ── */}
-      <section id="pricing" className="mx-auto max-w-[1080px] scroll-mt-20 px-10 py-24">
+      <section id="pricing" className="mx-auto max-w-[1080px] scroll-mt-20 px-10 py-24" aria-label="Pricing and plans">
         <div className="mx-auto max-w-[960px] text-center">
           <span className="font-mono text-[11.5px] tracking-[0.08em] text-primary">// free trial</span>
           <h2 className="mt-2 font-mono text-[clamp(1.75rem,3.5vw,2.75rem)] font-semibold leading-[1.1] tracking-[-0.04em]">
@@ -1257,6 +1061,6 @@ export function LandingPage() {
           <span className="text-[11.5px] text-muted-foreground/40">Agent-native sandbox platform.</span>
         </div>
       </footer>
-    </div>
+    </main>
   )
 }
