@@ -14,7 +14,7 @@ from treadstone.core.errors import (
     TemplateNotAllowedError,
 )
 from treadstone.models.metering import ComputeSession, UserPlan
-from treadstone.models.sandbox import Sandbox, SandboxStatus
+from treadstone.models.sandbox import Sandbox, SandboxStatus, StorageBackendMode
 from treadstone.services.metering_service import MeteringService
 
 FIXED_NOW = datetime(2026, 3, 15, 10, 0, 0, tzinfo=UTC)
@@ -183,7 +183,9 @@ class TestSandboxServiceCreateWithMetering:
             owner_id="user1234567890abcd", template="aio-sandbox-small", persist=True, storage_size="10Gi"
         )
 
-        metering.record_storage_allocation.assert_awaited_once_with(session, "user1234567890abcd", result.id, 10)
+        metering.record_storage_allocation.assert_awaited_once_with(
+            session, "user1234567890abcd", result.id, 10, backend_mode=StorageBackendMode.LIVE_DISK
+        )
 
     async def test_create_template_not_allowed_aborts_early(self, monkeypatch):
         monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
