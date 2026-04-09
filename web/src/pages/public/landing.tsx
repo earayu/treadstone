@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react"
 import { Link } from "react-router"
-import { useCurrentUser } from "@/hooks/use-auth"
 import { useSubmitWaitlistApplication } from "@/api/admin"
 import { TreadstoneSymbol } from "@/components/brand/logo"
 import { CopyButton } from "@/components/code/copy-button"
@@ -14,6 +13,10 @@ const GITHUB_STAR_LOGIN_URL = `https://github.com/login?return_to=${encodeURICom
 const RELEASES_URL = "https://github.com/earayu/treadstone/releases"
 const PYPI_CLI_URL = "https://pypi.org/project/treadstone-cli/"
 const SUPPORT_EMAIL = "support@treadstone-ai.dev"
+
+/** Hero primary CTA for visitors — opens the hosted public demo sandbox Web UI in a new tab. */
+const PUBLIC_DEMO_SANDBOX_URL =
+  "https://sandbox-sb10278370d791ca6a.treadstone-ai.dev/_treadstone/open?token=swl2e15ed6aec29e8bbee59fd11"
 
 /** Hero animated terminal: hidden by default; set to `true` to show it again (side-by-side on large screens). */
 const SHOW_HERO_TERMINAL = false
@@ -715,8 +718,6 @@ function AnimatedTerminal() {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function LandingPage() {
-  const { data: user, isLoading } = useCurrentUser()
-  const isLoggedIn = !isLoading && !!user
   const [waitlistTier, setWaitlistTier] = useState<string | null>(null)
 
   useEffect(() => {
@@ -780,21 +781,14 @@ export function LandingPage() {
             </p>
 
             <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-              {isLoggedIn ? (
-                <Link
-                  to="/app"
-                  className="rounded-[10px] bg-primary px-7 py-3.5 text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  Open Console
-                </Link>
-              ) : (
-                <Link
-                  to="/auth/sign-up"
-                  className="rounded-[10px] bg-primary px-7 py-3.5 text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  Get Started Free
-                </Link>
-              )}
+              <a
+                href={PUBLIC_DEMO_SANDBOX_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-[10px] bg-primary px-7 py-3.5 text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Try the live demo
+              </a>
               <button
                 type="button"
                 onClick={() => {
@@ -804,7 +798,7 @@ export function LandingPage() {
                 }}
                 className="rounded-[10px] border border-border/30 px-7 py-3.5 text-[15px] font-semibold text-muted-foreground transition-colors hover:border-border/50 hover:bg-white/[0.04] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                Apply for free access
+                Apply for Free access
               </button>
             </div>
           </div>
@@ -823,12 +817,9 @@ export function LandingPage() {
         <div className="mx-auto max-w-[1200px] px-6 pb-16 pt-6 sm:px-10 sm:pb-20 sm:pt-8">
           <div className="mx-auto max-w-[960px] text-center">
             <span className="font-mono text-[11.5px] tracking-[0.08em] text-primary">// quickstart</span>
-            <p className="mx-auto mt-2 max-w-[520px] text-[13.5px] leading-[1.55] text-muted-foreground">
-              Install, create a sandbox, then use it—six steps in two groups below.
-            </p>
           </div>
 
-          <div className="mx-auto mt-10 max-w-[960px] text-center">
+          <div className="mx-auto mt-8 max-w-[960px] text-center">
             <h2 className="font-mono text-[clamp(1.35rem,2.6vw,1.9rem)] font-semibold leading-[1.12] tracking-[-0.03em]">
               Start a sandbox in 3 steps
             </h2>

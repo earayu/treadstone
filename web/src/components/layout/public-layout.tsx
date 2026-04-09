@@ -113,10 +113,10 @@ export function PublicLayout() {
             </Link>
           ) : (
             <Link
-              to="/auth/sign-in"
+              to="/auth/sign-up"
               className="rounded border border-border px-4 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              Sign In
+              Sign up
             </Link>
           )}
         </div>
