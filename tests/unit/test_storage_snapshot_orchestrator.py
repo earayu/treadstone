@@ -111,6 +111,27 @@ async def _create_live_sandbox(
         await session.commit()
 
 
+def _rewrite_workspace_pvc(
+    k8s: FakeK8sClient,
+    *,
+    sandbox_id: str,
+    pvc_name: str,
+    keep_labels: bool = False,
+) -> None:
+    old_name = f"{sandbox_id}-{STORAGE_ROLE_WORKSPACE}"
+    pvc = k8s._pvcs.pop(f"treadstone-local/{old_name}")
+    pvc["metadata"]["name"] = pvc_name
+    if not keep_labels:
+        pvc["metadata"].pop("labels", None)
+    pvc["metadata"]["ownerReferences"] = [{"kind": "Sandbox", "name": sandbox_id, "controller": True}]
+    k8s._pvcs[f"treadstone-local/{pvc_name}"] = pvc
+
+    pv_name = pvc["spec"]["volumeName"]
+    pv = k8s._pvs[pv_name]
+    pv["spec"].setdefault("claimRef", {})
+    pv["spec"]["claimRef"]["name"] = pvc_name
+
+
 async def test_snapshot_tick_moves_persistent_sandbox_to_cold_storage():
     engine, factory = await _create_factory()
     k8s = FakeK8sClient()
@@ -172,6 +193,56 @@ async def test_snapshot_tick_waits_for_stop_before_creating_snapshot():
         sandbox = await session.get(Sandbox, sandbox_id)
         assert sandbox.status == SandboxStatus.COLD
         assert sandbox.pending_operation is None
+
+    await engine.dispose()
+
+
+async def test_snapshot_tick_finds_controller_named_workspace_pvc_without_labels():
+    engine, factory = await _create_factory()
+    k8s = FakeK8sClient()
+    sandbox_id = "sbworkspacename0001"
+    await _create_live_sandbox(factory, k8s, sandbox_id=sandbox_id, status=SandboxStatus.STOPPED)
+    _rewrite_workspace_pvc(k8s, sandbox_id=sandbox_id, pvc_name=f"{STORAGE_ROLE_WORKSPACE}-{sandbox_id}")
+
+    async with factory() as session:
+        sandbox = await session.get(Sandbox, sandbox_id)
+        sandbox.pending_operation = SandboxPendingOperation.SNAPSHOTTING
+        session.add(sandbox)
+        await session.commit()
+
+    await run_storage_snapshot_tick(factory, k8s)
+    await run_storage_snapshot_tick(factory, k8s)
+
+    async with factory() as session:
+        sandbox = await session.get(Sandbox, sandbox_id)
+        assert sandbox.status == SandboxStatus.COLD
+        assert sandbox.pending_operation is None
+        assert sandbox.snapshot_k8s_volume_snapshot_name is not None
+
+    await engine.dispose()
+
+
+async def test_snapshot_tick_finds_workspace_pvc_by_owner_reference_when_name_is_unexpected():
+    engine, factory = await _create_factory()
+    k8s = FakeK8sClient()
+    sandbox_id = "sbworkspaceowner0001"
+    await _create_live_sandbox(factory, k8s, sandbox_id=sandbox_id, status=SandboxStatus.STOPPED)
+    _rewrite_workspace_pvc(k8s, sandbox_id=sandbox_id, pvc_name=f"custom-workspace-{sandbox_id}")
+
+    async with factory() as session:
+        sandbox = await session.get(Sandbox, sandbox_id)
+        sandbox.pending_operation = SandboxPendingOperation.SNAPSHOTTING
+        session.add(sandbox)
+        await session.commit()
+
+    await run_storage_snapshot_tick(factory, k8s)
+    await run_storage_snapshot_tick(factory, k8s)
+
+    async with factory() as session:
+        sandbox = await session.get(Sandbox, sandbox_id)
+        assert sandbox.status == SandboxStatus.COLD
+        assert sandbox.pending_operation is None
+        assert sandbox.snapshot_k8s_volume_snapshot_name is not None
 
     await engine.dispose()
 
