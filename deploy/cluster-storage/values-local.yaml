@@ -4,3 +4,6 @@ storageClass:
   volumeBindingMode: WaitForFirstConsumer
   allowVolumeExpansion: true
   parameters: {}
+
+snapshotClass:
+  enabled: false

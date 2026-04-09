@@ -12,9 +12,9 @@ from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
 from treadstone.models.audit_event import AuditEvent
-from treadstone.models.sandbox import Sandbox
+from treadstone.models.sandbox import Sandbox, SandboxStatus, StorageBackendMode
 from treadstone.models.user import OAuthAccount, User
-from treadstone.services.k8s_client import FakeK8sClient, set_k8s_client
+from treadstone.services.k8s_client import FakeK8sClient, get_k8s_client, set_k8s_client
 
 _test_session_factory = None
 
@@ -511,6 +511,47 @@ class TestDeleteSandbox:
             assert sandbox is not None
             assert sandbox.status == "deleting"
 
+    async def test_delete_returns_409_when_bound_snapshot_cleanup_fails(self, auth_client):
+        create_resp = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": "del-snapshot-fail", "persist": True, "storage_size": "5Gi"},
+        )
+        sandbox_id = create_resp.json()["id"]
+
+        k8s = get_k8s_client()
+        assert isinstance(k8s, FakeK8sClient)
+
+        async with _test_session_factory() as session:
+            sandbox = await session.get(Sandbox, sandbox_id)
+            await k8s.create_volume_snapshot(
+                name=f"{sandbox_id}-workspace-snapshot",
+                namespace=sandbox.k8s_namespace,
+                source_pvc_name=f"{sandbox.k8s_sandbox_name}-workspace",
+                snapshot_class_name="treadstone-workspace-snapshot",
+            )
+            sandbox.status = SandboxStatus.READY
+            sandbox.storage_backend_mode = StorageBackendMode.LIVE_DISK
+            sandbox.snapshot_k8s_volume_snapshot_name = f"{sandbox_id}-workspace-snapshot"
+            sandbox.snapshot_k8s_volume_snapshot_content_name = f"vsc-{sandbox_id}-workspace-snapshot"
+            session.add(sandbox)
+            await session.commit()
+
+        async def _fail_delete_snapshot(name: str, namespace: str) -> bool:
+            raise RuntimeError("delete failed")
+
+        k8s.delete_volume_snapshot = _fail_delete_snapshot  # type: ignore[assignment]
+
+        delete_resp = await auth_client.delete(f"/v1/sandboxes/{sandbox_id}")
+
+        assert delete_resp.status_code == 409
+        assert delete_resp.json()["error"]["code"] == "conflict"
+
+        async with _test_session_factory() as session:
+            sandbox = await session.get(Sandbox, sandbox_id)
+            assert sandbox is not None
+            assert sandbox.status == SandboxStatus.ERROR
+            assert sandbox.status_message == "Failed to delete bound snapshot during sandbox delete"
+
     async def test_soft_deleted_sandbox_not_in_list(self, auth_client):
         """After soft-delete, the sandbox should not appear in the list API."""
         from treadstone.models.sandbox import SandboxStatus
@@ -594,3 +635,89 @@ class TestStartStopSandbox:
         sandbox_id = create_resp.json()["id"]
         resp = await auth_client.post(f"/v1/sandboxes/{sandbox_id}/stop")
         assert resp.status_code == 409
+
+
+class TestColdSnapshotRoutes:
+    async def test_snapshot_route_sets_pending_operation(self, auth_client):
+        create = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": "cold-snap", "persist": True, "storage_size": "5Gi"},
+        )
+        sandbox_id = create.json()["id"]
+
+        async with _test_session_factory() as session:
+            sandbox = await session.get(Sandbox, sandbox_id)
+            sandbox.status = SandboxStatus.READY
+            sandbox.storage_backend_mode = StorageBackendMode.LIVE_DISK
+            session.add(sandbox)
+            await session.commit()
+
+        resp = await auth_client.post(f"/v1/sandboxes/{sandbox_id}/snapshot")
+        assert resp.status_code == 202
+        data = resp.json()
+        assert data["status"] == "stopped"
+        assert data["pending_operation"] == "snapshotting"
+        assert data["storage"]["mode"] == "live_disk"
+
+    async def test_restore_route_accepts_cold_sandbox(self, auth_client):
+        create = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": "cold-restore", "persist": True, "storage_size": "5Gi"},
+        )
+        sandbox_id = create.json()["id"]
+
+        async with _test_session_factory() as session:
+            sandbox = await session.get(Sandbox, sandbox_id)
+            sandbox.status = SandboxStatus.COLD
+            sandbox.storage_backend_mode = StorageBackendMode.STANDARD_SNAPSHOT
+            sandbox.snapshot_k8s_volume_snapshot_name = f"{sandbox_id}-workspace-snapshot"
+            sandbox.snapshot_k8s_volume_snapshot_content_name = f"vsc-{sandbox_id}-workspace-snapshot"
+            sandbox.pending_operation = None
+            session.add(sandbox)
+            await session.commit()
+
+        resp = await auth_client.post(f"/v1/sandboxes/{sandbox_id}/restore")
+        assert resp.status_code == 202
+        data = resp.json()
+        assert data["status"] == "cold"
+        assert data["pending_operation"] == "restoring"
+
+    async def test_start_route_on_cold_sandbox_queues_restore_and_records_audit(self, auth_client):
+        create = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": "cold-start", "persist": True, "storage_size": "5Gi"},
+            headers={"X-Request-Id": "req-cold-start"},
+        )
+        sandbox_id = create.json()["id"]
+
+        async with _test_session_factory() as session:
+            sandbox = await session.get(Sandbox, sandbox_id)
+            sandbox.status = SandboxStatus.COLD
+            sandbox.storage_backend_mode = StorageBackendMode.STANDARD_SNAPSHOT
+            sandbox.snapshot_k8s_volume_snapshot_name = f"{sandbox_id}-workspace-snapshot"
+            sandbox.pending_operation = None
+            session.add(sandbox)
+            await session.commit()
+
+        resp = await auth_client.post(f"/v1/sandboxes/{sandbox_id}/start", headers={"X-Request-Id": "req-cold-start"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "cold"
+        assert data["pending_operation"] == "restoring"
+
+        async with _test_session_factory() as session:
+            events = (
+                (
+                    await session.execute(
+                        select(AuditEvent).where(
+                            AuditEvent.target_id == sandbox_id,
+                            AuditEvent.action.in_(["sandbox.restore_on_start", "sandbox.start"]),
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        actions = {event.action for event in events}
+        assert "sandbox.restore_on_start" in actions
+        assert "sandbox.start" in actions

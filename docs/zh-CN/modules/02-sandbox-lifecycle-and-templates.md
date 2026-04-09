@@ -11,6 +11,7 @@
 - `treadstone/models/sandbox.py`
 - `treadstone/services/sandbox_service.py`
 - `treadstone/services/k8s_client.py`
+- `treadstone/services/storage_snapshot_orchestrator.py`
 
 ## 当前模板目录
 
@@ -49,8 +50,12 @@
 - `k8s_sandbox_name`
 - `k8s_namespace`
 - `status`
+- `pending_operation`
 - `status_message`
 - `endpoints`
+- `storage_backend_mode`
+- `snapshot_k8s_volume_snapshot_name`
+- `snapshot_k8s_volume_snapshot_content_name`
 - `version`
 
 两个非常重要的语义：
@@ -96,6 +101,8 @@
 - `GET /v1/sandboxes`
 - `GET /v1/sandboxes/{sandbox_id}`
 - `DELETE /v1/sandboxes/{sandbox_id}`
+- `POST /v1/sandboxes/{sandbox_id}/snapshot`
+- `POST /v1/sandboxes/{sandbox_id}/restore`
 - `POST /v1/sandboxes/{sandbox_id}/start`
 - `POST /v1/sandboxes/{sandbox_id}/stop`
 
@@ -107,20 +114,28 @@
 
 ## 当前状态机
 
-数据库里真实存在的状态只有 5 个：
+数据库里真实存在的主状态有 6 个：
 
 - `creating`
 - `ready`
 - `stopped`
+- `cold`
 - `error`
 - `deleting`
 
 有效迁移规则是：
 
-- `creating -> ready|error|deleting`
+- `creating -> ready|error|stopped|deleting`
 - `ready -> stopped|error|deleting`
-- `stopped -> ready|deleting`
-- `error -> stopped|deleting`
+- `stopped -> creating|ready|cold|error|deleting`
+- `cold -> stopped|ready|error|deleting`
+- `error -> ready|creating|stopped|cold|deleting`
+
+除此之外，这次实现新增了一个后台异步操作字段：
+
+- `pending_operation = snapshotting|restoring`
+
+它表示冷存快照或恢复正在后台推进，但不会替代主状态。
 
 `delete` 并不是同步硬删：
 
@@ -147,6 +162,31 @@
 
 这是当前 `SandboxService` 的真实实现，而不是文档愿景。
 
+## 持久化 sandbox 的冷存能力
+
+这次实现后，`persist=true` 且 `provision_mode="direct"` 的 sandbox 多了一条冷存路径：
+
+- `snapshot`
+- `restore`
+- `start on cold`
+
+这里需要区分两个容易混淆的状态：
+
+- `stopped`：sandbox 已停机，但 live disk 仍保留
+- `cold`：live disk 已释放，只剩绑定的 `VolumeSnapshot`
+
+后台编排会：
+
+1. 等待 sandbox 真正停稳
+2. 从 workspace PVC 创建 `VolumeSnapshot`
+3. 删除 Sandbox CR 和 workspace PVC
+4. 把 sandbox 切到 `cold`
+5. 在 `restore` 或 `start` 时用 `PVC.dataSource=VolumeSnapshot` 重新恢复
+
+这部分的设计与失败补偿细节见：
+
+- [模块 9：Persistent Sandbox 冷存快照与恢复](./09-cold-snapshot-restore.md)
+
 ## 当前约束
 
 ### 1. 名称规则
@@ -171,4 +211,3 @@
 - Sandbox 生命周期能力已经稳定存在
 - 计量相关的数据模型和 API 已存在
 - 但“创建/启动 sandbox 时强制执行套餐限制”这一层还没有在公开路由上完全闭环
-

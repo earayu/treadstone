@@ -1,0 +1,17 @@
+{{- if and .Values.enabled .Values.snapshotClass.enabled }}
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: {{ .Values.snapshotClass.name }}
+  labels:
+    {{- include "cluster-storage.labels" . | nindent 4 }}
+    {{- with .Values.snapshotClass.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.snapshotClass.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+driver: {{ .Values.snapshotClass.driver }}
+deletionPolicy: {{ .Values.snapshotClass.deletionPolicy }}
+{{- end }}

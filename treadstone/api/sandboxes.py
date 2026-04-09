@@ -19,13 +19,14 @@ from treadstone.api.schemas import (
 from treadstone.config import settings
 from treadstone.core.database import get_session
 from treadstone.core.errors import (
+    ConflictError,
     EmailVerificationRequiredError,
     SandboxNotFoundError,
     ValidationError,
 )
 from treadstone.core.public_base_url import public_control_plane_base_url
 from treadstone.core.request_context import set_request_context
-from treadstone.models.sandbox import Sandbox
+from treadstone.models.sandbox import Sandbox, SandboxStatus
 from treadstone.models.sandbox_web_link import SandboxWebLink
 from treadstone.models.user import User, utc_now
 from treadstone.services.audit import record_audit_event
@@ -91,6 +92,17 @@ def _to_response(sb, base_url: str, web_link: SandboxWebLink | None = None) -> d
         "auto_delete_interval": sb.auto_delete_interval,
         "persist": sb.persist,
         "storage_size": sb.storage_size,
+        "pending_operation": sb.pending_operation,
+        "storage": (
+            {
+                "mode": sb.storage_backend_mode or "live_disk",
+                "size": sb.storage_size,
+                "snapshot_created_at": sb.gmt_snapshotted,
+                "zone": sb.workspace_zone,
+            }
+            if sb.persist and sb.storage_size
+            else None
+        ),
         "urls": _build_urls(sb, base_url, web_link),
         "created_at": sb.gmt_created,
     }
@@ -368,8 +380,19 @@ async def delete_sandbox(
     session: AsyncSession = Depends(get_session),
 ):
     service = SandboxService(session=session, metering=_metering)
-    await service.delete(sandbox_id=sandbox_id, owner_id=user.id)
+    sandbox = await service.delete(sandbox_id=sandbox_id, owner_id=user.id)
+    if sandbox.status == SandboxStatus.ERROR:
+        raise ConflictError(sandbox.status_message or f"Failed to delete sandbox {sandbox_id}.")
     set_request_context(request, sandbox_id=sandbox_id)
+    if sandbox.storage_backend_mode == "standard_snapshot":
+        await record_audit_event(
+            session,
+            action="sandbox.storage.asset_delete",
+            target_type="sandbox",
+            target_id=sandbox_id,
+            metadata={"asset_type": "bound_snapshot"},
+            request=request,
+        )
     await record_audit_event(
         session,
         action="sandbox.delete",
@@ -380,6 +403,50 @@ async def delete_sandbox(
     await session.commit()
 
 
+@router.post("/{sandbox_id}/snapshot", status_code=status.HTTP_202_ACCEPTED, response_model=SandboxDetailResponse)
+async def snapshot_sandbox(
+    request: Request,
+    sandbox_id: str,
+    user: User = Depends(get_current_control_plane_user),
+    session: AsyncSession = Depends(get_session),
+):
+    service = SandboxService(session=session, metering=_metering)
+    sandbox = await service.snapshot(sandbox_id=sandbox_id, owner_id=user.id)
+    set_request_context(request, sandbox_id=sandbox.id)
+    await record_audit_event(
+        session,
+        action="sandbox.snapshot",
+        target_type="sandbox",
+        target_id=sandbox.id,
+        request=request,
+    )
+    await session.commit()
+    web_link = await _load_active_web_link(session, sandbox.id) if settings.sandbox_domain else None
+    return _to_detail(sandbox, public_control_plane_base_url(request), web_link)
+
+
+@router.post("/{sandbox_id}/restore", status_code=status.HTTP_202_ACCEPTED, response_model=SandboxDetailResponse)
+async def restore_sandbox(
+    request: Request,
+    sandbox_id: str,
+    user: User = Depends(get_current_control_plane_user),
+    session: AsyncSession = Depends(get_session),
+):
+    service = SandboxService(session=session, metering=_metering)
+    sandbox = await service.restore(sandbox_id=sandbox_id, owner_id=user.id)
+    set_request_context(request, sandbox_id=sandbox.id)
+    await record_audit_event(
+        session,
+        action="sandbox.restore",
+        target_type="sandbox",
+        target_id=sandbox.id,
+        request=request,
+    )
+    await session.commit()
+    web_link = await _load_active_web_link(session, sandbox.id) if settings.sandbox_domain else None
+    return _to_detail(sandbox, public_control_plane_base_url(request), web_link)
+
+
 @router.post("/{sandbox_id}/start", response_model=SandboxDetailResponse)
 async def start_sandbox(
     request: Request,
@@ -388,8 +455,17 @@ async def start_sandbox(
     session: AsyncSession = Depends(get_session),
 ):
     service = SandboxService(session=session, metering=_metering)
+    before = await service.get(sandbox_id=sandbox_id, owner_id=user.id)
     sandbox = await service.start(sandbox_id=sandbox_id, owner_id=user.id)
     set_request_context(request, sandbox_id=sandbox.id)
+    if before is not None and before.status == "cold":
+        await record_audit_event(
+            session,
+            action="sandbox.restore_on_start",
+            target_type="sandbox",
+            target_id=sandbox.id,
+            request=request,
+        )
     await record_audit_event(
         session,
         action="sandbox.start",

@@ -236,6 +236,7 @@ def test_storage_ledger_fields_exist():
         "sandbox_id",
         "size_gib",
         "storage_state",
+        "backend_mode",
         "allocated_at",
         "released_at",
         "archived_at",

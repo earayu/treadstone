@@ -107,6 +107,7 @@ class LeaderControlledSyncSupervisor:
         self._sync_task: asyncio.Task | None = None
         self._metering_task: asyncio.Task | None = None
         self._lifecycle_task: asyncio.Task | None = None
+        self._snapshot_task: asyncio.Task | None = None
 
     async def run(self) -> None:
         try:
@@ -114,6 +115,7 @@ class LeaderControlledSyncSupervisor:
                 self._reap_sync_task()
                 self._reap_metering_task()
                 self._reap_lifecycle_task()
+                self._reap_snapshot_task()
                 try:
                     state = await self._elector.try_acquire_or_renew()
                 except Exception:
@@ -131,6 +133,9 @@ class LeaderControlledSyncSupervisor:
                     if self._lifecycle_task is None and self._session_factory is not None:
                         self._lifecycle_task = asyncio.create_task(self._lifecycle_tick_loop())
                         logger.info("Started lifecycle tick loop")
+                    if self._snapshot_task is None and self._session_factory is not None:
+                        self._snapshot_task = asyncio.create_task(self._snapshot_tick_loop())
+                        logger.info("Started storage snapshot tick loop")
                     await asyncio.sleep(self._elector.renew_interval_seconds)
                 else:
                     await self._stop_all_tasks("leadership lost")
@@ -182,6 +187,16 @@ class LeaderControlledSyncSupervisor:
                 logger.exception("Lifecycle tick failed")
             await asyncio.sleep(LIFECYCLE_TICK_INTERVAL)
 
+    async def _snapshot_tick_loop(self) -> None:
+        from treadstone.services.storage_snapshot_orchestrator import SNAPSHOT_TICK_INTERVAL, run_storage_snapshot_tick
+
+        while True:
+            try:
+                await run_storage_snapshot_tick(self._session_factory)
+            except Exception:
+                logger.exception("Storage snapshot tick failed")
+            await asyncio.sleep(SNAPSHOT_TICK_INTERVAL)
+
     async def _stop_all_tasks(self, reason: str) -> None:
         await self._stop_task(self._sync_task, "sync loop", reason)
         self._sync_task = None
@@ -189,6 +204,8 @@ class LeaderControlledSyncSupervisor:
         self._metering_task = None
         await self._stop_task(self._lifecycle_task, "lifecycle tick", reason)
         self._lifecycle_task = None
+        await self._stop_task(self._snapshot_task, "storage snapshot tick", reason)
+        self._snapshot_task = None
 
     @staticmethod
     async def _stop_task(task: asyncio.Task | None, name: str, reason: str) -> None:
@@ -208,6 +225,9 @@ class LeaderControlledSyncSupervisor:
 
     def _reap_lifecycle_task(self) -> None:
         self._lifecycle_task = self._reap_task(self._lifecycle_task, "lifecycle tick loop")
+
+    def _reap_snapshot_task(self) -> None:
+        self._snapshot_task = self._reap_task(self._snapshot_task, "storage snapshot tick loop")
 
     @staticmethod
     def _reap_task(task: asyncio.Task | None, name: str) -> asyncio.Task | None:

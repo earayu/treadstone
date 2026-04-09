@@ -90,6 +90,18 @@ class StorageBackendNotReadyError(TreadstoneError):
         )
 
 
+class StorageSnapshotBackendNotReadyError(TreadstoneError):
+    def __init__(self, snapshot_class_name: str):
+        super().__init__(
+            code="storage_snapshot_backend_not_ready",
+            message=(
+                "Cold snapshot storage is not ready. "
+                f"VolumeSnapshotClass '{snapshot_class_name}' was not found in the cluster."
+            ),
+            status=503,
+        )
+
+
 class SandboxTemplateCatalogUnavailableError(TreadstoneError):
     def __init__(self, message: str = "Sandbox template catalog is temporarily unavailable."):
         super().__init__(

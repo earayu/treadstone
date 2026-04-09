@@ -9,3 +9,11 @@ storageClass:
   volumeBindingMode: WaitForFirstConsumer
   allowVolumeExpansion: true
   parameters: {}
+
+snapshotClass:
+  enabled: false
+  name: treadstone-workspace-snapshot
+  annotations: {}
+  labels: {}
+  driver: ""
+  deletionPolicy: Retain

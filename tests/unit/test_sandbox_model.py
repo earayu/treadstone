@@ -1,13 +1,25 @@
-from treadstone.models.sandbox import Sandbox, SandboxStatus
+from treadstone.models.sandbox import Sandbox, SandboxPendingOperation, SandboxStatus, StorageBackendMode
 
 
 def test_sandbox_status_enum():
     assert SandboxStatus.CREATING == "creating"
     assert SandboxStatus.READY == "ready"
     assert SandboxStatus.STOPPED == "stopped"
+    assert SandboxStatus.COLD == "cold"
     assert SandboxStatus.ERROR == "error"
     assert SandboxStatus.DELETING == "deleting"
     assert SandboxStatus.DELETED == "deleted"
+
+
+def test_sandbox_pending_operation_enum():
+    assert SandboxPendingOperation.SNAPSHOTTING == "snapshotting"
+    assert SandboxPendingOperation.RESTORING == "restoring"
+
+
+def test_storage_backend_mode_enum():
+    assert StorageBackendMode.LIVE_DISK == "live_disk"
+    assert StorageBackendMode.STANDARD_SNAPSHOT == "standard_snapshot"
+    assert StorageBackendMode.ARCHIVE_SNAPSHOT == "archive_snapshot"
 
 
 def test_sandbox_fields_exist():
@@ -28,12 +40,25 @@ def test_sandbox_fields_exist():
         "k8s_resource_version",
         "last_synced_at",
         "status",
+        "pending_operation",
+        "pending_operation_target_status",
         "status_message",
+        "storage_backend_mode",
+        "k8s_workspace_pvc_name",
+        "k8s_workspace_pv_name",
+        "workspace_volume_handle",
+        "workspace_zone",
+        "snapshot_provider_id",
+        "snapshot_k8s_volume_snapshot_name",
+        "snapshot_k8s_volume_snapshot_content_name",
         "endpoints",
         "version",
         "gmt_created",
         "gmt_started",
         "gmt_stopped",
+        "gmt_snapshotted",
+        "gmt_restored",
+        "gmt_snapshot_archived",
         "gmt_deleted",
     ]:
         assert hasattr(sb, field), f"Missing field: {field}"
@@ -55,10 +80,11 @@ def test_sandbox_tablename():
 
 
 VALID_TRANSITIONS: dict[str, list[str]] = {
-    "creating": ["ready", "error", "deleting"],
+    "creating": ["ready", "error", "stopped", "deleting"],
     "ready": ["stopped", "error", "deleting"],
-    "stopped": ["ready", "error", "deleting"],
-    "error": ["ready", "creating", "stopped", "deleting"],
+    "stopped": ["creating", "ready", "cold", "error", "deleting"],
+    "cold": ["stopped", "ready", "error", "deleting"],
+    "error": ["ready", "creating", "stopped", "cold", "deleting"],
     "deleting": ["deleted"],
 }
 
@@ -74,15 +100,18 @@ def test_is_valid_transition():
 
     assert is_valid_transition("creating", "ready") is True
     assert is_valid_transition("creating", "error") is True
-    assert is_valid_transition("creating", "stopped") is False
+    assert is_valid_transition("creating", "stopped") is True
     assert is_valid_transition("deleting", "ready") is False
     assert is_valid_transition("deleting", "deleted") is True
     assert is_valid_transition("ready", "deleting") is True
     assert is_valid_transition("stopped", "error") is True
+    assert is_valid_transition("stopped", "cold") is True
+    assert is_valid_transition("cold", "stopped") is True
     assert is_valid_transition("deleted", "ready") is False
     assert is_valid_transition("error", "ready") is True
     assert is_valid_transition("error", "creating") is True
     assert is_valid_transition("error", "stopped") is True
+    assert is_valid_transition("error", "cold") is True
     assert is_valid_transition("error", "deleting") is True
 
 

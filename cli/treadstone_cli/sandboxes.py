@@ -191,11 +191,14 @@ def delete_sandbox(ctx: click.Context, sandbox_id: str) -> None:
     click.echo(f"Sandbox {sandbox_id} deleted.")
 
 
-@sandboxes.command("start", short_help="Start a stopped sandbox by ID.")
+@sandboxes.command("start", short_help="Start a stopped or cold sandbox by ID.")
 @click.argument("sandbox_id", metavar="SANDBOX_ID")
 @click.pass_context
 def start_sandbox(ctx: click.Context, sandbox_id: str) -> None:
-    """Start a stopped sandbox by sandbox ID."""
+    """Start a stopped sandbox by sandbox ID.
+
+    Cold sandboxes are restored automatically before the sandbox starts.
+    """
     client = require_auth(ctx)
     resp = client.post(f"/v1/sandboxes/{sandbox_id}/start")
     handle_error(resp)
@@ -219,6 +222,36 @@ def stop_sandbox(ctx: click.Context, sandbox_id: str) -> None:
         print_json(data)
     else:
         click.echo(f"Sandbox {sandbox_id} stopping.")
+
+
+@sandboxes.command("snapshot", short_help="Move a persistent sandbox to cold storage.")
+@click.argument("sandbox_id", metavar="SANDBOX_ID")
+@click.pass_context
+def snapshot_sandbox(ctx: click.Context, sandbox_id: str) -> None:
+    """Create a cold snapshot for a persistent direct sandbox."""
+    client = require_auth(ctx)
+    resp = client.post(f"/v1/sandboxes/{sandbox_id}/snapshot")
+    handle_error(resp)
+    data = resp.json()
+    if is_json_mode(ctx):
+        print_json(data)
+    else:
+        click.echo(f"Sandbox {sandbox_id} is snapshotting to cold storage.")
+
+
+@sandboxes.command("restore", short_help="Restore a cold sandbox without starting it.")
+@click.argument("sandbox_id", metavar="SANDBOX_ID")
+@click.pass_context
+def restore_sandbox(ctx: click.Context, sandbox_id: str) -> None:
+    """Restore a cold sandbox's disk without starting the runtime."""
+    client = require_auth(ctx)
+    resp = client.post(f"/v1/sandboxes/{sandbox_id}/restore")
+    handle_error(resp)
+    data = resp.json()
+    if is_json_mode(ctx):
+        print_json(data)
+    else:
+        click.echo(f"Sandbox {sandbox_id} is restoring from cold storage.")
 
 
 @sandboxes.group("web")

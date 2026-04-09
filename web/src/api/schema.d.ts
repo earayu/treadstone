@@ -723,6 +723,40 @@ export interface paths {
         patch: operations["sandboxes-update_sandbox"];
         trace?: never;
     };
+    "/v1/sandboxes/{sandbox_id}/snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Snapshot Sandbox */
+        post: operations["sandboxes-snapshot_sandbox"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sandboxes/{sandbox_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Sandbox */
+        post: operations["sandboxes-restore_sandbox"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sandboxes/{sandbox_id}/start": {
         parameters: {
             query?: never;
@@ -2003,6 +2037,13 @@ export interface components {
              * @example 5Gi
              */
             storage_size?: string | null;
+            /**
+             * Pending Operation
+             * @example null
+             * @example snapshotting
+             */
+            pending_operation?: string | null;
+            storage?: components["schemas"]["SandboxStorageResponse"] | null;
             urls: components["schemas"]["SandboxUrls"];
             /**
              * Created At
@@ -2097,6 +2138,13 @@ export interface components {
              * @example 5Gi
              */
             storage_size?: string | null;
+            /**
+             * Pending Operation
+             * @example null
+             * @example snapshotting
+             */
+            pending_operation?: string | null;
+            storage?: components["schemas"]["SandboxStorageResponse"] | null;
             urls: components["schemas"]["SandboxUrls"];
             /**
              * Created At
@@ -2120,6 +2168,29 @@ export interface components {
             status: string;
             /** Count */
             count: number;
+        };
+        /** SandboxStorageResponse */
+        SandboxStorageResponse: {
+            /**
+             * Mode
+             * @example live_disk
+             */
+            mode: string;
+            /**
+             * Size
+             * @example 5Gi
+             */
+            size: string;
+            /**
+             * Snapshot Created At
+             * @example 2026-03-21T12:00:00+00:00
+             */
+            snapshot_created_at?: string | null;
+            /**
+             * Zone
+             * @example ap-southeast-1a
+             */
+            zone?: string | null;
         };
         /** SandboxTemplateListResponse */
         SandboxTemplateListResponse: {
@@ -4272,6 +4343,68 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "sandboxes-snapshot_sandbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandbox_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "sandboxes-restore_sandbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandbox_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };

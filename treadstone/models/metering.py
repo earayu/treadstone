@@ -183,6 +183,7 @@ class StorageLedger(Base):
     )
     size_gib: Mapped[int] = mapped_column(Integer, nullable=False)
     storage_state: Mapped[str] = mapped_column(String(16), nullable=False, default=StorageState.ACTIVE)
+    backend_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="live_disk")
     allocated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

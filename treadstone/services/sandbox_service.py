@@ -25,10 +25,17 @@ from treadstone.core.errors import (
     SandboxNameConflictError,
     SandboxNotFoundError,
     StorageBackendNotReadyError,
+    StorageSnapshotBackendNotReadyError,
     TemplateNotFoundError,
     ValidationError,
 )
-from treadstone.models.sandbox import Sandbox, SandboxStatus, is_valid_transition
+from treadstone.models.sandbox import (
+    Sandbox,
+    SandboxPendingOperation,
+    SandboxStatus,
+    StorageBackendMode,
+    is_valid_transition,
+)
 from treadstone.models.sandbox_web_link import SandboxWebLink
 from treadstone.models.user import random_id, utc_now
 from treadstone.services.k8s_client import (
@@ -37,15 +44,18 @@ from treadstone.services.k8s_client import (
     LABEL_OWNER_ID,
     LABEL_PROVISION_MODE,
     LABEL_SANDBOX_ID,
+    LABEL_STORAGE_ROLE,
     LABEL_TEMPLATE,
     LABEL_WORKLOAD,
     PROVISION_MODE_CLAIM,
     PROVISION_MODE_DIRECT,
+    STORAGE_ROLE_WORKSPACE,
     WORKLOAD_SANDBOX,
     K8sClientProtocol,
     get_k8s_client,
 )
 from treadstone.services.metering_helpers import parse_storage_size_gib
+from treadstone.services.storage_snapshot_orchestrator import StorageSnapshotOrchestrator
 
 if TYPE_CHECKING:
     from treadstone.services.metering_service import MeteringService
@@ -57,10 +67,10 @@ def _sandbox_status_rank():
     """Stable list ordering: running first, then provisioning, deleting, then error/stopped."""
     return case(
         (Sandbox.status == SandboxStatus.READY, 0),
+        (Sandbox.pending_operation.is_not(None), 1),
         (Sandbox.status == SandboxStatus.CREATING, 1),
-        (Sandbox.status.in_(["starting", "stopping"]), 1),
         (Sandbox.status == SandboxStatus.DELETING, 2),
-        (Sandbox.status.in_([SandboxStatus.ERROR, SandboxStatus.STOPPED]), 3),
+        (Sandbox.status.in_([SandboxStatus.ERROR, SandboxStatus.STOPPED, SandboxStatus.COLD]), 3),
         else_=4,
     )
 
@@ -166,6 +176,7 @@ class SandboxService:
         if persist:
             sandbox.provision_mode = "direct"
             sandbox.k8s_sandbox_name = sandbox_id
+            sandbox.storage_backend_mode = StorageBackendMode.LIVE_DISK
         else:
             sandbox.provision_mode = "claim"
             sandbox.k8s_sandbox_claim_name = sandbox_id
@@ -208,7 +219,13 @@ class SandboxService:
         if self._metering is not None and persist and sandbox.status != SandboxStatus.ERROR:
             try:
                 size_gib = parse_storage_size_gib(effective_storage_size)
-                await self._metering.record_storage_allocation(self.session, owner_id, sandbox.id, size_gib)
+                await self._metering.record_storage_allocation(
+                    self.session,
+                    owner_id,
+                    sandbox.id,
+                    size_gib,
+                    backend_mode=StorageBackendMode.LIVE_DISK,
+                )
                 await self.session.commit()
             except Exception:
                 logger.exception("Failed to record storage allocation for sandbox %s", sandbox_id)
@@ -297,8 +314,21 @@ class SandboxService:
         if storage_class is None:
             raise StorageBackendNotReadyError(storage_class_name)
 
+    async def _ensure_snapshot_backend_ready(self) -> None:
+        snapshot_class_name = settings.sandbox_volume_snapshot_class.strip()
+        snapshot_class = await self.k8s.get_volume_snapshot_class(snapshot_class_name)
+        if snapshot_class is None:
+            raise StorageSnapshotBackendNotReadyError(snapshot_class_name)
+
     async def _create_direct(
-        self, sandbox: Sandbox, template: str, storage_size: str, *, shutdown_time: datetime | None = None
+        self,
+        sandbox: Sandbox,
+        template: str,
+        storage_size: str,
+        *,
+        replicas: int = 1,
+        data_source_name: str | None = None,
+        shutdown_time: datetime | None = None,
     ) -> None:
         tmpl = await self._resolve_template(sandbox.k8s_namespace, template)
 
@@ -313,14 +343,7 @@ class SandboxService:
             "limits": resource_limits,
         }
         volume_claim_templates = [
-            {
-                "metadata": {"name": "workspace"},
-                "spec": {
-                    "accessModes": ["ReadWriteOnce"],
-                    "storageClassName": settings.sandbox_storage_class,
-                    "resources": {"requests": {"storage": storage_size}},
-                },
-            }
+            _workspace_volume_claim_template(sandbox, storage_size, data_source_name=data_source_name)
         ]
 
         k8s_name = sandbox.k8s_sandbox_name or sandbox.id
@@ -349,6 +372,7 @@ class SandboxService:
             image=image,
             container_port=settings.sandbox_port,
             resources=resources,
+            replicas=replicas,
             startup_probe=tmpl.get("startup_probe"),
             readiness_probe=tmpl.get("readiness_probe"),
             liveness_probe=tmpl.get("liveness_probe"),
@@ -393,10 +417,13 @@ class SandboxService:
         sandboxes = list(result.scalars().all())
         return sandboxes, total
 
-    async def delete(self, sandbox_id: str, owner_id: str) -> None:
+    async def delete(self, sandbox_id: str, owner_id: str) -> Sandbox:
         sandbox = await self.get(sandbox_id, owner_id)
         if sandbox is None:
             raise SandboxNotFoundError(sandbox_id)
+
+        if sandbox.pending_operation is not None:
+            raise InvalidTransitionError(sandbox_id, sandbox.status, "deleting")
 
         if not is_valid_transition(sandbox.status, SandboxStatus.DELETING):
             raise InvalidTransitionError(sandbox_id, sandbox.status, "deleting")
@@ -424,7 +451,43 @@ class SandboxService:
             prev_status,
         )
 
+        storage = StorageSnapshotOrchestrator(session=self.session, k8s_client=self.k8s, metering=self._metering)
+
+        if sandbox.storage_backend_mode == StorageBackendMode.STANDARD_SNAPSHOT:
+            try:
+                await storage.backend.delete_bound_snapshot(sandbox)
+                storage._clear_snapshot_binding(sandbox)
+                if self._metering is not None:
+                    await self._metering.record_storage_release(self.session, sandbox.id)
+                sandbox.status = SandboxStatus.DELETED
+                sandbox.gmt_deleted = utc_now()
+                sandbox.status_message = None
+                sandbox.version += 1
+                self.session.add(sandbox)
+                await self.session.commit()
+                return sandbox
+            except Exception:
+                logger.exception("Failed to delete cold snapshot asset for sandbox %s", sandbox_id)
+                sandbox.status = SandboxStatus.ERROR
+                sandbox.status_message = "Failed to delete cold snapshot asset"
+                sandbox.version += 1
+                self.session.add(sandbox)
+                await self.session.commit()
+                return sandbox
+
         try:
+            if sandbox.snapshot_k8s_volume_snapshot_name:
+                try:
+                    await storage.backend.delete_bound_snapshot(sandbox)
+                    storage._clear_snapshot_binding(sandbox)
+                except Exception:
+                    logger.exception("Failed to clean up bound snapshot for sandbox %s during delete", sandbox_id)
+                    sandbox.status = SandboxStatus.ERROR
+                    sandbox.status_message = "Failed to delete bound snapshot during sandbox delete"
+                    sandbox.version += 1
+                    self.session.add(sandbox)
+                    await self.session.commit()
+                    return sandbox
             if sandbox.provision_mode == "direct":
                 sb_name = sandbox.k8s_sandbox_name or sandbox.id
                 logger.info("Deleting Sandbox CR %s (ns=%s)", sb_name, sandbox.k8s_namespace)
@@ -445,13 +508,61 @@ class SandboxService:
                 sandbox_id,
                 sandbox.status_message,
             )
+        return sandbox
+
+    async def snapshot(self, sandbox_id: str, owner_id: str) -> Sandbox:
+        sandbox = await self.get(sandbox_id, owner_id)
+        if sandbox is None:
+            raise SandboxNotFoundError(sandbox_id)
+        if not sandbox.persist or sandbox.provision_mode != PROVISION_MODE_DIRECT:
+            raise BadRequestError("Cold snapshot is only supported for persistent direct sandboxes.")
+        if sandbox.pending_operation is not None:
+            raise InvalidTransitionError(sandbox_id, sandbox.status, SandboxPendingOperation.SNAPSHOTTING)
+        if sandbox.status == SandboxStatus.READY:
+            sandbox = await self.stop(sandbox_id, owner_id)
+            if sandbox.status != SandboxStatus.STOPPED:
+                raise InvalidTransitionError(sandbox_id, sandbox.status, SandboxPendingOperation.SNAPSHOTTING)
+        elif sandbox.status != SandboxStatus.STOPPED:
+            raise InvalidTransitionError(sandbox_id, sandbox.status, SandboxPendingOperation.SNAPSHOTTING)
+
+        await self._ensure_snapshot_backend_ready()
+        sandbox.pending_operation = SandboxPendingOperation.SNAPSHOTTING
+        sandbox.pending_operation_target_status = None
+        sandbox.status_message = "Preparing cold snapshot."
+        sandbox.version += 1
+        self.session.add(sandbox)
+        await self.session.commit()
+        return sandbox
+
+    async def restore(self, sandbox_id: str, owner_id: str) -> Sandbox:
+        sandbox = await self.get(sandbox_id, owner_id)
+        if sandbox is None:
+            raise SandboxNotFoundError(sandbox_id)
+        if not sandbox.persist or sandbox.provision_mode != PROVISION_MODE_DIRECT:
+            raise BadRequestError("Cold restore is only supported for persistent direct sandboxes.")
+        if sandbox.pending_operation is not None:
+            raise InvalidTransitionError(sandbox_id, sandbox.status, SandboxPendingOperation.RESTORING)
+        if sandbox.status != SandboxStatus.COLD or sandbox.storage_backend_mode != StorageBackendMode.STANDARD_SNAPSHOT:
+            raise InvalidTransitionError(sandbox_id, sandbox.status, SandboxPendingOperation.RESTORING)
+
+        await self._ensure_snapshot_backend_ready()
+        sandbox.pending_operation = SandboxPendingOperation.RESTORING
+        sandbox.pending_operation_target_status = SandboxStatus.STOPPED
+        sandbox.status_message = "Queued sandbox restore."
+        sandbox.version += 1
+        self.session.add(sandbox)
+        await self.session.commit()
+        return sandbox
 
     async def start(self, sandbox_id: str, owner_id: str) -> Sandbox:
         sandbox = await self.get(sandbox_id, owner_id)
         if sandbox is None:
             raise SandboxNotFoundError(sandbox_id)
 
-        if sandbox.status not in (SandboxStatus.STOPPED, SandboxStatus.ERROR):
+        if sandbox.pending_operation is not None:
+            raise InvalidTransitionError(sandbox_id, sandbox.status, "ready")
+
+        if sandbox.status not in (SandboxStatus.STOPPED, SandboxStatus.ERROR, SandboxStatus.COLD):
             raise InvalidTransitionError(sandbox_id, sandbox.status, "ready")
 
         # ── Metering: enforcement checks before resuming (gated by config) ──
@@ -464,6 +575,18 @@ class SandboxService:
             if sandbox.auto_stop_interval > 0 and (sandbox.auto_stop_interval * 60) > max_duration:
                 plan = await self._metering.get_user_plan(self.session, owner_id)
                 raise SandboxDurationExceededError(plan.tier, max_duration)
+
+        if sandbox.status == SandboxStatus.COLD:
+            await self._ensure_snapshot_backend_ready()
+            sandbox.pending_operation = SandboxPendingOperation.RESTORING
+            sandbox.pending_operation_target_status = SandboxStatus.READY
+            sandbox.gmt_started = utc_now()
+            sandbox.gmt_last_active = utc_now()
+            sandbox.status_message = "Queued sandbox restore."
+            sandbox.version += 1
+            self.session.add(sandbox)
+            await self.session.commit()
+            return sandbox
 
         sandbox.status = SandboxStatus.CREATING
         sandbox.gmt_started = utc_now()
@@ -524,6 +647,9 @@ class SandboxService:
         if sandbox is None:
             raise SandboxNotFoundError(sandbox_id)
 
+        if sandbox.pending_operation is not None:
+            raise InvalidTransitionError(sandbox_id, sandbox.status, "stopped")
+
         if sandbox.status not in (SandboxStatus.READY, SandboxStatus.ERROR):
             raise InvalidTransitionError(sandbox_id, sandbox.status, "stopped")
 
@@ -569,3 +695,36 @@ class SandboxService:
 
         await self.session.execute(update(Sandbox).where(Sandbox.id == sandbox_id).values(gmt_last_active=utc_now()))
         await self.session.commit()
+
+
+def _workspace_volume_claim_template(
+    sandbox: Sandbox,
+    storage_size: str,
+    *,
+    data_source_name: str | None = None,
+) -> dict[str, Any]:
+    spec: dict[str, Any] = {
+        "accessModes": ["ReadWriteOnce"],
+        "storageClassName": settings.sandbox_storage_class,
+        "resources": {"requests": {"storage": storage_size}},
+    }
+    if data_source_name:
+        spec["dataSource"] = {
+            "name": data_source_name,
+            "kind": "VolumeSnapshot",
+            "apiGroup": "snapshot.storage.k8s.io",
+        }
+    return {
+        "metadata": {
+            "name": STORAGE_ROLE_WORKSPACE,
+            "labels": {
+                LABEL_SANDBOX_ID: sandbox.id,
+                LABEL_OWNER_ID: sandbox.owner_id,
+                LABEL_TEMPLATE: sandbox.template,
+                LABEL_PROVISION_MODE: PROVISION_MODE_DIRECT,
+                LABEL_WORKLOAD: WORKLOAD_SANDBOX,
+                LABEL_STORAGE_ROLE: STORAGE_ROLE_WORKSPACE,
+            },
+        },
+        "spec": spec,
+    }

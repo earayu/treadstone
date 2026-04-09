@@ -12,6 +12,7 @@ from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
     from ..models.sandbox_response_labels import SandboxResponseLabels
+    from ..models.sandbox_storage_response import SandboxStorageResponse
     from ..models.sandbox_urls import SandboxUrls
 
 
@@ -34,6 +35,8 @@ class SandboxResponse:
         labels (SandboxResponseLabels | Unset):
         persist (bool | Unset): Whether persistent storage is attached. Default: False.
         storage_size (None | str | Unset): Persistent volume size when persist=true.
+        pending_operation (None | str | Unset):
+        storage (None | SandboxStorageResponse | Unset):
     """
 
     id: str
@@ -47,9 +50,13 @@ class SandboxResponse:
     labels: SandboxResponseLabels | Unset = UNSET
     persist: bool | Unset = False
     storage_size: None | str | Unset = UNSET
+    pending_operation: None | str | Unset = UNSET
+    storage: None | SandboxStorageResponse | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
+        from ..models.sandbox_storage_response import SandboxStorageResponse
+
         id = self.id
 
         name = self.name
@@ -78,6 +85,20 @@ class SandboxResponse:
         else:
             storage_size = self.storage_size
 
+        pending_operation: None | str | Unset
+        if isinstance(self.pending_operation, Unset):
+            pending_operation = UNSET
+        else:
+            pending_operation = self.pending_operation
+
+        storage: dict[str, Any] | None | Unset
+        if isinstance(self.storage, Unset):
+            storage = UNSET
+        elif isinstance(self.storage, SandboxStorageResponse):
+            storage = self.storage.to_dict()
+        else:
+            storage = self.storage
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -98,12 +119,17 @@ class SandboxResponse:
             field_dict["persist"] = persist
         if storage_size is not UNSET:
             field_dict["storage_size"] = storage_size
+        if pending_operation is not UNSET:
+            field_dict["pending_operation"] = pending_operation
+        if storage is not UNSET:
+            field_dict["storage"] = storage
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.sandbox_response_labels import SandboxResponseLabels
+        from ..models.sandbox_storage_response import SandboxStorageResponse
         from ..models.sandbox_urls import SandboxUrls
 
         d = dict(src_dict)
@@ -141,6 +167,32 @@ class SandboxResponse:
 
         storage_size = _parse_storage_size(d.pop("storage_size", UNSET))
 
+        def _parse_pending_operation(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        pending_operation = _parse_pending_operation(d.pop("pending_operation", UNSET))
+
+        def _parse_storage(data: object) -> None | SandboxStorageResponse | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, dict):
+                    raise TypeError()
+                storage_type_0 = SandboxStorageResponse.from_dict(data)
+
+                return storage_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(None | SandboxStorageResponse | Unset, data)
+
+        storage = _parse_storage(d.pop("storage", UNSET))
+
         sandbox_response = cls(
             id=id,
             name=name,
@@ -153,6 +205,8 @@ class SandboxResponse:
             labels=labels,
             persist=persist,
             storage_size=storage_size,
+            pending_operation=pending_operation,
+            storage=storage,
         )
 
         sandbox_response.additional_properties = d

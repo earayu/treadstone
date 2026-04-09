@@ -14,17 +14,42 @@ class SandboxStatus(StrEnum):
     CREATING = "creating"
     READY = "ready"
     STOPPED = "stopped"
+    COLD = "cold"
     ERROR = "error"
     DELETING = "deleting"
     DELETED = "deleted"
 
 
+class SandboxPendingOperation(StrEnum):
+    SNAPSHOTTING = "snapshotting"
+    RESTORING = "restoring"
+
+
+class StorageBackendMode(StrEnum):
+    LIVE_DISK = "live_disk"
+    STANDARD_SNAPSHOT = "standard_snapshot"
+    ARCHIVE_SNAPSHOT = "archive_snapshot"
+
+
 VALID_TRANSITIONS: dict[str, list[str]] = {
-    SandboxStatus.CREATING: [SandboxStatus.READY, SandboxStatus.ERROR, SandboxStatus.DELETING],
+    SandboxStatus.CREATING: [SandboxStatus.READY, SandboxStatus.ERROR, SandboxStatus.STOPPED, SandboxStatus.DELETING],
     SandboxStatus.READY: [SandboxStatus.STOPPED, SandboxStatus.ERROR, SandboxStatus.DELETING],
     # STOPPED→ERROR: reconcile/watch mirrors K8s when CR reports ReconcilerError (DB may lag STOPPED).
-    SandboxStatus.STOPPED: [SandboxStatus.READY, SandboxStatus.ERROR, SandboxStatus.DELETING],
-    SandboxStatus.ERROR: [SandboxStatus.READY, SandboxStatus.CREATING, SandboxStatus.STOPPED, SandboxStatus.DELETING],
+    SandboxStatus.STOPPED: [
+        SandboxStatus.CREATING,
+        SandboxStatus.READY,
+        SandboxStatus.COLD,
+        SandboxStatus.ERROR,
+        SandboxStatus.DELETING,
+    ],
+    SandboxStatus.COLD: [SandboxStatus.STOPPED, SandboxStatus.READY, SandboxStatus.ERROR, SandboxStatus.DELETING],
+    SandboxStatus.ERROR: [
+        SandboxStatus.READY,
+        SandboxStatus.CREATING,
+        SandboxStatus.STOPPED,
+        SandboxStatus.COLD,
+        SandboxStatus.DELETING,
+    ],
     SandboxStatus.DELETING: [SandboxStatus.DELETED],
 }
 
@@ -72,13 +97,29 @@ class Sandbox(Base):
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     status: Mapped[str] = mapped_column(String(32), nullable=False, default=SandboxStatus.CREATING, index=True)
+    pending_operation: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    pending_operation_target_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     status_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     endpoints: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    storage_backend_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+    k8s_workspace_pvc_name: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    k8s_workspace_pv_name: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    workspace_volume_handle: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    workspace_zone: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    snapshot_provider_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    snapshot_k8s_volume_snapshot_name: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    snapshot_k8s_volume_snapshot_content_name: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, index=True
+    )
 
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     gmt_created: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     gmt_started: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     gmt_stopped: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    gmt_snapshotted: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    gmt_restored: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    gmt_snapshot_archived: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     gmt_last_active: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     gmt_deleted: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
