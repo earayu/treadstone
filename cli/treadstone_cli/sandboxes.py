@@ -239,21 +239,6 @@ def snapshot_sandbox(ctx: click.Context, sandbox_id: str) -> None:
         click.echo(f"Sandbox {sandbox_id} is snapshotting to cold storage.")
 
 
-@sandboxes.command("restore", short_help="Restore a cold sandbox without starting it.")
-@click.argument("sandbox_id", metavar="SANDBOX_ID")
-@click.pass_context
-def restore_sandbox(ctx: click.Context, sandbox_id: str) -> None:
-    """Restore a cold sandbox's disk without starting the runtime."""
-    client = require_auth(ctx)
-    resp = client.post(f"/v1/sandboxes/{sandbox_id}/restore")
-    handle_error(resp)
-    data = resp.json()
-    if is_json_mode(ctx):
-        print_json(data)
-    else:
-        click.echo(f"Sandbox {sandbox_id} is restoring from cold storage.")
-
-
 @sandboxes.group("web")
 def web() -> None:
     """Manage browser hand-off URLs for a sandbox.

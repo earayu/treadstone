@@ -313,60 +313,6 @@ async def test_snapshot_tick_completes_cold_cutover_after_cleanup_finishes_on_la
     await engine.dispose()
 
 
-async def test_restore_tick_moves_cold_sandbox_back_to_stopped_live_disk():
-    engine, factory = await _create_factory()
-    k8s = FakeK8sClient()
-    sandbox_id = "sbcoldrestore0000001"
-    await _create_live_sandbox(factory, k8s, sandbox_id=sandbox_id, status=SandboxStatus.STOPPED)
-
-    async with factory() as session:
-        metering = MeteringService()
-        await metering.record_storage_allocation(session, "user0001234567890", sandbox_id, 5)
-        sandbox = await session.get(Sandbox, sandbox_id)
-        sandbox.pending_operation = SandboxPendingOperation.SNAPSHOTTING
-        session.add(sandbox)
-        await session.commit()
-
-    await run_storage_snapshot_tick(factory, k8s)
-    await run_storage_snapshot_tick(factory, k8s)
-
-    async with factory() as session:
-        sandbox = await session.get(Sandbox, sandbox_id)
-        sandbox.pending_operation = SandboxPendingOperation.RESTORING
-        sandbox.pending_operation_target_status = SandboxStatus.STOPPED
-        session.add(sandbox)
-        await session.commit()
-
-    await run_storage_snapshot_tick(factory, k8s)
-    await run_storage_snapshot_tick(factory, k8s)
-
-    async with factory() as session:
-        sandbox = await session.get(Sandbox, sandbox_id)
-        assert sandbox.status == SandboxStatus.STOPPED
-        assert sandbox.pending_operation is None
-        assert sandbox.storage_backend_mode == StorageBackendMode.LIVE_DISK
-        assert sandbox.snapshot_k8s_volume_snapshot_name is None
-        assert sandbox.k8s_workspace_pvc_name is not None
-        assert sandbox.k8s_workspace_pv_name is not None
-
-        ledger = (
-            await session.execute(
-                select(StorageLedger).where(
-                    StorageLedger.sandbox_id == sandbox_id,
-                    StorageLedger.storage_state == StorageState.ACTIVE,
-                )
-            )
-        ).scalar_one()
-        assert ledger.backend_mode == StorageBackendMode.LIVE_DISK
-
-    restored = await k8s.get_sandbox(sandbox_id, "treadstone-local")
-    assert restored is not None
-    assert restored["spec"]["replicas"] == 0
-    assert await k8s.get_volume_snapshot(f"{sandbox_id}-workspace-snapshot", "treadstone-local") is None
-
-    await engine.dispose()
-
-
 async def test_restore_tick_falls_back_to_stopped_live_disk_when_runtime_errors():
     engine, factory = await _create_factory()
     k8s = FakeK8sClient()
@@ -387,7 +333,6 @@ async def test_restore_tick_falls_back_to_stopped_live_disk_when_runtime_errors(
     async with factory() as session:
         sandbox = await session.get(Sandbox, sandbox_id)
         sandbox.pending_operation = SandboxPendingOperation.RESTORING
-        sandbox.pending_operation_target_status = SandboxStatus.READY
         session.add(sandbox)
         await session.commit()
 
@@ -430,7 +375,6 @@ async def test_start_on_cold_restores_and_returns_to_ready():
         service = SandboxService(session=session, k8s_client=k8s, metering=MeteringService())
         sandbox = await service.start(sandbox_id, "user0001234567890")
         assert sandbox.pending_operation == SandboxPendingOperation.RESTORING
-        assert sandbox.pending_operation_target_status == SandboxStatus.READY
 
     await run_storage_snapshot_tick(factory, k8s)
     k8s.simulate_sandbox_ready(sandbox_id, "treadstone-local")

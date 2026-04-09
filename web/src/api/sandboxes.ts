@@ -111,22 +111,6 @@ export function useSnapshotSandbox() {
   })
 }
 
-export function useRestoreSandbox() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async (id: string) => {
-      const { data } = await client.POST("/v1/sandboxes/{sandbox_id}/restore", {
-        params: { path: { sandbox_id: id } },
-      })
-      return data!
-    },
-    onSuccess: (_data, id) => {
-      void qc.invalidateQueries({ queryKey: ["sandboxes"] })
-      void qc.invalidateQueries({ queryKey: ["sandboxes", id] })
-    },
-  })
-}
-
 export function useUpdateSandbox() {
   const qc = useQueryClient()
   return useMutation({

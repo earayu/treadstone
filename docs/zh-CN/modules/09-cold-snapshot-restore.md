@@ -2,7 +2,7 @@
 
 ## 模块目标
 
-这个模块描述 `persist=true` 的 direct sandbox 如何在 **保留工作区数据** 的前提下释放 live disk，把状态切到 `cold`，并在 `restore` 或 `start` 时重新 materialize 出 PVC/PV。
+这个模块描述 `persist=true` 的 direct sandbox 如何在 **保留工作区数据** 的前提下释放 live disk，把状态切到 `cold`，并在下一次 `start` 时自动从 snapshot 恢复出新的 PVC/PV。
 
 当前实现主要落在：
 
@@ -10,7 +10,6 @@
 - `treadstone/models/metering.py`
 - `treadstone/services/sandbox_service.py`
 - `treadstone/services/storage_snapshot_orchestrator.py`
-- `treadstone/services/k8s_client.py`
 - `treadstone/services/k8s_sync.py`
 - `treadstone/api/sandboxes.py`
 - `deploy/cluster-storage/templates/volumesnapshotclass.yaml`
@@ -28,10 +27,13 @@
   - 对 workspace PVC 做快照
   - 显式删除 Sandbox CR 和 workspace PVC
   - sandbox 进入 `cold`
-- `restore` 的含义固定为：
-  - 从绑定 snapshot 恢复 live disk
-  - 恢复完成后 sandbox 回到 `stopped`
-- `start` 对 `cold` sandbox 会自动触发 restore，然后再启动到 `ready`
+- `start` 对 `cold` sandbox 的含义固定为：
+  - 自动从绑定 snapshot 恢复 live disk
+  - 等待恢复后的 sandbox 重新 `ready`
+
+当前产品面不再公开 `restore-only`。原因是 ACK 当前依赖 `WaitForFirstConsumer`，而“只恢复磁盘、不启动 workload”会天然和 `replicas=0` 冲突，带来额外分支和隐式临时行为。为降低状态复杂度和测试面，公开恢复入口收敛为：
+
+- `cold -> start`
 
 这让用户只需要理解一件事：
 
@@ -51,7 +53,7 @@
 - `error`
 - `deleting`
 
-其中 `cold` 是这次新增的稳定状态，表示：
+其中 `cold` 表示：
 
 - 没有 live PVC / PV / disk
 - 仍然保留一份可恢复的 cold snapshot
@@ -65,15 +67,6 @@
 - `restoring`
 
 它是对主状态的覆盖层，不是新的生命周期终态。
-
-当前实现里还有一个内部辅助字段：
-
-- `pending_operation_target_status`
-
-它只用于恢复路径区分两种目标：
-
-- `restore only` -> 目标是 `stopped`
-- `start on cold` -> 目标是 `ready`
 
 ### 新增存储元数据
 
@@ -101,10 +94,9 @@ API 返回里新增：
 
 ## 3. 当前公开接口
 
-在原有 sandbox CRUD 之上，这次新增两个接口：
+在原有 sandbox CRUD 之上，这次只保留一个新增接口：
 
 - `POST /v1/sandboxes/{sandbox_id}/snapshot`
-- `POST /v1/sandboxes/{sandbox_id}/restore`
 
 并扩展了：
 
@@ -125,31 +117,24 @@ API 返回里新增：
 - `stopped`：直接进入 `snapshotting`
 - `cold` / `deleting` / `creating` / 已有 `pending_operation`：返回 `409`
 
-### `POST /restore`
-
-只支持：
-
-- `status="cold"`
-- `storage_backend_mode="standard_snapshot"`
-
-效果：
-
-- sandbox 保持 `cold`
-- `pending_operation="restoring"`
-- 后台恢复完成后回到 `stopped`
-
 ### `POST /start`
 
 当前有两条路径：
 
 - `stopped|error`：沿用原来的 scale-up
-- `cold`：改为 `restore_on_start`
+- `cold`：走 `restore_on_start`
 
 即：
 
 - 先进入 `pending_operation="restoring"`
-- 后台从 snapshot 恢复 PVC/PV
+- 后台从 snapshot 恢复 PVC/PV 和 Sandbox CR
 - 恢复成功后直达 `ready`
+
+当前不再提供：
+
+- `POST /v1/sandboxes/{sandbox_id}/restore`
+- CLI `treadstone sandboxes restore`
+- Web “Restore Only” 按钮
 
 ## 4. Kubernetes 与 ACK 实现方式
 
@@ -209,7 +194,7 @@ RBAC 新增权限：
 - 不依赖 agent-sandbox 的隐式 shutdown 语义去回收磁盘
 - 必须同时满足“快照 ready”和“live disk 确认释放”才允许 cutover 到 `cold`
 
-### Restore 链路
+### Restore-on-start 链路
 
 恢复路径复用 direct sandbox 创建逻辑，但 `volumeClaimTemplates` 会带上：
 
@@ -218,20 +203,18 @@ RBAC 新增权限：
 
 恢复顺序是：
 
-1. 校验 snapshot backend ready
-2. 创建新的 direct Sandbox CR
+1. `start(cold)` 把 sandbox 置为 `pending_operation=restoring`
+2. 编排器创建新的 direct Sandbox CR，`replicas=1`
 3. `workspace` PVC 从绑定 snapshot 恢复
 4. 等待 PVC/PV materialize
-5. 若目标是 `restore only`，等待 CR 落到 `STOPPED`
-6. 若目标是 `start on cold`，等待 CR 落到 `READY`
-7. 切回：
+5. 等待恢复出的 Sandbox CR 进入 `READY`
+6. 切回：
+   - `status=ready`
    - `storage_backend_mode=live_disk`
    - `pending_operation=null`
-8. 尝试删除旧的 bound snapshot
+7. 尝试删除旧的 bound snapshot
 
-## 6. 失败补偿与这次修过的边界问题
-
-这次实现里，review 后特别补了 4 个关键保护：
+## 6. 失败补偿与已知边界
 
 ### 1. 不会对还没真正停稳的 sandbox 做 snapshot
 
@@ -242,7 +225,7 @@ RBAC 新增权限：
 - 如果 K8s 还显示 `READY`
 - 或者还在 `creating`
 
-那么只会继续等待，不会创建 VolumeSnapshot。
+那么只会继续等待，不会创建 `VolumeSnapshot`。
 
 ### 2. restore 后遗留的旧 snapshot 不会被错误复用
 
@@ -253,23 +236,21 @@ RBAC 新增权限：
 - 清理成功：再创建新 snapshot
 - 清理失败：本次 snapshot 直接失败，保持 `stopped/live_disk`
 
-也就是说，不会把旧 snapshot 当成“新的冷存点”继续复用。
+不会把旧 snapshot 当成“新的冷存点”继续复用。
 
 ### 3. restore 遇到运行时错误不会无限卡在 `restoring`
 
 `k8s_sync` 在 `pending_operation` 期间会抑制普通状态回写，因此 restore 不能依赖 sync loop 自动把 `ERROR` 写回 DB。
 
-这次在 orchestrator 里显式补了处理：
+当前实现里，编排器会显式处理恢复期的 `ReconcilerError`：
 
-- 如果 workspace 已 materialize，但 CR 进入 `ReconcilerError`
+- 如果工作盘已经 materialize，但恢复出的 runtime 报错
 - sandbox 会回落到 `stopped/live_disk`
-- 用户可以重试 `start`
-
-这样不会无限停在 `cold + restoring`。
+- 用户可以重新点 `start`
 
 ### 4. 删除 live-disk sandbox 时，bound snapshot 清理失败不会再伪装成删除成功
 
-现在 delete 路径会先尝试清理残留的 bound snapshot。
+delete 路径会先尝试清理残留的 bound snapshot。
 
 如果 snapshot 清理失败：
 
@@ -312,7 +293,7 @@ RBAC 新增权限：
 
 并推进 cold storage 编排。
 
-同时 `k8s_sync` 这次有两个重要调整：
+同时 `k8s_sync` 这次有两个重要约束：
 
 - `cold` 被视为“CR 缺失也合法”
 - `pending_operation` 非空时，watch/reconcile 不会覆盖 orchestrator 正在推进的状态
@@ -326,7 +307,7 @@ RBAC 新增权限：
 - 只支持一份绑定 snapshot
 - 不支持 clone / fork
 - 不支持多历史恢复点
-- 不支持跨 sandbox restore
+- 不支持跨 sandbox 恢复点复用
 - `archive_snapshot` 只在 schema 里预留，功能未启用
 
 因此它解决的是：
@@ -342,3 +323,88 @@ RBAC 新增权限：
 3. `auto-archive`
 4. `auto-delete`
 5. 代理入口透明恢复
+
+## 10. 2026-04-09 白盒测试记录
+
+这一轮测试的目标，是在删除 `restore-only` 之后验证新的单入口模型是否闭环，并检查是否仍残留旧的公开面和内部状态字段。
+
+白盒覆盖点包括：
+
+- `snapshot(ready)` 是否仍会先等待真实 CR 停稳
+- `cold -> start -> restoring -> ready` 是否仍能完成
+- 恢复期 runtime 报错是否会回落到 `stopped/live_disk`
+- Web / CLI / API / OpenAPI 是否已经删掉 `/restore`
+- 模型和迁移是否已经移除 `pending_operation_target_status`
+
+本轮详细测试结果会在完成全量回归后继续追加到本节末尾。
+
+### 本轮结果
+
+- `make test`：`775 passed, 1 skipped, 7 deselected`
+- `make lint`：通过
+- `make gen-openapi`：通过
+- `make gen-web-types`：通过
+- `make gen-sdk-python`：通过
+- `cd web && npm run build`：通过
+
+### 这轮白盒检查实际覆盖到的内部细节
+
+- **API / OpenAPI / SDK / Web / CLI 收口**
+  - 生成后的 `openapi.json`、`openapi-public.json`、`web/src/api/schema.d.ts`、`sdk/python/` 已不再暴露 `/v1/sandboxes/{sandbox_id}/restore`
+  - Web 页面和 CLI 已删掉 `Restore Only` / `treadstone sandboxes restore`
+  - 测试里保留了一条显式 `404` 校验，确保后续不会误把这个路由加回来
+  - 额外用运行态 `FastAPI app.routes` 和 `app.openapi()` 做了一次检查，`/v1/sandboxes/{sandbox_id}/restore` 都返回不存在
+  - 额外用 `CliRunner` 检查 `sandboxes --help`，确认输出里已经没有 `restore` 子命令
+- **数据库与状态机**
+  - `Sandbox` 模型已移除 `pending_operation_target_status`
+  - 新迁移 `4b3f2f3fd7d8_remove_restore_only_target_status.py` 会在 drop column 前，把旧的 `restore-only` 进行中记录重置回 `cold`
+  - 单测继续覆盖 `pending_operation=snapshotting|restoring` 的推进和 `StorageLedger.backend_mode` 的切换
+- **恢复路径**
+  - `test_start_on_cold_restores_and_returns_to_ready` 继续校验唯一公开恢复入口 `cold -> start -> ready`
+  - `test_restore_tick_falls_back_to_stopped_live_disk_when_runtime_errors` 继续校验恢复期 runtime 出错时，不会卡死在 `restoring`
+- **快照路径**
+  - `test_snapshot_tick_waits_for_stop_before_creating_snapshot` 继续校验不会对仍在运行的 sandbox 直接做快照
+  - `test_snapshot_tick_fails_instead_of_reusing_stale_bound_snapshot` 继续校验旧 snapshot 清理失败时不会被错误复用
+  - `test_snapshot_tick_completes_cold_cutover_after_cleanup_finishes_on_later_tick` 继续校验只有快照 ready 且 live disk 真正释放后才切到 `cold`
+- **资源删除**
+  - `test_delete_cold_sandbox_deletes_snapshot_and_releases_storage_ledger` 继续校验删除 cold sandbox 时会删除绑定 snapshot 并释放 storage ledger
+  - `test_delete_returns_409_when_bound_snapshot_cleanup_fails` 继续校验 bound snapshot 清理失败时不会伪装成删除成功
+
+### 当前残留边界
+
+- `restore-only` 已经从产品面删除，但测试里仍保留 `POST /restore -> 404` 作为防回归检查，这属于预期。
+- 这轮验证依然是本地白盒回归，不包含真实 ACK 集群上的在线 `VolumeSnapshot` / ECS 云盘恢复压测；真实云环境仍需用 staging 或 production disposable sandbox 再做一次端到端验收。
+
+### 额外白盒脚本观察
+
+除了 pytest 回归，这轮还额外跑了两条白盒脚本，直接打印编排日志以及内存数据库里的 `Sandbox` / `StorageLedger` 状态。
+
+#### 成功路径
+
+观察到的关键切换如下：
+
+- 初始 `ready/live_disk`：K8s 有 CR、PVC 已 `Bound`、DB 里的 ledger 是 `live_disk`
+- `POST /snapshot` 之后：DB 立刻变成 `stopped + snapshotting`，K8s `replicas=0`，PVC 仍保留
+- 第 1 个 tick：日志出现 `Creating cold snapshot ...`，DB 写入 `snapshot_k8s_volume_snapshot_name`、`k8s_workspace_pvc_name`、`k8s_workspace_pv_name`、`workspace_zone`
+- 第 2 个 tick：日志出现 `Cold snapshot became ready` 与 `Cold snapshot cutover completed`，DB 切到 `cold/standard_snapshot`，PVC/PV 字段清空，ledger 同步切到 `standard_snapshot`
+- `POST /start` 之后：DB 变成 `cold + restoring`
+- 第 1 个 restore tick：重新创建 `replicas=1` 的 Sandbox CR，PVC 已重新 `Bound`，但 DB 仍保持 `cold + restoring`
+- 第 2 个 restore tick（手工把 fake CR 置为 ready 后）：DB 切到 `ready/live_disk`，bound snapshot 被清掉，ledger 回到 `live_disk`
+
+这证明当前唯一公开恢复入口 `cold -> start` 的底层资产切换顺序是闭环的，而且 snapshot 不会在恢复完成前被提前删除。
+
+#### 失败路径
+
+第二条脚本在 restore 过程中强行注入 `ReconcilerError`，观察结果是：
+
+- DB 最终回落到 `stopped/live_disk`
+- `pending_operation` 被清空
+- `status_message` 保留底层错误 `restore failed`
+- bound snapshot 被清掉
+- ledger 回到 `live_disk`
+
+这和当前失败补偿设计一致，说明删除 `restore-only` 之后，恢复期的 runtime 错误仍然不会把 sandbox 卡死在 `cold + restoring`。
+
+#### 脚本环境说明
+
+这两条脚本为了避免最小化 fixture 缺少 `TierTemplate` 而被 metering enforcement 拦住，临时关闭了 `metering_enforcement_enabled`。这只影响脚本 harness，不影响前面已经通过的正常单测、API 测试和全量 `make test` 回归。

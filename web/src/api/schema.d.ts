@@ -740,23 +740,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/sandboxes/{sandbox_id}/restore": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Restore Sandbox */
-        post: operations["sandboxes-restore_sandbox"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/sandboxes/{sandbox_id}/start": {
         parameters: {
             query?: never;
@@ -4362,37 +4345,6 @@ export interface operations {
         };
     };
     "sandboxes-snapshot_sandbox": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                sandbox_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SandboxDetailResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    "sandboxes-restore_sandbox": {
         parameters: {
             query?: never;
             header?: never;

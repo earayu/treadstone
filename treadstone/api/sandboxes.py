@@ -425,28 +425,6 @@ async def snapshot_sandbox(
     return _to_detail(sandbox, public_control_plane_base_url(request), web_link)
 
 
-@router.post("/{sandbox_id}/restore", status_code=status.HTTP_202_ACCEPTED, response_model=SandboxDetailResponse)
-async def restore_sandbox(
-    request: Request,
-    sandbox_id: str,
-    user: User = Depends(get_current_control_plane_user),
-    session: AsyncSession = Depends(get_session),
-):
-    service = SandboxService(session=session, metering=_metering)
-    sandbox = await service.restore(sandbox_id=sandbox_id, owner_id=user.id)
-    set_request_context(request, sandbox_id=sandbox.id)
-    await record_audit_event(
-        session,
-        action="sandbox.restore",
-        target_type="sandbox",
-        target_id=sandbox.id,
-        request=request,
-    )
-    await session.commit()
-    web_link = await _load_active_web_link(session, sandbox.id) if settings.sandbox_domain else None
-    return _to_detail(sandbox, public_control_plane_base_url(request), web_link)
-
-
 @router.post("/{sandbox_id}/start", response_model=SandboxDetailResponse)
 async def start_sandbox(
     request: Request,

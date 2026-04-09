@@ -527,28 +527,7 @@ class SandboxService:
 
         await self._ensure_snapshot_backend_ready()
         sandbox.pending_operation = SandboxPendingOperation.SNAPSHOTTING
-        sandbox.pending_operation_target_status = None
         sandbox.status_message = "Preparing cold snapshot."
-        sandbox.version += 1
-        self.session.add(sandbox)
-        await self.session.commit()
-        return sandbox
-
-    async def restore(self, sandbox_id: str, owner_id: str) -> Sandbox:
-        sandbox = await self.get(sandbox_id, owner_id)
-        if sandbox is None:
-            raise SandboxNotFoundError(sandbox_id)
-        if not sandbox.persist or sandbox.provision_mode != PROVISION_MODE_DIRECT:
-            raise BadRequestError("Cold restore is only supported for persistent direct sandboxes.")
-        if sandbox.pending_operation is not None:
-            raise InvalidTransitionError(sandbox_id, sandbox.status, SandboxPendingOperation.RESTORING)
-        if sandbox.status != SandboxStatus.COLD or sandbox.storage_backend_mode != StorageBackendMode.STANDARD_SNAPSHOT:
-            raise InvalidTransitionError(sandbox_id, sandbox.status, SandboxPendingOperation.RESTORING)
-
-        await self._ensure_snapshot_backend_ready()
-        sandbox.pending_operation = SandboxPendingOperation.RESTORING
-        sandbox.pending_operation_target_status = SandboxStatus.STOPPED
-        sandbox.status_message = "Queued sandbox restore."
         sandbox.version += 1
         self.session.add(sandbox)
         await self.session.commit()
@@ -579,7 +558,6 @@ class SandboxService:
         if sandbox.status == SandboxStatus.COLD:
             await self._ensure_snapshot_backend_ready()
             sandbox.pending_operation = SandboxPendingOperation.RESTORING
-            sandbox.pending_operation_target_status = SandboxStatus.READY
             sandbox.gmt_started = utc_now()
             sandbox.gmt_last_active = utc_now()
             sandbox.status_message = "Queued sandbox restore."
