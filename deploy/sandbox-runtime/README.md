@@ -46,19 +46,14 @@ The default Treadstone baseline is therefore **compatibility-first hardening**:
 - keep `allowPrivilegeEscalation: false`
 - keep `seccompProfile: RuntimeDefault`
 - keep `readOnlyRootFilesystem: false`
-- drop all capabilities and then add back only the minimum verified startup set:
-  - `CHOWN`
-  - `DAC_OVERRIDE`
-  - `FOWNER`
-  - `KILL`
-  - `SETUID`
-  - `SETGID`
+- do not force a `capabilities` override on the main container
 
 This is a deliberate boundary, not a hack:
 
 - the main container must still start as root because the image bootstraps runtime accounts dynamically
 - the direct-path `init-home` init container remains non-root
 - direct sandboxes still use `fsGroup` for the PVC-backed `/home/gem` workspace
+- ACS/ECI scheduling remains compatible because the Pod spec does not request disallowed capability overrides
 - this baseline is **not** Pod Security Standards `restricted` compliance
 
 If you later move to a custom image that is truly rootless-compatible, you can revisit `runAsNonRoot`, `runAsUser`, and a tighter capability set in a second phase. Until then, prefer this explicit compatible baseline over a misleading rootless configuration that fails at runtime.

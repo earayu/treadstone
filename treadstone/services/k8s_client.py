@@ -16,9 +16,10 @@ Security note: the stock ``ghcr.io/agent-infra/sandbox`` image is **not
 rootless-compatible**. Its entrypoint bootstraps the ``gem`` user/group and
 other runtime state as root on every start. Defaults here therefore target a
 **compatible hardening baseline**: keep seccomp and no-new-privilege style
-controls, retain a writable root filesystem, and add only the minimum verified
-Linux capabilities needed for startup. This is not Kubernetes Pod Security
-Standards ``restricted`` compliance.
+controls, retain a writable root filesystem, and avoid explicit Linux
+capability overrides. Some ACS/ECI policies reject any ``capabilities`` stanza
+even when the image starts fine with runtime defaults. This is not Kubernetes
+Pod Security Standards ``restricted`` compliance.
 
 Two implementations:
 - FakeK8sClient: In-memory stub for testing
@@ -58,14 +59,6 @@ SANDBOX_GID = 1000
 # False = compatible with the stock opaque image, which writes outside declared
 # volumes during bootstrap. True would require image/layout changes first.
 SANDBOX_READ_ONLY_ROOT_FILESYSTEM = False
-SANDBOX_STARTUP_CAPABILITIES = [
-    "CHOWN",
-    "DAC_OVERRIDE",
-    "FOWNER",
-    "KILL",
-    "SETUID",
-    "SETGID",
-]
 
 DEFAULT_STARTUP_PROBE: dict[str, Any] = {
     "httpGet": {"path": "/v1/sandbox", "port": 8080},
@@ -100,10 +93,9 @@ def _sandbox_pod_security_context(*, with_pvc: bool) -> dict[str, Any]:
 
 
 def _sandbox_main_container_security_context() -> dict[str, Any]:
-    """Main sandbox container: root-compatible minimum capability baseline mirrored from Helm defaults."""
+    """Main sandbox container: compatible baseline mirrored from Helm defaults."""
     return {
         "allowPrivilegeEscalation": False,
-        "capabilities": {"drop": ["ALL"], "add": SANDBOX_STARTUP_CAPABILITIES},
         "readOnlyRootFilesystem": SANDBOX_READ_ONLY_ROOT_FILESYSTEM,
         "seccompProfile": {"type": "RuntimeDefault"},
     }
