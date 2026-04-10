@@ -1,0 +1,80 @@
+# 120 sandboxes: Tiny/Small/Medium only.
+# Stateless vs stateful 1:1 (60 / 60). Stateful uses 5Gi / 10Gi / 20Gi (20 each),
+# with templates split 7+7+6 per tier for dispersion.
+
+name: "mixed-tsm-120-balanced-storage"
+description: >
+  60 stateless + 60 persistent (5Gi/10Gi/20Gi × 20 each; 7 tiny + 7 small + 6 medium per tier).
+
+matrix:
+  # Stateless (60): equal mix
+  - template: aio-sandbox-tiny
+    count: 20
+    persist: false
+
+  - template: aio-sandbox-small
+    count: 20
+    persist: false
+
+  - template: aio-sandbox-medium
+    count: 20
+    persist: false
+
+  # Stateful 5Gi (20)
+  - template: aio-sandbox-tiny
+    count: 7
+    persist: true
+    storage_size: "5Gi"
+
+  - template: aio-sandbox-small
+    count: 7
+    persist: true
+    storage_size: "5Gi"
+
+  - template: aio-sandbox-medium
+    count: 6
+    persist: true
+    storage_size: "5Gi"
+
+  # Stateful 10Gi (20)
+  - template: aio-sandbox-tiny
+    count: 7
+    persist: true
+    storage_size: "10Gi"
+
+  - template: aio-sandbox-small
+    count: 7
+    persist: true
+    storage_size: "10Gi"
+
+  - template: aio-sandbox-medium
+    count: 6
+    persist: true
+    storage_size: "10Gi"
+
+  # Stateful 20Gi (20)
+  - template: aio-sandbox-tiny
+    count: 7
+    persist: true
+    storage_size: "20Gi"
+
+  - template: aio-sandbox-small
+    count: 7
+    persist: true
+    storage_size: "20Gi"
+
+  - template: aio-sandbox-medium
+    count: 6
+    persist: true
+    storage_size: "20Gi"
+
+concurrency: 15
+ready_timeout_sec: 1200
+poll_interval_sec: 10
+
+auto_stop_interval: 60
+auto_delete_interval: -1
+
+cleanup:
+  after_run: true
+  on_failure: true
