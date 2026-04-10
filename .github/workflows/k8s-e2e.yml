@@ -143,10 +143,12 @@ jobs:
           EOF
           sed -i 's/^[[:space:]]*//' .env.local
 
+      # Pin the same tag as values-prod / deploy/README.md — not :latest (moving tag can break
+      # controller compatibility or stall warm-pool readiness for the full wait-k8s loop).
       - name: Sandbox runtime image override (GitHub-hosted runners)
         run: |
           cat > /tmp/ci-sandbox-runtime-image.yaml <<'EOF'
-          image: ghcr.io/agent-infra/sandbox:latest
+          image: ghcr.io/agent-infra/sandbox:1.0.0.152
           EOF
 
       # Mirrors scripts/up.sh local + make deploy-all, but applies extension CRDs and waits for
@@ -161,6 +163,8 @@ jobs:
           kind load docker-image treadstone:latest --name treadstone
           make image-web
           kind load docker-image treadstone-web:latest --name treadstone
+          docker pull ghcr.io/agent-infra/sandbox:1.0.0.152
+          kind load docker-image ghcr.io/agent-infra/sandbox:1.0.0.152 --name treadstone
           bash scripts/check-k8s-context.sh local
           make deploy-storage deploy-infra ENV=local
           kubectl apply -f deploy/agent-sandbox/upstream/extensions.yaml
@@ -168,6 +172,10 @@ jobs:
           make deploy-runtime deploy-api deploy-web ENV=local
 
       - name: make wait-k8s
+        env:
+          # Hurl E2E does not require a pre-warmed pool; skipping avoids a flaky 10-minute poll when
+          # status.readyReplicas never reaches spec.replicas (e.g. image pull or probe variance on GH runners).
+          SKIP_SANDBOX_WARM_POOL_WAIT: "1"
         run: make wait-k8s ENV=local
 
       - name: make smoke-web
