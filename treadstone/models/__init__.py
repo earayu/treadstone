@@ -11,6 +11,7 @@ from treadstone.models.metering import (
     TierTemplate,
     UserPlan,
 )
+from treadstone.models.password_reset_request_log import PasswordResetRequestLog
 from treadstone.models.platform_limits import PlatformLimits
 from treadstone.models.sandbox import Sandbox, SandboxPendingOperation, SandboxStatus, StorageBackendMode
 from treadstone.models.sandbox_web_link import SandboxWebLink
@@ -24,6 +25,7 @@ __all__ = [
     "AuditResult",
     "CliLoginFlow",
     "EmailVerificationLog",
+    "PasswordResetRequestLog",
     "ComputeSession",
     "ComputeGrant",
     "StorageLedger",

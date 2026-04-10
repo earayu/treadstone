@@ -171,6 +171,19 @@ class EmailAlreadyVerifiedError(TreadstoneError):
         super().__init__(code="email_already_verified", message=message, status=400)
 
 
+# ── Password Reset Errors ──
+
+
+class PasswordResetTokenInvalidError(TreadstoneError):
+    def __init__(self, message: str = "Invalid or expired password reset token."):
+        super().__init__(code="password_reset_token_invalid", message=message, status=400)
+
+
+class PasswordResetRateLimitedError(TreadstoneError):
+    def __init__(self, message: str):
+        super().__init__(code="password_reset_rate_limited", message=message, status=429)
+
+
 # ── Metering Errors ──
 
 

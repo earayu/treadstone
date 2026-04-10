@@ -10,6 +10,8 @@ import { DocsPage } from "@/pages/public/docs"
 
 import { SignInPage } from "@/pages/auth/sign-in"
 import { SignUpPage } from "@/pages/auth/sign-up"
+import { ForgotPasswordPage } from "@/pages/auth/forgot-password"
+import { ResetPasswordPage } from "@/pages/auth/reset-password"
 import { VerifyEmailPage } from "@/pages/auth/verify-email"
 import { CliLoginPage } from "@/pages/auth/cli-login"
 
@@ -59,6 +61,8 @@ const router = createBrowserRouter([
     children: [
       { path: "sign-in", element: <SignInPage /> },
       { path: "sign-up", element: <SignUpPage /> },
+      { path: "forgot-password", element: <ForgotPasswordPage /> },
+      { path: "reset-password", element: <ResetPasswordPage /> },
       { path: "verify-email", element: <VerifyEmailPage /> },
     ],
   },

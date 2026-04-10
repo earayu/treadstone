@@ -33,6 +33,15 @@ DeleteSandboxCallback = Callable[[AsyncSession, Sandbox], Awaitable[None]]
 _metering = MeteringService()
 
 
+class AutoDeleteFailure(Exception):
+    """Delete callback failed after external side effects and must leave the row in ERROR."""
+
+    def __init__(self, status_message: str, *, clear_snapshot_binding: bool = False) -> None:
+        super().__init__(status_message)
+        self.status_message = status_message
+        self.clear_snapshot_binding = clear_snapshot_binding
+
+
 async def check_idle_auto_stop(
     session: AsyncSession,
     stop_callback: StopSandboxCallback | None = None,
@@ -104,8 +113,9 @@ async def check_auto_delete(
 ) -> None:
     """Delete sandboxes that have been stopped longer than their auto_delete_interval.
 
-    Only considers STOPPED sandboxes with auto_delete_interval > 0 and a known
-    gmt_stopped timestamp.  Each sandbox is handled independently.
+    Considers STOPPED and COLD sandboxes with no in-flight pending_operation,
+    auto_delete_interval > 0, and a known gmt_stopped timestamp. Each sandbox
+    is handled independently.
     """
     now = utc_now()
     result = await session.execute(
@@ -150,6 +160,12 @@ async def check_auto_delete(
                     stopped_seconds,
                     threshold_seconds,
                 )
+        except AutoDeleteFailure as exc:
+            logger.exception("Failed to auto-delete sandbox %s", sandbox_id)
+            try:
+                await _persist_auto_delete_failure(session, sandbox_id, exc)
+            except Exception:
+                logger.exception("Failed to persist auto-delete failure state for sandbox %s", sandbox_id)
         except Exception:
             logger.exception("Failed to auto-delete sandbox %s", sandbox_id)
 
@@ -181,6 +197,25 @@ async def _db_only_stop(session: AsyncSession, sandbox: Sandbox) -> None:
     """Fallback stop when no K8s callback is available."""
     sandbox.status = SandboxStatus.STOPPED
     sandbox.gmt_stopped = utc_now()
+    sandbox.version += 1
+    session.add(sandbox)
+
+
+async def _persist_auto_delete_failure(
+    session: AsyncSession,
+    sandbox_id: str,
+    failure: AutoDeleteFailure,
+) -> None:
+    sandbox = await session.get(Sandbox, sandbox_id)
+    if sandbox is None or sandbox.gmt_deleted is not None:
+        return
+
+    sandbox.status = SandboxStatus.ERROR
+    sandbox.status_message = failure.status_message
+    if failure.clear_snapshot_binding:
+        sandbox.snapshot_provider_id = None
+        sandbox.snapshot_k8s_volume_snapshot_name = None
+        sandbox.snapshot_k8s_volume_snapshot_content_name = None
     sandbox.version += 1
     session.add(sandbox)
 

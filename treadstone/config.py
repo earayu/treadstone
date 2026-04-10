@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     resend_api_key: str = ""
     email_from: str = "support@treadstone-ai.dev"
     verification_token_lifetime_seconds: int = 3600
+    verification_resend_cooldown_seconds: int = 60
+    reset_password_token_lifetime_seconds: int = 3600
+    password_reset_request_cooldown_seconds: int = 60
+    password_reset_ip_hourly_limit: int = 5
 
     # Sandbox proxy defaults (overridable per-request via X-Sandbox-* headers)
     sandbox_namespace: str = "treadstone-local"

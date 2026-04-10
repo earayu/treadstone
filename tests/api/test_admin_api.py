@@ -20,6 +20,7 @@ from treadstone.main import app
 from treadstone.models.audit_event import AuditEvent
 from treadstone.models.metering import TierTemplate
 from treadstone.models.platform_limits import PlatformLimits  # noqa: F401 — register model for SQLite metadata
+from treadstone.models.sandbox import Sandbox, SandboxPendingOperation, SandboxStatus
 from treadstone.models.user import OAuthAccount, User
 from treadstone.models.user_feedback import UserFeedback  # noqa: F401 — register model for SQLite metadata
 from treadstone.models.waitlist import WaitlistApplication  # noqa: F401 — register model for SQLite metadata
@@ -888,3 +889,104 @@ async def test_sensitive_admin_reads_record_audit_events(admin_client, anon_clie
 
     assert feedback_events[-1].event_metadata["email_filter"] == "member@example.com"
     assert feedback_events[-1].event_metadata["result_count"] >= 1
+
+
+# ── POST /v1/admin/sandboxes/{sandbox_id}/force-reset-pending ─────────────────
+
+
+async def test_admin_force_reset_pending_clears_snapshotting(admin_client):
+    """Force-clear stuck snapshotting: DB + response + audit."""
+    user_id = _get_user_id(admin_client)
+    sb_id = "sbadminforcereset001"
+    async with _test_session_factory() as session:
+        session.add(
+            Sandbox(
+                id=sb_id,
+                name="force-reset-test",
+                owner_id=user_id,
+                template="aio-sandbox-small",
+                k8s_namespace="ns-test",
+                status=SandboxStatus.READY,
+                pending_operation=SandboxPendingOperation.SNAPSHOTTING,
+                endpoints={},
+                version=2,
+            )
+        )
+        await session.commit()
+
+    resp = await admin_client.post(f"/v1/admin/sandboxes/{sb_id}/force-reset-pending")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["id"] == sb_id
+    assert data["status"] == "stopped"
+    assert data["pending_operation"] is None
+    assert "snapshotting" in data["message"]
+
+    async with _test_session_factory() as session:
+        sb = await session.get(Sandbox, sb_id)
+        assert sb is not None
+        assert sb.pending_operation is None
+        assert sb.status == SandboxStatus.STOPPED
+        assert sb.version == 3
+
+    events = await _list_audit_events("admin.sandbox.force_reset_pending")
+    assert len(events) >= 1
+    assert events[-1].target_id == sb_id
+    assert events[-1].event_metadata["previous_pending_operation"] == "snapshotting"
+    assert events[-1].event_metadata["owner_id"] == user_id
+
+
+async def test_admin_force_reset_pending_no_op_when_no_pending(admin_client):
+    user_id = _get_user_id(admin_client)
+    sb_id = "sbadminforcereset002"
+    async with _test_session_factory() as session:
+        session.add(
+            Sandbox(
+                id=sb_id,
+                name="no-pending",
+                owner_id=user_id,
+                template="aio-sandbox-small",
+                k8s_namespace="ns-test",
+                status=SandboxStatus.STOPPED,
+                pending_operation=None,
+                endpoints={},
+            )
+        )
+        await session.commit()
+
+    resp = await admin_client.post(f"/v1/admin/sandboxes/{sb_id}/force-reset-pending")
+    assert resp.status_code == 200
+    assert resp.json()["message"] == "No-op: no pending operation to reset."
+
+
+async def test_admin_force_reset_pending_conflict_when_restoring(admin_client):
+    user_id = _get_user_id(admin_client)
+    sb_id = "sbadminforcereset003"
+    async with _test_session_factory() as session:
+        session.add(
+            Sandbox(
+                id=sb_id,
+                name="restoring",
+                owner_id=user_id,
+                template="aio-sandbox-small",
+                k8s_namespace="ns-test",
+                status=SandboxStatus.COLD,
+                pending_operation=SandboxPendingOperation.RESTORING,
+                endpoints={},
+            )
+        )
+        await session.commit()
+
+    resp = await admin_client.post(f"/v1/admin/sandboxes/{sb_id}/force-reset-pending")
+    assert resp.status_code == 409
+    assert "restoring" in resp.json()["error"]["message"].lower()
+
+
+async def test_admin_force_reset_pending_not_found(admin_client):
+    resp = await admin_client.post("/v1/admin/sandboxes/sbnonexistent00000/force-reset-pending")
+    assert resp.status_code == 404
+
+
+async def test_admin_force_reset_pending_requires_admin(member_client):
+    resp = await member_client.post("/v1/admin/sandboxes/sbadminforcereset004/force-reset-pending")
+    assert resp.status_code == 403
