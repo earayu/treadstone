@@ -67,6 +67,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/platform-limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Platform Limits */
+        get: operations["admin-get_platform_limits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Platform Limits */
+        patch: operations["admin-update_platform_limits"];
+        trace?: never;
+    };
     "/v1/admin/tier-templates": {
         parameters: {
             query?: never;
@@ -1732,7 +1750,7 @@ export interface components {
             persist: boolean;
             /**
              * Storage Size
-             * @description Persistent volume size (e.g. 5Gi, 10Gi, 20Gi). Allowed values depend on the sandbox template's annotation.
+             * @description Persistent volume size as '<integer>Gi' only (e.g. 5Gi, 10Gi, 20Gi). Allowed values depend on the sandbox template's annotation.
              * @example 5Gi
              */
             storage_size?: string | null;
@@ -1944,6 +1962,63 @@ export interface components {
              * @example user@example.com
              */
             email: string;
+        };
+        /** PlatformLimitsConfig */
+        PlatformLimitsConfig: {
+            /**
+             * Max Registered Users
+             * @example 200
+             */
+            max_registered_users?: number | null;
+            /**
+             * Max Total Sandboxes
+             * @example 1000
+             */
+            max_total_sandboxes?: number | null;
+            /**
+             * Max Total Storage Gib
+             * @example 1000
+             */
+            max_total_storage_gib?: number | null;
+            /**
+             * Max Waitlist Applications
+             * @example 500
+             */
+            max_waitlist_applications?: number | null;
+        };
+        /** PlatformLimitsResponse */
+        PlatformLimitsResponse: {
+            config: components["schemas"]["PlatformLimitsConfig"];
+            usage: components["schemas"]["PlatformLimitsUsage"];
+            /**
+             * Refreshed At
+             * Format: date-time
+             * @example 2026-04-10T00:00:00Z
+             */
+            refreshed_at: string;
+        };
+        /** PlatformLimitsUsage */
+        PlatformLimitsUsage: {
+            /**
+             * Registered Users
+             * @example 42
+             */
+            registered_users: number;
+            /**
+             * Total Sandboxes
+             * @example 120
+             */
+            total_sandboxes: number;
+            /**
+             * Total Storage Gib
+             * @example 250
+             */
+            total_storage_gib: number;
+            /**
+             * Waitlist Applications
+             * @example 75
+             */
+            waitlist_applications: number;
         };
         /** PlatformStatsResponse */
         PlatformStatsResponse: {
@@ -2607,6 +2682,29 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** UpdatePlatformLimitsRequest */
+        UpdatePlatformLimitsRequest: {
+            /**
+             * Max Registered Users
+             * @example 200
+             */
+            max_registered_users?: number | null;
+            /**
+             * Max Total Sandboxes
+             * @example 1000
+             */
+            max_total_sandboxes?: number | null;
+            /**
+             * Max Total Storage Gib
+             * @example 1000
+             */
+            max_total_storage_gib?: number | null;
+            /**
+             * Max Waitlist Applications
+             * @example 500
+             */
+            max_waitlist_applications?: number | null;
+        };
         /**
          * UpdateSandboxRequest
          * @description Partial update for sandbox metadata (control plane). Immutable fields: template, persist, storage.
@@ -3167,6 +3265,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlatformStatsResponse"];
+                };
+            };
+        };
+    };
+    "admin-get_platform_limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformLimitsResponse"];
+                };
+            };
+        };
+    };
+    "admin-update_platform_limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePlatformLimitsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformLimitsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

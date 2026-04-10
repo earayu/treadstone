@@ -10,6 +10,7 @@ import {
   Users,
   LayoutDashboard,
   MessageSquareText,
+  SlidersHorizontal,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCurrentUser } from "@/hooks/use-auth"
@@ -25,6 +26,7 @@ const navItems = [
 const adminNavItems = [
   { to: "/internal/admin/overview", icon: LayoutDashboard, label: "Overview" },
   { to: "/internal/admin/users", icon: Users, label: "User Management" },
+  { to: "/internal/admin/platform-limits", icon: SlidersHorizontal, label: "Platform Limits" },
   { to: "/internal/admin/metering", icon: Activity, label: "Admin Metering" },
   { to: "/internal/admin/feedback", icon: MessageSquareText, label: "Feedback" },
   { to: "/internal/audit", icon: FileText, label: "Audit Events" },

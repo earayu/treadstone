@@ -10,6 +10,36 @@ export type TierTemplate = components["schemas"]["TierTemplateItem"]
 export type UsageSummary = components["schemas"]["UsageSummaryResponse"]
 export type UserItem = components["schemas"]["UserResponse"]
 export type PlatformStats = components["schemas"]["PlatformStatsResponse"]
+export type PlatformLimitsResponse = components["schemas"]["PlatformLimitsResponse"]
+
+/** String fields for limit inputs; empty string means unlimited (null in API). */
+export type PlatformLimitsFormState = {
+  max_registered_users: string
+  max_total_sandboxes: string
+  max_total_storage_gib: string
+  max_waitlist_applications: string
+}
+
+export function usePlatformLimitsConfig() {
+  return useQuery({
+    queryKey: ["admin", "platform-limits"],
+    queryFn: async () => {
+      const { data } = await client.GET("/v1/admin/platform-limits")
+      return data!
+    },
+  })
+}
+
+export function useUpdatePlatformLimits() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (body: components["schemas"]["UpdatePlatformLimitsRequest"]) => {
+      const { data } = await client.PATCH("/v1/admin/platform-limits", { body })
+      return data!
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "platform-limits"] }),
+  })
+}
 
 export function usePlatformStats() {
   return useQuery({
