@@ -35,6 +35,14 @@ EXPECTED_DIRECT_ACS_UNITS = [
         },
     },
 ]
+EXPECTED_NETWORK_POLICY_DENYLIST = [
+    "10.0.0.0/8",
+    "172.16.0.0/12",
+    "192.168.0.0/16",
+    "100.64.0.0/10",
+    "169.254.0.0/16",
+    "127.0.0.0/8",
+]
 
 
 def _load_values(name: str) -> dict:
@@ -46,6 +54,17 @@ def test_default_values_keep_direct_acs_disabled() -> None:
 
     assert values["directAcsScheduling"]["enabled"] is False
     assert values["directAcsScheduling"]["units"] == EXPECTED_DIRECT_ACS_UNITS
+
+
+def test_default_values_enable_shared_sandbox_network_policies() -> None:
+    values = _load_values("values.yaml")
+
+    network_policies = values["networkPolicies"]
+    assert network_policies["enabled"] is True
+    assert network_policies["sandboxPodSelector"] == {"treadstone-ai.dev/workload": "sandbox"}
+    assert network_policies["ingress"]["allowFromApi"]["podSelector"] == {"treadstone-ai.dev/component": "api"}
+    assert network_policies["egress"]["allowPublicInternet"]["enabled"] is True
+    assert network_policies["egress"]["allowPublicInternet"]["exceptCidrs"] == EXPECTED_NETWORK_POLICY_DENYLIST
 
 
 def test_prod_values_enable_direct_acs_with_expected_unit_order() -> None:

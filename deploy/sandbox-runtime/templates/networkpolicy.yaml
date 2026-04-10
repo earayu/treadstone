@@ -1,0 +1,110 @@
+{{- if .Values.networkPolicies.enabled }}
+{{- $fullname := include "sandbox-runtime.fullname" . }}
+{{- $sandboxSelector := .Values.networkPolicies.sandboxPodSelector }}
+{{- $allowFromApi := .Values.networkPolicies.ingress.allowFromApi }}
+{{- $allowDns := .Values.networkPolicies.egress.allowDns }}
+{{- $allowPublicInternet := .Values.networkPolicies.egress.allowPublicInternet }}
+{{- $extraAllowRules := .Values.networkPolicies.egress.extraAllowRules }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ printf "%s-sandbox-default-deny" $fullname | trunc 63 | trimSuffix "-" }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sandbox-runtime.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- toYaml $sandboxSelector | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+{{- if $allowFromApi.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ printf "%s-sandbox-allow-from-api" $fullname | trunc 63 | trimSuffix "-" }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sandbox-runtime.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- toYaml $sandboxSelector | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- toYaml $allowFromApi.podSelector | nindent 14 }}
+      ports:
+        {{- toYaml $allowFromApi.ports | nindent 8 }}
+{{- end }}
+{{- if $allowDns.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ printf "%s-sandbox-allow-dns" $fullname | trunc 63 | trimSuffix "-" }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sandbox-runtime.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- toYaml $sandboxSelector | nindent 6 }}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            {{- toYaml $allowDns.namespaceSelector | nindent 12 }}
+      ports:
+        {{- toYaml $allowDns.ports | nindent 8 }}
+{{- end }}
+{{- if $allowPublicInternet.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ printf "%s-sandbox-allow-public-egress" $fullname | trunc 63 | trimSuffix "-" }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sandbox-runtime.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- toYaml $sandboxSelector | nindent 6 }}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: {{ $allowPublicInternet.cidr | quote }}
+            {{- with $allowPublicInternet.exceptCidrs }}
+            except:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}
+{{- end }}
+{{- if $extraAllowRules }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ printf "%s-sandbox-extra-egress" $fullname | trunc 63 | trimSuffix "-" }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sandbox-runtime.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- toYaml $sandboxSelector | nindent 6 }}
+  policyTypes:
+    - Egress
+  egress:
+    {{- toYaml $extraAllowRules | nindent 4 }}
+{{- end }}
+{{- end }}
