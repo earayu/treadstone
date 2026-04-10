@@ -2,6 +2,8 @@
 
 Endpoints:
   GET    /v1/admin/stats                        — platform-level operational statistics
+  GET    /v1/admin/platform-limits              — read platform-wide global cap configuration
+  PATCH  /v1/admin/platform-limits              — update platform-wide global cap configuration
   GET    /v1/admin/tier-templates               — list all tier templates
   PATCH  /v1/admin/tier-templates/{tier_name}    — update a tier template
   GET    /v1/admin/users/lookup-by-email        — find user by email
@@ -43,6 +45,7 @@ from treadstone.api.schemas import (
     CreateStorageQuotaGrantResponse,
     FeedbackItemResponse,
     FeedbackListResponse,
+    PlatformLimitsResponse,
     PlatformStatsResponse,
     ResolveEmailsRequest,
     ResolveEmailsResponse,
@@ -51,6 +54,7 @@ from treadstone.api.schemas import (
     StorageStats,
     TierTemplateListResponse,
     UpdatePlanRequest,
+    UpdatePlatformLimitsRequest,
     UpdateTierTemplateRequest,
     UpdateTierTemplateResponse,
     UpdateWaitlistApplicationRequest,
@@ -66,12 +70,14 @@ from treadstone.core.database import get_session
 from treadstone.core.errors import ConflictError, NotFoundError
 from treadstone.models.email_verification_log import EmailVerificationLog
 from treadstone.models.metering import ComputeGrant, StorageLedger, StorageQuotaGrant, UserPlan
+from treadstone.models.platform_limits import PLATFORM_LIMITS_SINGLETON_ID
 from treadstone.models.sandbox import Sandbox
-from treadstone.models.user import User
+from treadstone.models.user import User, utc_now
 from treadstone.models.user_feedback import UserFeedback
 from treadstone.models.waitlist import ApplicationStatus, WaitlistApplication
 from treadstone.services.audit import record_audit_event
 from treadstone.services.metering_service import MeteringService
+from treadstone.services.platform_limits import PlatformLimitsService, PlatformLimitsSnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +119,7 @@ async def _load_existing_user_ids(session: AsyncSession, user_ids: list[str]) ->
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
 
 _metering = MeteringService()
+_platform_limits = PlatformLimitsService()
 
 
 def serialize_compute_grant_response(grant: ComputeGrant) -> dict:
@@ -143,6 +150,24 @@ def serialize_storage_quota_grant_response(grant: StorageQuotaGrant) -> dict:
         "campaign_id": base["campaign_id"],
         "granted_at": base["granted_at"],
         "expires_at": base["expires_at"],
+    }
+
+
+def _serialize_platform_limits(snapshot: PlatformLimitsSnapshot) -> dict:
+    return {
+        "config": {
+            "max_registered_users": snapshot.config.max_registered_users,
+            "max_total_sandboxes": snapshot.config.max_total_sandboxes,
+            "max_total_storage_gib": snapshot.config.max_total_storage_gib,
+            "max_waitlist_applications": snapshot.config.max_waitlist_applications,
+        },
+        "usage": {
+            "registered_users": snapshot.usage.registered_users,
+            "total_sandboxes": snapshot.usage.total_sandboxes,
+            "total_storage_gib": snapshot.usage.total_storage_gib,
+            "waitlist_applications": snapshot.usage.waitlist_applications,
+        },
+        "refreshed_at": snapshot.refreshed_at,
     }
 
 
@@ -202,6 +227,55 @@ async def get_platform_stats(
     )
 
     return PlatformStatsResponse(users=users, sandboxes=sandboxes, compute=compute, storage=storage)
+
+
+# ── Platform Limits ───────────────────────────────────────────────────────────
+
+
+@router.get("/platform-limits", response_model=PlatformLimitsResponse)
+async def get_platform_limits(
+    request: Request,
+    _admin: User = Depends(get_current_admin_session),
+    session: AsyncSession = Depends(get_session),
+) -> PlatformLimitsResponse:
+    snapshot = await _platform_limits.build_snapshot(session)
+    await _record_sensitive_admin_read(
+        session,
+        request=request,
+        action="admin.platform_limits.read",
+        target_type="platform_limits",
+        target_id=PLATFORM_LIMITS_SINGLETON_ID,
+        metadata=_serialize_platform_limits(snapshot)["config"],
+    )
+    await session.commit()
+    return _serialize_platform_limits(snapshot)
+
+
+@router.patch("/platform-limits", response_model=PlatformLimitsResponse)
+async def update_platform_limits(
+    body: UpdatePlatformLimitsRequest,
+    request: Request,
+    admin: User = Depends(get_current_admin_session),
+    session: AsyncSession = Depends(get_session),
+) -> PlatformLimitsResponse:
+    config = await _platform_limits.get_or_create_config(session)
+    updates = body.model_dump(exclude_unset=True)
+    for field, value in updates.items():
+        setattr(config, field, value)
+    config.gmt_updated = utc_now()
+    session.add(config)
+    await record_audit_event(
+        session,
+        action="admin.platform_limits.updated",
+        target_type="platform_limits",
+        target_id=config.id,
+        actor_user_id=admin.id,
+        metadata={"updates": updates},
+        request=request,
+    )
+    await session.commit()
+    snapshot = await request.app.state.platform_limits_runtime.refresh_from_session(session)
+    return _serialize_platform_limits(snapshot)
 
 
 # ── Tier Templates ───────────────────────────────────────────────────────────

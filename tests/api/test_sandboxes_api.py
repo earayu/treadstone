@@ -12,6 +12,7 @@ from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
 from treadstone.models.audit_event import AuditEvent
+from treadstone.models.platform_limits import PLATFORM_LIMITS_SINGLETON_ID, PlatformLimits
 from treadstone.models.sandbox import Sandbox, SandboxStatus, StorageBackendMode
 from treadstone.models.user import OAuthAccount, User
 from treadstone.services.k8s_client import FakeK8sClient, get_k8s_client, set_k8s_client
@@ -49,6 +50,18 @@ async def db_session():
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
     await test_engine.dispose()
+
+
+async def _set_platform_limits(**limits) -> None:
+    async with _test_session_factory() as session:
+        row = await session.get(PlatformLimits, PLATFORM_LIMITS_SINGLETON_ID)
+        if row is None:
+            row = PlatformLimits(id=PLATFORM_LIMITS_SINGLETON_ID)
+        for field, value in limits.items():
+            setattr(row, field, value)
+        session.add(row)
+        await session.commit()
+        await app.state.platform_limits_runtime.refresh_from_session(session)
 
 
 @pytest.fixture
@@ -143,6 +156,51 @@ class TestCreateSandbox:
         )
         assert resp.status_code == 404
         assert resp.json()["error"]["code"] == "template_not_found"
+
+    async def test_create_respects_total_sandbox_cap(self, auth_client):
+        await _set_platform_limits(max_total_sandboxes=1)
+
+        first = await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "cap-a"})
+        second = await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "cap-b"})
+
+        assert first.status_code == 202
+        assert second.status_code == 503
+        assert second.json()["error"]["code"] == "sandbox_cap_exceeded"
+
+        async with _test_session_factory() as session:
+            event = (
+                (
+                    await session.execute(
+                        select(AuditEvent).where(AuditEvent.action == "sandbox.create").order_by(AuditEvent.created_at)
+                    )
+                )
+                .scalars()
+                .all()[-1]
+            )
+
+        assert event.result == "failure"
+        assert event.error_code == "sandbox_cap_exceeded"
+
+    async def test_create_persistent_sandbox_respects_global_storage_cap(self, auth_client):
+        await _set_platform_limits(max_total_storage_gib=0)
+
+        resp = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": "persist-capped", "persist": True, "storage_size": "5Gi"},
+        )
+
+        assert resp.status_code == 503
+        assert resp.json()["error"]["code"] == "global_storage_cap_exceeded"
+
+    async def test_create_non_persistent_sandbox_ignores_global_storage_cap(self, auth_client):
+        await _set_platform_limits(max_total_storage_gib=0)
+
+        resp = await auth_client.post(
+            "/v1/sandboxes",
+            json={"template": "aio-sandbox-tiny", "name": "ephemeral-ok", "persist": False},
+        )
+
+        assert resp.status_code == 202
 
     async def test_create_with_persist_returns_202(self, auth_client):
         resp = await auth_client.post(

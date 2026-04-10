@@ -13,6 +13,7 @@ from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
 from treadstone.models.audit_event import AuditEvent
+from treadstone.models.platform_limits import PLATFORM_LIMITS_SINGLETON_ID, PlatformLimits
 from treadstone.models.user import OAuthAccount, User
 from treadstone.services import browser_login as browser_login_service
 
@@ -94,6 +95,18 @@ def _extract_state(location: str) -> str:
     return parse_qs(urlparse(location).query)["state"][0]
 
 
+async def _set_platform_limits(**limits) -> None:
+    async with _test_session_factory() as session:
+        row = await session.get(PlatformLimits, PLATFORM_LIMITS_SINGLETON_ID)
+        if row is None:
+            row = PlatformLimits(id=PLATFORM_LIMITS_SINGLETON_ID)
+        for field, value in limits.items():
+            setattr(row, field, value)
+        session.add(row)
+        await session.commit()
+        await app.state.platform_limits_runtime.refresh_from_session(session)
+
+
 def _enable_browser_flow(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(auth_api.settings, "app_base_url", "http://test")
     monkeypatch.setattr(auth_api.settings, "sandbox_domain", "sandbox.localhost")
@@ -152,6 +165,46 @@ async def test_google_callback_creates_user_and_sets_session_cookie(db_session, 
     assert user.has_local_password is False
     assert oauth_account.oauth_name == "google"
     assert oauth_account.account_id == "acct-new"
+
+
+@pytest.mark.asyncio
+async def test_google_callback_blocks_new_user_when_global_cap_reached(db_session, monkeypatch):
+    monkeypatch.setattr(auth_api.settings, "app_base_url", "http://test")
+    await _set_platform_limits(max_registered_users=0)
+    client = FakeOAuthClient("google", account_id="acct-capped", account_email="capped@example.com")
+    monkeypatch.setattr(auth_api, "get_google_oauth_client", lambda: client, raising=False)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
+        authorize = await http_client.get("/v1/auth/google/authorize", follow_redirects=False)
+        state = _extract_state(authorize.headers["location"])
+        callback = await http_client.get(
+            "/v1/auth/google/callback",
+            params={"code": "oauth-code", "state": state},
+            follow_redirects=False,
+        )
+
+    assert callback.status_code == 503
+    assert callback.json()["error"]["code"] == "user_registration_cap_exceeded"
+
+    async with _test_session_factory() as session:
+        user = (
+            (await session.execute(select(User).where(User.email == "capped@example.com")))
+            .unique()
+            .scalar_one_or_none()
+        )
+        event = (
+            (
+                await session.execute(
+                    select(AuditEvent).where(AuditEvent.action == "auth.register").order_by(AuditEvent.created_at)
+                )
+            )
+            .scalars()
+            .all()[-1]
+        )
+
+    assert user is None
+    assert event.result == "failure"
+    assert event.error_code == "user_registration_cap_exceeded"
 
 
 @pytest.mark.asyncio

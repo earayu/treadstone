@@ -806,6 +806,51 @@ class PlatformStatsResponse(BaseModel):
     storage: StorageStats
 
 
+class PlatformLimitsConfig(BaseModel):
+    max_registered_users: int | None = Field(default=None, examples=[200])
+    max_total_sandboxes: int | None = Field(default=None, examples=[1000])
+    max_total_storage_gib: int | None = Field(default=None, examples=[1000])
+    max_waitlist_applications: int | None = Field(default=None, examples=[500])
+
+
+class PlatformLimitsUsage(BaseModel):
+    registered_users: int = Field(..., examples=[42])
+    total_sandboxes: int = Field(..., examples=[120])
+    total_storage_gib: int = Field(..., examples=[250])
+    waitlist_applications: int = Field(..., examples=[75])
+
+
+class PlatformLimitsResponse(BaseModel):
+    config: PlatformLimitsConfig
+    usage: PlatformLimitsUsage
+    refreshed_at: datetime = Field(..., examples=["2026-04-10T00:00:00Z"])
+
+
+class UpdatePlatformLimitsRequest(BaseModel):
+    max_registered_users: int | None = Field(default=None, examples=[200])
+    max_total_sandboxes: int | None = Field(default=None, examples=[1000])
+    max_total_storage_gib: int | None = Field(default=None, examples=[1000])
+    max_waitlist_applications: int | None = Field(default=None, examples=[500])
+
+    @field_validator(
+        "max_registered_users",
+        "max_total_sandboxes",
+        "max_total_storage_gib",
+        "max_waitlist_applications",
+    )
+    @classmethod
+    def validate_non_negative(cls, v: int | None) -> int | None:
+        if v is not None and v < 0:
+            raise ValueError("limit must be greater than or equal to 0")
+        return v
+
+    @model_validator(mode="after")
+    def validate_has_updates(self) -> UpdatePlatformLimitsRequest:
+        if not self.model_fields_set:
+            raise ValueError("At least one field to update must be provided.")
+        return self
+
+
 # ── Waitlist ──────────────────────────────────────────────────────────────────
 
 

@@ -10,6 +10,7 @@ from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
 from treadstone.models.metering import TierTemplate
+from treadstone.models.platform_limits import PLATFORM_LIMITS_SINGLETON_ID, PlatformLimits
 from treadstone.models.user import OAuthAccount, User
 from treadstone.models.waitlist import WaitlistApplication
 
@@ -65,6 +66,18 @@ async def session_factory():
     await test_engine.dispose()
 
 
+async def _set_platform_limits(session_factory, **limits) -> None:
+    async with session_factory() as session:
+        row = await session.get(PlatformLimits, PLATFORM_LIMITS_SINGLETON_ID)
+        if row is None:
+            row = PlatformLimits(id=PLATFORM_LIMITS_SINGLETON_ID)
+        for field, value in limits.items():
+            setattr(row, field, value)
+        session.add(row)
+        await session.commit()
+        await app.state.platform_limits_runtime.refresh_from_session(session)
+
+
 @pytest.fixture
 async def anon_client(session_factory):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -103,3 +116,32 @@ async def test_post_waitlist_succeeds_even_if_post_commit_refresh_fails(anon_cli
         )
 
     assert len(rows) == 1
+
+
+async def test_post_waitlist_respects_global_cap(anon_client, session_factory):
+    await _set_platform_limits(session_factory, max_waitlist_applications=0)
+
+    response = await anon_client.post(
+        "/v1/waitlist",
+        json={
+            "email": "waitlist-cap@example.com",
+            "name": "Waitlist Cap",
+            "target_tier": "pro",
+        },
+    )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "waitlist_cap_exceeded"
+
+    async with session_factory() as session:
+        rows = (
+            (
+                await session.execute(
+                    select(WaitlistApplication).where(WaitlistApplication.email == "waitlist-cap@example.com")
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    assert rows == []
