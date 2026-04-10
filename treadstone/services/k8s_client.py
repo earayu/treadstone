@@ -1,9 +1,20 @@
 """K8s client for agent-sandbox CRD operations.
 
 Treadstone uses dual-path sandbox provisioning:
-- SandboxClaim path (extensions.agents.x-k8s.io) — ephemeral sandboxes, WarmPool-eligible
-- Direct Sandbox path (agents.x-k8s.io) — persistent storage via volumeClaimTemplates
-- SandboxTemplate (extensions.agents.x-k8s.io) — Read-only config catalog
+- SandboxClaim path (extensions.agents.x-k8s.io) — ephemeral sandboxes, WarmPool-eligible.
+  Pods come from Helm ``SandboxTemplate`` resources (no PVC in template, no init container).
+- Direct Sandbox path (agents.x-k8s.io) — persistent storage via ``volumeClaimTemplates``.
+  When PVCs mount ``SANDBOX_HOME_DIR``, the volume hides the image home; ``init-home``
+  seeds the PVC from the image layer on first boot (see ``Kr8sClient.create_sandbox``).
+- SandboxTemplate (extensions.agents.x-k8s.io) — read-only catalog for the claim path.
+
+Pod/container ``securityContext`` defaults here should stay aligned with
+``deploy/sandbox-runtime/values.yaml`` (``sandboxPodSecurityContext``,
+``sandboxContainerSecurityContext``).
+
+PSS note: defaults match the chart — non-root, seccomp, dropped caps, but **writable root FS**
+(``readOnlyRootFilesystem`` false). That aligns with **baseline-oriented** hardening, not the
+Kubernetes **restricted** profile (which needs read-only root plus writable paths only on volumes).
 
 Two implementations:
 - FakeK8sClient: In-memory stub for testing
@@ -39,6 +50,11 @@ SANDBOX_HOME_DIR = "/home/gem"
 SANDBOX_UID = 1000
 SANDBOX_GID = 1000
 
+# Align default with deploy/sandbox-runtime/values.yaml sandboxContainerSecurityContext.
+# False = less strict (baseline-friendly): image may write to paths not backed by a volume.
+# True = required for PSS "restricted"; needs emptyDir/tmpfs (or similar) for every writable path.
+SANDBOX_READ_ONLY_ROOT_FILESYSTEM = False
+
 DEFAULT_STARTUP_PROBE: dict[str, Any] = {
     "httpGet": {"path": "/v1/sandbox", "port": 8080},
     "periodSeconds": 5,
@@ -60,6 +76,45 @@ class WatchExpiredError(Exception):
 def format_shutdown_time(dt: datetime) -> str:
     """Format a datetime as RFC3339 for K8s shutdownTime field."""
     return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _sandbox_pod_security_context(*, with_pvc: bool) -> dict[str, Any]:
+    """Pod-level securityContext (baseline-oriented PSS hardening). Adds fsGroup when a workspace PVC is used."""
+    ctx: dict[str, Any] = {
+        "runAsNonRoot": True,
+        "runAsUser": SANDBOX_UID,
+        "runAsGroup": SANDBOX_GID,
+        "seccompProfile": {"type": "RuntimeDefault"},
+    }
+    if with_pvc:
+        ctx["fsGroup"] = SANDBOX_GID
+        ctx["fsGroupChangePolicy"] = "OnRootMismatch"
+    return ctx
+
+
+def _sandbox_main_container_security_context() -> dict[str, Any]:
+    """Main sandbox container: matches Helm sandboxContainerSecurityContext defaults."""
+    return {
+        "allowPrivilegeEscalation": False,
+        "capabilities": {"drop": ["ALL"]},
+        "readOnlyRootFilesystem": SANDBOX_READ_ONLY_ROOT_FILESYSTEM,
+        "runAsNonRoot": True,
+        "runAsUser": SANDBOX_UID,
+        "runAsGroup": SANDBOX_GID,
+        "seccompProfile": {"type": "RuntimeDefault"},
+    }
+
+
+def _sandbox_init_container_security_context() -> dict[str, Any]:
+    """init-home runs as the same UID as the main process; root is not required for cp with fsGroup."""
+    return {
+        "allowPrivilegeEscalation": False,
+        "capabilities": {"drop": ["ALL"]},
+        "runAsNonRoot": True,
+        "runAsUser": SANDBOX_UID,
+        "runAsGroup": SANDBOX_GID,
+        "seccompProfile": {"type": "RuntimeDefault"},
+    }
 
 
 @runtime_checkable
@@ -248,30 +303,31 @@ class Kr8sClient:
             readiness_probe=readiness_probe,
             liveness_probe=liveness_probe,
         )
+        container["securityContext"] = _sandbox_main_container_security_context()
 
-        pod_spec: dict[str, Any] = {"containers": [container], "restartPolicy": "OnFailure"}
+        pod_spec: dict[str, Any] = {
+            "automountServiceAccountToken": False,
+            "containers": [container],
+            "restartPolicy": "OnFailure",
+            "securityContext": _sandbox_pod_security_context(with_pvc=bool(volume_claim_templates)),
+        }
 
         if volume_claim_templates:
             vol_names = [vct["metadata"]["name"] for vct in volume_claim_templates]
             container["volumeMounts"] = [{"name": n, "mountPath": SANDBOX_HOME_DIR} for n in vol_names]
-
-            pod_spec["securityContext"] = {
-                "fsGroup": SANDBOX_GID,
-                "fsGroupChangePolicy": "OnRootMismatch",
-            }
 
             # On first boot the PVC shadows the image's home dir.  Seed the
             # volume with the image-layer skeleton (dotfiles from useradd -m,
             # etc.) so the main container's entrypoint can layer runtime state
             # on top.  A sentinel file tracks whether seeding has happened —
             # `ls -A` empty-checks break on ext4 volumes that ship lost+found.
+            # Runs as UID/GID SANDBOX_* with pod fsGroup; no chown (PSS restricted).
             _sentinel = "/mnt/home/.treadstone-home-initialized"
             init_script = (
                 f"if [ ! -f {_sentinel} ]; then "
                 f"cp -a {SANDBOX_HOME_DIR}/. /mnt/home/ 2>/dev/null || true; "
                 f"touch {_sentinel}; "
-                f"fi; "
-                f"chown {SANDBOX_UID}:{SANDBOX_GID} /mnt/home"
+                f"fi"
             )
             pod_spec["initContainers"] = [
                 {
@@ -279,7 +335,7 @@ class Kr8sClient:
                     "image": image,
                     "command": ["sh", "-c", init_script],
                     "volumeMounts": [{"name": n, "mountPath": "/mnt/home"} for n in vol_names],
-                    "securityContext": {"runAsUser": 0},
+                    "securityContext": _sandbox_init_container_security_context(),
                 }
             ]
 
@@ -748,12 +804,23 @@ class FakeK8sClient:
                 readiness_probe=template.get("readiness_probe"),
                 liveness_probe=template.get("liveness_probe"),
             )
+        container["securityContext"] = _sandbox_main_container_security_context()
 
         self._sandboxes[key] = {
             "apiVersion": f"{SANDBOX_API_GROUP}/{SANDBOX_API_VERSION}",
             "kind": "Sandbox",
             "metadata": {"name": sandbox_name, "namespace": namespace, "resourceVersion": "1"},
-            "spec": {"replicas": 1, "podTemplate": {"spec": {"containers": [container]}}},
+            "spec": {
+                "replicas": 1,
+                "podTemplate": {
+                    "spec": {
+                        "automountServiceAccountToken": False,
+                        "restartPolicy": "OnFailure",
+                        "securityContext": _sandbox_pod_security_context(with_pvc=False),
+                        "containers": [container],
+                    },
+                },
+            },
             "status": {
                 "conditions": [_make_ready_condition("False", "DependenciesNotReady", "Pod does not exist")],
                 "serviceFQDN": f"{sandbox_name}.{namespace}.svc.cluster.local",
@@ -798,15 +865,46 @@ class FakeK8sClient:
         if annotations:
             sb_metadata["annotations"] = annotations
 
-        pod_spec: dict[str, Any] = {
-            "containers": [{"name": "sandbox", "image": image, "resources": resources}],
+        main: dict[str, Any] = {
+            "name": "sandbox",
+            "image": image,
+            "resources": resources,
         }
         _apply_container_probes(
-            pod_spec["containers"][0],
+            main,
             startup_probe=startup_probe,
             readiness_probe=readiness_probe,
             liveness_probe=liveness_probe,
         )
+        main["securityContext"] = _sandbox_main_container_security_context()
+
+        pod_spec: dict[str, Any] = {
+            "automountServiceAccountToken": False,
+            "containers": [main],
+            "restartPolicy": "OnFailure",
+            "securityContext": _sandbox_pod_security_context(with_pvc=bool(volume_claim_templates)),
+        }
+
+        if volume_claim_templates:
+            vol_names = [vct["metadata"]["name"] for vct in volume_claim_templates]
+            main["volumeMounts"] = [{"name": n, "mountPath": SANDBOX_HOME_DIR} for n in vol_names]
+            _sentinel = "/mnt/home/.treadstone-home-initialized"
+            init_script = (
+                f"if [ ! -f {_sentinel} ]; then "
+                f"cp -a {SANDBOX_HOME_DIR}/. /mnt/home/ 2>/dev/null || true; "
+                f"touch {_sentinel}; "
+                f"fi"
+            )
+            pod_spec["initContainers"] = [
+                {
+                    "name": "init-home",
+                    "image": image,
+                    "command": ["sh", "-c", init_script],
+                    "volumeMounts": [{"name": n, "mountPath": "/mnt/home"} for n in vol_names],
+                    "securityContext": _sandbox_init_container_security_context(),
+                }
+            ]
+
         pod_template: dict[str, Any] = {"spec": pod_spec}
         if pod_labels:
             pod_template["metadata"] = {"labels": pod_labels}

@@ -22,6 +22,11 @@ spec:
         {{- end }}
         treadstone-ai.dev/provision-mode: "claim"
     spec:
+      automountServiceAccountToken: false
+      {{- with $.Values.sandboxPodSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: sandbox
           image: {{ $.Values.image }}
@@ -61,5 +66,9 @@ spec:
             limits:
               cpu: {{ .cpu.limits | quote }}
               memory: {{ .memory.limits | quote }}
+          {{- with $.Values.sandboxContainerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
       restartPolicy: OnFailure
 {{- end }}
