@@ -43,6 +43,18 @@ EXPECTED_NETWORK_POLICY_DENYLIST = [
     "169.254.0.0/16",
     "127.0.0.0/8",
 ]
+EXPECTED_SANDBOX_POD_SECURITY_CONTEXT = {
+    "seccompProfile": {"type": "RuntimeDefault"},
+}
+EXPECTED_SANDBOX_CONTAINER_SECURITY_CONTEXT = {
+    "allowPrivilegeEscalation": False,
+    "readOnlyRootFilesystem": False,
+    "seccompProfile": {"type": "RuntimeDefault"},
+    "capabilities": {
+        "drop": ["ALL"],
+        "add": ["CHOWN", "DAC_OVERRIDE", "FOWNER", "KILL", "SETUID", "SETGID"],
+    },
+}
 
 
 def _load_values(name: str) -> dict:
@@ -65,6 +77,13 @@ def test_default_values_enable_shared_sandbox_network_policies() -> None:
     assert network_policies["ingress"]["allowFromApi"]["podSelector"] == {"treadstone-ai.dev/component": "api"}
     assert network_policies["egress"]["allowPublicInternet"]["enabled"] is True
     assert network_policies["egress"]["allowPublicInternet"]["exceptCidrs"] == EXPECTED_NETWORK_POLICY_DENYLIST
+
+
+def test_default_values_define_compatible_sandbox_security_contexts() -> None:
+    values = _load_values("values.yaml")
+
+    assert values["sandboxPodSecurityContext"] == EXPECTED_SANDBOX_POD_SECURITY_CONTEXT
+    assert values["sandboxContainerSecurityContext"] == EXPECTED_SANDBOX_CONTAINER_SECURITY_CONTEXT
 
 
 def test_prod_values_enable_direct_acs_with_expected_unit_order() -> None:
