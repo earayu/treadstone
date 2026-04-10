@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Test Report</title>
+    <style>
+        body {
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    font-size: 1.125rem;
+    line-height: 1.4;
+}
+
+.container {
+    max-width: 1200px;
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+h2 {
+    color: #ff0288;
+    font-size: 2.5rem;
+}
+
+.summary {
+    margin: 32px 0 32px 0;
+    font-size: 1.25rem;
+}
+
+.date {
+    margin-bottom: 20px;
+}
+
+td {
+    padding: 4px 8px 4px 0;
+}
+
+thead {
+    font-weight: bold;
+}
+
+.success, .success a {
+    color: green;
+}
+
+.failure, .failure a {
+    color: red;
+}
+
+@media (prefers-color-scheme: dark) {
+    body {
+        background-color: #19191c;
+        color: #c2c2c2;
+    }
+}
+
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Report</h2>
+    <div class="summary">
+        <div class="date">Fri, 10 Apr 2026 09:14:02 +0000</div>
+        <div class="count">Executed: 10 (100%)</div>
+        <div class="count">Succeeded: 6 (60.0%)</div>
+        <div class="count">Failed: 4 (40.0%)</div>
+    </div>
+    <table>
+        <thead>
+        <td>File</td>
+        <td>Status</td>
+        <td>Start Time</td>
+        <td>Duration</td>
+        </thead>
+        <tbody>
+        <tr class="success" data-duration="4514" data-status="success" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/01-auth-flow.hurl" data-id="7db60c3b-39e1-4958-b851-716e4f1d11f5" data-timestamp="1775811628">
+    <td><a href="store/7db60c3b-39e1-4958-b851-716e4f1d11f5-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/01-auth-flow.hurl</a></td>
+    <td>success</td>
+    <td>2026-04-10T09:00:28+00:00</td>
+    <td>4.514</td>
+</tr>
+<tr class="success" data-duration="10577" data-status="success" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/02-api-keys.hurl" data-id="98af91fd-8ad9-4046-9658-4ca43e214864" data-timestamp="1775811632">
+    <td><a href="store/98af91fd-8ad9-4046-9658-4ca43e214864-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/02-api-keys.hurl</a></td>
+    <td>success</td>
+    <td>2026-04-10T09:00:32+00:00</td>
+    <td>10.577</td>
+</tr>
+<tr class="success" data-duration="6586" data-status="success" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/03-password-change.hurl" data-id="08a67340-d7af-46b6-af1a-3a664fc22111" data-timestamp="1775811643">
+    <td><a href="store/08a67340-d7af-46b6-af1a-3a664fc22111-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/03-password-change.hurl</a></td>
+    <td>success</td>
+    <td>2026-04-10T09:00:43+00:00</td>
+    <td>6.586</td>
+</tr>
+<tr class="success" data-duration="23817" data-status="success" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/04-sandbox-crud.hurl" data-id="a53053b1-5288-47d0-825d-d12f723a0201" data-timestamp="1775811649">
+    <td><a href="store/a53053b1-5288-47d0-825d-d12f723a0201-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/04-sandbox-crud.hurl</a></td>
+    <td>success</td>
+    <td>2026-04-10T09:00:49+00:00</td>
+    <td>23.817</td>
+</tr>
+<tr class="failure" data-duration="103889" data-status="failure" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/05-sandbox-dual-path.hurl" data-id="6a05867d-489a-421a-a1cd-116123f361c0" data-timestamp="1775811673">
+    <td><a href="store/6a05867d-489a-421a-a1cd-116123f361c0-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/05-sandbox-dual-path.hurl</a></td>
+    <td>failure</td>
+    <td>2026-04-10T09:01:13+00:00</td>
+    <td>103.889</td>
+</tr>
+<tr class="failure" data-duration="100500" data-status="failure" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/06-sandbox-names-web-link.hurl" data-id="cd9311cd-4f55-4641-aaca-3a13ab2fe422" data-timestamp="1775811777">
+    <td><a href="store/cd9311cd-4f55-4641-aaca-3a13ab2fe422-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/06-sandbox-names-web-link.hurl</a></td>
+    <td>failure</td>
+    <td>2026-04-10T09:02:57+00:00</td>
+    <td>100.5</td>
+</tr>
+<tr class="success" data-duration="16698" data-status="success" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/07-metering-usage.hurl" data-id="296ca09f-cc64-43bf-96d2-a2fb0b15da5c" data-timestamp="1775811878">
+    <td><a href="store/296ca09f-cc64-43bf-96d2-a2fb0b15da5c-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/07-metering-usage.hurl</a></td>
+    <td>success</td>
+    <td>2026-04-10T09:04:38+00:00</td>
+    <td>16.698</td>
+</tr>
+<tr class="success" data-duration="26239" data-status="success" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/08-metering-admin.hurl" data-id="fa81e948-08ec-4156-84e1-9d7b1ce4bb29" data-timestamp="1775811894">
+    <td><a href="store/fa81e948-08ec-4156-84e1-9d7b1ce4bb29-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/08-metering-admin.hurl</a></td>
+    <td>success</td>
+    <td>2026-04-10T09:04:54+00:00</td>
+    <td>26.239</td>
+</tr>
+<tr class="failure" data-duration="260325" data-status="failure" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/09-data-plane-proxy.hurl" data-id="530b4789-4bbd-4341-94f6-0b626904f808" data-timestamp="1775811920">
+    <td><a href="store/530b4789-4bbd-4341-94f6-0b626904f808-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/09-data-plane-proxy.hurl</a></td>
+    <td>failure</td>
+    <td>2026-04-10T09:05:20+00:00</td>
+    <td>260.325</td>
+</tr>
+<tr class="failure" data-duration="261219" data-status="failure" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/10-sandbox-lifecycle.hurl" data-id="f2060fac-e147-4869-9e3b-885420a001ff" data-timestamp="1775812181">
+    <td><a href="store/f2060fac-e147-4869-9e3b-885420a001ff-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/10-sandbox-lifecycle.hurl</a></td>
+    <td>failure</td>
+    <td>2026-04-10T09:09:41+00:00</td>
+    <td>261.219</td>
+</tr>
+
+        </tbody>
+    </table>
+</div>
+</body>
+</html>
