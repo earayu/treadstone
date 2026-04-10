@@ -24,6 +24,49 @@ sandboxProbes:
 sandboxPodSelectorLabels:
   treadstone-ai.dev/workload: "sandbox"
 
+networkPolicies:
+  enabled: true
+  sandboxPodSelector:
+    treadstone-ai.dev/workload: "sandbox"
+
+  ingress:
+    allowFromApi:
+      enabled: true
+      podSelector:
+        treadstone-ai.dev/component: "api"
+      ports:
+        - protocol: TCP
+          port: 8080
+
+  egress:
+    allowDns:
+      enabled: true
+      namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: "kube-system"
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    allowPublicInternet:
+      enabled: true
+      cidr: "0.0.0.0/0"
+      # Start with common private and cluster-internal ranges, then override
+      # per environment with the actual Pod/Service/VPC networks in use.
+      exceptCidrs:
+        - "10.0.0.0/8"
+        - "172.16.0.0/12"
+        - "192.168.0.0/16"
+        - "100.64.0.0/10"
+        - "169.254.0.0/16"
+        - "127.0.0.0/8"
+
+    # Appended verbatim as extra NetworkPolicy egress rules.
+    # Use this for environment-specific allow rules without changing chart code.
+    extraAllowRules: []
+
 # Pod Security Standards (PSS): these defaults intentionally target the LESS strict end of the
 # spectrum (closer to the "baseline" profile): readOnlyRootFilesystem stays false so the AIO
 # sandbox image can write outside declared volumes (e.g. /tmp). That does NOT satisfy the
