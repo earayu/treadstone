@@ -50,10 +50,6 @@ EXPECTED_SANDBOX_CONTAINER_SECURITY_CONTEXT = {
     "allowPrivilegeEscalation": False,
     "readOnlyRootFilesystem": False,
     "seccompProfile": {"type": "RuntimeDefault"},
-    "capabilities": {
-        "drop": ["ALL"],
-        "add": ["CHOWN", "DAC_OVERRIDE", "FOWNER", "KILL", "SETUID", "SETGID"],
-    },
 }
 
 

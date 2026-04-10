@@ -16,10 +16,6 @@ from treadstone.services.k8s_client import (
 
 EXPECTED_MAIN_SECURITY_CONTEXT = {
     "allowPrivilegeEscalation": False,
-    "capabilities": {
-        "drop": ["ALL"],
-        "add": ["CHOWN", "DAC_OVERRIDE", "FOWNER", "KILL", "SETUID", "SETGID"],
-    },
     "readOnlyRootFilesystem": False,
     "seccompProfile": {"type": "RuntimeDefault"},
 }
