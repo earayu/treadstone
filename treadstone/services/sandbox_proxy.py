@@ -1,12 +1,11 @@
 """
 Transparent reverse proxy to Sandbox pods running in Kubernetes.
 
-Replaces the upstream sandbox-router
+Inspired by the upstream sandbox-router
 (https://github.com/kubernetes-sigs/agent-sandbox/blob/main/clients/python/agentic-sandbox-client/sandbox-router/sandbox_router.py)
-with a first-party implementation that also supports WebSocket proxying.
-
-The API contract is intentionally compatible with the official sandbox-router so
-that the k8s-agent-sandbox Python SDK can target this service as well.
+but implemented in-tree with WebSocket support. Routing (namespace, port,
+Kubernetes service name) is decided by the API layer and settings, not by
+client request headers.
 """
 
 from __future__ import annotations
@@ -14,7 +13,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Any
 
 import httpx
 import websockets
@@ -38,6 +36,11 @@ PROXY_HOP_HEADERS = frozenset(
         "trailers",
     }
 )
+
+
+def _is_x_sandbox_vendor_header(name: str) -> bool:
+    """True if the header is in the legacy X-Sandbox-* family; never forward to the workload."""
+    return name.lower().startswith("x-sandbox")
 
 
 def _build_http_client() -> httpx.AsyncClient:
@@ -75,17 +78,11 @@ def build_sandbox_url(
     return f"{scheme}://{host}:{p}/{path.lstrip('/')}"
 
 
-def _sanitize_namespace(namespace: str) -> bool:
-    return namespace.replace("-", "").replace("_", "").isalnum()
-
-
-def _sanitize_sandbox_id(sandbox_id: str) -> bool:
-    return sandbox_id.replace("-", "").replace("_", "").isalnum()
-
-
 def _filter_request_headers(headers: dict[str, str]) -> dict[str, str]:
-    """Remove hop-by-hop headers and force identity encoding."""
-    filtered = {k: v for k, v in headers.items() if k.lower() not in PROXY_HOP_HEADERS}
+    """Remove hop-by-hop headers, X-Sandbox-* (any suffix), and force identity encoding."""
+    filtered = {
+        k: v for k, v in headers.items() if k.lower() not in PROXY_HOP_HEADERS and not _is_x_sandbox_vendor_header(k)
+    }
     filtered["accept-encoding"] = "identity"
     return filtered
 
@@ -93,38 +90,6 @@ def _filter_request_headers(headers: dict[str, str]) -> dict[str, str]:
 def _filter_response_headers(headers: httpx.Headers) -> dict[str, str]:
     """Keep content headers, strip hop-by-hop."""
     return {k: v for k, v in headers.multi_items() if k.lower() not in PROXY_HOP_HEADERS}
-
-
-def resolve_routing(
-    headers: dict[str, str],
-    *,
-    path_sandbox_id: str | None = None,
-) -> dict[str, Any]:
-    """Resolve sandbox routing from path params (priority) and/or headers.
-
-    Defaults for namespace and port come from settings, overridable per-request
-    via X-Sandbox-Namespace / X-Sandbox-Port headers.
-
-    Returns a dict with sandbox_id, namespace, port.
-    Raises ValueError for invalid input.
-    """
-    sandbox_id = path_sandbox_id or headers.get("x-sandbox-id")
-    if not sandbox_id:
-        raise ValueError("X-Sandbox-ID header is required.")
-    if not _sanitize_sandbox_id(sandbox_id):
-        raise ValueError("Invalid sandbox ID format.")
-
-    namespace = headers.get("x-sandbox-namespace", settings.sandbox_namespace)
-    if not _sanitize_namespace(namespace):
-        raise ValueError("Invalid namespace format.")
-
-    port_raw = headers.get("x-sandbox-port", str(settings.sandbox_port))
-    try:
-        port = int(port_raw)
-    except (ValueError, TypeError) as exc:
-        raise ValueError("Invalid port format.") from exc
-
-    return {"sandbox_id": sandbox_id, "namespace": namespace, "port": port}
 
 
 async def proxy_http_request(
