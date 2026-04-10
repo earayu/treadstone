@@ -291,6 +291,15 @@ class VerificationConfirmRequest(BaseModel):
     token: str = Field(..., examples=["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."])
 
 
+class PasswordResetRequest(BaseModel):
+    email: EmailStr = Field(..., examples=["user@example.com"])
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str = Field(..., examples=["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."])
+    new_password: str = Field(..., examples=["NewPass456!"])
+
+
 class ChangePasswordRequest(BaseModel):
     old_password: str = Field(..., examples=["OldPass123!"])
     new_password: str = Field(..., examples=["NewPass456!"])

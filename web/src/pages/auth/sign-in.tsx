@@ -147,6 +147,12 @@ export function SignInPage() {
       </p>
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
+        <Link to="/auth/forgot-password" className="font-medium text-foreground underline-offset-4 hover:underline">
+          Forgot password?
+        </Link>
+      </p>
+
+      <p className="mt-6 text-center text-sm text-muted-foreground">
         Need an account?{" "}
         <Link to="/auth/sign-up" className="font-medium text-foreground underline-offset-4 hover:underline">
           Create one

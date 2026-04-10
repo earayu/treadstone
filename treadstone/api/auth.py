@@ -26,6 +26,8 @@ from treadstone.api.schemas import (
     LoginRequest,
     LoginResponse,
     MessageResponse,
+    PasswordResetConfirmRequest,
+    PasswordResetRequest,
     RegisterRequest,
     RegisterResponse,
     SetPasswordRequest,
@@ -45,9 +47,11 @@ from treadstone.core.errors import (
     EmailVerificationTokenInvalidError,
     ForbiddenError,
     NotFoundError,
+    PasswordResetRateLimitedError,
+    PasswordResetTokenInvalidError,
     ValidationError,
 )
-from treadstone.core.request_context import set_request_context
+from treadstone.core.request_context import get_client_ip, set_request_context
 from treadstone.core.users import (
     COOKIE_MAX_AGE,
     UserManager,
@@ -65,6 +69,7 @@ from treadstone.models.api_key import (
 )
 from treadstone.models.cli_login_flow import CliLoginFlow, hash_flow_secret
 from treadstone.models.email_verification_log import EmailVerificationLog
+from treadstone.models.password_reset_request_log import PasswordResetRequestLog
 from treadstone.models.sandbox import Sandbox
 from treadstone.models.user import OAuthAccount, Role, User, random_id, utc_now
 from treadstone.services.audit import record_audit_event
@@ -319,6 +324,52 @@ async def authenticate_email_password(session: AsyncSession, email: str, passwor
     return user
 
 
+def _normalized_email(value: str) -> str:
+    return value.strip().lower()
+
+
+async def _enforce_password_reset_request_limits(
+    session: AsyncSession,
+    *,
+    requested_email: str,
+    request_ip: str | None,
+) -> None:
+    now = utc_now()
+    cooldown_cutoff = now - timedelta(seconds=settings.password_reset_request_cooldown_seconds)
+
+    recent_email_attempt = (
+        await session.execute(
+            select(PasswordResetRequestLog.id)
+            .where(
+                PasswordResetRequestLog.requested_email == requested_email,
+                PasswordResetRequestLog.gmt_created >= cooldown_cutoff,
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if recent_email_attempt is not None:
+        raise PasswordResetRateLimitedError(
+            f"Please wait {settings.password_reset_request_cooldown_seconds} seconds before trying again."
+        )
+
+    if request_ip is None:
+        return
+
+    hour_cutoff = now - timedelta(hours=1)
+    hourly_attempts = (
+        await session.execute(
+            select(func.count())
+            .select_from(PasswordResetRequestLog)
+            .where(
+                PasswordResetRequestLog.request_ip == request_ip,
+                PasswordResetRequestLog.gmt_created >= hour_cutoff,
+            )
+        )
+    ).scalar_one()
+    if hourly_attempts >= settings.password_reset_ip_hourly_limit:
+        raise PasswordResetRateLimitedError("Too many password reset requests from this IP. Please try again later.")
+
+
 async def write_session_cookie(response: Response, user: User) -> str:
     strategy = get_jwt_strategy()
     token = await strategy.write_token(user)
@@ -331,6 +382,27 @@ async def write_session_cookie(response: Response, user: User) -> str:
         secure=should_use_secure_cookies(),
     )
     return token
+
+
+async def _record_password_reset_request_log(
+    session: AsyncSession,
+    *,
+    requested_email: str,
+    matched_user_id: str | None,
+    was_sent: bool,
+    request_ip: str | None,
+    user_agent: str | None,
+) -> PasswordResetRequestLog:
+    log_entry = PasswordResetRequestLog(
+        requested_email=requested_email,
+        matched_user_id=matched_user_id,
+        was_sent=was_sent,
+        request_ip=request_ip,
+        user_agent=user_agent,
+    )
+    session.add(log_entry)
+    await session.flush()
+    return log_entry
 
 
 async def _validate_owned_sandbox_ids(session: AsyncSession, owner_id: str, sandbox_ids: list[str]) -> list[str]:
@@ -919,7 +991,117 @@ async def set_password(
     return {"detail": "Password set"}
 
 
-VERIFICATION_RESEND_COOLDOWN_SECONDS = 60
+@router.post("/password-reset/request", response_model=MessageResponse)
+async def request_password_reset(
+    request: Request,
+    body: PasswordResetRequest,
+    session: AsyncSession = Depends(get_session),
+    user_manager: UserManager = Depends(get_user_manager),
+):
+    requested_email = _normalized_email(str(body.email))
+    request_ip = get_client_ip(request.scope)
+    user_agent = request.headers.get("user-agent")
+
+    try:
+        await _enforce_password_reset_request_limits(session, requested_email=requested_email, request_ip=request_ip)
+    except PasswordResetRateLimitedError as exc:
+        await record_audit_event(
+            session,
+            action="auth.password.reset.request",
+            target_type="user",
+            result="failure",
+            error_code=exc.code,
+            metadata={"email": requested_email},
+            request=request,
+        )
+        await session.commit()
+        raise
+
+    user = (
+        (await session.execute(select(User).where(func.lower(User.email) == requested_email)))
+        .unique()
+        .scalar_one_or_none()
+    )
+    can_send = user is not None and user.is_active and user.has_local_password
+
+    sent = False
+    if can_send and user is not None:
+        try:
+            await user_manager.forgot_password(user, request)
+            sent = True
+        except Exception:
+            logger.exception("Failed to send password reset email to %s", user.email)
+
+    await _record_password_reset_request_log(
+        session,
+        requested_email=requested_email,
+        matched_user_id=user.id if user is not None else None,
+        was_sent=sent,
+        request_ip=request_ip,
+        user_agent=user_agent,
+    )
+    await record_audit_event(
+        session,
+        action="auth.password.reset.request",
+        target_type="user",
+        target_id=user.id if user is not None else None,
+        metadata={"email": requested_email, "was_sent": sent},
+        request=request,
+    )
+    await session.commit()
+    return {"detail": "If an account exists, we sent a password reset link."}
+
+
+@router.post("/password-reset/confirm", response_model=MessageResponse)
+async def confirm_password_reset(
+    request: Request,
+    body: PasswordResetConfirmRequest,
+    session: AsyncSession = Depends(get_session),
+    user_manager: UserManager = Depends(get_user_manager),
+):
+    try:
+        user = await user_manager.reset_password(body.token, body.new_password, request)
+    except fastapi_users_exceptions.InvalidResetPasswordToken:
+        await record_audit_event(
+            session,
+            action="auth.password.reset",
+            target_type="user",
+            result="failure",
+            error_code="password_reset_token_invalid",
+            request=request,
+        )
+        await session.commit()
+        raise PasswordResetTokenInvalidError() from None
+    except fastapi_users_exceptions.UserInactive:
+        await record_audit_event(
+            session,
+            action="auth.password.reset",
+            target_type="user",
+            result="failure",
+            error_code="forbidden",
+            request=request,
+        )
+        await session.commit()
+        raise ForbiddenError("Account is disabled. Contact your administrator.") from None
+
+    db_user = await session.get(User, user.id)
+    if db_user is None:
+        raise NotFoundError("User", user.id)
+    if not db_user.is_verified:
+        db_user.is_verified = True
+        session.add(db_user)
+
+    set_request_context(request, actor_user_id=db_user.id)
+    await record_audit_event(
+        session,
+        action="auth.password.reset",
+        target_type="user",
+        target_id=db_user.id,
+        metadata={"email": db_user.email},
+        request=request,
+    )
+    await session.commit()
+    return {"detail": "Password reset successful"}
 
 
 @router.post("/verification/request", response_model=MessageResponse)
@@ -948,9 +1130,9 @@ async def request_verification(
         if last_created.tzinfo is None:
             last_created = last_created.replace(tzinfo=UTC)
         elapsed = (now - last_created).total_seconds()
-        if elapsed < VERIFICATION_RESEND_COOLDOWN_SECONDS:
+        if elapsed < settings.verification_resend_cooldown_seconds:
             raise BadRequestError(
-                f"Please wait {int(VERIFICATION_RESEND_COOLDOWN_SECONDS - elapsed)} seconds before resending."
+                f"Please wait {int(settings.verification_resend_cooldown_seconds - elapsed)} seconds before resending."
             )
 
     set_request_context(request, actor_user_id=current_user.id)

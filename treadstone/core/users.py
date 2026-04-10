@@ -44,6 +44,7 @@ def get_github_oauth_client() -> GitHubOAuth2 | None:
 # ── UserManager ──
 class UserManager(BaseUserManager[User, str]):
     reset_password_token_secret = settings.jwt_secret
+    reset_password_token_lifetime_seconds = settings.reset_password_token_lifetime_seconds
     verification_token_secret = settings.jwt_secret
     verification_token_lifetime_seconds = settings.verification_token_lifetime_seconds
 
@@ -62,7 +63,9 @@ class UserManager(BaseUserManager[User, str]):
             await session.refresh(user)
 
     async def on_after_forgot_password(self, user: User, token: str, request: Request | None = None) -> None:
-        pass  # TODO: send email
+        reset_url = f"{settings.app_base_url.rstrip('/')}/auth/reset-password?token={token}"
+        backend = get_email_backend()
+        await backend.send_password_reset_email(to=user.email, token=token, reset_url=reset_url)
 
     async def on_after_request_verify(self, user: User, token: str, request: Request | None = None) -> None:
         verify_url = f"{settings.app_base_url.rstrip('/')}/auth/verify-email?token={token}"
