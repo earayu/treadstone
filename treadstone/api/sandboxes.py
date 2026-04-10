@@ -338,10 +338,6 @@ async def create_sandbox(
         request=request,
     )
     await session.commit()
-    await runtime.apply_local_delta(
-        sandboxes=1,
-        storage_gib=requested_storage_gib if sandbox.persist else 0,
-    )
     return _to_response(sandbox, public_control_plane_base_url(request), web_link)
 
 
@@ -418,7 +414,6 @@ async def delete_sandbox(
     user: User = Depends(get_current_control_plane_user),
     session: AsyncSession = Depends(get_session),
 ):
-    runtime = _get_platform_limits_runtime(request)
     service = SandboxService(session=session, metering=_metering)
     sandbox = await service.delete(sandbox_id=sandbox_id, owner_id=user.id)
     if sandbox.status == SandboxStatus.ERROR:
@@ -441,11 +436,6 @@ async def delete_sandbox(
         request=request,
     )
     await session.commit()
-    await runtime.ensure_snapshot(session)
-    await runtime.apply_local_delta(
-        sandboxes=-1,
-        storage_gib=-_platform_limits.parse_storage_size_gib(sandbox.storage_size) if sandbox.persist else 0,
-    )
 
 
 @router.post("/{sandbox_id}/snapshot", status_code=status.HTTP_202_ACCEPTED, response_model=SandboxDetailResponse)

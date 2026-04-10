@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import case, func, select
@@ -18,6 +18,7 @@ from treadstone.models.platform_limits import PLATFORM_LIMITS_SINGLETON_ID, Plat
 from treadstone.models.sandbox import Sandbox
 from treadstone.models.user import User, utc_now
 from treadstone.models.waitlist import WaitlistApplication
+from treadstone.services.metering_helpers import parse_storage_size_gib as _parse_storage_size_gib_str
 
 PLATFORM_LIMITS_REFRESH_INTERVAL_SECONDS = 15
 
@@ -61,11 +62,7 @@ class PlatformLimitsService:
     def parse_storage_size_gib(storage_size: str | None) -> int:
         if storage_size is None:
             return 0
-        if storage_size.endswith("Gi"):
-            return int(storage_size[:-2])
-        if storage_size.endswith("Ti"):
-            return int(storage_size[:-2]) * 1024
-        raise ValueError(f"Unsupported storage size format: {storage_size}")
+        return _parse_storage_size_gib_str(storage_size)
 
     async def get_config(self, session: AsyncSession) -> PlatformLimits | None:
         return await session.get(PlatformLimits, PLATFORM_LIMITS_SINGLETON_ID)
@@ -153,10 +150,6 @@ class PlatformLimitsRuntime:
         self._session_factory: async_sessionmaker[AsyncSession] | None = None
         self._bind_token: int | None = None
 
-    @property
-    def snapshot(self) -> PlatformLimitsSnapshot | None:
-        return self._snapshot
-
     async def start(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
         await self.force_refresh()
@@ -196,6 +189,11 @@ class PlatformLimitsRuntime:
         return await self.refresh_from_session(session)
 
     async def refresh_from_session(self, session: AsyncSession) -> PlatformLimitsSnapshot:
+        """Rebuild the in-process snapshot from the database (same aggregates as ``force_refresh``).
+
+        Used by admin usage responses, tests, and any caller that needs an up-to-date snapshot
+        without waiting for the periodic refresh loop. Uses the same lock as ``force_refresh``.
+        """
         async with self._lock:
             token = self._session_bind_token(session)
             snapshot = await self._service.build_snapshot(session)
@@ -213,25 +211,3 @@ class PlatformLimitsRuntime:
                 self._snapshot = snapshot
                 self._bind_token = self._session_bind_token(session)
                 return snapshot
-
-    async def apply_local_delta(
-        self,
-        *,
-        users: int = 0,
-        sandboxes: int = 0,
-        storage_gib: int = 0,
-        waitlist_applications: int = 0,
-    ) -> PlatformLimitsSnapshot | None:
-        async with self._lock:
-            if self._snapshot is None:
-                return None
-            usage = self._snapshot.usage
-            updated_usage = replace(
-                usage,
-                registered_users=max(0, usage.registered_users + users),
-                total_sandboxes=max(0, usage.total_sandboxes + sandboxes),
-                total_storage_gib=max(0, usage.total_storage_gib + storage_gib),
-                waitlist_applications=max(0, usage.waitlist_applications + waitlist_applications),
-            )
-            self._snapshot = replace(self._snapshot, usage=updated_usage, refreshed_at=utc_now())
-            return self._snapshot

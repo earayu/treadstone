@@ -26,8 +26,8 @@ SANDBOX_NAME_RULE = (
 SANDBOX_NAME_DESCRIPTION = (
     f"Optional custom sandbox name. {SANDBOX_NAME_RULE} Sandbox names only need to be unique for the current user."
 )
-STORAGE_SIZE_PATTERN = re.compile(r"^\d+(?:Gi|Ti)$")
-STORAGE_SIZE_RULE = "storage_size must match format '<number>Gi' or '<number>Ti' (e.g. 5Gi, 10Gi, 20Gi, 1Ti)."
+STORAGE_SIZE_PATTERN = re.compile(r"^\d+Gi$")
+STORAGE_SIZE_RULE = "storage_size must match format '<integer>Gi' (e.g. 5Gi, 10Gi, 20Gi)."
 
 # ── Sandbox ──────────────────────────────────────────────────────────────────
 
@@ -50,7 +50,7 @@ class CreateSandboxRequest(BaseModel):
     storage_size: str | None = Field(
         default=None,
         examples=["5Gi"],
-        description="Persistent volume size (e.g. 5Gi, 10Gi, 20Gi). "
+        description="Persistent volume size as '<integer>Gi' only (e.g. 5Gi, 10Gi, 20Gi). "
         "Allowed values depend on the sandbox template's annotation.",
     )
 

@@ -87,5 +87,4 @@ async def submit_waitlist_application(
         body.target_tier,
         application.id,
     )
-    await runtime.apply_local_delta(waitlist_applications=1)
     return _serialize_application(application)

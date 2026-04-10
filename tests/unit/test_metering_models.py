@@ -314,8 +314,9 @@ class TestParseStorageSizeGib:
     def test_20gi(self):
         assert parse_storage_size_gib("20Gi") == 20
 
-    def test_1ti(self):
-        assert parse_storage_size_gib("1Ti") == 1024
+    def test_ti_rejected(self):
+        with pytest.raises(BadRequestError, match="Unsupported storage size format"):
+            parse_storage_size_gib("1Ti")
 
     def test_invalid_suffix_raises(self):
         with pytest.raises(BadRequestError, match="Unsupported storage size format"):

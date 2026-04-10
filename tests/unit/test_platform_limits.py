@@ -118,22 +118,30 @@ async def test_build_snapshot_counts_usage_from_models():
 
 
 @pytest.mark.asyncio
-async def test_runtime_apply_local_delta_updates_snapshot_counts():
+async def test_runtime_refresh_from_session_reflects_committed_rows():
     session_factory = await _make_session_factory()
     runtime = PlatformLimitsRuntime()
 
     async with session_factory() as session:
-        snapshot = await runtime.ensure_snapshot(session)
+        snapshot = await runtime.refresh_from_session(session)
 
     assert snapshot.usage.registered_users == 0
 
-    await runtime.apply_local_delta(users=1, sandboxes=2, storage_gib=5, waitlist_applications=3)
+    async with session_factory() as session:
+        session.add(
+            User(
+                email="postcommit@example.com",
+                hashed_password="hashed",
+                has_local_password=True,
+                is_active=True,
+                is_verified=True,
+                role="rw",
+            )
+        )
+        await session.commit()
+        snapshot = await runtime.refresh_from_session(session)
 
-    assert runtime.snapshot is not None
-    assert runtime.snapshot.usage.registered_users == 1
-    assert runtime.snapshot.usage.total_sandboxes == 2
-    assert runtime.snapshot.usage.total_storage_gib == 5
-    assert runtime.snapshot.usage.waitlist_applications == 3
+    assert snapshot.usage.registered_users == 1
 
 
 @pytest.mark.asyncio

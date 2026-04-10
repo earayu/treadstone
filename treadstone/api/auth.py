@@ -542,7 +542,6 @@ async def register(
     )
     await session.commit()
     await session.refresh(user)
-    await _get_platform_limits_runtime(request).apply_local_delta(users=1)
 
     verification_email_sent = False
     if not user.is_verified:
@@ -788,8 +787,6 @@ async def _oauth_callback(
             return response
 
     await session.commit()
-    if outcome == "register":
-        await _get_platform_limits_runtime(request).apply_local_delta(users=1)
 
     if cli_flow_id_from_state:
         response: Response = _cli_oauth_redirect(cli_flow_id_from_state, "approved")

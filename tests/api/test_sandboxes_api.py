@@ -64,6 +64,12 @@ async def _set_platform_limits(**limits) -> None:
         await app.state.platform_limits_runtime.refresh_from_session(session)
 
 
+async def _refresh_platform_limits_runtime_cache() -> None:
+    """Align the API process snapshot with the database (tests only)."""
+    async with _test_session_factory() as session:
+        await app.state.platform_limits_runtime.refresh_from_session(session)
+
+
 @pytest.fixture
 async def auth_client(db_session):
     """Register + login, return client with auth cookie."""
@@ -161,9 +167,10 @@ class TestCreateSandbox:
         await _set_platform_limits(max_total_sandboxes=1)
 
         first = await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "cap-a"})
+        assert first.status_code == 202
+        await _refresh_platform_limits_runtime_cache()
         second = await auth_client.post("/v1/sandboxes", json={"template": "aio-sandbox-tiny", "name": "cap-b"})
 
-        assert first.status_code == 202
         assert second.status_code == 503
         assert second.json()["error"]["code"] == "sandbox_cap_exceeded"
 
