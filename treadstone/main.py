@@ -30,6 +30,7 @@ from treadstone.core.errors import TreadstoneError
 from treadstone.middleware.request_logging import RequestLoggingMiddleware
 from treadstone.middleware.sandbox_subdomain import SandboxSubdomainMiddleware
 from treadstone.openapi_spec import build_full_openapi_spec, filter_public_openapi, merge_sandbox_paths
+from treadstone.services.platform_limits import PlatformLimitsRuntime
 from treadstone.services.sandbox_proxy import close_http_client
 
 logger = logging.getLogger(__name__)
@@ -90,6 +91,8 @@ async def lifespan(app: FastAPI):
     from treadstone.services.leader_election import K8sLeaseStore, LeaderElector
     from treadstone.services.sync_supervisor import LeaderControlledSyncSupervisor
 
+    await app.state.platform_limits_runtime.start(async_session)
+
     if settings.leader_election_enabled:
         holder_identity = settings.pod_name or os.getenv("HOSTNAME") or "treadstone-api"
         lease_namespace = settings.pod_namespace or settings.sandbox_namespace
@@ -121,6 +124,7 @@ async def lifespan(app: FastAPI):
             sync_task.cancel()
             with suppress(asyncio.CancelledError):
                 await sync_task
+            await app.state.platform_limits_runtime.stop()
             await close_http_client()
         return
 
@@ -144,6 +148,7 @@ async def lifespan(app: FastAPI):
             await lifecycle_task
         with suppress(asyncio.CancelledError):
             await snapshot_task
+        await app.state.platform_limits_runtime.stop()
         await close_http_client()
 
 
@@ -160,6 +165,7 @@ app = FastAPI(
     lifespan=lifespan,
     servers=[{"url": "https://api.treadstone-ai.dev", "description": "Production"}],
 )
+app.state.platform_limits_runtime = PlatformLimitsRuntime()
 
 
 @app.exception_handler(TreadstoneError)

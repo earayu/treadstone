@@ -19,6 +19,7 @@ from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
 from treadstone.models.audit_event import AuditEvent
 from treadstone.models.metering import TierTemplate
+from treadstone.models.platform_limits import PlatformLimits  # noqa: F401 — register model for SQLite metadata
 from treadstone.models.sandbox import Sandbox, SandboxPendingOperation, SandboxStatus
 from treadstone.models.user import OAuthAccount, User
 from treadstone.models.user_feedback import UserFeedback  # noqa: F401 — register model for SQLite metadata
@@ -166,6 +167,58 @@ async def test_list_tier_templates(admin_client):
 async def test_list_tier_templates_requires_admin(member_client):
     resp = await member_client.get("/v1/admin/tier-templates")
     assert resp.status_code == 403
+
+
+async def test_get_platform_limits_returns_live_config_and_usage(admin_client, anon_client):
+    await anon_client.post("/v1/auth/register", json={"email": "platform-user@example.com", "password": "Pass123!"})
+    await anon_client.post(
+        "/v1/waitlist",
+        json={"email": "platform-waitlist@example.com", "name": "Waitlist User", "target_tier": "pro"},
+    )
+
+    patch_resp = await admin_client.patch(
+        "/v1/admin/platform-limits",
+        json={"max_registered_users": 10, "max_waitlist_applications": 20},
+    )
+    assert patch_resp.status_code == 200
+
+    resp = await admin_client.get("/v1/admin/platform-limits")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["config"]["max_registered_users"] == 10
+    assert data["config"]["max_waitlist_applications"] == 20
+    assert data["usage"]["registered_users"] >= 2
+    assert data["usage"]["waitlist_applications"] >= 1
+
+
+async def test_patch_platform_limits_allows_clearing_values(admin_client):
+    first = await admin_client.patch(
+        "/v1/admin/platform-limits",
+        json={"max_registered_users": 5, "max_total_sandboxes": 8},
+    )
+    assert first.status_code == 200
+
+    second = await admin_client.patch(
+        "/v1/admin/platform-limits",
+        json={"max_registered_users": None},
+    )
+    assert second.status_code == 200
+    assert second.json()["config"]["max_registered_users"] is None
+    assert second.json()["config"]["max_total_sandboxes"] == 8
+
+    update_events = await _list_audit_events("admin.platform_limits.updated")
+    assert update_events[-1].event_metadata["updates"] == {"max_registered_users": None}
+
+
+async def test_platform_limits_admin_endpoints_require_admin_session(member_client):
+    get_resp = await member_client.get("/v1/admin/platform-limits")
+    assert get_resp.status_code == 403
+
+
+async def test_platform_limits_admin_endpoints_reject_api_key_auth(admin_client):
+    api_key = await _create_control_plane_api_key(admin_client, "platform-limits")
+    resp = await admin_client.get("/v1/admin/platform-limits", headers={"Authorization": f"Bearer {api_key}"})
+    assert resp.status_code == 401
 
 
 # ── PATCH /v1/admin/tier-templates/{tier_name} ──────────────────────────────

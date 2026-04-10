@@ -22,6 +22,7 @@ from treadstone.core.errors import (
     ConflictError,
     EmailVerificationRequiredError,
     SandboxNotFoundError,
+    TreadstoneError,
     ValidationError,
 )
 from treadstone.core.public_base_url import public_control_plane_base_url
@@ -32,11 +33,13 @@ from treadstone.models.user import User, utc_now
 from treadstone.services.audit import record_audit_event
 from treadstone.services.browser_auth import build_open_link_token, build_open_link_url
 from treadstone.services.metering_service import MeteringService
+from treadstone.services.platform_limits import PlatformLimitsService
 from treadstone.services.sandbox_service import SandboxService
 
 router = APIRouter(prefix="/v1/sandboxes", tags=["sandboxes"])
 
 _metering = MeteringService()
+_platform_limits = PlatformLimitsService()
 
 
 def _web_port_suffix(api_base: str) -> str:
@@ -126,6 +129,10 @@ def _get_web_url(sb, base_url: str) -> str:
     if web_url is None:
         raise ValidationError("sandbox_domain must be configured to use sandbox Web UI links.")
     return web_url
+
+
+def _get_platform_limits_runtime(request: Request):
+    return request.app.state.platform_limits_runtime
 
 
 async def _load_active_web_link(session: AsyncSession, sandbox_id: str) -> SandboxWebLink | None:
@@ -265,6 +272,34 @@ async def create_sandbox(
         )
         await session.commit()
         raise EmailVerificationRequiredError()
+
+    runtime = _get_platform_limits_runtime(request)
+    snapshot = await runtime.ensure_snapshot(session)
+    try:
+        _platform_limits.check_sandbox_creation_allowed(snapshot)
+        if body.persist:
+            requested_storage_gib = _platform_limits.parse_storage_size_gib(
+                body.storage_size or settings.sandbox_default_storage_size
+            )
+            _platform_limits.check_storage_allocation_allowed(snapshot, requested_storage_gib)
+        else:
+            requested_storage_gib = 0
+    except TreadstoneError as exc:
+        await record_audit_event(
+            session,
+            action="sandbox.create",
+            target_type="sandbox",
+            result="failure",
+            error_code=getattr(exc, "code", None),
+            metadata={
+                "template": body.template,
+                "persist": body.persist,
+                "storage_size": (body.storage_size or settings.sandbox_default_storage_size) if body.persist else None,
+            },
+            request=request,
+        )
+        await session.commit()
+        raise
 
     service = SandboxService(session=session, metering=_metering)
     sandbox = await service.create(

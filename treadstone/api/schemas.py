@@ -26,8 +26,8 @@ SANDBOX_NAME_RULE = (
 SANDBOX_NAME_DESCRIPTION = (
     f"Optional custom sandbox name. {SANDBOX_NAME_RULE} Sandbox names only need to be unique for the current user."
 )
-STORAGE_SIZE_PATTERN = re.compile(r"^\d+(?:Gi|Ti)$")
-STORAGE_SIZE_RULE = "storage_size must match format '<number>Gi' or '<number>Ti' (e.g. 5Gi, 10Gi, 20Gi, 1Ti)."
+STORAGE_SIZE_PATTERN = re.compile(r"^\d+Gi$")
+STORAGE_SIZE_RULE = "storage_size must match format '<integer>Gi' (e.g. 5Gi, 10Gi, 20Gi)."
 
 # ── Sandbox ──────────────────────────────────────────────────────────────────
 
@@ -50,7 +50,7 @@ class CreateSandboxRequest(BaseModel):
     storage_size: str | None = Field(
         default=None,
         examples=["5Gi"],
-        description="Persistent volume size (e.g. 5Gi, 10Gi, 20Gi). "
+        description="Persistent volume size as '<integer>Gi' only (e.g. 5Gi, 10Gi, 20Gi). "
         "Allowed values depend on the sandbox template's annotation.",
     )
 
@@ -813,6 +813,51 @@ class PlatformStatsResponse(BaseModel):
     sandboxes: SandboxStats
     compute: ComputeStats
     storage: StorageStats
+
+
+class PlatformLimitsConfig(BaseModel):
+    max_registered_users: int | None = Field(default=None, examples=[200])
+    max_total_sandboxes: int | None = Field(default=None, examples=[1000])
+    max_total_storage_gib: int | None = Field(default=None, examples=[1000])
+    max_waitlist_applications: int | None = Field(default=None, examples=[500])
+
+
+class PlatformLimitsUsage(BaseModel):
+    registered_users: int = Field(..., examples=[42])
+    total_sandboxes: int = Field(..., examples=[120])
+    total_storage_gib: int = Field(..., examples=[250])
+    waitlist_applications: int = Field(..., examples=[75])
+
+
+class PlatformLimitsResponse(BaseModel):
+    config: PlatformLimitsConfig
+    usage: PlatformLimitsUsage
+    refreshed_at: datetime = Field(..., examples=["2026-04-10T00:00:00Z"])
+
+
+class UpdatePlatformLimitsRequest(BaseModel):
+    max_registered_users: int | None = Field(default=None, examples=[200])
+    max_total_sandboxes: int | None = Field(default=None, examples=[1000])
+    max_total_storage_gib: int | None = Field(default=None, examples=[1000])
+    max_waitlist_applications: int | None = Field(default=None, examples=[500])
+
+    @field_validator(
+        "max_registered_users",
+        "max_total_sandboxes",
+        "max_total_storage_gib",
+        "max_waitlist_applications",
+    )
+    @classmethod
+    def validate_non_negative(cls, v: int | None) -> int | None:
+        if v is not None and v < 0:
+            raise ValueError("limit must be greater than or equal to 0")
+        return v
+
+    @model_validator(mode="after")
+    def validate_has_updates(self) -> UpdatePlatformLimitsRequest:
+        if not self.model_fields_set:
+            raise ValueError("At least one field to update must be provided.")
+        return self
 
 
 # ── Waitlist ──────────────────────────────────────────────────────────────────

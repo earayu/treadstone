@@ -49,6 +49,7 @@ from treadstone.core.errors import (
     NotFoundError,
     PasswordResetRateLimitedError,
     PasswordResetTokenInvalidError,
+    TreadstoneError,
     ValidationError,
 )
 from treadstone.core.request_context import get_client_ip, set_request_context
@@ -75,10 +76,12 @@ from treadstone.models.user import OAuthAccount, Role, User, random_id, utc_now
 from treadstone.services.audit import record_audit_event
 from treadstone.services.browser_login import validate_browser_return_to
 from treadstone.services.cli_login_flow import approve_cli_flow
+from treadstone.services.platform_limits import PlatformLimitsService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
+_platform_limits = PlatformLimitsService()
 
 OAUTH_STATE_AUDIENCE = "treadstone:oauth-state"
 OAUTH_STATE_TTL_SECONDS = 600
@@ -154,6 +157,10 @@ def _oauth_error_message(provider: str, error: str, error_description: str | Non
     if error_description:
         return error_description
     return f"{provider.title()} login failed."
+
+
+def _get_platform_limits_runtime(request: Request):
+    return request.app.state.platform_limits_runtime
 
 
 async def _validate_cli_flow_pending(
@@ -565,6 +572,22 @@ async def register(
     if existing.unique().scalar_one_or_none():
         raise ConflictError("Email already registered")
 
+    snapshot = await _get_platform_limits_runtime(request).ensure_snapshot(session)
+    try:
+        _platform_limits.check_user_registration_allowed(snapshot)
+    except TreadstoneError as exc:
+        await record_audit_event(
+            session,
+            action="auth.register",
+            target_type="user",
+            result="failure",
+            error_code=getattr(exc, "code", None),
+            metadata={"email": body.email},
+            request=request,
+        )
+        await session.commit()
+        raise
+
     ph = PasswordHelper()
     hashed = ph.hash(body.password)
 
@@ -768,6 +791,23 @@ async def _oauth_callback(
     else:
         existing_user = await session.execute(select(User).where(User.email == account_email))
         outcome = "link" if existing_user.unique().scalar_one_or_none() is not None else "register"
+
+    if outcome == "register":
+        snapshot = await _get_platform_limits_runtime(request).ensure_snapshot(session)
+        try:
+            _platform_limits.check_user_registration_allowed(snapshot)
+        except TreadstoneError as exc:
+            await record_audit_event(
+                session,
+                action="auth.register",
+                target_type="user",
+                result="failure",
+                error_code=getattr(exc, "code", None),
+                metadata={"email": account_email, "provider": provider, "surface": surface},
+                request=request,
+            )
+            await session.commit()
+            raise
 
     try:
         user = await user_manager.oauth_callback(

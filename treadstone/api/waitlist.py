@@ -8,16 +8,20 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from treadstone.api.schemas import WaitlistApplicationRequest, WaitlistApplicationResponse
 from treadstone.core.database import get_session
+from treadstone.core.errors import TreadstoneError
 from treadstone.models.waitlist import ApplicationStatus, WaitlistApplication
+from treadstone.services.audit import record_audit_event
+from treadstone.services.platform_limits import PlatformLimitsService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/waitlist", tags=["waitlist"])
+_platform_limits = PlatformLimitsService()
 
 
 def _serialize_application(app: WaitlistApplication) -> dict:
@@ -37,6 +41,7 @@ def _serialize_application(app: WaitlistApplication) -> dict:
 
 @router.post("", status_code=201, response_model=WaitlistApplicationResponse)
 async def submit_waitlist_application(
+    request: Request,
     body: WaitlistApplicationRequest,
     session: AsyncSession = Depends(get_session),
 ) -> WaitlistApplicationResponse:
@@ -45,6 +50,23 @@ async def submit_waitlist_application(
     No authentication required — users may apply before registering. Multiple
     applications from the same email (including same tier) are allowed.
     """
+    runtime = request.app.state.platform_limits_runtime
+    snapshot = await runtime.ensure_snapshot(session)
+    try:
+        _platform_limits.check_waitlist_submission_allowed(snapshot)
+    except TreadstoneError as exc:
+        await record_audit_event(
+            session,
+            action="waitlist.submit",
+            target_type="waitlist_application",
+            result="failure",
+            error_code=getattr(exc, "code", None),
+            metadata={"email": body.email.lower(), "target_tier": body.target_tier},
+            request=request,
+        )
+        await session.commit()
+        raise
+
     email_lower = body.email.lower()
 
     application = WaitlistApplication(

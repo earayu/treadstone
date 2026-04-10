@@ -10,6 +10,7 @@ from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_jwt_strategy, get_user_db, get_user_manager
 from treadstone.main import app
 from treadstone.models.audit_event import AuditEvent
+from treadstone.models.platform_limits import PLATFORM_LIMITS_SINGLETON_ID, PlatformLimits
 from treadstone.models.user import OAuthAccount, User
 
 _test_session_factory = None
@@ -48,6 +49,18 @@ async def db_session():
     await test_engine.dispose()
 
 
+async def _set_platform_limits(**limits) -> None:
+    async with _test_session_factory() as session:
+        row = await session.get(PlatformLimits, PLATFORM_LIMITS_SINGLETON_ID)
+        if row is None:
+            row = PlatformLimits(id=PLATFORM_LIMITS_SINGLETON_ID)
+        for field, value in limits.items():
+            setattr(row, field, value)
+        session.add(row)
+        await session.commit()
+        await app.state.platform_limits_runtime.refresh_from_session(session)
+
+
 @pytest.mark.asyncio
 async def test_register_first_user_becomes_admin(db_session):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -74,6 +87,43 @@ async def test_register_duplicate_email(db_session):
         await client.post("/v1/auth/register", json={"email": "a@b.com", "password": "Pass123!"})
         resp = await client.post("/v1/auth/register", json={"email": "a@b.com", "password": "Pass123!"})
     assert resp.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_register_respects_global_user_cap(db_session):
+    await _set_platform_limits(max_registered_users=0)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post("/v1/auth/register", json={"email": "cap@example.com", "password": "Pass123!"})
+
+    assert resp.status_code == 503
+    assert resp.json()["error"]["code"] == "user_registration_cap_exceeded"
+
+    async with _test_session_factory() as session:
+        event = (
+            (
+                await session.execute(
+                    select(AuditEvent).where(AuditEvent.action == "auth.register").order_by(AuditEvent.created_at)
+                )
+            )
+            .scalars()
+            .all()[-1]
+        )
+
+    assert event.result == "failure"
+    assert event.error_code == "user_registration_cap_exceeded"
+
+
+@pytest.mark.asyncio
+async def test_register_duplicate_email_wins_before_global_cap(db_session):
+    await _set_platform_limits(max_registered_users=1)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        first = await client.post("/v1/auth/register", json={"email": "dup@example.com", "password": "Pass123!"})
+        second = await client.post("/v1/auth/register", json={"email": "dup@example.com", "password": "Pass123!"})
+
+    assert first.status_code == 201
+    assert second.status_code == 409
 
 
 @pytest.mark.asyncio

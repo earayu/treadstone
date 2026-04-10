@@ -57,18 +57,15 @@ def calculate_cu_rate(template: str) -> Decimal:
 
 
 def parse_storage_size_gib(size_str: str) -> int:
-    """Convert K8s-style size strings ('5Gi', '10Gi', '1Ti') to integer GiB."""
+    """Convert Kubernetes-style Gi strings (e.g. ``5Gi``, ``10Gi``) to integer GiB."""
     if size_str.endswith("Gi"):
         try:
             return int(size_str[:-2])
         except ValueError:
             raise BadRequestError(f"Invalid storage size value: {size_str}")
-    if size_str.endswith("Ti"):
-        try:
-            return int(size_str[:-2]) * 1024
-        except ValueError:
-            raise BadRequestError(f"Invalid storage size value: {size_str}")
-    raise BadRequestError(f"Unsupported storage size format: {size_str}. Use 'Gi' or 'Ti' suffix.")
+    raise BadRequestError(
+        f"Unsupported storage size format: {size_str}. Use a '<integer>Gi' value (e.g. 5Gi, 10Gi, 20Gi)."
+    )
 
 
 def compute_period_bounds(now: datetime) -> tuple[datetime, datetime]:

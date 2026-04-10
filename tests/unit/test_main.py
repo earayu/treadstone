@@ -48,6 +48,8 @@ async def test_lifespan_passes_session_factory_to_supervisor_when_leader_electio
     )
     monkeypatch.setattr(sync_supervisor, "LeaderControlledSyncSupervisor", CapturingSupervisor)
     monkeypatch.setattr(main, "close_http_client", close_http_client)
+    monkeypatch.setattr(main.app.state.platform_limits_runtime, "start", AsyncMock())
+    monkeypatch.setattr(main.app.state.platform_limits_runtime, "stop", AsyncMock())
 
     async with main.lifespan(main.app):
         assert captured["session_factory"] is async_session
@@ -90,6 +92,8 @@ async def test_lifespan_starts_metering_loop_when_leader_election_disabled(monke
     monkeypatch.setattr(k8s_client, "get_k8s_client", lambda: object())
     monkeypatch.setattr(k8s_sync, "start_sync_loop", fake_sync_loop)
     monkeypatch.setattr(main, "close_http_client", close_http_client)
+    monkeypatch.setattr(main.app.state.platform_limits_runtime, "start", AsyncMock())
+    monkeypatch.setattr(main.app.state.platform_limits_runtime, "stop", AsyncMock())
 
     async with main.lifespan(main.app):
         await asyncio.wait_for(sync_started.wait(), timeout=0.5)

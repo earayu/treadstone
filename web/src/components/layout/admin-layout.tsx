@@ -5,6 +5,9 @@ import { useCurrentUser, useLogout } from "@/hooks/use-auth"
 import { APP_VERSION } from "@/lib/app-version"
 
 const ADMIN_ROUTE_LABELS: Record<string, string> = {
+  "/internal/admin/overview": "OVERVIEW",
+  "/internal/admin/users": "USER MANAGEMENT",
+  "/internal/admin/platform-limits": "PLATFORM LIMITS",
   "/internal/admin/metering": "METERING",
   "/internal/admin/feedback": "FEEDBACK",
   "/internal/audit": "AUDIT EVENTS",

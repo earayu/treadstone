@@ -12,6 +12,7 @@ from treadstone.models.metering import (
     UserPlan,
 )
 from treadstone.models.password_reset_request_log import PasswordResetRequestLog
+from treadstone.models.platform_limits import PlatformLimits
 from treadstone.models.sandbox import Sandbox, SandboxPendingOperation, SandboxStatus, StorageBackendMode
 from treadstone.models.sandbox_web_link import SandboxWebLink
 from treadstone.models.user import OAuthAccount, Role, User
@@ -31,6 +32,7 @@ __all__ = [
     "StorageQuotaGrant",
     "StorageState",
     "TierTemplate",
+    "PlatformLimits",
     "User",
     "UserPlan",
     "OAuthAccount",
