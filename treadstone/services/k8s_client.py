@@ -249,7 +249,11 @@ class Kr8sClient:
             liveness_probe=liveness_probe,
         )
 
-        pod_spec: dict[str, Any] = {"containers": [container], "restartPolicy": "OnFailure"}
+        pod_spec: dict[str, Any] = {
+            "automountServiceAccountToken": False,
+            "containers": [container],
+            "restartPolicy": "OnFailure",
+        }
 
         if volume_claim_templates:
             vol_names = [vct["metadata"]["name"] for vct in volume_claim_templates]
@@ -753,7 +757,12 @@ class FakeK8sClient:
             "apiVersion": f"{SANDBOX_API_GROUP}/{SANDBOX_API_VERSION}",
             "kind": "Sandbox",
             "metadata": {"name": sandbox_name, "namespace": namespace, "resourceVersion": "1"},
-            "spec": {"replicas": 1, "podTemplate": {"spec": {"containers": [container]}}},
+            "spec": {
+                "replicas": 1,
+                "podTemplate": {
+                    "spec": {"automountServiceAccountToken": False, "containers": [container]},
+                },
+            },
             "status": {
                 "conditions": [_make_ready_condition("False", "DependenciesNotReady", "Pod does not exist")],
                 "serviceFQDN": f"{sandbox_name}.{namespace}.svc.cluster.local",
@@ -799,6 +808,7 @@ class FakeK8sClient:
             sb_metadata["annotations"] = annotations
 
         pod_spec: dict[str, Any] = {
+            "automountServiceAccountToken": False,
             "containers": [{"name": "sandbox", "image": image, "resources": resources}],
         }
         _apply_container_probes(

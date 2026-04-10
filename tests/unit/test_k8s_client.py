@@ -142,6 +142,7 @@ async def test_create_claim_also_creates_sandbox():
     sb = await client.get_sandbox("my-sb", "treadstone-local")
     assert sb is not None
     assert sb["kind"] == "Sandbox"
+    assert sb["spec"]["podTemplate"]["spec"]["automountServiceAccountToken"] is False
     assert sb["status"]["serviceFQDN"] == "my-sb.treadstone-local.svc.cluster.local"
 
 
@@ -261,6 +262,7 @@ async def test_create_sandbox_direct_without_storage():
     )
     assert sb["kind"] == "Sandbox"
     assert "volumeClaimTemplates" not in sb["spec"]
+    assert sb["spec"]["podTemplate"]["spec"]["automountServiceAccountToken"] is False
 
 
 async def test_get_storage_class():
@@ -375,7 +377,9 @@ async def test_create_sandbox_requests_expected_manifest_with_probes():
     call = api.calls[0]
     assert call["method"] == "POST"
     assert call["base"] == "/apis/agents.x-k8s.io/v1alpha1/namespaces/treadstone-prod/sandboxes"
-    container = call["json"]["spec"]["podTemplate"]["spec"]["containers"][0]
+    pod_spec = call["json"]["spec"]["podTemplate"]["spec"]
+    assert pod_spec["automountServiceAccountToken"] is False
+    container = pod_spec["containers"][0]
     assert container["startupProbe"]["httpGet"]["path"] == "/v1/sandbox"
     assert container["readinessProbe"]["failureThreshold"] == 3
     assert "livenessProbe" not in container
@@ -417,6 +421,7 @@ async def test_create_sandbox_manifest_mounts_pvc_at_home_dir():
     assert len(api.calls) == 1
     manifest = api.calls[0]["json"]
     pod_spec = manifest["spec"]["podTemplate"]["spec"]
+    assert pod_spec["automountServiceAccountToken"] is False
 
     # Main container mounts PVC at the image's home directory
     main = pod_spec["containers"][0]
@@ -440,7 +445,7 @@ async def test_create_sandbox_manifest_mounts_pvc_at_home_dir():
 
 
 async def test_create_sandbox_manifest_without_pvc_has_no_init_or_security_context():
-    """Ephemeral sandbox (no PVC) must not add securityContext or initContainers."""
+    """Ephemeral sandbox (no PVC) disables SA token automount and skips PVC extras."""
     client = Kr8sClient()
     api = _RecordingAPI()
 
@@ -460,6 +465,7 @@ async def test_create_sandbox_manifest_without_pvc_has_no_init_or_security_conte
     manifest = api.calls[0]["json"]
     pod_spec = manifest["spec"]["podTemplate"]["spec"]
 
+    assert pod_spec["automountServiceAccountToken"] is False
     assert "securityContext" not in pod_spec
     assert "initContainers" not in pod_spec
     assert "volumeMounts" not in pod_spec["containers"][0]
@@ -525,6 +531,7 @@ async def test_kr8s_client_preserves_explicit_pod_labels() -> None:
 
     manifest = api.calls[0]["json"]
     pod_spec = manifest["spec"]["podTemplate"]["spec"]
+    assert pod_spec["automountServiceAccountToken"] is False
     assert "tolerations" not in pod_spec
     labels = manifest["spec"]["podTemplate"]["metadata"]["labels"]
     assert labels["treadstone-ai.dev/workload"] == "sandbox"

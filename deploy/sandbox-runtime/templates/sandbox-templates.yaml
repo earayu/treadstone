@@ -22,6 +22,7 @@ spec:
         {{- end }}
         treadstone-ai.dev/provision-mode: "claim"
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: sandbox
           image: {{ $.Values.image }}
