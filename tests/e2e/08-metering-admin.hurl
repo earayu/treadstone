@@ -45,17 +45,17 @@ jsonpath "$.is_active" == true
 jsonpath "$.users_affected" >= 0
 
 
-# ── PATCH /v1/admin/tier-templates/pro — restore Alembic seed (3600)
+# ── PATCH /v1/admin/tier-templates/pro — restore current seed (7200)
 
 PATCH {{base_url}}/v1/admin/tier-templates/pro
 Authorization: Bearer {{admin_api_key}}
 Content-Type: application/json
 {
-    "grace_period_seconds": 3600
+    "grace_period_seconds": 7200
 }
 HTTP 200
 [Asserts]
-jsonpath "$.grace_period_seconds" == 3600
+jsonpath "$.grace_period_seconds" == 7200
 
 
 # ── Register target user for admin management tests ─────────────────────────
@@ -107,10 +107,10 @@ Content-Type: application/json
 HTTP 200
 [Asserts]
 jsonpath "$.tier" == "pro"
-jsonpath "$.compute_units_monthly_limit" == 80.0
-jsonpath "$.storage_capacity_limit_gib" == 10
-jsonpath "$.max_concurrent_running" == 3
-jsonpath "$.max_sandbox_duration_seconds" == 28800
+jsonpath "$.compute_units_monthly_limit" == 180.0
+jsonpath "$.storage_capacity_limit_gib" == 20
+jsonpath "$.max_concurrent_running" == 5
+jsonpath "$.max_sandbox_duration_seconds" == 0
 
 
 # ── Verify tier change via admin usage view ──────────────────────────────────
@@ -120,9 +120,9 @@ Authorization: Bearer {{admin_api_key}}
 HTTP 200
 [Asserts]
 jsonpath "$.tier" == "pro"
-jsonpath "$.compute.monthly_limit" == 80.0
-jsonpath "$.storage.total_quota_gib" == 10
-jsonpath "$.limits.max_concurrent_running" == 3
+jsonpath "$.compute.monthly_limit" == 180.0
+jsonpath "$.storage.total_quota_gib" == 20
+jsonpath "$.limits.max_concurrent_running" == 5
 
 
 # ── POST /v1/admin/users/{id}/compute-grants — issue compute credits ────────

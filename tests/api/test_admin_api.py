@@ -35,27 +35,27 @@ async def _seed_tier_templates(session: AsyncSession) -> None:
             compute_units_monthly=Decimal("10"),
             storage_capacity_gib=0,
             max_concurrent_running=1,
-            max_sandbox_duration_seconds=1800,
-            allowed_templates=["aio-sandbox-tiny", "aio-sandbox-small"],
-            grace_period_seconds=600,
+            max_sandbox_duration_seconds=7200,
+            allowed_templates=["aio-sandbox-tiny"],
+            grace_period_seconds=900,
         ),
         TierTemplate(
             tier_name="pro",
-            compute_units_monthly=Decimal("100"),
-            storage_capacity_gib=10,
-            max_concurrent_running=3,
-            max_sandbox_duration_seconds=7200,
+            compute_units_monthly=Decimal("180"),
+            storage_capacity_gib=20,
+            max_concurrent_running=5,
+            max_sandbox_duration_seconds=0,
             allowed_templates=["aio-sandbox-tiny", "aio-sandbox-small", "aio-sandbox-medium"],
-            grace_period_seconds=1800,
+            grace_period_seconds=7200,
         ),
         TierTemplate(
             tier_name="ultra",
-            compute_units_monthly=Decimal("300"),
-            storage_capacity_gib=20,
-            max_concurrent_running=5,
-            max_sandbox_duration_seconds=28800,
+            compute_units_monthly=Decimal("480"),
+            storage_capacity_gib=60,
+            max_concurrent_running=15,
+            max_sandbox_duration_seconds=0,
             allowed_templates=["aio-sandbox-tiny", "aio-sandbox-small", "aio-sandbox-medium", "aio-sandbox-large"],
-            grace_period_seconds=3600,
+            grace_period_seconds=21600,
         ),
     ]
     for t in defaults:
@@ -323,8 +323,10 @@ async def test_admin_update_user_plan_change_tier(admin_client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["tier"] == "pro"
-    assert data["compute_units_monthly_limit"] == 100.0
-    assert data["max_concurrent_running"] == 3
+    assert data["compute_units_monthly_limit"] == 180.0
+    assert data["storage_capacity_limit_gib"] == 20
+    assert data["max_concurrent_running"] == 5
+    assert data["max_sandbox_duration_seconds"] == 0
 
 
 async def test_admin_update_user_plan_with_overrides(admin_client):

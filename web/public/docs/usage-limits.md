@@ -20,27 +20,31 @@ A sandbox only consumes CU while it is in the **running** state. A stopped or de
 
 ## How the Budget Works
 
-Each plan includes a fixed number of CU-hours per month:
+Each plan includes a fixed number of CU-hours per month plus a persistent storage quota:
 
-| Plan | CU-h / month | Concurrent sandboxes |
-|---|---|---|
-| Free | 10 | 1 |
-| Pro | 80 | up to 3 |
-| Ultra | 240 | up to 8 |
-| Custom | 800 | up to 20 |
+| Plan | CU-h / month | Persistent storage quota | Concurrent sandboxes | Max auto-stop setting |
+|---|---:|---:|---:|---|
+| Free | 10 | 0 GiB | 1 | up to 2 hr |
+| Pro | 180 | 20 GiB | 5 | Never allowed |
+| Ultra | 480 | 60 GiB | 15 | Never allowed |
+| Custom | 1800 | 200 GiB | 50 | Never allowed |
 
 **Example**: running an `aio-sandbox-tiny` (0.25 CU/h) for 8 hours costs 2 CU-h. On the Free plan that leaves 8 CU-h for the rest of the month.
 
+Persistent storage quota is the total hot disk you can keep attached across your persistent sandboxes. Stopped sandboxes do not burn compute, but their attached disks still count against storage quota until deleted or moved out of hot storage.
+
 ## Controlling Consumption
 
-The most effective lever is `--auto-stop-interval`. A sandbox automatically stops after this many seconds of inactivity, so it stops consuming CU even if you forget to stop it manually.
+The most effective lever is `--auto-stop-interval`. New sandboxes default to **60 minutes**. A sandbox automatically stops after this many minutes of inactivity, so it stops consuming CU even if you forget to stop it manually.
 
 ```bash
-# Stop automatically after 10 minutes of inactivity
-$ treadstone sandboxes create --template aio-sandbox-tiny --name demo --auto-stop-interval 600
+# Stop automatically after 60 minutes of inactivity
+$ treadstone sandboxes create --template aio-sandbox-tiny --name demo --auto-stop-interval 60
 ```
 
-Use `--auto-delete-interval -1` (the default) to keep the sandbox around after it stops — you can restart it later without losing state.
+Free users can configure auto-stop up to 2 hours. Pro, Ultra, and Custom can set `0` (`Never`) when they want long-running agents or persistent personal dev hosts.
+
+Use `--auto-delete-interval -1` (the default) to keep the sandbox around after it stops so you can restart it later without losing state.
 
 ## Checking Your Balance
 

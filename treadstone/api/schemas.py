@@ -512,7 +512,7 @@ class GracePeriodStatus(BaseModel):
     active: bool = Field(..., examples=[False])
     started_at: str | None = Field(default=None, examples=[None])
     expires_at: str | None = Field(default=None, examples=[None])
-    grace_period_seconds: int = Field(..., examples=[1800])
+    grace_period_seconds: int = Field(..., examples=[7200])
 
 
 class UsageSummaryResponse(BaseModel):
@@ -528,15 +528,15 @@ class UserPlanResponse(BaseModel):
     id: str = Field(..., examples=["planabc123def456"])
     user_id: str = Field(..., examples=["userabc123def456"])
     tier: str = Field(..., examples=["pro"])
-    compute_units_monthly_limit: float = Field(..., examples=[100.0])
+    compute_units_monthly_limit: float = Field(..., examples=[180.0])
     compute_units_monthly_used: float = Field(..., examples=[45.5])
-    storage_capacity_limit_gib: int = Field(..., examples=[10])
-    max_concurrent_running: int = Field(..., examples=[3])
-    max_sandbox_duration_seconds: int = Field(..., examples=[7200])
+    storage_capacity_limit_gib: int = Field(..., examples=[20])
+    max_concurrent_running: int = Field(..., examples=[5])
+    max_sandbox_duration_seconds: int = Field(..., examples=[0])
     allowed_templates: list[str] = Field(
         ..., examples=[["aio-sandbox-tiny", "aio-sandbox-small", "aio-sandbox-medium"]]
     )
-    grace_period_seconds: int = Field(..., examples=[1800])
+    grace_period_seconds: int = Field(..., examples=[7200])
     overrides: dict[str, Any] | None = Field(default=None)
     billing_period_start: str = Field(..., examples=["2026-03-01T00:00:00+00:00"])
     billing_period_end: str = Field(..., examples=["2026-04-01T00:00:00+00:00"])
@@ -674,14 +674,14 @@ class CreateStorageQuotaGrantResponse(BaseModel):
 
 class TierTemplateItem(BaseModel):
     tier: str = Field(..., examples=["pro"])
-    compute_units_monthly: float = Field(..., examples=[100.0])
-    storage_capacity_gib: int = Field(..., examples=[10])
-    max_concurrent_running: int = Field(..., examples=[3])
-    max_sandbox_duration_seconds: int = Field(..., examples=[7200])
+    compute_units_monthly: float = Field(..., examples=[180.0])
+    storage_capacity_gib: int = Field(..., examples=[20])
+    max_concurrent_running: int = Field(..., examples=[5])
+    max_sandbox_duration_seconds: int = Field(..., examples=[0])
     allowed_templates: list[str] = Field(
         ..., examples=[["aio-sandbox-tiny", "aio-sandbox-small", "aio-sandbox-medium"]]
     )
-    grace_period_seconds: int = Field(..., examples=[1800])
+    grace_period_seconds: int = Field(..., examples=[7200])
     is_active: bool = Field(..., examples=[True])
     created_at: str = Field(..., examples=["2026-01-01T00:00:00+00:00"])
     updated_at: str = Field(..., examples=["2026-01-01T00:00:00+00:00"])
@@ -692,15 +692,15 @@ class TierTemplateListResponse(BaseModel):
 
 
 class UpdateTierTemplateRequest(BaseModel):
-    compute_units_monthly: float | None = Field(default=None, examples=[150])
-    storage_capacity_gib: int | None = Field(default=None, examples=[15])
-    max_concurrent_running: int | None = Field(default=None, examples=[5])
-    max_sandbox_duration_seconds: int | None = Field(default=None, examples=[14400])
+    compute_units_monthly: float | None = Field(default=None, ge=0, examples=[180])
+    storage_capacity_gib: int | None = Field(default=None, ge=0, examples=[20])
+    max_concurrent_running: int | None = Field(default=None, ge=1, examples=[5])
+    max_sandbox_duration_seconds: int | None = Field(default=None, ge=0, examples=[0])
     allowed_templates: list[str] | None = Field(
         default=None,
         examples=[["aio-sandbox-tiny", "aio-sandbox-small", "aio-sandbox-medium", "aio-sandbox-large"]],
     )
-    grace_period_seconds: int | None = Field(default=None, examples=[3600])
+    grace_period_seconds: int | None = Field(default=None, ge=1, examples=[7200])
     apply_to_existing: bool = Field(default=False)
 
     @model_validator(mode="after")

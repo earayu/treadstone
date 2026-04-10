@@ -53,13 +53,13 @@ def _make_plan(tier: str = "pro", **kwargs) -> UserPlan:
     defaults = {
         "user_id": "user1234567890abcd",
         "tier": tier,
-        "compute_units_monthly_limit": Decimal("100"),
+        "compute_units_monthly_limit": Decimal("180"),
         "compute_units_monthly_used": Decimal("0"),
-        "storage_capacity_limit_gib": 10,
-        "max_concurrent_running": 3,
-        "max_sandbox_duration_seconds": 7200,
+        "storage_capacity_limit_gib": 20,
+        "max_concurrent_running": 5,
+        "max_sandbox_duration_seconds": 0,
         "allowed_templates": ["aio-sandbox-tiny", "aio-sandbox-small", "aio-sandbox-medium"],
-        "grace_period_seconds": 1800,
+        "grace_period_seconds": 7200,
         "period_start": datetime(2026, 3, 1, 0, 0, 0, tzinfo=UTC),
         "period_end": datetime(2026, 4, 1, 0, 0, 0, tzinfo=UTC),
     }
@@ -113,7 +113,7 @@ def _mock_metering() -> MeteringService:
     m.check_compute_quota = AsyncMock()
     m.check_concurrent_limit = AsyncMock()
     m.check_storage_quota = AsyncMock()
-    m.check_sandbox_duration = AsyncMock(return_value=7200)
+    m.check_sandbox_duration = AsyncMock(return_value=0)
     m.get_user_plan = AsyncMock(return_value=_make_plan())
     m.record_storage_allocation = AsyncMock()
     m.record_storage_release = AsyncMock()
@@ -322,6 +322,7 @@ class TestSandboxServiceCreateWithMetering:
             auto_stop_interval=0,
         )
         assert result.status == SandboxStatus.CREATING
+        assert k8s.create_sandbox_claim.call_args.kwargs["shutdown_time"] is None
 
     async def test_create_any_interval_allowed_when_tier_unlimited(self, monkeypatch):
         """When tier has no duration limit (max_duration=0), any positive interval is allowed."""
@@ -340,6 +341,7 @@ class TestSandboxServiceCreateWithMetering:
             auto_stop_interval=9999,
         )
         assert result.status == SandboxStatus.CREATING
+        assert k8s.create_sandbox_claim.call_args.kwargs["shutdown_time"] is None
 
     async def test_create_without_metering_skips_all_checks(self):
         from treadstone.services.sandbox_service import SandboxService
@@ -396,6 +398,22 @@ class TestSandboxServiceStartWithMetering:
         result = await service.start(sandbox_id=sb.id, owner_id=sb.owner_id)
         assert result.status == SandboxStatus.CREATING
         k8s.scale_sandbox.assert_called_once()
+
+    async def test_start_allows_existing_long_interval_when_tier_is_unlimited(self, monkeypatch):
+        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
+        from treadstone.services.sandbox_service import SandboxService
+
+        sb = _make_sandbox(status=SandboxStatus.STOPPED, auto_stop_interval=9999)
+        session = _mock_session(sb)
+        k8s = _mock_k8s_client()
+        metering = _mock_metering()
+        metering.check_sandbox_duration = AsyncMock(return_value=0)
+        service = SandboxService(session=session, k8s_client=k8s, metering=metering)
+
+        result = await service.start(sandbox_id=sb.id, owner_id=sb.owner_id)
+
+        assert result.status == SandboxStatus.CREATING
+        k8s.scale_sandbox.assert_called_once_with(name=sb.id, namespace="treadstone-local", replicas=1)
 
 
 class TestSandboxServiceStopWithMetering:

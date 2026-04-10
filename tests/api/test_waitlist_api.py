@@ -22,9 +22,9 @@ async def _seed_tier_templates(session: AsyncSession) -> None:
             compute_units_monthly=10,
             storage_capacity_gib=0,
             max_concurrent_running=1,
-            max_sandbox_duration_seconds=1800,
-            allowed_templates=["aio-sandbox-tiny", "aio-sandbox-small"],
-            grace_period_seconds=600,
+            max_sandbox_duration_seconds=7200,
+            allowed_templates=["aio-sandbox-tiny"],
+            grace_period_seconds=900,
         )
     )
     await session.commit()
