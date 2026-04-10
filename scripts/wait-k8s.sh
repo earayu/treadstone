@@ -58,8 +58,10 @@ kubectl rollout status "deployment/${WEB_DEPLOY}" -n "$NS" --timeout="$TIMEOUT_R
 
 # Warm pool for aio-sandbox-tiny (values-local): pool name is "<template>-pool"
 POOL_NAME="${SANDBOX_WARM_POOL_NAME:-aio-sandbox-tiny-pool}"
-echo "Waiting for SandboxWarmPool ${POOL_NAME} (best-effort, up to ~10 min) ..."
-if kubectl get sandboxwarmpool "$POOL_NAME" -n "$NS" &>/dev/null; then
+if [[ "${SKIP_SANDBOX_WARM_POOL_WAIT:-}" == "1" ]]; then
+	echo "Skipping SandboxWarmPool wait (SKIP_SANDBOX_WARM_POOL_WAIT=1)."
+elif kubectl get sandboxwarmpool "$POOL_NAME" -n "$NS" &>/dev/null; then
+	echo "Waiting for SandboxWarmPool ${POOL_NAME} (best-effort, up to ~10 min) ..."
 	for i in $(seq 1 120); do
 		ready=$(kubectl get sandboxwarmpool "$POOL_NAME" -n "$NS" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "")
 		want=$(kubectl get sandboxwarmpool "$POOL_NAME" -n "$NS" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "1")
