@@ -1,0 +1,37 @@
+# 180 sandboxes: 50 small + 50 tiny + 50 medium + 30 large
+# Run with --no-cleanup to keep sandboxes running after the benchmark exits.
+
+name: "mixed-templates-180"
+description: >
+  Mixed template burst: small/tiny stateless; medium/large with 5Gi persistent
+  storage (matches existing benchmark conventions).
+
+matrix:
+  - template: aio-sandbox-small
+    count: 50
+    persist: false
+
+  - template: aio-sandbox-tiny
+    count: 50
+    persist: false
+
+  - template: aio-sandbox-medium
+    count: 50
+    persist: true
+    storage_size: "5Gi"
+
+  - template: aio-sandbox-large
+    count: 30
+    persist: true
+    storage_size: "5Gi"
+
+concurrency: 15
+ready_timeout_sec: 1200
+poll_interval_sec: 10
+
+auto_stop_interval: 60
+auto_delete_interval: -1
+
+cleanup:
+  after_run: false
+  on_failure: true

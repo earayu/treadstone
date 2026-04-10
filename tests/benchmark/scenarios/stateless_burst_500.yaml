@@ -1,0 +1,22 @@
+# Scenario: stateless-burst-500
+# Burst-create 500 stateless sandboxes (aio-sandbox-tiny).
+
+name: "stateless-burst-500"
+description: >
+  Burst-create 500 stateless sandboxes for capacity testing.
+
+matrix:
+  - template: aio-sandbox-tiny
+    count: 500
+    persist: false
+
+concurrency: 20
+ready_timeout_sec: 900
+poll_interval_sec: 10
+
+auto_stop_interval: 60
+auto_delete_interval: -1
+
+cleanup:
+  after_run: true
+  on_failure: true
