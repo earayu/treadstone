@@ -11,22 +11,18 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from treadstone.api.deps import _authenticate_api_key_value, get_current_data_plane_user
+from treadstone.config import settings
 from treadstone.core.database import async_session, get_session
 from treadstone.core.errors import (
     SandboxNotFoundError,
     SandboxNotReadyError,
     SandboxUnreachableError,
-    ValidationError,
 )
 from treadstone.core.request_context import set_scope_context
 from treadstone.models.api_key import ApiKeyDataPlaneMode, ApiKeySandboxGrant
 from treadstone.models.sandbox import Sandbox, SandboxStatus
 from treadstone.models.user import User, utc_now
-from treadstone.services.sandbox_proxy import (
-    proxy_http_request,
-    proxy_websocket,
-    resolve_routing,
-)
+from treadstone.services.sandbox_proxy import proxy_http_request, proxy_websocket
 
 logger = logging.getLogger(__name__)
 
@@ -56,13 +52,7 @@ async def http_proxy(
         raise SandboxNotReadyError(sandbox_id, sandbox.status)
 
     headers = dict(request.headers)
-    try:
-        routing = resolve_routing(
-            headers,
-            path_sandbox_id=sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.id,
-        )
-    except ValueError as exc:
-        raise ValidationError(str(exc)) from exc
+    k8s_id = sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.id
 
     body = await request.body()
 
@@ -73,12 +63,12 @@ async def http_proxy(
     try:
         status_code, resp_headers, resp = await proxy_http_request(
             method=request.method,
-            sandbox_id=routing["sandbox_id"],
+            sandbox_id=k8s_id,
             path=full_path,
             headers=headers,
             body=body,
-            namespace=routing["namespace"],
-            port=routing["port"],
+            namespace=sandbox.k8s_namespace,
+            port=settings.sandbox_port,
         )
     except Exception:
         logger.exception("Proxy failed for sandbox %s", sandbox_id)
@@ -108,8 +98,7 @@ async def ws_proxy(
     - ``Authorization: Bearer sk-…`` header (preferred)
     - ``?token=sk-…`` query param (for clients that cannot set WS headers)
 
-    X-Sandbox-Namespace and X-Sandbox-Port headers are honoured for routing,
-    matching the behaviour of the HTTP proxy.
+    Upstream namespace and port match the HTTP proxy (sandbox row + settings).
     """
     auth_header = websocket.headers.get("authorization", "")
     token_param = websocket.query_params.get("token", "")
@@ -184,15 +173,7 @@ async def ws_proxy(
     else:
         full_path = f"{path}?{query_string}" if query_string else path
 
-    # Resolve namespace / port overrides from WS headers (same as HTTP proxy).
-    ws_headers = dict(websocket.headers)
     k8s_id = sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.id
-    try:
-        routing = resolve_routing(ws_headers, path_sandbox_id=k8s_id)
-    except ValueError as exc:
-        logger.warning("WebSocket routing error for sandbox %s: %s", sandbox_id, exc)
-        await websocket.close(code=1008, reason=str(exc))
-        return
 
     async def _touch_activity() -> None:
         async with async_session() as touch_session:
@@ -206,10 +187,10 @@ async def ws_proxy(
     try:
         await proxy_websocket(
             client_ws=websocket,
-            sandbox_id=routing["sandbox_id"],
+            sandbox_id=k8s_id,
             path=full_path,
-            namespace=routing["namespace"],
-            port=routing["port"],
+            namespace=sandbox.k8s_namespace,
+            port=settings.sandbox_port,
             on_activity=_touch_activity,
         )
     except Exception:

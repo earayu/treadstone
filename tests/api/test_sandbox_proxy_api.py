@@ -172,6 +172,58 @@ async def test_proxy_success_for_ready_sandbox(auth_client):
     assert resp.json() == {"ok": True}
 
 
+async def test_proxy_ignores_x_sandbox_override_headers(auth_client):
+    """Client-supplied X-Sandbox-* must not change upstream host/port or k8s id."""
+    create_resp = await auth_client.post(
+        "/v1/sandboxes",
+        json={"template": "aio-sandbox-tiny", "name": "proxy-ignore-headers-sb"},
+    )
+    sandbox_id = create_resp.json()["id"]
+
+    async with _test_session_factory() as session:
+        from treadstone.models.sandbox import Sandbox
+
+        sb = await session.get(Sandbox, sandbox_id)
+        sb.status = "ready"
+        session.add(sb)
+        await session.commit()
+        expected_ns = sb.k8s_namespace
+        k8s_id = sb.k8s_sandbox_name or sb.k8s_sandbox_claim_name or sb.id
+
+    captured_urls: list[str] = []
+
+    def build_request_capture(method, url, headers, content):
+        captured_urls.append(str(url))
+        return httpx.Request(method, url)
+
+    mock_client = _mock_upstream(
+        body=b"ok",
+        headers={"content-type": "text/plain"},
+    )
+    mock_client.build_request.side_effect = build_request_capture
+
+    key_resp = await auth_client.post("/v1/auth/api-keys", json={"name": "proxy-ignore-h"})
+    api_key = key_resp.json()["key"]
+
+    with patch("treadstone.services.sandbox_proxy._http_client", mock_client):
+        resp = await auth_client.get(
+            f"/v1/sandboxes/{sandbox_id}/proxy/healthz",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "X-Sandbox-Port": "9999",
+                "X-Sandbox-Namespace": "attacker-ns",
+                "X-Sandbox-ID": "evil-id",
+            },
+        )
+    assert resp.status_code == 200
+    assert len(captured_urls) == 1
+    url = captured_urls[0]
+    assert f"{k8s_id}.{expected_ns}.svc.cluster.local" in url
+    assert "attacker-ns" not in url
+    assert ":9999" not in url
+    assert ":8080" in url
+
+
 async def test_proxy_cookie_auth_returns_401_auth_invalid(auth_client):
     create_resp = await auth_client.post(
         "/v1/sandboxes",

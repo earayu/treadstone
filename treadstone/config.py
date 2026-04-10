@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     password_reset_request_cooldown_seconds: int = 60
     password_reset_ip_hourly_limit: int = 5
 
-    # Sandbox proxy defaults (overridable per-request via X-Sandbox-* headers)
+    # Sandbox workload namespace/port defaults (proxy, subdomain, new sandboxes)
     sandbox_namespace: str = "treadstone-local"
     sandbox_port: int = 8080
     sandbox_proxy_timeout: float = 180.0
