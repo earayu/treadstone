@@ -41,18 +41,18 @@ async def _seed_tier_templates(session: AsyncSession) -> None:
             compute_units_monthly=Decimal("10"),
             storage_capacity_gib=0,
             max_concurrent_running=1,
-            max_sandbox_duration_seconds=1800,
-            allowed_templates=["aio-sandbox-tiny", "aio-sandbox-small"],
-            grace_period_seconds=600,
+            max_sandbox_duration_seconds=7200,
+            allowed_templates=["aio-sandbox-tiny"],
+            grace_period_seconds=900,
         ),
         TierTemplate(
             tier_name="pro",
-            compute_units_monthly=Decimal("100"),
-            storage_capacity_gib=10,
-            max_concurrent_running=3,
-            max_sandbox_duration_seconds=7200,
+            compute_units_monthly=Decimal("180"),
+            storage_capacity_gib=20,
+            max_concurrent_running=5,
+            max_sandbox_duration_seconds=0,
             allowed_templates=["aio-sandbox-tiny", "aio-sandbox-small", "aio-sandbox-medium"],
-            grace_period_seconds=1800,
+            grace_period_seconds=7200,
         ),
     ]
     for t in defaults:
@@ -131,10 +131,10 @@ async def test_get_usage_returns_summary(user_client):
     assert data["storage"]["unit"] == "GiB"
 
     assert data["limits"]["max_concurrent_running"] == 1
-    assert data["limits"]["allowed_templates"] == ["aio-sandbox-tiny", "aio-sandbox-small"]
+    assert data["limits"]["allowed_templates"] == ["aio-sandbox-tiny"]
 
     assert data["grace_period"]["active"] is False
-    assert data["grace_period"]["grace_period_seconds"] == 600
+    assert data["grace_period"]["grace_period_seconds"] == 900
 
 
 async def test_get_usage_includes_credit_pool_and_grants(user_client):
@@ -302,9 +302,9 @@ async def test_get_plan_returns_full_details(user_client):
     assert data["compute_units_monthly_used"] == 0.0
     assert data["storage_capacity_limit_gib"] == 0
     assert data["max_concurrent_running"] == 1
-    assert data["max_sandbox_duration_seconds"] == 1800
-    assert data["allowed_templates"] == ["aio-sandbox-tiny", "aio-sandbox-small"]
-    assert data["grace_period_seconds"] == 600
+    assert data["max_sandbox_duration_seconds"] == 7200
+    assert data["allowed_templates"] == ["aio-sandbox-tiny"]
+    assert data["grace_period_seconds"] == 900
     assert data["billing_period_start"] is not None
     assert data["billing_period_end"] is not None
     assert data["grace_period_started_at"] is None

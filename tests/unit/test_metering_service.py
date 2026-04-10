@@ -43,17 +43,17 @@ def _make_template(tier_name: str = "free", **kwargs) -> TierTemplate:
             "compute_units_monthly": Decimal("10"),
             "storage_capacity_gib": 0,
             "max_concurrent_running": 1,
-            "max_sandbox_duration_seconds": 1800,
-            "allowed_templates": ["aio-sandbox-tiny", "aio-sandbox-small"],
-            "grace_period_seconds": 600,
+            "max_sandbox_duration_seconds": 7200,
+            "allowed_templates": ["aio-sandbox-tiny"],
+            "grace_period_seconds": 900,
         },
         "pro": {
-            "compute_units_monthly": Decimal("100"),
-            "storage_capacity_gib": 10,
-            "max_concurrent_running": 3,
-            "max_sandbox_duration_seconds": 7200,
+            "compute_units_monthly": Decimal("180"),
+            "storage_capacity_gib": 20,
+            "max_concurrent_running": 5,
+            "max_sandbox_duration_seconds": 0,
             "allowed_templates": ["aio-sandbox-tiny", "aio-sandbox-small", "aio-sandbox-medium"],
-            "grace_period_seconds": 1800,
+            "grace_period_seconds": 7200,
         },
     }
     values = {**defaults.get(tier_name, defaults["free"]), **kwargs}
@@ -67,9 +67,9 @@ def _make_plan(user_id: str = "user01", tier: str = "free", **kwargs) -> UserPla
         "compute_units_monthly_used": Decimal("0"),
         "storage_capacity_limit_gib": 0,
         "max_concurrent_running": 1,
-        "max_sandbox_duration_seconds": 1800,
-        "allowed_templates": ["aio-sandbox-tiny", "aio-sandbox-small"],
-        "grace_period_seconds": 600,
+        "max_sandbox_duration_seconds": 7200,
+        "allowed_templates": ["aio-sandbox-tiny"],
+        "grace_period_seconds": 900,
         "period_start": datetime(2026, 3, 1, 0, 0, 0, tzinfo=UTC),
         "period_end": datetime(2026, 4, 1, 0, 0, 0, tzinfo=UTC),
     }
@@ -180,7 +180,7 @@ class TestEnsureUserPlan:
         plan = await svc.ensure_user_plan(session, "user01", tier="pro")
 
         assert plan.tier == "pro"
-        assert plan.compute_units_monthly_limit == Decimal("100")
+        assert plan.compute_units_monthly_limit == Decimal("180")
         grants = _added_objects(session, ComputeGrant)
         assert len(grants) == 0
 
@@ -246,8 +246,10 @@ class TestUpdateUserTier:
         plan = await svc.update_user_tier(session, "user01", "pro")
 
         assert plan.tier == "pro"
-        assert plan.compute_units_monthly_limit == Decimal("100")
-        assert plan.max_concurrent_running == 3
+        assert plan.compute_units_monthly_limit == Decimal("180")
+        assert plan.storage_capacity_limit_gib == 20
+        assert plan.max_concurrent_running == 5
+        assert plan.max_sandbox_duration_seconds == 0
         assert plan.gmt_updated == FIXED_NOW
 
     async def test_applies_overrides(self, monkeypatch):
@@ -274,7 +276,7 @@ class TestUpdateUserTier:
         svc = MeteringService()
         svc._get_tier_template = AsyncMock(return_value=pro_template)
 
-        created_plan = _make_plan("user01", tier="pro", compute_units_monthly_limit=Decimal("100"))
+        created_plan = _make_plan("user01", tier="pro", compute_units_monthly_limit=Decimal("180"))
         svc.ensure_user_plan = AsyncMock(return_value=created_plan)
 
         session = _mock_session(
@@ -302,8 +304,8 @@ class TestUpdateUserTier:
         plan = await svc.update_user_tier(session, "user01", "pro")
 
         assert plan.tier == "pro"
-        assert plan.compute_units_monthly_limit == Decimal("100")
-        assert plan.max_concurrent_running == 3
+        assert plan.compute_units_monthly_limit == Decimal("180")
+        assert plan.max_concurrent_running == 5
 
 
 class TestApplyOverrides:
@@ -1175,20 +1177,20 @@ class TestUsageSummaryQueries:
 
 class TestCheckSandboxDuration:
     async def test_returns_max_duration_for_free_tier(self):
-        plan = _make_plan("user01", max_sandbox_duration_seconds=1800)
-        svc = MeteringService()
-        svc.get_user_plan = AsyncMock(return_value=plan)
-
-        result = await svc.check_sandbox_duration(AsyncMock(), "user01")
-        assert result == 1800
-
-    async def test_returns_max_duration_for_pro_tier(self):
-        plan = _make_plan("user01", tier="pro", max_sandbox_duration_seconds=7200)
+        plan = _make_plan("user01", max_sandbox_duration_seconds=7200)
         svc = MeteringService()
         svc.get_user_plan = AsyncMock(return_value=plan)
 
         result = await svc.check_sandbox_duration(AsyncMock(), "user01")
         assert result == 7200
+
+    async def test_returns_max_duration_for_pro_tier(self):
+        plan = _make_plan("user01", tier="pro", max_sandbox_duration_seconds=0)
+        svc = MeteringService()
+        svc.get_user_plan = AsyncMock(return_value=plan)
+
+        result = await svc.check_sandbox_duration(AsyncMock(), "user01")
+        assert result == 0
 
     async def test_returns_overridden_duration(self):
         plan = _make_plan("user01", max_sandbox_duration_seconds=14400)

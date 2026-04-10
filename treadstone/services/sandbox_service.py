@@ -107,6 +107,26 @@ class SandboxService:
         self.k8s = k8s_client or get_k8s_client()
         self._metering = metering
 
+    async def _validate_auto_stop_interval_for_tier(self, owner_id: str, auto_stop_interval: int) -> int | None:
+        """Validate the requested auto-stop interval against the owner's plan.
+
+        Returns the plan's absolute runtime ceiling in seconds when metering
+        enforcement is active. ``0`` means the tier allows "Never" and has no
+        absolute runtime ceiling to project into Kubernetes shutdown time.
+        """
+        if self._metering is None or not settings.metering_enforcement_enabled:
+            return None
+
+        max_duration = await self._metering.check_sandbox_duration(self.session, owner_id)
+        if max_duration <= 0:
+            return max_duration
+
+        if auto_stop_interval == 0 or (auto_stop_interval * 60) > max_duration:
+            plan = await self._metering.get_user_plan(self.session, owner_id)
+            raise SandboxDurationExceededError(plan.tier, max_duration)
+
+        return max_duration
+
     async def create(
         self,
         owner_id: str,
@@ -141,13 +161,7 @@ class SandboxService:
                 size_gib = parse_storage_size_gib(effective_storage_size)
                 await self._metering.check_storage_quota(self.session, owner_id, size_gib)
 
-            max_duration = await self._metering.check_sandbox_duration(self.session, owner_id)
-            if max_duration > 0:
-                # Tier enforces a maximum duration.
-                # auto_stop_interval == 0 means "never", which is not allowed when tier has a limit.
-                if auto_stop_interval == 0 or (auto_stop_interval * 60) > max_duration:
-                    plan = await self._metering.get_user_plan(self.session, owner_id)
-                    raise SandboxDurationExceededError(plan.tier, max_duration)
+            max_duration = await self._validate_auto_stop_interval_for_tier(owner_id, auto_stop_interval)
 
         # ── Create sandbox record ──
         sandbox_id = "sb" + random_id()
@@ -190,7 +204,7 @@ class SandboxService:
         await self.session.refresh(sandbox)
 
         shutdown_time: datetime | None = None
-        if max_duration is not None:
+        if max_duration is not None and max_duration > 0:
             shutdown_time = datetime.now(UTC) + timedelta(seconds=max_duration)
 
         try:
@@ -247,12 +261,7 @@ class SandboxService:
             raise BadRequestError(f"Unsupported fields: {', '.join(sorted(extra))}")
 
         new_auto_stop = patch["auto_stop_interval"] if "auto_stop_interval" in patch else sandbox.auto_stop_interval
-        if self._metering is not None and settings.metering_enforcement_enabled:
-            max_duration = await self._metering.check_sandbox_duration(self.session, owner_id)
-            if max_duration > 0:
-                if new_auto_stop == 0 or (new_auto_stop * 60) > max_duration:
-                    plan = await self._metering.get_user_plan(self.session, owner_id)
-                    raise SandboxDurationExceededError(plan.tier, max_duration)
+        await self._validate_auto_stop_interval_for_tier(owner_id, new_auto_stop)
 
         if "name" in patch:
             sandbox.name = patch["name"]
@@ -550,10 +559,7 @@ class SandboxService:
             await self._metering.check_compute_quota(self.session, owner_id)
             await self._metering.check_concurrent_limit(self.session, owner_id)
 
-            max_duration = await self._metering.check_sandbox_duration(self.session, owner_id)
-            if sandbox.auto_stop_interval > 0 and (sandbox.auto_stop_interval * 60) > max_duration:
-                plan = await self._metering.get_user_plan(self.session, owner_id)
-                raise SandboxDurationExceededError(plan.tier, max_duration)
+            await self._validate_auto_stop_interval_for_tier(owner_id, sandbox.auto_stop_interval)
 
         if sandbox.status == SandboxStatus.COLD:
             await self._ensure_snapshot_backend_ready()
