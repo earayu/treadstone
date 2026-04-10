@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "result": "fail",
+  "github": {
+    "run_id": 24233664257,
+    "run_attempt": 1,
+    "repository": "earayu/treadstone",
+    "workflow": "K8s E2E",
+    "run_url": "https://github.com/earayu/treadstone/actions/runs/24233664257"
+  },
+  "git": {
+    "sha": "1e6a37289ff1e780b6d383d78f16fc0ab41a731e",
+    "sha_short": "1e6a372",
+    "ref_name": "311/merge",
+    "commit_url": "https://github.com/earayu/treadstone/commit/1e6a37289ff1e780b6d383d78f16fc0ab41a731e"
+  },
+  "pr": {
+    "number": 311,
+    "url": "https://github.com/earayu/treadstone/pull/311"
+  },
+  "published_at": "2026-04-10T08:48:16Z"
+}
