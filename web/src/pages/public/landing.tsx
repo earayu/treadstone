@@ -16,7 +16,7 @@ const SUPPORT_EMAIL = "support@treadstone-ai.dev"
 
 /** Hero primary CTA for visitors — opens the hosted public demo sandbox Web UI in a new tab. */
 const PUBLIC_DEMO_SANDBOX_URL =
-  "https://sandbox-sb10278370d791ca6a.treadstone-ai.dev/_treadstone/open?token=swl2e15ed6aec29e8bbee59fd11"
+  "https://sandbox-sba1ad15f841c32f2f.treadstone-ai.dev/_treadstone/open?token=swld751d929b7f5efc0b11f426f"
 
 /** Hero animated terminal: hidden by default; set to `true` to show it again (side-by-side on large screens). */
 const SHOW_HERO_TERMINAL = false
