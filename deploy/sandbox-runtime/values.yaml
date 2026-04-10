@@ -67,30 +67,31 @@ networkPolicies:
     # Use this for environment-specific allow rules without changing chart code.
     extraAllowRules: []
 
-# Pod Security Standards (PSS): these defaults intentionally target the LESS strict end of the
-# spectrum (closer to the "baseline" profile): readOnlyRootFilesystem stays false so the AIO
-# sandbox image can write outside declared volumes (e.g. /tmp). That does NOT satisfy the
-# "restricted" profile, which requires a read-only root filesystem and writable paths only via volumes.
-# If your namespace enforces restricted, override values and/or change the image layout first.
-# Keep in sync with treadstone/services/k8s_client.py (SANDBOX_READ_ONLY_ROOT_FILESYSTEM).
+# Baseline-compatible hardening for the current opaque AIO image.
+# The stock image is not rootless-compatible: it bootstraps the `gem` account
+# and other runtime state as root on every start. Keep the main container on
+# the image default user, retain seccomp + no-new-privilege style controls, and
+# add only the minimum verified capabilities required for startup. This is not
+# Pod Security Standards "restricted" compliance.
 sandboxPodSecurityContext:
-  runAsNonRoot: true
-  runAsUser: 1000
-  runAsGroup: 1000
   seccompProfile:
     type: RuntimeDefault
 
 sandboxContainerSecurityContext:
   allowPrivilegeEscalation: false
   readOnlyRootFilesystem: false
-  runAsNonRoot: true
-  runAsUser: 1000
-  runAsGroup: 1000
   seccompProfile:
     type: RuntimeDefault
   capabilities:
     drop:
       - ALL
+    add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - SETUID
+      - SETGID
 
 sandboxTemplates:
   - name: aio-sandbox-tiny

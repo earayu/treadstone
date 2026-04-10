@@ -14,6 +14,24 @@ from treadstone.services.k8s_client import (
     format_shutdown_time,
 )
 
+EXPECTED_MAIN_SECURITY_CONTEXT = {
+    "allowPrivilegeEscalation": False,
+    "capabilities": {
+        "drop": ["ALL"],
+        "add": ["CHOWN", "DAC_OVERRIDE", "FOWNER", "KILL", "SETUID", "SETGID"],
+    },
+    "readOnlyRootFilesystem": False,
+    "seccompProfile": {"type": "RuntimeDefault"},
+}
+EXPECTED_INIT_SECURITY_CONTEXT = {
+    "allowPrivilegeEscalation": False,
+    "capabilities": {"drop": ["ALL"]},
+    "runAsNonRoot": True,
+    "runAsUser": 1000,
+    "runAsGroup": 1000,
+    "seccompProfile": {"type": "RuntimeDefault"},
+}
+
 
 class _EmptyStreamResponse:
     def __init__(self, payload: dict | None = None):
@@ -147,6 +165,8 @@ async def test_create_claim_also_creates_sandbox():
     assert ps["automountServiceAccountToken"] is False
     assert ps["securityContext"] == _sandbox_pod_security_context(with_pvc=False)
     assert ps["containers"][0]["securityContext"] == _sandbox_main_container_security_context()
+    assert ps["securityContext"] == {"seccompProfile": {"type": "RuntimeDefault"}}
+    assert ps["containers"][0]["securityContext"] == EXPECTED_MAIN_SECURITY_CONTEXT
     assert sb["status"]["serviceFQDN"] == "my-sb.treadstone-local.svc.cluster.local"
 
 
@@ -387,8 +407,13 @@ async def test_create_sandbox_requests_expected_manifest_with_probes():
     pod_spec = call["json"]["spec"]["podTemplate"]["spec"]
     assert pod_spec["automountServiceAccountToken"] is False
     assert pod_spec["securityContext"] == _sandbox_pod_security_context(with_pvc=False)
+    assert pod_spec["securityContext"] == {"seccompProfile": {"type": "RuntimeDefault"}}
     container = pod_spec["containers"][0]
     assert container["securityContext"] == _sandbox_main_container_security_context()
+    assert container["securityContext"] == EXPECTED_MAIN_SECURITY_CONTEXT
+    assert "runAsNonRoot" not in container["securityContext"]
+    assert "runAsUser" not in container["securityContext"]
+    assert "runAsGroup" not in container["securityContext"]
     assert container["startupProbe"]["httpGet"]["path"] == "/v1/sandbox"
     assert container["readinessProbe"]["failureThreshold"] == 3
     assert "livenessProbe" not in container
@@ -436,8 +461,17 @@ async def test_create_sandbox_manifest_mounts_pvc_at_home_dir():
     main = pod_spec["containers"][0]
     assert main["volumeMounts"] == [{"name": "workspace", "mountPath": SANDBOX_HOME_DIR}]
     assert main["securityContext"] == _sandbox_main_container_security_context()
+    assert main["securityContext"] == EXPECTED_MAIN_SECURITY_CONTEXT
+    assert "runAsNonRoot" not in main["securityContext"]
+    assert "runAsUser" not in main["securityContext"]
+    assert "runAsGroup" not in main["securityContext"]
 
     assert pod_spec["securityContext"] == _sandbox_pod_security_context(with_pvc=True)
+    assert pod_spec["securityContext"] == {
+        "seccompProfile": {"type": "RuntimeDefault"},
+        "fsGroup": 1000,
+        "fsGroupChangePolicy": "OnRootMismatch",
+    }
 
     # initContainer seeds home contents on first boot using a sentinel file
     # (not ls -A empty-check, which breaks on ext4 volumes with lost+found)
@@ -445,6 +479,7 @@ async def test_create_sandbox_manifest_mounts_pvc_at_home_dir():
     assert init["name"] == "init-home"
     assert init["image"] == image
     assert init["securityContext"] == _sandbox_init_container_security_context()
+    assert init["securityContext"] == EXPECTED_INIT_SECURITY_CONTEXT
     assert init["volumeMounts"] == [{"name": "workspace", "mountPath": "/mnt/home"}]
     script = init["command"][2]
     assert ".treadstone-home-initialized" in script
@@ -452,7 +487,7 @@ async def test_create_sandbox_manifest_mounts_pvc_at_home_dir():
 
 
 async def test_create_sandbox_manifest_without_pvc_has_baseline_security_no_init():
-    """Ephemeral sandbox (no PVC): PSS baseline on pod/main container; no init or PVC mounts."""
+    """Ephemeral sandbox (no PVC): compatible baseline on pod/main container; no init or PVC mounts."""
     client = Kr8sClient()
     api = _RecordingAPI()
 
@@ -474,7 +509,9 @@ async def test_create_sandbox_manifest_without_pvc_has_baseline_security_no_init
 
     assert pod_spec["automountServiceAccountToken"] is False
     assert pod_spec["securityContext"] == _sandbox_pod_security_context(with_pvc=False)
+    assert pod_spec["securityContext"] == {"seccompProfile": {"type": "RuntimeDefault"}}
     assert pod_spec["containers"][0]["securityContext"] == _sandbox_main_container_security_context()
+    assert pod_spec["containers"][0]["securityContext"] == EXPECTED_MAIN_SECURITY_CONTEXT
     assert "initContainers" not in pod_spec
     assert "volumeMounts" not in pod_spec["containers"][0]
     assert "volumeClaimTemplates" not in manifest["spec"]
@@ -541,6 +578,7 @@ async def test_kr8s_client_preserves_explicit_pod_labels() -> None:
     pod_spec = manifest["spec"]["podTemplate"]["spec"]
     assert pod_spec["automountServiceAccountToken"] is False
     assert pod_spec["securityContext"] == _sandbox_pod_security_context(with_pvc=False)
+    assert pod_spec["securityContext"] == {"seccompProfile": {"type": "RuntimeDefault"}}
     assert "tolerations" not in pod_spec
     labels = manifest["spec"]["podTemplate"]["metadata"]["labels"]
     assert labels["treadstone-ai.dev/workload"] == "sandbox"

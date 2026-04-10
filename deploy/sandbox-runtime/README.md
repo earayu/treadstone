@@ -36,8 +36,31 @@ This is a practical V1 control, not a final hard-isolation model:
 - cluster-internal reachability is reduced through the denylist, not fully auto-discovered
 - future tightening can move to `80/443`-only defaults or plan-specific exceptions without changing sandbox lifecycle code
 
-## Pod Security Standards (PSS)
+## Sandbox Security Context Baseline
 
-Defaults are **less strict** on purpose: `readOnlyRootFilesystem` is **false** so the stock sandbox image can write where it expects (e.g. under `/tmp`). That is closer to the **baseline** profile than to **restricted** (which requires a read-only root filesystem and writable paths only through declared volumes). Namespaces that **enforce restricted** may reject these Pods unless you tighten the image/volumes first and set `readOnlyRootFilesystem: true` (and related overrides) in values.
+The current `ghcr.io/agent-infra/sandbox` image is an opaque upstream image and is **not rootless-compatible**. Its startup scripts create the `gem` user/group and perform other bootstrap steps as root on every start. Because of that, Treadstone does **not** force the main sandbox container to run as UID/GID 1000.
+
+The default Treadstone baseline is therefore **compatibility-first hardening**:
+
+- keep `automountServiceAccountToken: false`
+- keep `allowPrivilegeEscalation: false`
+- keep `seccompProfile: RuntimeDefault`
+- keep `readOnlyRootFilesystem: false`
+- drop all capabilities and then add back only the minimum verified startup set:
+  - `CHOWN`
+  - `DAC_OVERRIDE`
+  - `FOWNER`
+  - `KILL`
+  - `SETUID`
+  - `SETGID`
+
+This is a deliberate boundary, not a hack:
+
+- the main container must still start as root because the image bootstraps runtime accounts dynamically
+- the direct-path `init-home` init container remains non-root
+- direct sandboxes still use `fsGroup` for the PVC-backed `/home/gem` workspace
+- this baseline is **not** Pod Security Standards `restricted` compliance
+
+If you later move to a custom image that is truly rootless-compatible, you can revisit `runAsNonRoot`, `runAsUser`, and a tighter capability set in a second phase. Until then, prefer this explicit compatible baseline over a misleading rootless configuration that fails at runtime.
 
 Workspace PVCs rely on **fsGroup** for permissions; confirm your **StorageClass / CSI** supports `fsGroup` behavior for production.

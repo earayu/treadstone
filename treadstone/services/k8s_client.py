@@ -12,9 +12,13 @@ Pod/container ``securityContext`` defaults here should stay aligned with
 ``deploy/sandbox-runtime/values.yaml`` (``sandboxPodSecurityContext``,
 ``sandboxContainerSecurityContext``).
 
-PSS note: defaults match the chart — non-root, seccomp, dropped caps, but **writable root FS**
-(``readOnlyRootFilesystem`` false). That aligns with **baseline-oriented** hardening, not the
-Kubernetes **restricted** profile (which needs read-only root plus writable paths only on volumes).
+Security note: the stock ``ghcr.io/agent-infra/sandbox`` image is **not
+rootless-compatible**. Its entrypoint bootstraps the ``gem`` user/group and
+other runtime state as root on every start. Defaults here therefore target a
+**compatible hardening baseline**: keep seccomp and no-new-privilege style
+controls, retain a writable root filesystem, and add only the minimum verified
+Linux capabilities needed for startup. This is not Kubernetes Pod Security
+Standards ``restricted`` compliance.
 
 Two implementations:
 - FakeK8sClient: In-memory stub for testing
@@ -51,9 +55,17 @@ SANDBOX_UID = 1000
 SANDBOX_GID = 1000
 
 # Align default with deploy/sandbox-runtime/values.yaml sandboxContainerSecurityContext.
-# False = less strict (baseline-friendly): image may write to paths not backed by a volume.
-# True = required for PSS "restricted"; needs emptyDir/tmpfs (or similar) for every writable path.
+# False = compatible with the stock opaque image, which writes outside declared
+# volumes during bootstrap. True would require image/layout changes first.
 SANDBOX_READ_ONLY_ROOT_FILESYSTEM = False
+SANDBOX_STARTUP_CAPABILITIES = [
+    "CHOWN",
+    "DAC_OVERRIDE",
+    "FOWNER",
+    "KILL",
+    "SETUID",
+    "SETGID",
+]
 
 DEFAULT_STARTUP_PROBE: dict[str, Any] = {
     "httpGet": {"path": "/v1/sandbox", "port": 8080},
@@ -79,13 +91,8 @@ def format_shutdown_time(dt: datetime) -> str:
 
 
 def _sandbox_pod_security_context(*, with_pvc: bool) -> dict[str, Any]:
-    """Pod-level securityContext (baseline-oriented PSS hardening). Adds fsGroup when a workspace PVC is used."""
-    ctx: dict[str, Any] = {
-        "runAsNonRoot": True,
-        "runAsUser": SANDBOX_UID,
-        "runAsGroup": SANDBOX_GID,
-        "seccompProfile": {"type": "RuntimeDefault"},
-    }
+    """Pod-level compatible hardening; direct sandboxes keep fsGroup for PVC-backed home directories."""
+    ctx: dict[str, Any] = {"seccompProfile": {"type": "RuntimeDefault"}}
     if with_pvc:
         ctx["fsGroup"] = SANDBOX_GID
         ctx["fsGroupChangePolicy"] = "OnRootMismatch"
@@ -93,20 +100,17 @@ def _sandbox_pod_security_context(*, with_pvc: bool) -> dict[str, Any]:
 
 
 def _sandbox_main_container_security_context() -> dict[str, Any]:
-    """Main sandbox container: matches Helm sandboxContainerSecurityContext defaults."""
+    """Main sandbox container: root-compatible minimum capability baseline mirrored from Helm defaults."""
     return {
         "allowPrivilegeEscalation": False,
-        "capabilities": {"drop": ["ALL"]},
+        "capabilities": {"drop": ["ALL"], "add": SANDBOX_STARTUP_CAPABILITIES},
         "readOnlyRootFilesystem": SANDBOX_READ_ONLY_ROOT_FILESYSTEM,
-        "runAsNonRoot": True,
-        "runAsUser": SANDBOX_UID,
-        "runAsGroup": SANDBOX_GID,
         "seccompProfile": {"type": "RuntimeDefault"},
     }
 
 
 def _sandbox_init_container_security_context() -> dict[str, Any]:
-    """init-home runs as the same UID as the main process; root is not required for cp with fsGroup."""
+    """init-home remains non-root; the incompatibility is in the main image entrypoint bootstrap."""
     return {
         "allowPrivilegeEscalation": False,
         "capabilities": {"drop": ["ALL"]},
@@ -321,7 +325,8 @@ class Kr8sClient:
             # etc.) so the main container's entrypoint can layer runtime state
             # on top.  A sentinel file tracks whether seeding has happened —
             # `ls -A` empty-checks break on ext4 volumes that ship lost+found.
-            # Runs as UID/GID SANDBOX_* with pod fsGroup; no chown (PSS restricted).
+            # init-home stays non-root and avoids chown; the main opaque image
+            # still boots as root to create its runtime user/group.
             _sentinel = "/mnt/home/.treadstone-home-initialized"
             init_script = (
                 f"if [ ! -f {_sentinel} ]; then "
