@@ -24,6 +24,31 @@ sandboxProbes:
 sandboxPodSelectorLabels:
   treadstone-ai.dev/workload: "sandbox"
 
+# Pod Security Standards (PSS): these defaults intentionally target the LESS strict end of the
+# spectrum (closer to the "baseline" profile): readOnlyRootFilesystem stays false so the AIO
+# sandbox image can write outside declared volumes (e.g. /tmp). That does NOT satisfy the
+# "restricted" profile, which requires a read-only root filesystem and writable paths only via volumes.
+# If your namespace enforces restricted, override values and/or change the image layout first.
+# Keep in sync with treadstone/services/k8s_client.py (SANDBOX_READ_ONLY_ROOT_FILESYSTEM).
+sandboxPodSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+sandboxContainerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+  capabilities:
+    drop:
+      - ALL
+
 sandboxTemplates:
   - name: aio-sandbox-tiny
     displayName: "AIO Sandbox Tiny"
