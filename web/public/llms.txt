@@ -6,7 +6,7 @@
 
 - [Overview](/docs/index.md): What Treadstone is and what you can build; introduces control plane vs data plane in plain language, then points to Sandbox endpoints for URLs.
 - [Browser Handoff](/docs/browser-handoff.md): Let humans enter the sandbox in a browser: authenticated session or owner-shared JWT link; full workspace view and human-in-the-loop control.
-- [API Keys & Auth](/docs/api-keys-auth.md): Sign up via CLI or Console OAuth (Google/GitHub), then session login, API keys, control-plane vs data-plane access, and selected sandbox grants.
+- [API Keys & Auth](/docs/api-keys-auth.md): Sign up via CLI or Console OAuth, then session login, API keys, control-plane vs data-plane access, and selected sandbox grants.
 - [CLI Guide](/docs/cli-guide.md): Install the CLI and core behavior: global flags, credential precedence, JSON vs human output, --help, skills, defaults, and local config.
 - [MCP in sandbox](/docs/mcp-sandbox.md): Expose an MCP server inside a sandbox via the data-plane proxy: urls.proxy + /mcp, API key auth, HTTP/SSE and WebSocket transports, query forwarding, and when to use subdomain browser URLs.
 - [API Reference](/docs/api-reference.md): Control-plane route tables, generic proxy row, and a shell-path summary; full merged sandbox runtime API is in Swagger and openapi.json.

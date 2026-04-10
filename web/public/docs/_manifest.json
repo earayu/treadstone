@@ -73,7 +73,7 @@
     "title": "API Keys & Auth",
     "section": "Core Workflows",
     "order": 30,
-    "summary": "Sign up via CLI or Console OAuth (Google/GitHub), then session login, API keys, control-plane vs data-plane access, and selected sandbox grants.",
+    "summary": "Sign up via CLI or Console OAuth, then session login, API keys, control-plane vs data-plane access, and selected sandbox grants.",
     "default": false,
     "llm_priority": 100,
     "aliases": [

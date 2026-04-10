@@ -5,12 +5,8 @@ import { TreadstoneSymbol } from "@/components/brand/logo"
 import { CopyButton } from "@/components/code/copy-button"
 import { LANDING_PAGE_TITLE, attachLandingJsonLd } from "@/lib/landing-seo"
 
-const GITHUB_URL = "https://github.com/earayu/treadstone"
 const DISCORD_URL = "https://discord.gg/ygSP9tT5RB"
 const TWITTER_X_URL = "https://x.com/treadstone_ai"
-/** Sign-in then return to repo root (for Star CTA). */
-const GITHUB_STAR_LOGIN_URL = `https://github.com/login?return_to=${encodeURIComponent(GITHUB_URL)}`
-const RELEASES_URL = "https://github.com/earayu/treadstone/releases"
 const PYPI_CLI_URL = "https://pypi.org/project/treadstone-cli/"
 const SUPPORT_EMAIL = "support@treadstone-ai.dev"
 
@@ -392,8 +388,8 @@ function WaitlistDialog({ tier, onClose }: WaitlistDialogProps) {
           <form onSubmit={handleSubmit} className="space-y-4 p-5">
             <p className="text-sm text-muted-foreground">
               Early {tierLabel} capacity is limited. We review requests to prioritize builders who will ship on
-              Treadstone. There is no minimum GitHub stars or followers—optional links just help us understand your
-              background.
+              Treadstone. Optional links just help us understand your background—there is no follower or popularity
+              requirement.
             </p>
 
             <div className="flex flex-col gap-1">
@@ -436,14 +432,12 @@ function WaitlistDialog({ tier, onClose }: WaitlistDialogProps) {
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-medium text-muted-foreground">
-                GitHub profile or portfolio URL (optional)
-              </label>
+              <label className="text-[11px] font-medium text-muted-foreground">Portfolio or project URL (optional)</label>
               <input
                 type="url"
                 value={portfolioUrl}
                 onChange={(e) => setPortfolioUrl(e.target.value)}
-                placeholder="https://github.com/yourhandle"
+                placeholder="https://your-site.example"
                 className="h-[36px] rounded-sm border border-border/40 bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
               />
               <p className="text-[10px] leading-snug text-muted-foreground/70">
@@ -997,7 +991,6 @@ export function LandingPage() {
                   { label: "Python SDK Guide", href: "/docs/python-sdk-guide" },
                   { label: "REST API Reference", href: "/docs/api-reference" },
                   { label: "CLI on PyPI", href: PYPI_CLI_URL, external: true },
-                  { label: "GitHub Releases", href: RELEASES_URL, external: true },
                 ].map((l) => (
                   <li key={l.label}>
                     <a
@@ -1017,7 +1010,6 @@ export function LandingPage() {
               <span className="font-mono text-[10px] tracking-[0.1em] text-muted-foreground/40">COMMUNITY</span>
               <ul className="mt-3.5 flex flex-col gap-2.5">
                 {[
-                  { label: "Star on GitHub ★", href: GITHUB_STAR_LOGIN_URL },
                   { label: "Discord", href: DISCORD_URL },
                   { label: "X (Twitter)", href: TWITTER_X_URL },
                 ].map((l) => (

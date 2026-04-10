@@ -13,7 +13,7 @@ Read [`/docs/index.md`](/docs/index.md) first if you are new.
 
 - [Sandbox Lifecycle](/docs/sandbox-lifecycle.md): Create, list, inspect, stop, start, and delete sandboxes. Sandboxes only consume Compute Units while running.
 - [Browser Handoff](/docs/browser-handoff.md): Let humans enter the sandbox in a browser: authenticated session or owner-shared JWT link; full workspace view and human-in-the-loop control.
-- [API Keys & Auth](/docs/api-keys-auth.md): Sign up via CLI or Console OAuth (Google/GitHub), then session login, API keys, control-plane vs data-plane access, and selected sandbox grants.
+- [API Keys & Auth](/docs/api-keys-auth.md): Sign up via CLI or Console OAuth, then session login, API keys, control-plane vs data-plane access, and selected sandbox grants.
 - [Inside your sandbox](/docs/inside-sandbox.md): Call HTTP/WebSocket into a running sandbox via urls.proxy: API key, curl, MCP pointer, and Swagger for merged runtime paths.
 - [Usage & Limits](/docs/usage-limits.md): Read plan limits, compute remaining, storage quota, allowed templates, concurrency limits, and billing-period status.
 

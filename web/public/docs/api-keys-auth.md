@@ -19,7 +19,7 @@ treadstone auth register --email you@example.com --password 'YourPass123!'
 
 ### Web Console (OAuth)
 
-Open the Treadstone web app and sign up with **Google** or **GitHub** OAuth. After OAuth completes, you can use the Console with your session or run `treadstone auth login` from the CLI (same account).
+Open the Treadstone web app and sign up with **OAuth** (for example, Google). After OAuth completes, you can use the Console with your session or run `treadstone auth login` from the CLI (same account).
 
 ## Sessions vs API Keys
 
@@ -125,7 +125,7 @@ The scope model has three fields:
 
 ## For Agents
 
-- Register with `POST /v1/auth/register` (body: `email`, `password`) or use `treadstone auth register`; Console users may use Google/GitHub OAuth in the browser instead.
+- Register with `POST /v1/auth/register` (body: `email`, `password`) or use `treadstone auth register`; Console users may use OAuth in the browser instead.
 - After registration, interactive flows use `treadstone auth login`; automation uses API keys with minimal scope.
 
 ## Read Next

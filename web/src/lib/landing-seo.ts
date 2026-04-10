@@ -1,4 +1,4 @@
-/** Home page SEO — English copy for public index + JSON-LD (AGENTS.md: GitHub-public content in English). */
+/** Home page SEO — English copy for public index + JSON-LD (AGENTS.md: public-facing marketing content in English). */
 
 export const LANDING_SITE_URL = "https://treadstone-ai.dev"
 
@@ -42,10 +42,6 @@ export function buildLandingJsonLd(): Record<string, unknown> {
       priceCurrency: "USD",
       description: "Free trial with metered compute (CU-hours)",
     },
-    sameAs: [
-      "https://github.com/earayu/treadstone",
-      "https://x.com/treadstone_ai",
-      "https://discord.gg/ygSP9tT5RB",
-    ],
+    sameAs: ["https://x.com/treadstone_ai", "https://discord.gg/ygSP9tT5RB"],
   }
 }
