@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from treadstone.core.database import Base
-from treadstone.models.sandbox import Sandbox, SandboxStatus
+from treadstone.models.sandbox import Sandbox, SandboxStatus, StorageBackendMode
 from treadstone.models.sandbox_web_link import SandboxWebLink
 from treadstone.models.user import User
 from treadstone.services.k8s_sync import handle_watch_event
@@ -387,6 +387,62 @@ async def test_auto_delete_k8s_path_stays_trackable_until_watch_finishes(
         sandbox = await session.get(Sandbox, sandbox_id)
         assert sandbox.status == SandboxStatus.DELETED
         assert sandbox.gmt_deleted is not None
+
+
+@patch("treadstone.services.k8s_client.get_k8s_client")
+@patch("treadstone.services.metering_service.MeteringService.record_storage_release", new_callable=AsyncMock)
+@patch("treadstone.services.sync_supervisor.utc_now", return_value=REAL_FIXED_NOW)
+@patch("treadstone.services.sandbox_lifecycle_tasks.utc_now", return_value=REAL_FIXED_NOW)
+@patch("treadstone.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
+async def test_auto_delete_cold_k8s_path_persists_error_when_storage_release_fails(
+    mock_audit,
+    mock_lifecycle_now,
+    mock_supervisor_now,
+    mock_record_storage_release,
+    mock_get_k8s_client,
+    session_factory,
+):
+    """Cold auto-delete must leave an ERROR row if cleanup partially succeeds and metering fails."""
+    mock_record_storage_release.side_effect = RuntimeError("ledger unavailable")
+    k8s = AsyncMock()
+    k8s.set_volume_snapshot_content_deletion_policy = AsyncMock()
+    k8s.get_volume_snapshot = AsyncMock(return_value={"status": {"boundVolumeSnapshotContentName": "vsc-cold-01"}})
+    k8s.delete_volume_snapshot = AsyncMock(return_value=True)
+    k8s.get_volume_snapshot_content = AsyncMock(return_value={"metadata": {"name": "vsc-cold-01"}})
+    k8s.delete_volume_snapshot_content = AsyncMock(return_value=True)
+    mock_get_k8s_client.return_value = k8s
+
+    sandbox_id = await _insert_real_sandbox(
+        session_factory,
+        id="sb_real_cold_delete_03",
+        name="real-cold-delete",
+        status=SandboxStatus.COLD,
+        auto_delete_interval=60,
+        gmt_stopped=REAL_FIXED_NOW - timedelta(minutes=90),
+        persist=True,
+        provision_mode="direct",
+        storage_size="5Gi",
+        storage_backend_mode=StorageBackendMode.STANDARD_SNAPSHOT,
+        snapshot_provider_id="snap-handle-01",
+        snapshot_k8s_volume_snapshot_name="cold-snap-01",
+        snapshot_k8s_volume_snapshot_content_name="vsc-cold-01",
+    )
+
+    async with session_factory() as session:
+        await check_auto_delete(session, delete_callback=_k8s_delete_sandbox)
+
+    async with session_factory() as session:
+        sandbox = await session.get(Sandbox, sandbox_id)
+        assert sandbox.status == SandboxStatus.ERROR
+        assert sandbox.status_message == "Auto-delete failed: could not release storage ledger"
+        assert sandbox.gmt_deleted is None
+        assert sandbox.snapshot_provider_id is None
+        assert sandbox.snapshot_k8s_volume_snapshot_name is None
+        assert sandbox.snapshot_k8s_volume_snapshot_content_name is None
+
+    k8s.delete_volume_snapshot.assert_awaited_once_with("cold-snap-01", "treadstone-local")
+    k8s.delete_volume_snapshot_content.assert_awaited_once_with("vsc-cold-01")
+    mock_audit.assert_not_called()
 
 
 @patch("treadstone.services.k8s_client.get_k8s_client")

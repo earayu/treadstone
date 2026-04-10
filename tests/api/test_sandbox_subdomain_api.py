@@ -355,6 +355,9 @@ class TestSubdomainRouting:
         scope = _make_ws_scope("/", headers=headers)
 
         async def capturing_proxy_websocket(**kwargs):
+            on_activity = kwargs.get("on_activity")
+            if on_activity is not None:
+                await on_activity()
             return None
 
         with patch("treadstone.middleware.sandbox_subdomain.proxy_websocket", side_effect=capturing_proxy_websocket):

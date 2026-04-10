@@ -62,6 +62,7 @@ async def _k8s_delete_sandbox(session, sandbox) -> None:
 
     if sandbox.status == SandboxStatus.COLD or sandbox.storage_backend_mode == StorageBackendMode.STANDARD_SNAPSHOT:
         from treadstone.services.metering_service import MeteringService
+        from treadstone.services.sandbox_lifecycle_tasks import AutoDeleteFailure
         from treadstone.services.storage_snapshot_orchestrator import StorageSnapshotOrchestrator
 
         k8s = get_k8s_client()
@@ -69,23 +70,18 @@ async def _k8s_delete_sandbox(session, sandbox) -> None:
         try:
             await storage.backend.delete_bound_snapshot(sandbox)
             storage._clear_snapshot_binding(sandbox)
-        except Exception:
+        except Exception as exc:
             logger.exception("Failed to clean up snapshot for cold sandbox %s during auto-delete", sandbox.id)
-            sandbox.status = SandboxStatus.ERROR
-            sandbox.status_message = "Auto-delete failed: could not clean up cold snapshot asset"
-            sandbox.version += 1
-            session.add(sandbox)
-            raise
+            raise AutoDeleteFailure("Auto-delete failed: could not clean up cold snapshot asset") from exc
         try:
             metering = MeteringService()
             await metering.record_storage_release(session, sandbox.id)
-        except Exception:
+        except Exception as exc:
             logger.exception("Failed to release storage ledger for cold sandbox %s during auto-delete", sandbox.id)
-            sandbox.status = SandboxStatus.ERROR
-            sandbox.status_message = "Auto-delete failed: could not release storage ledger"
-            sandbox.version += 1
-            session.add(sandbox)
-            raise
+            raise AutoDeleteFailure(
+                "Auto-delete failed: could not release storage ledger",
+                clear_snapshot_binding=True,
+            ) from exc
         sandbox.status = SandboxStatus.DELETED
         sandbox.gmt_deleted = utc_now()
         sandbox.version += 1

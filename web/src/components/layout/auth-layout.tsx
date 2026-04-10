@@ -2,15 +2,20 @@ import { Outlet, Link, Navigate, useLocation } from "react-router"
 import { useCurrentUser } from "@/hooks/use-auth"
 import { TreadstoneLockup } from "@/components/brand/logo"
 
-/** Must allow logged-in users to stay on this route so the token can be POSTed to /v1/auth/verification/confirm. */
-function isVerifyEmailPath(pathname: string): boolean {
-  return pathname === "/auth/verify-email" || pathname.endsWith("/auth/verify-email")
+/** Must allow logged-in users to stay on token-based auth routes so links from email can complete. */
+function isTokenActionPath(pathname: string): boolean {
+  return (
+    pathname === "/auth/verify-email" ||
+    pathname.endsWith("/auth/verify-email") ||
+    pathname === "/auth/reset-password" ||
+    pathname.endsWith("/auth/reset-password")
+  )
 }
 
 export function AuthLayout() {
   const { data: user, isLoading } = useCurrentUser()
   const location = useLocation()
-  const onVerifyEmail = isVerifyEmailPath(location.pathname)
+  const onTokenAction = isTokenActionPath(location.pathname)
 
   if (isLoading) {
     return (
@@ -20,7 +25,7 @@ export function AuthLayout() {
     )
   }
 
-  if (user && !onVerifyEmail) {
+  if (user && !onTokenAction) {
     return <Navigate to="/app" replace />
   }
 

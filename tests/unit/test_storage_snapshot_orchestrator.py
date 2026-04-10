@@ -389,6 +389,65 @@ async def test_start_on_cold_restores_and_returns_to_ready():
     await engine.dispose()
 
 
+async def test_snapshot_after_restore_reuses_live_disk_without_deleting_fresh_snapshot():
+    engine, factory = await _create_factory()
+    k8s = FakeK8sClient()
+    sandbox_id = "sbrestoreandsnap001"
+    await _create_live_sandbox(factory, k8s, sandbox_id=sandbox_id, status=SandboxStatus.STOPPED)
+
+    async with factory() as session:
+        metering = MeteringService()
+        await metering.record_storage_allocation(session, "user0001234567890", sandbox_id, 5)
+        sandbox = await session.get(Sandbox, sandbox_id)
+        sandbox.pending_operation = SandboxPendingOperation.SNAPSHOTTING
+        session.add(sandbox)
+        await session.commit()
+
+    await run_storage_snapshot_tick(factory, k8s)
+    await run_storage_snapshot_tick(factory, k8s)
+
+    async with factory() as session:
+        sandbox = await session.get(Sandbox, sandbox_id)
+        sandbox.pending_operation = SandboxPendingOperation.RESTORING
+        session.add(sandbox)
+        await session.commit()
+
+    await run_storage_snapshot_tick(factory, k8s)
+    k8s.simulate_sandbox_ready(sandbox_id, "treadstone-local")
+    await run_storage_snapshot_tick(factory, k8s)
+
+    async with factory() as session:
+        sandbox = await session.get(Sandbox, sandbox_id)
+        assert sandbox.status == SandboxStatus.READY
+        assert sandbox.snapshot_k8s_volume_snapshot_name is None
+        assert sandbox.snapshot_k8s_volume_snapshot_content_name is None
+        assert sandbox.gmt_snapshotted is None
+
+    await k8s.scale_sandbox(sandbox_id, "treadstone-local", 0)
+    async with factory() as session:
+        sandbox = await session.get(Sandbox, sandbox_id)
+        sandbox.status = SandboxStatus.STOPPED
+        sandbox.pending_operation = SandboxPendingOperation.SNAPSHOTTING
+        session.add(sandbox)
+        await session.commit()
+
+    await run_storage_snapshot_tick(factory, k8s)
+    await run_storage_snapshot_tick(factory, k8s)
+
+    snapshot_name = f"{sandbox_id}-workspace-snapshot"
+    async with factory() as session:
+        sandbox = await session.get(Sandbox, sandbox_id)
+        assert sandbox.status == SandboxStatus.COLD
+        assert sandbox.pending_operation is None
+        assert sandbox.snapshot_k8s_volume_snapshot_name == snapshot_name
+        assert sandbox.snapshot_k8s_volume_snapshot_content_name == f"vsc-{snapshot_name}"
+
+    assert list(k8s._volume_snapshots.keys()) == [f"treadstone-local/{snapshot_name}"]
+    assert list(k8s._volume_snapshot_contents.keys()) == [f"vsc-{snapshot_name}"]
+
+    await engine.dispose()
+
+
 async def test_snapshot_tick_fails_instead_of_reusing_stale_bound_snapshot():
     engine, factory = await _create_factory()
     k8s = FakeK8sClient()

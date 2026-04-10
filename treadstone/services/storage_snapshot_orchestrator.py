@@ -162,7 +162,8 @@ class StorageSnapshotOrchestrator:
             sandbox.storage_backend_mode == StorageBackendMode.LIVE_DISK
             and sandbox.snapshot_k8s_volume_snapshot_name
             and sandbox.gmt_restored is not None
-            and (sandbox.gmt_snapshotted is None or sandbox.gmt_restored >= sandbox.gmt_snapshotted)
+            and sandbox.gmt_snapshotted is not None
+            and sandbox.gmt_restored >= sandbox.gmt_snapshotted
         ):
             try:
                 await self.backend.delete_bound_snapshot(sandbox)
@@ -545,6 +546,7 @@ class StorageSnapshotOrchestrator:
         self.session.add(sandbox)
 
     def _clear_snapshot_binding(self, sandbox: Sandbox) -> None:
+        sandbox.gmt_snapshotted = None
         sandbox.snapshot_provider_id = None
         sandbox.snapshot_k8s_volume_snapshot_name = None
         sandbox.snapshot_k8s_volume_snapshot_content_name = None

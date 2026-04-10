@@ -47,6 +47,8 @@ from .login_request import LoginRequest
 from .login_response import LoginResponse
 from .logto_config import LogtoConfig
 from .message_response import MessageResponse
+from .password_reset_confirm_request import PasswordResetConfirmRequest
+from .password_reset_request import PasswordResetRequest
 from .platform_stats_response import PlatformStatsResponse
 from .register_request import RegisterRequest
 from .register_response import RegisterResponse
@@ -149,6 +151,8 @@ __all__ = (
     "LoginResponse",
     "LogtoConfig",
     "MessageResponse",
+    "PasswordResetConfirmRequest",
+    "PasswordResetRequest",
     "PlatformStatsResponse",
     "RegisterRequest",
     "RegisterResponse",
