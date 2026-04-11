@@ -11,6 +11,7 @@ import {
   useDeleteApiKey,
   type ApiKey,
 } from "@/api/api-keys"
+import { useSandboxes } from "@/api/sandboxes"
 import { HelpIcon } from "@/components/ui/help-icon"
 import { DOC } from "@/lib/console-docs"
 import { cn } from "@/lib/utils"
@@ -55,6 +56,11 @@ function ScopeBadges({ keyRow }: { keyRow: ApiKey }) {
   const cp = keyRow.scope.control_plane
   const dpMode = keyRow.scope.data_plane.mode
   const hasData = dpMode !== "none"
+  const selectedCount = keyRow.scope.data_plane.sandbox_ids?.length ?? 0
+  const dataPlaneLabel =
+    dpMode === "selected" && selectedCount > 0
+      ? `Data plane (${selectedCount})`
+      : "Data plane"
   return (
     <div className="flex flex-wrap gap-1">
       {cp && (
@@ -64,7 +70,7 @@ function ScopeBadges({ keyRow }: { keyRow: ApiKey }) {
       )}
       {hasData && (
         <span className="bg-primary/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
-          Data plane
+          {dataPlaneLabel}
         </span>
       )}
       {!cp && !hasData && (
@@ -89,8 +95,14 @@ export function ApiKeysPage() {
   const [expiryPreset, setExpiryPreset] = useState<ExpiryPresetId>("360d")
   const [scopeControl, setScopeControl] = useState(true)
   const [scopeData, setScopeData] = useState(true)
+  const [dataPlaneScopeMode, setDataPlaneScopeMode] = useState<"all" | "selected">("all")
+  const [selectedSandboxIds, setSelectedSandboxIds] = useState<string[]>([])
 
   const [createdSecret, setCreatedSecret] = useState<string | null>(null)
+
+  const { data: sandboxListData, isLoading: sandboxesLoading } = useSandboxes({
+    enabled: createOpen,
+  })
 
   const filtered = useMemo(() => {
     if (!filter.trim()) return items
@@ -119,17 +131,30 @@ export function ApiKeysPage() {
     setExpiryPreset("360d")
     setScopeControl(true)
     setScopeData(true)
+    setDataPlaneScopeMode("all")
+    setSelectedSandboxIds([])
+  }
+
+  function toggleSandboxInSelection(id: string) {
+    setSelectedSandboxIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    )
   }
 
   async function handleCreate() {
+    const dataPlane =
+      !scopeData
+        ? ({ mode: "none" as const } as const)
+        : dataPlaneScopeMode === "all"
+          ? ({ mode: "all" as const } as const)
+          : ({ mode: "selected" as const, sandbox_ids: selectedSandboxIds } as const)
+
     const body = {
       name: newName.trim() || "default",
       expires_in: selectedExpiryPreset.seconds,
       scope: {
         control_plane: scopeControl,
-        data_plane: scopeData
-          ? { mode: "all" as const }
-          : { mode: "none" as const },
+        data_plane: dataPlane,
       },
     }
 
@@ -333,7 +358,7 @@ export function ApiKeysPage() {
       <Dialog.Root open={createOpen} onOpenChange={setCreateOpen}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/70 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(100vw-2rem,440px)] -translate-x-1/2 -translate-y-1/2 border border-border/20 bg-card p-6 shadow-xl outline-none">
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(100vw-2rem,520px)] max-h-[min(90vh,720px)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto border border-border/20 bg-card p-6 shadow-xl outline-none">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <Dialog.Title className="text-lg font-bold text-foreground">Create API key</Dialog.Title>
@@ -413,12 +438,94 @@ export function ApiKeysPage() {
                   </div>
                   <Switch.Root
                     checked={scopeData}
-                    onCheckedChange={setScopeData}
+                    onCheckedChange={(on) => {
+                      setScopeData(on)
+                      if (!on) {
+                        setDataPlaneScopeMode("all")
+                        setSelectedSandboxIds([])
+                      }
+                    }}
                     className="h-6 w-11 shrink-0 rounded-full bg-muted-foreground/30 outline-none data-[state=checked]:bg-primary"
                   >
                     <Switch.Thumb className="block size-5 translate-x-0.5 rounded-full bg-background transition-transform will-change-transform data-[state=checked]:translate-x-[22px]" />
                   </Switch.Root>
                 </div>
+                {scopeData && (
+                  <div className="space-y-3 border-t border-border/10 pt-3">
+                    <p className="text-xs font-medium text-muted-foreground">Data plane access</p>
+                    <div role="radiogroup" aria-label="Data plane scope" className="grid gap-2">
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={dataPlaneScopeMode === "all"}
+                        onClick={() => setDataPlaneScopeMode("all")}
+                        className={cn(
+                          "border px-3 py-2 text-left text-sm transition-colors focus:outline-none focus:ring-1 focus:ring-ring",
+                          dataPlaneScopeMode === "all"
+                            ? "border-primary bg-primary/10 text-foreground"
+                            : "border-border/30 bg-background text-muted-foreground hover:border-border/60 hover:text-foreground",
+                        )}
+                      >
+                        <span className="font-medium">All sandboxes</span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          Can call the proxy for any sandbox you own.
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={dataPlaneScopeMode === "selected"}
+                        onClick={() => setDataPlaneScopeMode("selected")}
+                        className={cn(
+                          "border px-3 py-2 text-left text-sm transition-colors focus:outline-none focus:ring-1 focus:ring-ring",
+                          dataPlaneScopeMode === "selected"
+                            ? "border-primary bg-primary/10 text-foreground"
+                            : "border-border/30 bg-background text-muted-foreground hover:border-border/60 hover:text-foreground",
+                        )}
+                      >
+                        <span className="font-medium">Selected sandboxes</span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          Restrict proxy access to the sandboxes you pick below.
+                        </span>
+                      </button>
+                    </div>
+                    {dataPlaneScopeMode === "selected" && (
+                      <div className="rounded border border-border/20 bg-background/80 p-3">
+                        {sandboxesLoading ? (
+                          <p className="text-xs text-muted-foreground">Loading sandboxes…</p>
+                        ) : (sandboxListData?.items ?? []).length === 0 ? (
+                          <p className="text-xs text-muted-foreground">
+                            No sandboxes yet. Create one first, then issue a key scoped to it.
+                          </p>
+                        ) : (
+                          <ul className="max-h-40 space-y-2 overflow-y-auto pr-1">
+                            {(sandboxListData?.items ?? [])
+                              .slice()
+                              .sort((a, b) => a.name.localeCompare(b.name))
+                              .map((s) => (
+                                <li key={s.id}>
+                                  <label className="flex cursor-pointer items-start gap-2 text-sm">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedSandboxIds.includes(s.id)}
+                                      onChange={() => toggleSandboxInSelection(s.id)}
+                                      className="mt-0.5 size-4 shrink-0 rounded border-border/40"
+                                    />
+                                    <span className="min-w-0">
+                                      <span className="font-medium text-foreground">{s.name}</span>
+                                      <span className="mt-0.5 block font-mono text-[11px] text-muted-foreground">
+                                        {s.id}
+                                      </span>
+                                    </span>
+                                  </label>
+                                </li>
+                              ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -433,7 +540,13 @@ export function ApiKeysPage() {
               </Dialog.Close>
               <button
                 type="button"
-                disabled={createKey.isPending || (!scopeControl && !scopeData)}
+                disabled={
+                  createKey.isPending ||
+                  (!scopeControl && !scopeData) ||
+                  (scopeData &&
+                    dataPlaneScopeMode === "selected" &&
+                    selectedSandboxIds.length === 0)
+                }
                 onClick={() => void handleCreate()}
                 className="bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
               >
