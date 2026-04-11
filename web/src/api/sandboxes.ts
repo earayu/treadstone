@@ -8,13 +8,14 @@ export type CreateSandboxBody = components["schemas"]["CreateSandboxRequest"]
 const TRANSITIONING_STATUSES = new Set(["creating", "starting", "stopping", "deleting"])
 const TRANSITIONING_OPERATIONS = new Set(["snapshotting", "restoring"])
 
-export function useSandboxes() {
+export function useSandboxes(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["sandboxes"],
     queryFn: async () => {
       const { data } = await client.GET("/v1/sandboxes")
       return data!
     },
+    enabled: options?.enabled ?? true,
     refetchInterval: (query) => {
       const data = query.state.data
       if (!data) return 30_000
