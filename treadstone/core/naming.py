@@ -1,6 +1,6 @@
 import secrets
 import string
-from typing import Iterable
+from collections.abc import Iterable
 
 # Keep lists compact initially; can be extended without API change.
 _ADJECTIVES: tuple[str, ...] = (
