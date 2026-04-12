@@ -165,7 +165,17 @@ class SandboxService:
 
         # ── Create sandbox record ──
         sandbox_id = "sb" + random_id()
-        sandbox_name = name or f"sb-{random_id(8)}"
+        if name:
+            sandbox_name = name
+        else:
+            # Human-readable default name, e.g. sb-lively-otter-3f9a
+            try:
+                from treadstone.core.naming import generate_sandbox_name
+
+                sandbox_name = generate_sandbox_name()
+            except Exception:
+                # Fallback to legacy scheme on any unexpected error
+                sandbox_name = f"sb-{random_id(8)}"
 
         if persist:
             await self._ensure_persistent_storage_backend_ready()
