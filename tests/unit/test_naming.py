@@ -1,6 +1,5 @@
 import re
-import sys
-sys.path.append('workspace/treadstone')
+
 from treadstone.core.naming import generate_sandbox_name
 
 PATTERN = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,53}[a-z0-9])?$")
