@@ -431,4 +431,8 @@ email_21="e2e-21-${UNIQUE}@test.treadstone.dev"  # error-boundaries
 3. **K8s 依赖:** 文件 09（proxy）、10（lifecycle）需要真实 K8s 集群，仅在 k8s-e2e CI 中运行。**Snapshot 不在 Kind 环境测试**（无 VolumeSnapshot CRD，返回 503）
 4. **Retry 策略:** sandbox 相关操作统一使用 `retry: 90, retry-interval: 2s`（180s 超时），与现有测试一致
 5. **向后兼容:** 文件编号保持 01-10 不变，新增 11-21，避免破坏现有 CI 引用
-6. **API 行为备注:** 错误密码登录返回 400（`BadRequestError`）而非 401；并发限制错误码为 `concurrent_limit_exceeded`（非 `sandbox_quota_exceeded`）；`GET /v1/auth/user` 响应中验证状态字段名为 `is_verified`（非 `email_verified`，见 `api/auth.py:934`）；register 响应不含 `is_active` 字段
+6. **API 响应字段备注:**
+   - 错误密码登录返回 400（`BadRequestError`）而非 401
+   - 并发限制错误码为 `concurrent_limit_exceeded`（非 `sandbox_quota_exceeded`）
+   - `POST /v1/auth/register` 响应：`{id, email, role, is_verified, verification_email_sent}` — **不含** `is_active`（见 `api/auth.py:628-634`）
+   - `GET /v1/auth/user` 响应：`{id, email, username, role, is_active, is_verified, has_local_password}` — 验证字段为 `is_verified`（非 `email_verified`，见 `api/auth.py:931-935`）
