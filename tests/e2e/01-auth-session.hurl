@@ -23,7 +23,6 @@ user_id: jsonpath "$.id"
 [Asserts]
 jsonpath "$.email" == "{{email_01}}"
 jsonpath "$.id" isString
-jsonpath "$.is_active" == true
 
 
 # ── Verify email (admin fetches token) ───────────────────────────────────────

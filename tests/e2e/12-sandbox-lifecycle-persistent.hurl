@@ -138,24 +138,8 @@ HTTP 200
 jsonpath "$.items" count >= 1
 
 
-# ── Snapshot ────────────────────────────────────────────────────────────────
-
-POST {{base_url}}/v1/sandboxes/{{sandbox_id}}/snapshot
-Authorization: Bearer {{api_key}}
-HTTP 202
-[Asserts]
-jsonpath "$.id" == "{{sandbox_id}}"
-
-# Wait for snapshot to complete (pending_operation clears)
-GET {{base_url}}/v1/sandboxes/{{sandbox_id}}
-Authorization: Bearer {{api_key}}
-[Options]
-retry: 60
-retry-interval: 3s
-HTTP 200
-[Asserts]
-jsonpath "$.status" == "ready"
-jsonpath "$.pending_operation" == null
+# ── Snapshot (skipped: requires VolumeSnapshot CRDs not available in Kind) ──
+# Snapshot testing deferred to P2 file 19-sandbox-patch-snapshot.hurl.
 
 
 # ── Stop → Stopped ──────────────────────────────────────────────────────────

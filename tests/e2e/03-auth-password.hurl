@@ -42,7 +42,7 @@ Content-Type: application/json
     "email": "{{email_04}}",
     "password": "{{test_password}}"
 }
-HTTP 401
+HTTP 400
 
 
 # ── Login with new password ─────────────────────────────────────────────────

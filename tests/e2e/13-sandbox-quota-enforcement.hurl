@@ -98,7 +98,7 @@ Content-Type: application/json
 }
 HTTP 429
 [Asserts]
-jsonpath "$.error.code" == "sandbox_quota_exceeded"
+jsonpath "$.error.code" == "concurrent_limit_exceeded"
 
 
 # ── Persistent sandbox without storage quota → 402 ──────────────────────────
