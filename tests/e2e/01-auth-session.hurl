@@ -77,7 +77,7 @@ HTTP 200
 jsonpath "$.id" == "{{user_id}}"
 jsonpath "$.email" == "{{email_01}}"
 jsonpath "$.is_active" == true
-jsonpath "$.email_verified" == true
+jsonpath "$.is_verified" == true
 jsonpath "$.role" isString
 
 
