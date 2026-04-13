@@ -149,4 +149,5 @@ jsonpath "$.error.code" == "forbidden"
 # ── Cleanup ─────────────────────────────────────────────────────────────────
 
 DELETE {{base_url}}/v1/auth/api-keys/{{api_key_id}}
+Authorization: Bearer {{api_key}}
 HTTP 204
