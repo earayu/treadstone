@@ -123,4 +123,4 @@ Content-Type: application/json
 }
 HTTP 409
 [Asserts]
-jsonpath "$.error.code" == "user_already_exists"
+jsonpath "$.error.code" == "conflict"
