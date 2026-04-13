@@ -555,9 +555,7 @@ class TestApplyMeteringOnTransition:
         try:
             await _apply_metering_on_transition(session, sandbox, SandboxStatus.CREATING, SandboxStatus.READY)
 
-            obs.on_sandbox_ready.assert_awaited_once_with(
-                session, sandbox.id, sandbox.owner_id, sandbox.template
-            )
+            obs.on_sandbox_ready.assert_awaited_once_with(session, sandbox.id, sandbox.owner_id, sandbox.template)
             obs.on_sandbox_stopped.assert_not_awaited()
         finally:
             cleanup()

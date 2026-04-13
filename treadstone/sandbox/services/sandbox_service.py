@@ -284,9 +284,7 @@ class SandboxService:
         except Exception:
             logger.exception("Failed to create K8s resource for sandbox %s", sandbox.id)
             sandbox.status = SandboxStatus.ERROR
-            sandbox.status_message = (
-                f"Failed to create {'Sandbox CR' if sandbox.persist else 'SandboxClaim'}"
-            )
+            sandbox.status_message = f"Failed to create {'Sandbox CR' if sandbox.persist else 'SandboxClaim'}"
             sandbox.version += 1
             self.session.add(sandbox)
             await self.session.commit()
@@ -335,12 +333,23 @@ class SandboxService:
     ) -> Sandbox:
         # Phase 1: Validate — pure decision, no side effects
         params = await self._validate_create(
-            owner_id, template, name, auto_stop_interval, persist, storage_size,
+            owner_id,
+            template,
+            name,
+            auto_stop_interval,
+            persist,
+            storage_size,
         )
 
         # Phase 2: Persist — DB write (auto-rollback on failure)
         sandbox = await self._persist_sandbox(
-            owner_id, template, params, labels, auto_stop_interval, auto_delete_interval, persist,
+            owner_id,
+            template,
+            params,
+            labels,
+            auto_stop_interval,
+            auto_delete_interval,
+            persist,
         )
 
         # Phase 3: Provision — K8s side effect (compensating DB update on failure)
