@@ -16,15 +16,14 @@ import contextlib
 import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from treadstone.audit.models.audit_event import AuditActorType
 from treadstone.audit.services.audit import record_audit_event
 from treadstone.config import settings
 from treadstone.infra.services.k8s_client import K8sClientProtocol, WatchExpiredError
-from treadstone.metering.services.metering_helpers import sync_template_specs_from_k8s, validate_template_specs
-from treadstone.metering.services.metering_service import MeteringService
+from treadstone.infra.services.sandbox_state_observer import get_observers, get_reconcile_hooks
 from treadstone.sandbox.models.sandbox import Sandbox, SandboxPendingOperation, SandboxStatus, is_valid_transition
 
 logger = logging.getLogger(__name__)
@@ -37,16 +36,12 @@ __all__ = [
     "derive_status_from_sandbox_cr",
     "handle_watch_event",
     "reconcile",
-    "reconcile_metering",
-    "reconcile_storage_metering",
     "start_sync_loop",
     "watch_loop",
     # Private helpers re-exported by shim
-    "_apply_metering_on_transition",
+    "_notify_observers_on_transition",
     "_try_close_compute_session",
 ]
-
-_metering = MeteringService()
 
 RECONCILE_INTERVAL = 300  # 5 minutes
 WATCH_RESTART_BACKOFF = 5  # seconds to wait before restarting Watch after unexpected failure
@@ -231,9 +226,7 @@ async def handle_watch_event(
                     cr_name,
                 )
                 return
-            await _try_close_compute_session(session, sandbox.id)
-            if sandbox.persist:
-                await _try_release_storage_ledger(session, sandbox.id)
+            await _try_notify_sandbox_deleted(session, sandbox.id, sandbox.persist)
             if sandbox.status == SandboxStatus.DELETING:
                 await _record_status_change(
                     session,
@@ -330,7 +323,7 @@ async def handle_watch_event(
                     source="k8s_watch",
                     message=message,
                 )
-                await _apply_metering_on_transition(session, sandbox, old_status, new_status)
+                await _notify_observers_on_transition(session, sandbox, old_status, new_status)
                 await session.commit()
 
 
@@ -373,9 +366,7 @@ async def reconcile(
                 policy = _CR_MISSING_POLICY.get(sandbox.status, "mark_error")
 
                 if policy == "delete":
-                    await _try_close_compute_session(session, sandbox.id)
-                    if sandbox.persist:
-                        await _try_release_storage_ledger(session, sandbox.id)
+                    await _try_notify_sandbox_deleted(session, sandbox.id, sandbox.persist)
                     await _record_status_change(
                         session,
                         sandbox_id=sandbox.id,
@@ -486,30 +477,18 @@ async def reconcile(
                         source="k8s_reconcile",
                         message=message,
                     )
-                    await _apply_metering_on_transition(session, sandbox, old_status, new_status)
+                    await _notify_observers_on_transition(session, sandbox, old_status, new_status)
                     await session.commit()
             elif cr_rv != sandbox.k8s_resource_version:
                 await _update_sync_metadata(session, sandbox.id, cr_rv)
                 await session.commit()
 
-    # ── Metering reconciliation: fix mismatches between sessions/ledgers and sandbox state ──
-    try:
-        await reconcile_metering(session_factory)
-    except Exception:
-        logger.exception("Compute metering reconciliation failed")
-
-    try:
-        await reconcile_storage_metering(session_factory)
-    except Exception:
-        logger.exception("Storage metering reconciliation failed")
-
-    # ── Template spec sync + validation: populate runtime cache and detect drift ──
-    try:
-        k8s_templates = await k8s_client.list_sandbox_templates(namespace)
-        sync_template_specs_from_k8s(k8s_templates)
-        validate_template_specs(k8s_templates)
-    except Exception:
-        logger.exception("Template spec sync/validation failed")
+    # ── Run registered reconcile hooks (metering, template sync, etc.) ──
+    for hook in get_reconcile_hooks():
+        try:
+            await hook(session_factory)
+        except Exception:
+            logger.exception("Reconcile hook %s failed", getattr(hook, "__name__", type(hook).__name__))
 
     logger.info("Reconciliation complete. %d unmanaged CRs in K8s. list_rv=%s", len(cr_map), list_rv)
     return list_rv
@@ -654,198 +633,73 @@ async def _delete_sandbox_row(
     await session.commit()
 
 
-async def _apply_metering_on_transition(
+async def _notify_observers_on_transition(
     session: AsyncSession,
     sandbox: Sandbox,
     old_status: str,
     new_status: str,
 ) -> None:
-    """Open or close a ComputeSession based on sandbox state transition.
+    """Notify registered SandboxStateObservers of a lifecycle transition.
 
     Best-effort: failures are logged but never block the sync pipeline.
-    reconcile_metering() will repair any missed operations.
+    Reconcile hooks will repair any missed operations.
     """
-    try:
-        if old_status != SandboxStatus.READY and new_status == SandboxStatus.READY:
-            await _metering.open_compute_session(session, sandbox.id, sandbox.owner_id, sandbox.template)
+    observers = get_observers()
+    if not observers:
+        return
 
-        elif old_status == SandboxStatus.READY and new_status in (
-            SandboxStatus.STOPPED,
-            SandboxStatus.COLD,
-            SandboxStatus.ERROR,
-            SandboxStatus.DELETING,
-        ):
-            await _metering.close_compute_session(session, sandbox.id)
-    except Exception:
-        logger.exception("Metering transition failed for sandbox %s (%s→%s)", sandbox.id, old_status, new_status)
+    if old_status != SandboxStatus.READY and new_status == SandboxStatus.READY:
+        for obs in observers:
+            try:
+                await obs.on_sandbox_ready(session, sandbox.id, sandbox.owner_id, sandbox.template)
+            except Exception:
+                logger.exception(
+                    "Observer %s.on_sandbox_ready failed for sandbox %s (%s→%s)",
+                    type(obs).__name__,
+                    sandbox.id,
+                    old_status,
+                    new_status,
+                )
+
+    elif old_status == SandboxStatus.READY and new_status in (
+        SandboxStatus.STOPPED,
+        SandboxStatus.COLD,
+        SandboxStatus.ERROR,
+        SandboxStatus.DELETING,
+    ):
+        for obs in observers:
+            try:
+                await obs.on_sandbox_stopped(session, sandbox.id)
+            except Exception:
+                logger.exception(
+                    "Observer %s.on_sandbox_stopped failed for sandbox %s (%s→%s)",
+                    type(obs).__name__,
+                    sandbox.id,
+                    old_status,
+                    new_status,
+                )
+
+
+# Backward-compatible alias for tests that patch the old name
+_apply_metering_on_transition = _notify_observers_on_transition
 
 
 async def _try_close_compute_session(session: AsyncSession, sandbox_id: str) -> None:
-    """Best-effort close of any open ComputeSession for the given sandbox."""
-    try:
-        await _metering.close_compute_session(session, sandbox_id)
-    except Exception:
-        logger.exception("Failed to close compute session for sandbox %s", sandbox_id)
+    """Best-effort close: notify observers that a sandbox has stopped."""
+    for obs in get_observers():
+        try:
+            await obs.on_sandbox_stopped(session, sandbox_id)
+        except Exception:
+            logger.exception("Observer %s.on_sandbox_stopped failed for sandbox %s", type(obs).__name__, sandbox_id)
 
 
-async def _try_release_storage_ledger(session: AsyncSession, sandbox_id: str) -> None:
-    """Best-effort release of ACTIVE StorageLedger for a persistent sandbox."""
-    try:
-        await _metering.record_storage_release(session, sandbox_id)
-    except Exception:
-        logger.exception("Failed to release storage ledger for sandbox %s", sandbox_id)
-
-
-async def reconcile_metering(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """Check and repair mismatches between ComputeSession state and sandbox state.
-
-    Two repair cases:
-      1. sandbox is READY but has no open ComputeSession → open one
-      2. sandbox is NOT READY (or missing) but has an open ComputeSession → close it
-    """
-    async with session_factory() as session:
-        from treadstone.metering.models.metering import ComputeSession
-
-        # Case 1: READY sandboxes missing an open session (single JOIN query)
-        missing_stmt = (
-            select(Sandbox)
-            .outerjoin(
-                ComputeSession,
-                and_(
-                    ComputeSession.sandbox_id == Sandbox.id,
-                    ComputeSession.ended_at.is_(None),
-                ),
-            )
-            .where(
-                Sandbox.status == SandboxStatus.READY,
-                ComputeSession.id.is_(None),
-            )
-        )
-        missing_result = await session.execute(missing_stmt)
-        for sandbox in missing_result.scalars():
-            logger.warning("Ready sandbox %s has no open ComputeSession, opening one", sandbox.id)
-            try:
-                await _metering.open_compute_session(session, sandbox.id, sandbox.owner_id, sandbox.template)
-            except Exception:
-                logger.exception("Failed to open compute session for sandbox %s during reconciliation", sandbox.id)
-
-        # Case 2: open sessions for non-READY (or deleted) sandboxes (single JOIN query)
-        stale_stmt = (
-            select(ComputeSession, Sandbox)
-            .outerjoin(Sandbox, ComputeSession.sandbox_id == Sandbox.id)
-            .where(
-                ComputeSession.ended_at.is_(None),
-                or_(
-                    Sandbox.id.is_(None),
-                    Sandbox.status != SandboxStatus.READY,
-                ),
-            )
-        )
-        stale_result = await session.execute(stale_stmt)
-        for cs, sandbox in stale_result:
-            status_desc = sandbox.status if sandbox else "deleted"
-            logger.warning(
-                "ComputeSession %s for sandbox %s is open but sandbox is %s, closing",
-                cs.id,
-                cs.sandbox_id,
-                status_desc,
-            )
-            try:
-                await _metering.close_compute_session(session, cs.sandbox_id)
-            except Exception:
-                logger.exception(
-                    "Failed to close compute session %s during reconciliation",
-                    cs.id,
-                )
-
-        await session.commit()
-
-
-async def reconcile_storage_metering(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """Check and repair mismatches between StorageLedger and persistent sandboxes.
-
-    Two repair cases:
-      1. persist sandbox (not DELETING) has no ACTIVE StorageLedger → create one
-      2. ACTIVE StorageLedger whose sandbox is deleted/missing → release it
-    """
-    from treadstone.metering.models.metering import StorageLedger, StorageState
-    from treadstone.metering.services.metering_helpers import parse_storage_size_gib
-
-    async with session_factory() as session:
-        # Case 1: persistent sandboxes missing a storage ledger entry (single JOIN query)
-        missing_stmt = (
-            select(Sandbox)
-            .outerjoin(
-                StorageLedger,
-                and_(
-                    StorageLedger.sandbox_id == Sandbox.id,
-                    StorageLedger.storage_state == StorageState.ACTIVE,
-                ),
-            )
-            .where(
-                Sandbox.persist.is_(True),
-                Sandbox.status.notin_([SandboxStatus.DELETING, SandboxStatus.DELETED]),
-                Sandbox.storage_size.isnot(None),
-                Sandbox.gmt_deleted.is_(None),
-                StorageLedger.id.is_(None),
-            )
-        )
-        missing_result = await session.execute(missing_stmt)
-        for sandbox in missing_result.scalars():
-            logger.warning("Persistent sandbox %s has no ACTIVE storage ledger, creating one", sandbox.id)
-            try:
-                size_gib = parse_storage_size_gib(sandbox.storage_size)
-                await _metering.record_storage_allocation(
-                    session,
-                    sandbox.owner_id,
-                    sandbox.id,
-                    size_gib,
-                    backend_mode=sandbox.storage_backend_mode or "live_disk",
-                )
-            except Exception:
-                logger.exception("Failed to create storage ledger for sandbox %s during reconciliation", sandbox.id)
-
-        # Case 2: ACTIVE ledger entries for deleted/missing sandboxes (single JOIN query)
-        stale_stmt = (
-            select(StorageLedger, Sandbox)
-            .outerjoin(Sandbox, StorageLedger.sandbox_id == Sandbox.id)
-            .where(
-                StorageLedger.storage_state == StorageState.ACTIVE,
-                or_(
-                    StorageLedger.sandbox_id.is_(None),
-                    Sandbox.id.is_(None),
-                    Sandbox.status.in_([SandboxStatus.DELETING, SandboxStatus.DELETED]),
-                ),
-            )
-        )
-        stale_result = await session.execute(stale_stmt)
-        for ledger, sandbox in stale_result:
-            if ledger.sandbox_id is None:
-                logger.warning(
-                    "StorageLedger %s is ACTIVE but has NULL sandbox_id, skipping",
-                    ledger.id,
-                )
-                continue
-            status_desc = sandbox.status if sandbox else "deleted"
-            logger.warning(
-                "StorageLedger %s for sandbox %s is ACTIVE but sandbox is %s, releasing",
-                ledger.id,
-                ledger.sandbox_id,
-                status_desc,
-            )
-            try:
-                await _metering.record_storage_release(session, ledger.sandbox_id)
-            except Exception:
-                logger.exception(
-                    "Failed to release storage ledger %s during reconciliation",
-                    ledger.id,
-                )
-
-        await session.commit()
+async def _try_notify_sandbox_deleted(session: AsyncSession, sandbox_id: str, persist: bool) -> None:
+    """Best-effort notify: sandbox CR was deleted."""
+    for obs in get_observers():
+        try:
+            await obs.on_sandbox_deleted(session, sandbox_id, persist)
+        except Exception:
+            logger.exception("Observer %s.on_sandbox_deleted failed for sandbox %s", type(obs).__name__, sandbox_id)
 
 
 def _sandbox_status_log_value(to_status: str | SandboxStatus) -> str:

@@ -33,9 +33,12 @@ async def test_lifespan_passes_session_factory_to_supervisor_when_leader_electio
     monkeypatch.setattr(main.settings, "pod_name", "test-pod")
     monkeypatch.setattr(main.settings, "pod_namespace", "test-namespace")
 
+    import treadstone.services.k8s_client as k8s_client
     import treadstone.services.leader_election as leader_election
     import treadstone.services.sync_supervisor as sync_supervisor
 
+    monkeypatch.setattr(k8s_client, "get_k8s_client", lambda: object())
+    monkeypatch.setattr(main, "_register_metering_observers", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(leader_election, "K8sLeaseStore", lambda: object())
     monkeypatch.setattr(
         leader_election,
@@ -85,6 +88,7 @@ async def test_lifespan_starts_metering_loop_when_leader_election_disabled(monke
 
     monkeypatch.setattr(main.settings, "leader_election_enabled", False)
     monkeypatch.setattr(main, "_run_metering_loop", fake_metering_loop)
+    monkeypatch.setattr(main, "_register_metering_observers", lambda *_args, **_kwargs: None)
 
     import treadstone.services.k8s_client as k8s_client
     import treadstone.services.k8s_sync as k8s_sync
