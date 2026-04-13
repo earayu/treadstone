@@ -99,6 +99,28 @@ jsonpath "$.enabled" == true
 jsonpath "$.web_url" startsWith "http://sandbox-{{sandbox_id_a}}.sandbox.localhost"
 
 
+# ── Active revocation: DELETE web-link → disabled ───────────────────────────
+
+DELETE {{base_url}}/v1/sandboxes/{{sandbox_id_a}}/web-link
+Authorization: Bearer {{api_key_a}}
+HTTP 204
+
+GET {{base_url}}/v1/sandboxes/{{sandbox_id_a}}/web-link
+Authorization: Bearer {{api_key_a}}
+HTTP 200
+[Asserts]
+jsonpath "$.enabled" == false
+
+
+# ── Re-create web-link after revocation ─────────────────────────────────────
+
+POST {{base_url}}/v1/sandboxes/{{sandbox_id_a}}/web-link
+Authorization: Bearer {{api_key_a}}
+HTTP 200
+[Asserts]
+jsonpath "$.web_url" startsWith "http://sandbox-{{sandbox_id_a}}.sandbox.localhost"
+
+
 # Free tier: max_concurrent_running=1 — stop first sandbox so the duplicate-name request hits 409 (otherwise 429).
 GET {{base_url}}/v1/sandboxes/{{sandbox_id_a}}
 Authorization: Bearer {{api_key_a}}
