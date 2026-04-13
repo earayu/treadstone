@@ -8,14 +8,14 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from treadstone.api import auth as auth_api
 from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
+from treadstone.identity.api import auth as auth_api
+from treadstone.identity.services import browser_login as browser_login_service
 from treadstone.main import app
 from treadstone.models.audit_event import AuditEvent
 from treadstone.models.platform_limits import PLATFORM_LIMITS_SINGLETON_ID, PlatformLimits
 from treadstone.models.user import OAuthAccount, User
-from treadstone.services import browser_login as browser_login_service
 
 _test_session_factory = None
 

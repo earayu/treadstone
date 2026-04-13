@@ -9,10 +9,10 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from treadstone.api import auth as auth_api
-from treadstone.api import cli_auth as cli_auth_api
 from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
+from treadstone.identity.api import auth as auth_api
+from treadstone.identity.api import cli_auth as cli_auth_api
 from treadstone.main import app
 from treadstone.models.cli_login_flow import CliLoginFlow
 from treadstone.models.user import OAuthAccount, User, utc_now

@@ -83,6 +83,24 @@ async def _run_storage_snapshot_loop(session_factory) -> None:
         await asyncio.sleep(SNAPSHOT_TICK_INTERVAL)
 
 
+def _register_metering_observers(k8s_client, namespace: str) -> None:
+    """Register metering observer + reconcile hooks.  Called once during startup."""
+    from functools import partial
+
+    from treadstone.infra.services.sandbox_state_observer import register_observer, register_reconcile_hook
+    from treadstone.metering.services.metering_reconcile import (
+        reconcile_metering,
+        reconcile_storage_metering,
+        reconcile_template_specs,
+    )
+    from treadstone.metering.services.metering_state_observer import MeteringStateObserver
+
+    register_observer(MeteringStateObserver())
+    register_reconcile_hook(reconcile_metering)
+    register_reconcile_hook(reconcile_storage_metering)
+    register_reconcile_hook(partial(reconcile_template_specs, k8s_client=k8s_client, namespace=namespace))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from treadstone.core.database import async_session
@@ -92,6 +110,9 @@ async def lifespan(app: FastAPI):
     from treadstone.services.sync_supervisor import LeaderControlledSyncSupervisor
 
     await app.state.platform_limits_runtime.start(async_session)
+
+    k8s_client = get_k8s_client()
+    _register_metering_observers(k8s_client, settings.sandbox_namespace)
 
     if settings.leader_election_enabled:
         holder_identity = settings.pod_name or os.getenv("HOSTNAME") or "treadstone-api"
@@ -107,7 +128,7 @@ async def lifespan(app: FastAPI):
         )
         supervisor = LeaderControlledSyncSupervisor(
             elector=elector,
-            sync_loop_factory=lambda: start_sync_loop(settings.sandbox_namespace, get_k8s_client(), async_session),
+            sync_loop_factory=lambda: start_sync_loop(settings.sandbox_namespace, k8s_client, async_session),
             session_factory=async_session,
         )
         logger.info(
@@ -129,7 +150,7 @@ async def lifespan(app: FastAPI):
         return
 
     logger.info("Leader election disabled; starting K8s sync loop directly")
-    sync_task = asyncio.create_task(start_sync_loop(settings.sandbox_namespace, get_k8s_client(), async_session))
+    sync_task = asyncio.create_task(start_sync_loop(settings.sandbox_namespace, k8s_client, async_session))
     metering_task = asyncio.create_task(_run_metering_loop(async_session))
     lifecycle_task = asyncio.create_task(_run_lifecycle_loop(async_session))
     snapshot_task = asyncio.create_task(_run_storage_snapshot_loop(async_session))

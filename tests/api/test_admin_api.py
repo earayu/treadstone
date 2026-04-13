@@ -13,10 +13,10 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from treadstone.api import admin as admin_api
 from treadstone.core.database import Base, get_session
 from treadstone.core.users import UserManager, get_user_db, get_user_manager
 from treadstone.main import app
+from treadstone.metering.api import admin_metering as admin_metering_api
 from treadstone.models.audit_event import AuditEvent
 from treadstone.models.metering import TierTemplate
 from treadstone.models.platform_limits import PlatformLimits  # noqa: F401 — register model for SQLite metadata
@@ -532,13 +532,13 @@ async def test_batch_compute_grants_preloads_existing_users_once(admin_client, a
     second = await anon_client.post("/v1/auth/register", json={"email": "second@example.com", "password": "Pass123!"})
     second_user_id = second.json()["id"]
     seen_user_ids: list[list[str]] = []
-    original = admin_api._load_existing_user_ids
+    original = admin_metering_api._load_existing_user_ids
 
     async def spy(session: AsyncSession, user_ids: list[str]) -> set[str]:
         seen_user_ids.append(list(user_ids))
         return await original(session, user_ids)
 
-    monkeypatch.setattr(admin_api, "_load_existing_user_ids", spy)
+    monkeypatch.setattr(admin_metering_api, "_load_existing_user_ids", spy)
 
     resp = await admin_client.post(
         "/v1/admin/compute-grants/batch",
@@ -562,13 +562,13 @@ async def test_batch_storage_grants_preloads_existing_users_once(admin_client, a
     )
     second_user_id = second.json()["id"]
     seen_user_ids: list[list[str]] = []
-    original = admin_api._load_existing_user_ids
+    original = admin_metering_api._load_existing_user_ids
 
     async def spy(session: AsyncSession, user_ids: list[str]) -> set[str]:
         seen_user_ids.append(list(user_ids))
         return await original(session, user_ids)
 
-    monkeypatch.setattr(admin_api, "_load_existing_user_ids", spy)
+    monkeypatch.setattr(admin_metering_api, "_load_existing_user_ids", spy)
 
     resp = await admin_client.post(
         "/v1/admin/storage-grants/batch",

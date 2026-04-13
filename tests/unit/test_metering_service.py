@@ -148,7 +148,7 @@ class TestEnsureUserPlan:
         session.flush.assert_not_awaited()
 
     async def test_creates_new_free_plan(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
+        monkeypatch.setattr("treadstone.metering.services.metering_service.utc_now", lambda: FIXED_NOW)
         template = _make_template("free")
         session = _mock_session(
             _MockResult(value=None),  # no existing plan
@@ -169,7 +169,7 @@ class TestEnsureUserPlan:
         session.flush.assert_awaited_once()
 
     async def test_creates_pro_plan_without_welcome_bonus(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
+        monkeypatch.setattr("treadstone.metering.services.metering_service.utc_now", lambda: FIXED_NOW)
         template = _make_template("pro")
         session = _mock_session(
             _MockResult(value=None),
@@ -196,7 +196,7 @@ class TestEnsureUserPlan:
 
     async def test_concurrent_creation_returns_winner(self, monkeypatch):
         """When a concurrent request already created the plan, return it."""
-        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
+        monkeypatch.setattr("treadstone.metering.services.metering_service.utc_now", lambda: FIXED_NOW)
         template = _make_template("free")
         winner_plan = _make_plan("user01")
 
@@ -234,7 +234,7 @@ class TestGetUserPlan:
 
 class TestUpdateUserTier:
     async def test_updates_existing_plan_from_template(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
+        monkeypatch.setattr("treadstone.metering.services.metering_service.utc_now", lambda: FIXED_NOW)
         old_plan = _make_plan("user01", tier="free")
         pro_template = _make_template("pro")
         svc = MeteringService()
@@ -253,7 +253,7 @@ class TestUpdateUserTier:
         assert plan.gmt_updated == FIXED_NOW
 
     async def test_applies_overrides(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
+        monkeypatch.setattr("treadstone.metering.services.metering_service.utc_now", lambda: FIXED_NOW)
         old_plan = _make_plan("user01", tier="free")
         pro_template = _make_template("pro")
         svc = MeteringService()
@@ -271,7 +271,7 @@ class TestUpdateUserTier:
 
     async def test_creates_with_target_tier_when_no_plan(self, monkeypatch):
         """First-time tier assignment should NOT create a free plan + bonus first."""
-        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
+        monkeypatch.setattr("treadstone.metering.services.metering_service.utc_now", lambda: FIXED_NOW)
         pro_template = _make_template("pro")
         svc = MeteringService()
         svc._get_tier_template = AsyncMock(return_value=pro_template)
@@ -291,7 +291,7 @@ class TestUpdateUserTier:
 
     async def test_corrects_tier_when_concurrent_free_plan_created(self, monkeypatch):
         """If ensure_user_plan returns a free plan (concurrent race), still apply the requested tier."""
-        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
+        monkeypatch.setattr("treadstone.metering.services.metering_service.utc_now", lambda: FIXED_NOW)
         pro_template = _make_template("pro")
         free_plan = _make_plan("user01", tier="free")
         svc = MeteringService()
@@ -370,7 +370,7 @@ class TestConsumeComputeCredits:
         assert result == ConsumeResult(Decimal("0"), Decimal("0"), Decimal("0"))
 
     async def test_fully_covered_by_monthly(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
+        monkeypatch.setattr("treadstone.metering.services.metering_service.utc_now", lambda: FIXED_NOW)
         plan = _make_plan(
             "user01",
             compute_units_monthly_limit=Decimal("100"),
@@ -388,7 +388,7 @@ class TestConsumeComputeCredits:
         assert plan.compute_units_monthly_used == Decimal("60")
 
     async def test_monthly_plus_extra(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
+        monkeypatch.setattr("treadstone.metering.services.metering_service.utc_now", lambda: FIXED_NOW)
         plan = _make_plan(
             "user01",
             compute_units_monthly_limit=Decimal("100"),
@@ -415,7 +415,7 @@ class TestConsumeComputeCredits:
         assert grant.remaining_amount == Decimal("47")
 
     async def test_both_pools_exhausted_returns_shortfall(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
+        monkeypatch.setattr("treadstone.metering.services.metering_service.utc_now", lambda: FIXED_NOW)
         plan = _make_plan(
             "user01",
             compute_units_monthly_limit=Decimal("10"),
@@ -432,7 +432,7 @@ class TestConsumeComputeCredits:
         assert result.shortfall == Decimal("5")
 
     async def test_extra_fifo_consumes_nearest_expiry_first(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
+        monkeypatch.setattr("treadstone.metering.services.metering_service.utc_now", lambda: FIXED_NOW)
         plan = _make_plan(
             "user01",
             compute_units_monthly_limit=Decimal("10"),
@@ -466,7 +466,7 @@ class TestConsumeComputeCredits:
 
     async def test_monthly_already_exceeded_skips_monthly(self, monkeypatch):
         """If monthly_used > limit (shouldn't happen normally), don't go negative."""
-        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
+        monkeypatch.setattr("treadstone.metering.services.metering_service.utc_now", lambda: FIXED_NOW)
         plan = _make_plan(
             "user01",
             compute_units_monthly_limit=Decimal("10"),
@@ -489,7 +489,7 @@ class TestConsumeComputeCredits:
 
 class TestOpenComputeSession:
     async def test_creates_session_with_correct_fields(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
+        monkeypatch.setattr("treadstone.metering.services.metering_service.utc_now", lambda: FIXED_NOW)
         session = _mock_session(
             _MockResult(value=None),  # no existing open session
         )
@@ -545,7 +545,7 @@ class TestCloseComputeSession:
     async def test_closes_session_and_accumulates_resource_hours(self, monkeypatch):
         last_tick = datetime(2026, 3, 15, 9, 59, 0, tzinfo=UTC)
         close_time = datetime(2026, 3, 15, 10, 0, 0, tzinfo=UTC)
-        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: close_time)
+        monkeypatch.setattr("treadstone.metering.services.metering_service.utc_now", lambda: close_time)
 
         cs = ComputeSession(
             sandbox_id="sb01",
@@ -575,7 +575,7 @@ class TestCloseComputeSession:
         """Closing a session with elapsed time must consume credits via dual-pool."""
         last_tick = datetime(2026, 3, 15, 9, 59, 0, tzinfo=UTC)
         close_time = datetime(2026, 3, 15, 10, 0, 0, tzinfo=UTC)
-        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: close_time)
+        monkeypatch.setattr("treadstone.metering.services.metering_service.utc_now", lambda: close_time)
 
         cs = ComputeSession(
             sandbox_id="sb01",
@@ -602,7 +602,7 @@ class TestCloseComputeSession:
 
     async def test_zero_elapsed_still_closes(self, monkeypatch):
         """If last_metered_at == now, no resource-hours are added but session still closes."""
-        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
+        monkeypatch.setattr("treadstone.metering.services.metering_service.utc_now", lambda: FIXED_NOW)
         cs = ComputeSession(
             sandbox_id="sb01",
             user_id="user01",
@@ -631,7 +631,7 @@ class TestCloseComputeSession:
 
 class TestRecordStorageAllocation:
     async def test_creates_active_ledger_entry(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
+        monkeypatch.setattr("treadstone.metering.services.metering_service.utc_now", lambda: FIXED_NOW)
         # Idempotency: first execute checks for existing ACTIVE ledger (none)
         session = _mock_session(_MockResult(value=None))
         svc = MeteringService()
@@ -660,7 +660,7 @@ class TestRecordStorageRelease:
     async def test_transitions_to_deleted_with_gib_hours(self, monkeypatch):
         allocated = datetime(2026, 3, 14, 10, 0, 0, tzinfo=UTC)
         release_time = datetime(2026, 3, 15, 10, 0, 0, tzinfo=UTC)
-        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: release_time)
+        monkeypatch.setattr("treadstone.metering.services.metering_service.utc_now", lambda: release_time)
 
         ledger = StorageLedger(
             user_id="user01",
@@ -683,7 +683,7 @@ class TestRecordStorageRelease:
         assert ledger.gib_hours_consumed == Decimal("240.0000")
 
     async def test_zero_elapsed_no_additional_gib_hours(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
+        monkeypatch.setattr("treadstone.metering.services.metering_service.utc_now", lambda: FIXED_NOW)
         ledger = StorageLedger(
             user_id="user01",
             sandbox_id="sb01",
@@ -1075,7 +1075,7 @@ class TestGetCurrentStorageUsed:
 
 class TestUsageSummaryQueries:
     async def test_snapshot_batches_usage_rollups(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
+        monkeypatch.setattr("treadstone.metering.services.metering_service.utc_now", lambda: FIXED_NOW)
         plan = _make_plan("user01", storage_capacity_limit_gib=10, max_concurrent_running=3)
         svc = MeteringService()
         session = _mock_session(
@@ -1103,7 +1103,7 @@ class TestUsageSummaryQueries:
         assert session.execute.await_count == 2
 
     async def test_compute_usage_combines_aggregate_and_boundary_rows(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
+        monkeypatch.setattr("treadstone.metering.services.metering_service.utc_now", lambda: FIXED_NOW)
         svc = MeteringService()
         session = _mock_session(
             _MockResult(one_value=(Decimal("4"), Decimal("8"))),
@@ -1140,7 +1140,7 @@ class TestUsageSummaryQueries:
         assert result == Decimal("3.7500")
 
     async def test_storage_usage_aggregates_released_rows_and_clips_boundary_rows(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: FIXED_NOW)
+        monkeypatch.setattr("treadstone.metering.services.metering_service.utc_now", lambda: FIXED_NOW)
         svc = MeteringService()
         session = AsyncMock()
         session.execute = AsyncMock(

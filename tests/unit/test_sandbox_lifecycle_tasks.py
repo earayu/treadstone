@@ -117,9 +117,9 @@ async def _insert_real_sandbox(factory, **overrides) -> str:
 # ═══════════════════════════════════════════════════
 
 
-@patch("treadstone.services.sandbox_lifecycle_tasks.utc_now", return_value=FIXED_NOW)
-@patch("treadstone.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
-@patch("treadstone.services.sandbox_lifecycle_tasks._metering", create=True)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.utc_now", return_value=FIXED_NOW)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks._metering", create=True)
 async def test_idle_auto_stop_stops_idle_sandbox(mock_metering, mock_audit, mock_now):
     """Sandbox idle > auto_stop_interval should be stopped with eager DB state update."""
     mock_metering.close_compute_session = AsyncMock()
@@ -143,9 +143,9 @@ async def test_idle_auto_stop_stops_idle_sandbox(mock_metering, mock_audit, mock
     session.commit.assert_called_once()
 
 
-@patch("treadstone.services.sandbox_lifecycle_tasks.utc_now", return_value=FIXED_NOW)
-@patch("treadstone.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
-@patch("treadstone.services.sandbox_lifecycle_tasks._metering", create=True)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.utc_now", return_value=FIXED_NOW)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks._metering", create=True)
 async def test_idle_auto_stop_skips_active_sandbox(mock_metering, mock_audit, mock_now):
     """Sandbox idle < auto_stop_interval should NOT be stopped."""
     mock_metering.close_compute_session = AsyncMock()
@@ -163,9 +163,9 @@ async def test_idle_auto_stop_skips_active_sandbox(mock_metering, mock_audit, mo
     session.commit.assert_called_once()
 
 
-@patch("treadstone.services.sandbox_lifecycle_tasks.utc_now", return_value=FIXED_NOW)
-@patch("treadstone.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
-@patch("treadstone.services.sandbox_lifecycle_tasks._metering", create=True)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.utc_now", return_value=FIXED_NOW)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks._metering", create=True)
 async def test_idle_auto_stop_callback_failure_does_not_block_others(mock_metering, mock_audit, mock_now):
     """Failure stopping one sandbox should not prevent stopping another."""
     mock_metering.close_compute_session = AsyncMock()
@@ -182,9 +182,9 @@ async def test_idle_auto_stop_callback_failure_does_not_block_others(mock_meteri
     session.commit.assert_called_once()
 
 
-@patch("treadstone.services.sandbox_lifecycle_tasks.utc_now", return_value=FIXED_NOW)
-@patch("treadstone.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
-@patch("treadstone.services.sandbox_lifecycle_tasks._metering", create=True)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.utc_now", return_value=FIXED_NOW)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks._metering", create=True)
 async def test_idle_auto_stop_uses_db_fallback_without_callback(mock_metering, mock_audit, mock_now):
     """Without a stop callback, should fall back to _db_only_stop."""
     mock_metering.close_compute_session = AsyncMock()
@@ -203,8 +203,8 @@ async def test_idle_auto_stop_uses_db_fallback_without_callback(mock_metering, m
 # ═══════════════════════════════════════════════════
 
 
-@patch("treadstone.services.sandbox_lifecycle_tasks.utc_now", return_value=FIXED_NOW)
-@patch("treadstone.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.utc_now", return_value=FIXED_NOW)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
 async def test_auto_delete_deletes_expired_sandbox(mock_audit, mock_now):
     """Stopped sandbox past auto_delete_interval should be deleted."""
     sandbox = _make_sandbox(
@@ -223,8 +223,8 @@ async def test_auto_delete_deletes_expired_sandbox(mock_audit, mock_now):
     session.commit.assert_called_once()
 
 
-@patch("treadstone.services.sandbox_lifecycle_tasks.utc_now", return_value=FIXED_NOW)
-@patch("treadstone.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.utc_now", return_value=FIXED_NOW)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
 async def test_auto_delete_skips_recently_stopped_sandbox(mock_audit, mock_now):
     """Stopped sandbox within auto_delete_interval should NOT be deleted."""
     sandbox = _make_sandbox(
@@ -241,8 +241,8 @@ async def test_auto_delete_skips_recently_stopped_sandbox(mock_audit, mock_now):
     session.commit.assert_called_once()
 
 
-@patch("treadstone.services.sandbox_lifecycle_tasks.utc_now", return_value=FIXED_NOW)
-@patch("treadstone.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.utc_now", return_value=FIXED_NOW)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
 async def test_auto_delete_callback_failure_does_not_block_others(mock_audit, mock_now):
     """Failure deleting one sandbox should not prevent deleting another."""
     sb1 = _make_sandbox(
@@ -266,8 +266,8 @@ async def test_auto_delete_callback_failure_does_not_block_others(mock_audit, mo
     session.commit.assert_called_once()
 
 
-@patch("treadstone.services.sandbox_lifecycle_tasks.utc_now", return_value=FIXED_NOW)
-@patch("treadstone.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.utc_now", return_value=FIXED_NOW)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
 async def test_auto_delete_uses_db_fallback_without_callback(mock_audit, mock_now):
     """Without a delete callback, should fall back to _db_only_delete."""
     sandbox = _make_sandbox(
@@ -284,9 +284,9 @@ async def test_auto_delete_uses_db_fallback_without_callback(mock_audit, mock_no
     session.commit.assert_called_once()
 
 
-@patch("treadstone.services.sandbox_lifecycle_tasks.utc_now", return_value=REAL_FIXED_NOW)
-@patch("treadstone.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
-@patch("treadstone.services.sandbox_lifecycle_tasks._metering", create=True)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.utc_now", return_value=REAL_FIXED_NOW)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks._metering", create=True)
 async def test_idle_auto_stop_rolls_back_partial_db_update_on_followup_failure(
     mock_metering,
     mock_audit,
@@ -314,8 +314,8 @@ async def test_idle_auto_stop_rolls_back_partial_db_update_on_followup_failure(
     mock_audit.assert_not_called()
 
 
-@patch("treadstone.services.sandbox_lifecycle_tasks.utc_now", return_value=REAL_FIXED_NOW)
-@patch("treadstone.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.utc_now", return_value=REAL_FIXED_NOW)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
 async def test_auto_delete_rolls_back_partial_delete_on_audit_failure(mock_audit, mock_now, session_factory):
     """A failed audit write must not leave the sandbox stuck in DELETING."""
     mock_audit.side_effect = RuntimeError("audit table unavailable")
@@ -337,9 +337,9 @@ async def test_auto_delete_rolls_back_partial_delete_on_audit_failure(mock_audit
         assert sandbox.version == 1
 
 
-@patch("treadstone.services.sync_supervisor.utc_now", return_value=REAL_FIXED_NOW)
-@patch("treadstone.services.sandbox_lifecycle_tasks.utc_now", return_value=REAL_FIXED_NOW)
-@patch("treadstone.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
+@patch("treadstone.infra.services.sync_supervisor.utc_now", return_value=REAL_FIXED_NOW)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.utc_now", return_value=REAL_FIXED_NOW)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
 async def test_auto_delete_k8s_path_stays_trackable_until_watch_finishes(
     mock_audit,
     mock_lifecycle_now,
@@ -389,11 +389,11 @@ async def test_auto_delete_k8s_path_stays_trackable_until_watch_finishes(
         assert sandbox.gmt_deleted is not None
 
 
-@patch("treadstone.services.k8s_client.get_k8s_client")
-@patch("treadstone.services.metering_service.MeteringService.record_storage_release", new_callable=AsyncMock)
-@patch("treadstone.services.sync_supervisor.utc_now", return_value=REAL_FIXED_NOW)
-@patch("treadstone.services.sandbox_lifecycle_tasks.utc_now", return_value=REAL_FIXED_NOW)
-@patch("treadstone.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
+@patch("treadstone.infra.services.k8s_client.get_k8s_client")
+@patch("treadstone.metering.services.metering_service.MeteringService.record_storage_release", new_callable=AsyncMock)
+@patch("treadstone.infra.services.sync_supervisor.utc_now", return_value=REAL_FIXED_NOW)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.utc_now", return_value=REAL_FIXED_NOW)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.record_audit_event", new_callable=AsyncMock)
 async def test_auto_delete_cold_k8s_path_persists_error_when_storage_release_fails(
     mock_audit,
     mock_lifecycle_now,
@@ -445,7 +445,7 @@ async def test_auto_delete_cold_k8s_path_persists_error_when_storage_release_fai
     mock_audit.assert_not_called()
 
 
-@patch("treadstone.services.k8s_client.get_k8s_client")
+@patch("treadstone.infra.services.k8s_client.get_k8s_client")
 async def test_k8s_stop_sandbox_uses_actual_adopted_sandbox_name(mock_get_k8s_client):
     """Lifecycle stop must scale the real adopted Sandbox, not the claim name."""
     k8s = AsyncMock()
@@ -466,8 +466,8 @@ async def test_k8s_stop_sandbox_uses_actual_adopted_sandbox_name(mock_get_k8s_cl
     )
 
 
-@patch("treadstone.services.k8s_client.get_k8s_client")
-@patch("treadstone.services.sync_supervisor.utc_now", return_value=REAL_FIXED_NOW)
+@patch("treadstone.infra.services.k8s_client.get_k8s_client")
+@patch("treadstone.infra.services.sync_supervisor.utc_now", return_value=REAL_FIXED_NOW)
 async def test_k8s_delete_sandbox_claim_path_uses_claim_name_after_adoption(mock_now, mock_get_k8s_client):
     """Lifecycle delete must delete the SandboxClaim for claim-path sandboxes."""
     k8s = AsyncMock()
@@ -493,8 +493,8 @@ async def test_k8s_delete_sandbox_claim_path_uses_claim_name_after_adoption(mock
 # ═══════════════════════════════════════════════════
 
 
-@patch("treadstone.services.sandbox_lifecycle_tasks.check_auto_delete", new_callable=AsyncMock)
-@patch("treadstone.services.sandbox_lifecycle_tasks.check_idle_auto_stop", new_callable=AsyncMock)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.check_auto_delete", new_callable=AsyncMock)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.check_idle_auto_stop", new_callable=AsyncMock)
 async def test_run_lifecycle_tick_calls_both_steps(mock_idle, mock_delete):
     """run_lifecycle_tick should execute both sub-steps with independent sessions."""
     factory = Mock()
@@ -509,8 +509,8 @@ async def test_run_lifecycle_tick_calls_both_steps(mock_idle, mock_delete):
     assert factory.call_count == 2
 
 
-@patch("treadstone.services.sandbox_lifecycle_tasks.check_auto_delete", new_callable=AsyncMock)
-@patch("treadstone.services.sandbox_lifecycle_tasks.check_idle_auto_stop", new_callable=AsyncMock)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.check_auto_delete", new_callable=AsyncMock)
+@patch("treadstone.infra.services.sandbox_lifecycle_tasks.check_idle_auto_stop", new_callable=AsyncMock)
 async def test_run_lifecycle_tick_step_failure_does_not_block_next(mock_idle, mock_delete):
     """If check_idle_auto_stop fails, check_auto_delete should still run."""
     factory = Mock()

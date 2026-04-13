@@ -12,6 +12,18 @@ from treadstone.services.k8s_client import FakeK8sClient
 from treadstone.services.k8s_sync import derive_status_from_sandbox_cr, handle_watch_event, reconcile, watch_loop
 
 
+@pytest.fixture(autouse=True)
+def _clear_observers():
+    """Ensure no registered observers leak between tests."""
+    from treadstone.infra.services.sandbox_state_observer import clear_observers, clear_reconcile_hooks
+
+    clear_observers()
+    clear_reconcile_hooks()
+    yield
+    clear_observers()
+    clear_reconcile_hooks()
+
+
 @pytest.fixture
 async def session_factory():
     engine = create_async_engine("sqlite+aiosqlite://", echo=False)

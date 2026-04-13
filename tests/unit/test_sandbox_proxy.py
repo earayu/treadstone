@@ -15,7 +15,7 @@ class TestBuildSandboxUrl:
         from treadstone.config import Settings
 
         s = Settings()
-        monkeypatch.setattr("treadstone.services.sandbox_proxy.settings", s)
+        monkeypatch.setattr("treadstone.proxy.services.sandbox_proxy.settings", s)
 
         url = build_sandbox_url("my-sandbox", "v1/execute")
         assert url == "http://my-sandbox.default.svc.cluster.local:8080/v1/execute"

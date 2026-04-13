@@ -163,7 +163,7 @@ async def test_proxy_success_for_ready_sandbox(auth_client):
     key_resp = await auth_client.post("/v1/auth/api-keys", json={"name": "proxy-ready"})
     api_key = key_resp.json()["key"]
 
-    with patch("treadstone.services.sandbox_proxy._http_client", mock_client):
+    with patch("treadstone.proxy.services.sandbox_proxy._http_client", mock_client):
         resp = await auth_client.get(
             f"/v1/sandboxes/{sandbox_id}/proxy/healthz",
             headers={"Authorization": f"Bearer {api_key}"},
@@ -205,7 +205,7 @@ async def test_proxy_ignores_x_sandbox_override_headers(auth_client):
     key_resp = await auth_client.post("/v1/auth/api-keys", json={"name": "proxy-ignore-h"})
     api_key = key_resp.json()["key"]
 
-    with patch("treadstone.services.sandbox_proxy._http_client", mock_client):
+    with patch("treadstone.proxy.services.sandbox_proxy._http_client", mock_client):
         resp = await auth_client.get(
             f"/v1/sandboxes/{sandbox_id}/proxy/healthz",
             headers={
@@ -318,7 +318,7 @@ async def test_proxy_selected_scope_allows_granted_sandbox(auth_client):
     api_key = key_resp.json()["key"]
     mock_client = _mock_upstream(body=b'{"selected": true}', headers={"content-type": "application/json"})
 
-    with patch("treadstone.services.sandbox_proxy._http_client", mock_client):
+    with patch("treadstone.proxy.services.sandbox_proxy._http_client", mock_client):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get(
                 f"/v1/sandboxes/{sandbox_id}/proxy/healthz",
@@ -376,7 +376,7 @@ async def test_proxy_forwards_query_string(auth_client):
         captured_paths.append(path)
         return 200, {"content-type": "text/plain"}, _mock_upstream(body=b"ok").send.return_value
 
-    with patch("treadstone.api.sandbox_proxy.proxy_http_request", side_effect=capturing_proxy_http_request):
+    with patch("treadstone.proxy.api.sandbox_proxy.proxy_http_request", side_effect=capturing_proxy_http_request):
         resp = await auth_client.get(
             f"/v1/sandboxes/{sandbox_id}/proxy/mcp?sessionId=abc123&stream=1",
             headers={"Authorization": f"Bearer {api_key}"},
@@ -444,7 +444,7 @@ async def test_proxy_ws_no_auth_closes_1008(auth_client):
 async def test_proxy_ws_with_api_key_header_proxies(auth_client, monkeypatch):
     """WebSocket proxy authenticates via Authorization header and calls proxy_websocket."""
     # ws_proxy uses async_session directly, so patch to use the test DB factory.
-    monkeypatch.setattr("treadstone.api.sandbox_proxy.async_session", _test_session_factory)
+    monkeypatch.setattr("treadstone.proxy.api.sandbox_proxy.async_session", _test_session_factory)
 
     create_resp = await auth_client.post(
         "/v1/sandboxes",
@@ -471,7 +471,7 @@ async def test_proxy_ws_with_api_key_header_proxies(auth_client, monkeypatch):
     headers = [(b"authorization", f"Bearer {api_key}".encode())]
     scope = _make_ws_scope(f"/v1/sandboxes/{sandbox_id}/proxy/mcp", headers=headers)
 
-    with patch("treadstone.api.sandbox_proxy.proxy_websocket", side_effect=capturing_proxy_websocket):
+    with patch("treadstone.proxy.api.sandbox_proxy.proxy_websocket", side_effect=capturing_proxy_websocket):
         await _run_ws_asgi(scope)
 
     assert len(proxy_calls) == 1, f"proxy_websocket was called {len(proxy_calls)} times; expected 1"
@@ -480,7 +480,7 @@ async def test_proxy_ws_with_api_key_header_proxies(auth_client, monkeypatch):
 
 async def test_proxy_ws_token_param_auth(auth_client, monkeypatch):
     """WebSocket proxy accepts API key via ?token= query param and strips it upstream."""
-    monkeypatch.setattr("treadstone.api.sandbox_proxy.async_session", _test_session_factory)
+    monkeypatch.setattr("treadstone.proxy.api.sandbox_proxy.async_session", _test_session_factory)
 
     create_resp = await auth_client.post(
         "/v1/sandboxes",
@@ -507,7 +507,7 @@ async def test_proxy_ws_token_param_auth(auth_client, monkeypatch):
     qs = f"token={api_key}&sessionId=xyz".encode()
     scope = _make_ws_scope(f"/v1/sandboxes/{sandbox_id}/proxy/mcp", headers=[], query_string=qs)
 
-    with patch("treadstone.api.sandbox_proxy.proxy_websocket", side_effect=capturing_proxy_websocket):
+    with patch("treadstone.proxy.api.sandbox_proxy.proxy_websocket", side_effect=capturing_proxy_websocket):
         await _run_ws_asgi(scope)
 
     assert len(proxy_calls) == 1, f"proxy_websocket was called {len(proxy_calls)} times; expected 1"
@@ -546,7 +546,7 @@ async def test_proxy_selected_scope_hits_single_grant_lookup(auth_client):
     api_key = key_resp.json()["key"]
     mock_client = _mock_upstream(body=b'{"selected": true}', headers={"content-type": "application/json"})
 
-    with patch("treadstone.services.sandbox_proxy._http_client", mock_client):
+    with patch("treadstone.proxy.services.sandbox_proxy._http_client", mock_client):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             with _capture_sql() as statements:
                 resp = await client.get(

@@ -212,8 +212,8 @@ def _make_tick_session(open_sessions, update_rowcount=1, capture_update_stmts: l
 
 
 class TestTickMetering:
-    @patch("treadstone.services.metering_tasks._metering")
-    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    @patch("treadstone.metering.services.metering_tasks._metering")
+    @patch("treadstone.metering.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_meters_open_session_and_updates_resource_hours(self, mock_now, mock_metering):
         from treadstone.services.metering_tasks import tick_metering
 
@@ -235,8 +235,8 @@ class TestTickMetering:
             expected_delta_mem=cs.memory_gib_request * eh,
         )
 
-    @patch("treadstone.services.metering_tasks._metering")
-    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    @patch("treadstone.metering.services.metering_tasks._metering")
+    @patch("treadstone.metering.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_skips_session_with_zero_elapsed(self, mock_now, mock_metering):
         from treadstone.services.metering_tasks import tick_metering
 
@@ -248,8 +248,8 @@ class TestTickMetering:
 
         assert result == 0
 
-    @patch("treadstone.services.metering_tasks._metering")
-    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    @patch("treadstone.metering.services.metering_tasks._metering")
+    @patch("treadstone.metering.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_handles_optimistic_lock_conflict_with_savepoint_rollback(self, mock_now, mock_metering):
         """Lock conflict rolls back the savepoint — that session is skipped without failing the tick."""
         from treadstone.services.metering_tasks import tick_metering
@@ -262,8 +262,8 @@ class TestTickMetering:
 
         assert result == 0
 
-    @patch("treadstone.services.metering_tasks._metering")
-    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    @patch("treadstone.metering.services.metering_tasks._metering")
+    @patch("treadstone.metering.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_no_open_sessions_is_noop(self, mock_now, mock_metering):
         from treadstone.services.metering_tasks import tick_metering
 
@@ -275,8 +275,8 @@ class TestTickMetering:
         assert result == 0
         session.commit.assert_not_awaited()
 
-    @patch("treadstone.services.metering_tasks._metering")
-    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    @patch("treadstone.metering.services.metering_tasks._metering")
+    @patch("treadstone.metering.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_crash_recovery_compensates_gap(self, mock_now, mock_metering):
         """After a 5-minute leader crash, tick should compute the full gap."""
         from treadstone.services.metering_tasks import tick_metering
@@ -303,8 +303,8 @@ class TestTickMetering:
             expected_delta_mem=expected_delta_mem,
         )
 
-    @patch("treadstone.services.metering_tasks._metering")
-    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    @patch("treadstone.metering.services.metering_tasks._metering")
+    @patch("treadstone.metering.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_tick_consumes_credits_per_user(self, mock_now, mock_metering):
         """tick_metering must call consume_compute_credits for each user with metered sessions."""
         from treadstone.services.metering_tasks import tick_metering
@@ -322,8 +322,8 @@ class TestTickMetering:
         credit_amount = call_args[0][2]
         assert credit_amount > Decimal("0")
 
-    @patch("treadstone.services.metering_tasks._metering")
-    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    @patch("treadstone.metering.services.metering_tasks._metering")
+    @patch("treadstone.metering.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_tick_aggregates_credits_across_sessions_for_same_user(self, mock_now, mock_metering):
         """Multiple sessions for the same user produce a single aggregated consume call."""
         from treadstone.services.metering_tasks import tick_metering
@@ -351,8 +351,8 @@ class TestTickMetering:
         call_args = mock_metering.consume_compute_credits.call_args
         assert call_args[0][1] == "user_01"
 
-    @patch("treadstone.services.metering_tasks._metering")
-    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    @patch("treadstone.metering.services.metering_tasks._metering")
+    @patch("treadstone.metering.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_tick_does_not_consume_credits_on_lock_conflict(self, mock_now, mock_metering):
         """If optimistic lock conflicts for all sessions, no credits should be consumed."""
         from treadstone.services.metering_tasks import tick_metering
@@ -372,7 +372,7 @@ class TestTickMetering:
 
 
 class TestTickStorageMetering:
-    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    @patch("treadstone.metering.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_updates_gib_hours(self, mock_now):
         from treadstone.services.metering_tasks import tick_storage_metering
 
@@ -386,7 +386,7 @@ class TestTickStorageMetering:
         session.execute.assert_awaited_once()
         session.commit.assert_awaited_once()
 
-    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    @patch("treadstone.metering.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_no_rows_matched(self, mock_now):
         from treadstone.services.metering_tasks import tick_storage_metering
 
@@ -399,7 +399,7 @@ class TestTickStorageMetering:
         assert result == 0
         session.commit.assert_not_awaited()
 
-    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    @patch("treadstone.metering.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_no_active_entries(self, mock_now):
         from treadstone.services.metering_tasks import tick_storage_metering
 
@@ -419,7 +419,7 @@ class TestTickStorageMetering:
 
 
 class TestCheckWarningThresholds:
-    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    @patch("treadstone.metering.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_emits_80_percent_warning(self, mock_now):
         from treadstone.services.metering_tasks import check_warning_thresholds
 
@@ -435,11 +435,11 @@ class TestCheckWarningThresholds:
         session.add = MagicMock()
         session.commit = AsyncMock()
 
-        with patch("treadstone.services.metering_tasks._metering") as mock_metering:
+        with patch("treadstone.metering.services.metering_tasks._metering") as mock_metering:
             mock_metering.get_user_plan = AsyncMock()
             mock_metering.get_total_compute_remaining = AsyncMock()
             mock_metering.get_extra_compute_remaining = AsyncMock()
-            with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
+            with patch("treadstone.metering.services.metering_tasks.record_audit_event") as mock_audit:
                 mock_audit.return_value = MagicMock()
                 await check_warning_thresholds(session)
 
@@ -451,7 +451,7 @@ class TestCheckWarningThresholds:
 
         assert plan.warning_80_notified_at is not None
 
-    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    @patch("treadstone.metering.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_emits_100_percent_warning(self, mock_now):
         from treadstone.services.metering_tasks import check_warning_thresholds
 
@@ -467,11 +467,11 @@ class TestCheckWarningThresholds:
         session.add = MagicMock()
         session.commit = AsyncMock()
 
-        with patch("treadstone.services.metering_tasks._metering") as mock_metering:
+        with patch("treadstone.metering.services.metering_tasks._metering") as mock_metering:
             mock_metering.get_user_plan = AsyncMock()
             mock_metering.get_total_compute_remaining = AsyncMock()
             mock_metering.get_extra_compute_remaining = AsyncMock()
-            with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
+            with patch("treadstone.metering.services.metering_tasks.record_audit_event") as mock_audit:
                 mock_audit.return_value = MagicMock()
                 await check_warning_thresholds(session)
 
@@ -483,7 +483,7 @@ class TestCheckWarningThresholds:
 
         assert plan.warning_100_notified_at is not None
 
-    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    @patch("treadstone.metering.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_does_not_repeat_warning(self, mock_now):
         from treadstone.services.metering_tasks import check_warning_thresholds
 
@@ -503,11 +503,11 @@ class TestCheckWarningThresholds:
         session.add = MagicMock()
         session.commit = AsyncMock()
 
-        with patch("treadstone.services.metering_tasks._metering") as mock_metering:
+        with patch("treadstone.metering.services.metering_tasks._metering") as mock_metering:
             mock_metering.get_user_plan = AsyncMock()
             mock_metering.get_total_compute_remaining = AsyncMock()
             mock_metering.get_extra_compute_remaining = AsyncMock()
-            with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
+            with patch("treadstone.metering.services.metering_tasks.record_audit_event") as mock_audit:
                 mock_audit.return_value = MagicMock()
                 await check_warning_thresholds(session)
 
@@ -520,7 +520,7 @@ class TestCheckWarningThresholds:
 
 
 class TestCheckGracePeriods:
-    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    @patch("treadstone.metering.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_starts_grace_period_on_first_exhaustion(self, mock_now):
         from treadstone.services.metering_tasks import check_grace_periods
 
@@ -537,10 +537,10 @@ class TestCheckGracePeriods:
         session.add = MagicMock()
         session.commit = AsyncMock()
 
-        with patch("treadstone.services.metering_tasks._metering") as mock_metering:
+        with patch("treadstone.metering.services.metering_tasks._metering") as mock_metering:
             mock_metering.get_user_plan = AsyncMock()
             mock_metering.get_total_compute_remaining = AsyncMock()
-            with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
+            with patch("treadstone.metering.services.metering_tasks.record_audit_event") as mock_audit:
                 mock_audit.return_value = MagicMock()
                 await check_grace_periods(session)
 
@@ -551,7 +551,7 @@ class TestCheckGracePeriods:
 
         assert plan.grace_period_started_at == FIXED_NOW
 
-    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    @patch("treadstone.metering.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_enforces_stop_after_grace_period_expires(self, mock_now):
         from treadstone.services.metering_tasks import check_grace_periods
 
@@ -578,9 +578,9 @@ class TestCheckGracePeriods:
         session.add = MagicMock()
         session.commit = AsyncMock()
 
-        with patch("treadstone.services.metering_tasks._metering") as mock_metering:
+        with patch("treadstone.metering.services.metering_tasks._metering") as mock_metering:
             mock_metering.close_compute_session = AsyncMock(return_value=None)
-            with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
+            with patch("treadstone.metering.services.metering_tasks.record_audit_event") as mock_audit:
                 mock_audit.return_value = MagicMock()
                 await check_grace_periods(session)
 
@@ -593,7 +593,7 @@ class TestCheckGracePeriods:
         assert plan.grace_period_started_at is None
         assert sandbox.status == SandboxStatus.STOPPED
 
-    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    @patch("treadstone.metering.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_enforces_stop_on_absolute_cap_exceeded(self, mock_now):
         from treadstone.services.metering_tasks import check_grace_periods
 
@@ -620,9 +620,9 @@ class TestCheckGracePeriods:
         session.add = MagicMock()
         session.commit = AsyncMock()
 
-        with patch("treadstone.services.metering_tasks._metering") as mock_metering:
+        with patch("treadstone.metering.services.metering_tasks._metering") as mock_metering:
             mock_metering.close_compute_session = AsyncMock(return_value=None)
-            with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
+            with patch("treadstone.metering.services.metering_tasks.record_audit_event") as mock_audit:
                 mock_audit.return_value = MagicMock()
                 await check_grace_periods(session)
 
@@ -632,7 +632,7 @@ class TestCheckGracePeriods:
                 assert len(auto_stop_calls) == 1
                 assert auto_stop_calls[0].kwargs["metadata"]["reason"] == "absolute_cap_exceeded"
 
-    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    @patch("treadstone.metering.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_clears_grace_period_when_credits_restored(self, mock_now):
         from treadstone.services.metering_tasks import check_grace_periods
 
@@ -649,8 +649,8 @@ class TestCheckGracePeriods:
         session.add = MagicMock()
         session.commit = AsyncMock()
 
-        with patch("treadstone.services.metering_tasks._metering"):
-            with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
+        with patch("treadstone.metering.services.metering_tasks._metering"):
+            with patch("treadstone.metering.services.metering_tasks.record_audit_event") as mock_audit:
                 mock_audit.return_value = MagicMock()
                 await check_grace_periods(session)
 
@@ -658,7 +658,7 @@ class TestCheckGracePeriods:
 
         assert plan.grace_period_started_at is None
 
-    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    @patch("treadstone.metering.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_uses_stop_callback_when_provided(self, mock_now):
         from treadstone.services.metering_tasks import check_grace_periods
 
@@ -686,15 +686,15 @@ class TestCheckGracePeriods:
         session.add = MagicMock()
         session.commit = AsyncMock()
 
-        with patch("treadstone.services.metering_tasks._metering") as mock_metering:
+        with patch("treadstone.metering.services.metering_tasks._metering") as mock_metering:
             mock_metering.close_compute_session = AsyncMock(return_value=None)
-            with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
+            with patch("treadstone.metering.services.metering_tasks.record_audit_event") as mock_audit:
                 mock_audit.return_value = MagicMock()
                 await check_grace_periods(session, stop_sandbox_callback=stop_callback)
 
         stop_callback.assert_awaited_once_with(session, sandbox)
 
-    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    @patch("treadstone.metering.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_clears_grace_when_stop_succeeds_but_followups_fail(self, mock_now):
         from treadstone.services.metering_tasks import check_grace_periods
 
@@ -721,10 +721,10 @@ class TestCheckGracePeriods:
         session.add = MagicMock()
         session.commit = AsyncMock()
 
-        with patch("treadstone.services.metering_tasks._metering") as mock_metering:
+        with patch("treadstone.metering.services.metering_tasks._metering") as mock_metering:
             mock_metering.close_compute_session = AsyncMock(side_effect=RuntimeError("metering failed"))
             with patch(
-                "treadstone.services.metering_tasks.record_audit_event",
+                "treadstone.metering.services.metering_tasks.record_audit_event",
                 new_callable=AsyncMock,
                 side_effect=RuntimeError("audit failed"),
             ):
@@ -733,7 +733,7 @@ class TestCheckGracePeriods:
         stop_callback.assert_awaited_once_with(session, sandbox)
         assert plan.grace_period_started_at is None
 
-    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    @patch("treadstone.metering.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_no_running_sandboxes_is_noop(self, mock_now):
         from treadstone.services.metering_tasks import check_grace_periods
 
@@ -741,12 +741,12 @@ class TestCheckGracePeriods:
         session.execute = AsyncMock(side_effect=[_MockDistinct([])])
         session.commit = AsyncMock()
 
-        with patch("treadstone.services.metering_tasks._metering"):
-            with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
+        with patch("treadstone.metering.services.metering_tasks._metering"):
+            with patch("treadstone.metering.services.metering_tasks.record_audit_event") as mock_audit:
                 await check_grace_periods(session)
                 mock_audit.assert_not_awaited()
 
-    @patch("treadstone.services.metering_tasks.utc_now", return_value=FIXED_NOW)
+    @patch("treadstone.metering.services.metering_tasks.utc_now", return_value=FIXED_NOW)
     async def test_does_not_enforce_during_active_grace_period(self, mock_now):
         """Grace period is active but not expired — no enforcement yet."""
         from treadstone.services.metering_tasks import check_grace_periods
@@ -771,8 +771,8 @@ class TestCheckGracePeriods:
         session.add = MagicMock()
         session.commit = AsyncMock()
 
-        with patch("treadstone.services.metering_tasks._metering"):
-            with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
+        with patch("treadstone.metering.services.metering_tasks._metering"):
+            with patch("treadstone.metering.services.metering_tasks.record_audit_event") as mock_audit:
                 mock_audit.return_value = MagicMock()
                 await check_grace_periods(session)
                 auto_stop_calls = [
@@ -789,7 +789,7 @@ class TestCheckGracePeriods:
 
 
 class TestHandlePeriodRollover:
-    @patch("treadstone.services.metering_tasks.utc_now")
+    @patch("treadstone.metering.services.metering_tasks.utc_now")
     async def test_splits_session_at_period_boundary(self, mock_now):
         from treadstone.services.metering_tasks import handle_period_rollover
 
@@ -809,7 +809,7 @@ class TestHandlePeriodRollover:
         session.add = MagicMock()
         session.flush = AsyncMock()
 
-        with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
+        with patch("treadstone.metering.services.metering_tasks.record_audit_event") as mock_audit:
             mock_audit.return_value = MagicMock()
             new_cs = await handle_period_rollover(session, cs, plan)
 
@@ -823,7 +823,7 @@ class TestHandlePeriodRollover:
         assert new_cs.vcpu_request == cs.vcpu_request
         assert new_cs.memory_gib_request == cs.memory_gib_request
 
-    @patch("treadstone.services.metering_tasks.utc_now")
+    @patch("treadstone.metering.services.metering_tasks.utc_now")
     async def test_no_rollover_when_within_period(self, mock_now):
         from treadstone.services.metering_tasks import handle_period_rollover
 
@@ -838,7 +838,7 @@ class TestHandlePeriodRollover:
         assert result is None
         assert cs.ended_at is None
 
-    @patch("treadstone.services.metering_tasks.utc_now")
+    @patch("treadstone.metering.services.metering_tasks.utc_now")
     async def test_rollover_with_stopped_sandbox_returns_none(self, mock_now):
         from treadstone.services.metering_tasks import handle_period_rollover
 
@@ -855,7 +855,7 @@ class TestHandlePeriodRollover:
         session.add = MagicMock()
         session.flush = AsyncMock()
 
-        with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
+        with patch("treadstone.metering.services.metering_tasks.record_audit_event") as mock_audit:
             mock_audit.return_value = MagicMock()
             new_cs = await handle_period_rollover(session, cs, plan)
 
@@ -864,7 +864,7 @@ class TestHandlePeriodRollover:
 
 
 class TestResetMonthlyCredits:
-    @patch("treadstone.services.metering_tasks.utc_now")
+    @patch("treadstone.metering.services.metering_tasks.utc_now")
     async def test_resets_expired_plans(self, mock_now):
         from treadstone.services.metering_tasks import reset_monthly_credits
 
@@ -891,7 +891,7 @@ class TestResetMonthlyCredits:
         session.commit = AsyncMock()
         session.get = AsyncMock()
 
-        with patch("treadstone.services.metering_tasks.record_audit_event") as mock_audit:
+        with patch("treadstone.metering.services.metering_tasks.record_audit_event") as mock_audit:
             mock_audit.return_value = MagicMock()
             result = await reset_monthly_credits(session)
 
@@ -919,11 +919,11 @@ class TestRunMeteringTick:
         session_factory = MagicMock(return_value=factory)
 
         with (
-            patch("treadstone.services.metering_tasks.tick_metering", new_callable=AsyncMock) as m1,
-            patch("treadstone.services.metering_tasks.tick_storage_metering", new_callable=AsyncMock) as m2,
-            patch("treadstone.services.metering_tasks.check_warning_thresholds", new_callable=AsyncMock) as m3,
-            patch("treadstone.services.metering_tasks.check_grace_periods", new_callable=AsyncMock) as m4,
-            patch("treadstone.services.metering_tasks.reset_monthly_credits", new_callable=AsyncMock) as m5,
+            patch("treadstone.metering.services.metering_tasks.tick_metering", new_callable=AsyncMock) as m1,
+            patch("treadstone.metering.services.metering_tasks.tick_storage_metering", new_callable=AsyncMock) as m2,
+            patch("treadstone.metering.services.metering_tasks.check_warning_thresholds", new_callable=AsyncMock) as m3,
+            patch("treadstone.metering.services.metering_tasks.check_grace_periods", new_callable=AsyncMock) as m4,
+            patch("treadstone.metering.services.metering_tasks.reset_monthly_credits", new_callable=AsyncMock) as m5,
         ):
             await run_metering_tick(session_factory)
 
@@ -944,14 +944,14 @@ class TestRunMeteringTick:
 
         with (
             patch(
-                "treadstone.services.metering_tasks.tick_metering",
+                "treadstone.metering.services.metering_tasks.tick_metering",
                 new_callable=AsyncMock,
                 side_effect=RuntimeError("DB error"),
             ),
-            patch("treadstone.services.metering_tasks.tick_storage_metering", new_callable=AsyncMock) as m2,
-            patch("treadstone.services.metering_tasks.check_warning_thresholds", new_callable=AsyncMock) as m3,
-            patch("treadstone.services.metering_tasks.check_grace_periods", new_callable=AsyncMock) as m4,
-            patch("treadstone.services.metering_tasks.reset_monthly_credits", new_callable=AsyncMock) as m5,
+            patch("treadstone.metering.services.metering_tasks.tick_storage_metering", new_callable=AsyncMock) as m2,
+            patch("treadstone.metering.services.metering_tasks.check_warning_thresholds", new_callable=AsyncMock) as m3,
+            patch("treadstone.metering.services.metering_tasks.check_grace_periods", new_callable=AsyncMock) as m4,
+            patch("treadstone.metering.services.metering_tasks.reset_monthly_credits", new_callable=AsyncMock) as m5,
         ):
             await run_metering_tick(session_factory)
 

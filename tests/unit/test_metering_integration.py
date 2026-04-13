@@ -129,7 +129,7 @@ def _mock_metering() -> MeteringService:
 
 class TestSandboxServiceCreateWithMetering:
     async def test_create_runs_all_quota_checks(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
+        monkeypatch.setattr("treadstone.sandbox.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         session = _mock_session()
@@ -145,7 +145,7 @@ class TestSandboxServiceCreateWithMetering:
         metering.check_sandbox_duration.assert_awaited_once()
 
     async def test_create_persist_checks_storage_quota(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
+        monkeypatch.setattr("treadstone.sandbox.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         session = _mock_session()
@@ -160,7 +160,7 @@ class TestSandboxServiceCreateWithMetering:
         metering.check_storage_quota.assert_awaited_once_with(session, "user1234567890abcd", 5)
 
     async def test_create_non_persist_skips_storage_check(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
+        monkeypatch.setattr("treadstone.sandbox.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         session = _mock_session()
@@ -189,7 +189,7 @@ class TestSandboxServiceCreateWithMetering:
         )
 
     async def test_create_template_not_allowed_aborts_early(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
+        monkeypatch.setattr("treadstone.sandbox.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         session = _mock_session()
@@ -207,7 +207,7 @@ class TestSandboxServiceCreateWithMetering:
         k8s.create_sandbox_claim.assert_not_called()
 
     async def test_create_compute_quota_exceeded_aborts_early(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
+        monkeypatch.setattr("treadstone.sandbox.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         session = _mock_session()
@@ -222,7 +222,7 @@ class TestSandboxServiceCreateWithMetering:
         session.add.assert_not_called()
 
     async def test_create_concurrent_limit_exceeded_aborts_early(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
+        monkeypatch.setattr("treadstone.sandbox.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         session = _mock_session()
@@ -237,7 +237,7 @@ class TestSandboxServiceCreateWithMetering:
         session.add.assert_not_called()
 
     async def test_create_storage_quota_exceeded_aborts_early(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
+        monkeypatch.setattr("treadstone.sandbox.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         session = _mock_session()
@@ -254,7 +254,7 @@ class TestSandboxServiceCreateWithMetering:
         session.add.assert_not_called()
 
     async def test_create_duration_exceeded_raises(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
+        monkeypatch.setattr("treadstone.sandbox.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         session = _mock_session()
@@ -271,7 +271,7 @@ class TestSandboxServiceCreateWithMetering:
             )
 
     async def test_create_auto_stop_disabled_skips_duration_check(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
+        monkeypatch.setattr("treadstone.sandbox.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         session = _mock_session()
@@ -289,7 +289,7 @@ class TestSandboxServiceCreateWithMetering:
 
     async def test_create_never_autostop_blocked_when_tier_has_limit(self, monkeypatch):
         """auto_stop_interval=0 (never) must be rejected if the tier enforces a duration limit."""
-        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
+        monkeypatch.setattr("treadstone.sandbox.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         session = _mock_session()
@@ -307,7 +307,7 @@ class TestSandboxServiceCreateWithMetering:
 
     async def test_create_never_autostop_allowed_when_tier_unlimited(self, monkeypatch):
         """auto_stop_interval=0 (never) is allowed when the tier has no duration limit (max_duration=0)."""
-        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
+        monkeypatch.setattr("treadstone.sandbox.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         session = _mock_session()
@@ -326,7 +326,7 @@ class TestSandboxServiceCreateWithMetering:
 
     async def test_create_any_interval_allowed_when_tier_unlimited(self, monkeypatch):
         """When tier has no duration limit (max_duration=0), any positive interval is allowed."""
-        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
+        monkeypatch.setattr("treadstone.sandbox.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         session = _mock_session()
@@ -357,7 +357,7 @@ class TestSandboxServiceCreateWithMetering:
 
 class TestSandboxServiceStartWithMetering:
     async def test_start_runs_quota_checks(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
+        monkeypatch.setattr("treadstone.sandbox.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         sb = _make_sandbox(status=SandboxStatus.STOPPED)
@@ -372,7 +372,7 @@ class TestSandboxServiceStartWithMetering:
         metering.check_concurrent_limit.assert_awaited_once()
 
     async def test_start_compute_quota_exceeded_aborts(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
+        monkeypatch.setattr("treadstone.sandbox.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         sb = _make_sandbox(status=SandboxStatus.STOPPED)
@@ -400,7 +400,7 @@ class TestSandboxServiceStartWithMetering:
         k8s.scale_sandbox.assert_called_once()
 
     async def test_start_allows_existing_long_interval_when_tier_is_unlimited(self, monkeypatch):
-        monkeypatch.setattr("treadstone.services.sandbox_service.settings.metering_enforcement_enabled", True)
+        monkeypatch.setattr("treadstone.sandbox.services.sandbox_service.settings.metering_enforcement_enabled", True)
         from treadstone.services.sandbox_service import SandboxService
 
         sb = _make_sandbox(status=SandboxStatus.STOPPED, auto_stop_interval=9999)
@@ -521,8 +521,26 @@ class TestSandboxServiceDeleteWithMetering:
 
 
 # ═══════════════════════════════════════════════════════════
-#  F16 — K8s Sync metering integration
+#  F16 — K8s Sync metering integration (via SandboxStateObserver)
 # ═══════════════════════════════════════════════════════════
+
+
+def _register_mock_observer(mock_observer):
+    """Register a mock observer and return a cleanup function."""
+    from treadstone.infra.services.sandbox_state_observer import clear_observers, register_observer
+
+    clear_observers()
+    register_observer(mock_observer)
+    return clear_observers
+
+
+def _make_mock_observer():
+    """Create a mock that satisfies the SandboxStateObserver Protocol."""
+    obs = MagicMock()
+    obs.on_sandbox_ready = AsyncMock()
+    obs.on_sandbox_stopped = AsyncMock()
+    obs.on_sandbox_deleted = AsyncMock()
+    return obs
 
 
 class TestApplyMeteringOnTransition:
@@ -531,106 +549,118 @@ class TestApplyMeteringOnTransition:
 
         session = AsyncMock()
         sandbox = _make_sandbox(status=SandboxStatus.CREATING)
+        obs = _make_mock_observer()
+        cleanup = _register_mock_observer(obs)
 
-        with patch("treadstone.services.k8s_sync._metering") as mock_metering:
-            mock_metering.open_compute_session = AsyncMock()
-            mock_metering.close_compute_session = AsyncMock()
-
+        try:
             await _apply_metering_on_transition(session, sandbox, SandboxStatus.CREATING, SandboxStatus.READY)
 
-            mock_metering.open_compute_session.assert_awaited_once_with(
-                session, sandbox.id, sandbox.owner_id, sandbox.template
-            )
-            mock_metering.close_compute_session.assert_not_awaited()
+            obs.on_sandbox_ready.assert_awaited_once_with(session, sandbox.id, sandbox.owner_id, sandbox.template)
+            obs.on_sandbox_stopped.assert_not_awaited()
+        finally:
+            cleanup()
 
     async def test_ready_to_stopped_closes_session(self):
         from treadstone.services.k8s_sync import _apply_metering_on_transition
 
         session = AsyncMock()
         sandbox = _make_sandbox(status=SandboxStatus.READY)
+        obs = _make_mock_observer()
+        cleanup = _register_mock_observer(obs)
 
-        with patch("treadstone.services.k8s_sync._metering") as mock_metering:
-            mock_metering.open_compute_session = AsyncMock()
-            mock_metering.close_compute_session = AsyncMock()
-
+        try:
             await _apply_metering_on_transition(session, sandbox, SandboxStatus.READY, SandboxStatus.STOPPED)
 
-            mock_metering.close_compute_session.assert_awaited_once_with(session, sandbox.id)
-            mock_metering.open_compute_session.assert_not_awaited()
+            obs.on_sandbox_stopped.assert_awaited_once_with(session, sandbox.id)
+            obs.on_sandbox_ready.assert_not_awaited()
+        finally:
+            cleanup()
 
     async def test_ready_to_error_closes_session(self):
         from treadstone.services.k8s_sync import _apply_metering_on_transition
 
         session = AsyncMock()
         sandbox = _make_sandbox(status=SandboxStatus.READY)
+        obs = _make_mock_observer()
+        cleanup = _register_mock_observer(obs)
 
-        with patch("treadstone.services.k8s_sync._metering") as mock_metering:
-            mock_metering.close_compute_session = AsyncMock()
-
+        try:
             await _apply_metering_on_transition(session, sandbox, SandboxStatus.READY, SandboxStatus.ERROR)
-
-            mock_metering.close_compute_session.assert_awaited_once()
+            obs.on_sandbox_stopped.assert_awaited_once()
+        finally:
+            cleanup()
 
     async def test_ready_to_deleting_closes_session(self):
         from treadstone.services.k8s_sync import _apply_metering_on_transition
 
         session = AsyncMock()
         sandbox = _make_sandbox(status=SandboxStatus.READY)
+        obs = _make_mock_observer()
+        cleanup = _register_mock_observer(obs)
 
-        with patch("treadstone.services.k8s_sync._metering") as mock_metering:
-            mock_metering.close_compute_session = AsyncMock()
-
+        try:
             await _apply_metering_on_transition(session, sandbox, SandboxStatus.READY, SandboxStatus.DELETING)
-
-            mock_metering.close_compute_session.assert_awaited_once()
+            obs.on_sandbox_stopped.assert_awaited_once()
+        finally:
+            cleanup()
 
     async def test_creating_to_error_is_noop(self):
         from treadstone.services.k8s_sync import _apply_metering_on_transition
 
         session = AsyncMock()
         sandbox = _make_sandbox(status=SandboxStatus.CREATING)
+        obs = _make_mock_observer()
+        cleanup = _register_mock_observer(obs)
 
-        with patch("treadstone.services.k8s_sync._metering") as mock_metering:
-            mock_metering.open_compute_session = AsyncMock()
-            mock_metering.close_compute_session = AsyncMock()
-
+        try:
             await _apply_metering_on_transition(session, sandbox, SandboxStatus.CREATING, SandboxStatus.ERROR)
 
-            mock_metering.open_compute_session.assert_not_awaited()
-            mock_metering.close_compute_session.assert_not_awaited()
+            obs.on_sandbox_ready.assert_not_awaited()
+            obs.on_sandbox_stopped.assert_not_awaited()
+        finally:
+            cleanup()
 
     async def test_metering_failure_does_not_raise(self):
         from treadstone.services.k8s_sync import _apply_metering_on_transition
 
         session = AsyncMock()
         sandbox = _make_sandbox(status=SandboxStatus.CREATING)
+        obs = _make_mock_observer()
+        obs.on_sandbox_ready = AsyncMock(side_effect=RuntimeError("DB failure"))
+        cleanup = _register_mock_observer(obs)
 
-        with patch("treadstone.services.k8s_sync._metering") as mock_metering:
-            mock_metering.open_compute_session = AsyncMock(side_effect=RuntimeError("DB failure"))
-
+        try:
             await _apply_metering_on_transition(session, sandbox, SandboxStatus.CREATING, SandboxStatus.READY)
+        finally:
+            cleanup()
 
 
 class TestTryCloseComputeSession:
-    async def test_delegates_to_metering(self):
+    async def test_delegates_to_observer(self):
         from treadstone.services.k8s_sync import _try_close_compute_session
 
         session = AsyncMock()
-        with patch("treadstone.services.k8s_sync._metering") as mock_metering:
-            mock_metering.close_compute_session = AsyncMock()
+        obs = _make_mock_observer()
+        cleanup = _register_mock_observer(obs)
 
+        try:
             await _try_close_compute_session(session, "sb_test")
-
-            mock_metering.close_compute_session.assert_awaited_once_with(session, "sb_test")
+            obs.on_sandbox_stopped.assert_awaited_once_with(session, "sb_test")
+        finally:
+            cleanup()
 
     async def test_failure_does_not_raise(self):
         from treadstone.services.k8s_sync import _try_close_compute_session
 
         session = AsyncMock()
-        with patch("treadstone.services.k8s_sync._metering") as mock_metering:
-            mock_metering.close_compute_session = AsyncMock(side_effect=RuntimeError("oops"))
+        obs = _make_mock_observer()
+        obs.on_sandbox_stopped = AsyncMock(side_effect=RuntimeError("oops"))
+        cleanup = _register_mock_observer(obs)
 
+        try:
             await _try_close_compute_session(session, "sb_test")
+        finally:
+            cleanup()
 
 
 # ═══════════════════════════════════════════════════════════
@@ -654,7 +684,7 @@ class _MockScalarsResult:
 
 class TestReconcileMetering:
     async def test_opens_session_for_ready_sandbox_without_one(self):
-        from treadstone.services.k8s_sync import reconcile_metering
+        from treadstone.metering.services.metering_reconcile import reconcile_metering
 
         sandbox = _make_sandbox(status=SandboxStatus.READY)
 
@@ -680,7 +710,8 @@ class TestReconcileMetering:
         factory.__aexit__ = AsyncMock(return_value=False)
         session_factory = MagicMock(return_value=factory)
 
-        with patch("treadstone.services.k8s_sync._metering") as mock_metering:
+        with patch("treadstone.metering.services.metering_reconcile.MeteringService") as MockCls:
+            mock_metering = MockCls.return_value
             mock_metering.open_compute_session = AsyncMock()
             mock_metering.close_compute_session = AsyncMock()
 
@@ -691,7 +722,7 @@ class TestReconcileMetering:
             )
 
     async def test_closes_session_for_stopped_sandbox_with_open_session(self):
-        from treadstone.services.k8s_sync import reconcile_metering
+        from treadstone.metering.services.metering_reconcile import reconcile_metering
 
         stopped_sandbox = _make_sandbox(status=SandboxStatus.STOPPED)
         open_cs = ComputeSession(
@@ -726,7 +757,8 @@ class TestReconcileMetering:
         factory.__aexit__ = AsyncMock(return_value=False)
         session_factory = MagicMock(return_value=factory)
 
-        with patch("treadstone.services.k8s_sync._metering") as mock_metering:
+        with patch("treadstone.metering.services.metering_reconcile.MeteringService") as MockCls:
+            mock_metering = MockCls.return_value
             mock_metering.open_compute_session = AsyncMock()
             mock_metering.close_compute_session = AsyncMock()
 
@@ -735,7 +767,7 @@ class TestReconcileMetering:
             mock_metering.close_compute_session.assert_awaited_once_with(session, stopped_sandbox.id)
 
     async def test_closes_session_for_deleted_sandbox(self):
-        from treadstone.services.k8s_sync import reconcile_metering
+        from treadstone.metering.services.metering_reconcile import reconcile_metering
 
         open_cs = ComputeSession(
             id="cs_orphan",
@@ -769,7 +801,8 @@ class TestReconcileMetering:
         factory.__aexit__ = AsyncMock(return_value=False)
         session_factory = MagicMock(return_value=factory)
 
-        with patch("treadstone.services.k8s_sync._metering") as mock_metering:
+        with patch("treadstone.metering.services.metering_reconcile.MeteringService") as MockCls:
+            mock_metering = MockCls.return_value
             mock_metering.close_compute_session = AsyncMock()
 
             await reconcile_metering(session_factory)
@@ -777,7 +810,7 @@ class TestReconcileMetering:
             mock_metering.close_compute_session.assert_awaited_once_with(session, "sb_deleted")
 
     async def test_no_mismatches_is_noop(self):
-        from treadstone.services.k8s_sync import reconcile_metering
+        from treadstone.metering.services.metering_reconcile import reconcile_metering
 
         session = AsyncMock()
         session.execute = AsyncMock(return_value=_MockScalarsResult([]))
@@ -788,7 +821,8 @@ class TestReconcileMetering:
         factory.__aexit__ = AsyncMock(return_value=False)
         session_factory = MagicMock(return_value=factory)
 
-        with patch("treadstone.services.k8s_sync._metering") as mock_metering:
+        with patch("treadstone.metering.services.metering_reconcile.MeteringService") as MockCls:
+            mock_metering = MockCls.return_value
             mock_metering.open_compute_session = AsyncMock()
             mock_metering.close_compute_session = AsyncMock()
 
@@ -798,7 +832,7 @@ class TestReconcileMetering:
             mock_metering.close_compute_session.assert_not_awaited()
 
     async def test_metering_failure_does_not_halt_reconciliation(self):
-        from treadstone.services.k8s_sync import reconcile_metering
+        from treadstone.metering.services.metering_reconcile import reconcile_metering
 
         sb1 = _make_sandbox(id="sb_a", status=SandboxStatus.READY)
         sb2 = _make_sandbox(id="sb_b", status=SandboxStatus.READY)
@@ -827,7 +861,8 @@ class TestReconcileMetering:
         factory.__aexit__ = AsyncMock(return_value=False)
         session_factory = MagicMock(return_value=factory)
 
-        with patch("treadstone.services.k8s_sync._metering") as mock_metering:
+        with patch("treadstone.metering.services.metering_reconcile.MeteringService") as MockCls:
+            mock_metering = MockCls.return_value
             mock_metering.open_compute_session = AsyncMock(side_effect=[RuntimeError("fail on sb_a"), None])
 
             await reconcile_metering(session_factory)
