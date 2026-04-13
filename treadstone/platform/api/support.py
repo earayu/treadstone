@@ -19,6 +19,11 @@ from treadstone.identity.api.deps import optional_cookie_user
 from treadstone.identity.models.user import User, utc_now
 from treadstone.platform.models.user_feedback import UserFeedback
 
+__all__ = [
+    "router",
+    "FEEDBACK_SUBMISSION_COOLDOWN_SECONDS",
+]
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/support", tags=["support"])

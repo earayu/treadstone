@@ -6,6 +6,11 @@ from sqlalchemy.orm import Mapped, mapped_column
 from treadstone.core.database import Base
 from treadstone.identity.models.user import utc_now
 
+__all__ = [
+    "PLATFORM_LIMITS_SINGLETON_ID",
+    "PlatformLimits",
+]
+
 PLATFORM_LIMITS_SINGLETON_ID = "platform_limits"
 
 

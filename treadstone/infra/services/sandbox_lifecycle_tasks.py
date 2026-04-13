@@ -25,6 +25,14 @@ from treadstone.sandbox.models.sandbox import Sandbox, SandboxStatus
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "AutoDeleteFailure",
+    "LIFECYCLE_TICK_INTERVAL",
+    "check_auto_delete",
+    "check_idle_auto_stop",
+    "run_lifecycle_tick",
+]
+
 LIFECYCLE_TICK_INTERVAL = 60
 
 StopSandboxCallback = Callable[[AsyncSession, Sandbox], Awaitable[None]]

@@ -8,6 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from treadstone.audit.models.audit_event import AuditActorType, AuditEvent, AuditResult
 from treadstone.core.request_context import get_client_ip, get_request_context
 
+__all__ = [
+    "record_audit_event",
+]
+
 
 def _compact(metadata: dict[str, Any] | None) -> dict[str, Any]:
     if metadata is None:

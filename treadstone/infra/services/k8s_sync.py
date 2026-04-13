@@ -29,6 +29,23 @@ from treadstone.sandbox.models.sandbox import Sandbox, SandboxPendingOperation, 
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    # Constants
+    "RECONCILE_INTERVAL",
+    "WATCH_RESTART_BACKOFF",
+    # Public functions
+    "derive_status_from_sandbox_cr",
+    "handle_watch_event",
+    "reconcile",
+    "reconcile_metering",
+    "reconcile_storage_metering",
+    "start_sync_loop",
+    "watch_loop",
+    # Private helpers re-exported by shim
+    "_apply_metering_on_transition",
+    "_try_close_compute_session",
+]
+
 _metering = MeteringService()
 
 RECONCILE_INTERVAL = 300  # 5 minutes

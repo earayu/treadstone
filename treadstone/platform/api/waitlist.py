@@ -18,6 +18,10 @@ from treadstone.core.errors import TreadstoneError
 from treadstone.platform.models.waitlist import ApplicationStatus, WaitlistApplication
 from treadstone.platform.services.platform_limits import PlatformLimitsService
 
+__all__ = [
+    "router",
+]
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/waitlist", tags=["waitlist"])

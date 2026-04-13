@@ -23,6 +23,19 @@ from treadstone.config import settings
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "PROXY_HOP_HEADERS",
+    "WS_ACTIVITY_TOUCH_INTERVAL",
+    "build_sandbox_url",
+    "close_http_client",
+    "get_http_client",
+    "proxy_http_request",
+    "proxy_websocket",
+    "_filter_request_headers",
+    "_filter_response_headers",
+    "_is_x_sandbox_vendor_header",
+]
+
 PROXY_HOP_HEADERS = frozenset(
     {
         "host",

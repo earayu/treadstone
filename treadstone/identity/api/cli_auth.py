@@ -32,6 +32,10 @@ from treadstone.identity.services.cli_login_flow import approve_cli_flow as appr
 from treadstone.identity.services.cli_login_flow import consume_cli_flow
 from treadstone.identity.services.users import get_jwt_strategy
 
+__all__ = [
+    "router",
+]
+
 router = APIRouter(prefix="/v1/auth/cli", tags=["auth"])
 
 

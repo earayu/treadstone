@@ -7,6 +7,12 @@ from sqlalchemy.orm import Mapped, mapped_column
 from treadstone.core.database import Base
 from treadstone.identity.models.user import random_id, utc_now
 
+__all__ = [
+    "AuditActorType",
+    "AuditEvent",
+    "AuditResult",
+]
+
 
 class AuditActorType(StrEnum):
     USER = "user"

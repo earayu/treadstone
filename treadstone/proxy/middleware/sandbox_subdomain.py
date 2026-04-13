@@ -43,6 +43,13 @@ from treadstone.sandbox.models.sandbox_web_link import SandboxWebLink
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "SandboxSubdomainMiddleware",
+    "extract_sandbox_id",
+    # Private helper re-exported by shim
+    "_strip_internal_auth",
+]
+
 _HTML_NOT_FOUND = """\
 <!doctype html>
 <html lang="en">

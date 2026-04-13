@@ -38,6 +38,10 @@ from treadstone.metering.models.metering import ComputeSession, StorageLedger
 from treadstone.metering.services.metering_helpers import CU_MEMORY_WEIGHT, CU_VCPU_WEIGHT
 from treadstone.metering.services.metering_service import MeteringService
 
+__all__ = [
+    "router",
+]
+
 router = APIRouter(prefix="/v1/usage", tags=["usage"])
 
 _metering = MeteringService()

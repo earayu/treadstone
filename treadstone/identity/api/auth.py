@@ -78,6 +78,34 @@ from treadstone.identity.services.users import (
 from treadstone.platform.services.platform_limits import PlatformLimitsService
 from treadstone.sandbox.models.sandbox import Sandbox
 
+__all__ = [
+    "OAUTH_STATE_AUDIENCE",
+    "OAUTH_STATE_TTL_SECONDS",
+    "authenticate_email_password",
+    "change_password",
+    "confirm_password_reset",
+    "confirm_verification",
+    "create_api_key",
+    "delete_api_key",
+    "delete_user",
+    "get_user",
+    "github_authorize",
+    "github_callback",
+    "google_authorize",
+    "google_callback",
+    "list_api_keys",
+    "list_users",
+    "login",
+    "logout",
+    "register",
+    "request_password_reset",
+    "request_verification",
+    "router",
+    "update_api_key",
+    "update_user_status",
+    "write_session_cookie",
+]
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])

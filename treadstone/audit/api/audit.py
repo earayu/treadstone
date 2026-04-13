@@ -15,6 +15,10 @@ from treadstone.core.request_context import set_request_context
 from treadstone.identity.api.deps import bearer_scheme, optional_cookie_user
 from treadstone.identity.models.user import User
 
+__all__ = [
+    "router",
+]
+
 router = APIRouter(prefix="/v1/audit", tags=["audit"])
 
 

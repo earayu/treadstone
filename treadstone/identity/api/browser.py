@@ -16,6 +16,10 @@ from treadstone.identity.services.browser_auth import issue_bootstrap_ticket
 from treadstone.identity.services.browser_login import validate_browser_return_to
 from treadstone.sandbox.models.sandbox import Sandbox
 
+__all__ = [
+    "router",
+]
+
 router = APIRouter(prefix="/v1/browser", tags=["browser"])
 
 

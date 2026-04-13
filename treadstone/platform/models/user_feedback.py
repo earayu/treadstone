@@ -8,6 +8,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 from treadstone.core.database import Base
 from treadstone.identity.models.user import random_id, utc_now
 
+__all__ = [
+    "UserFeedback",
+]
+
 
 class UserFeedback(Base):
     __tablename__ = "user_feedback"

@@ -36,6 +36,55 @@ from typing import Any, Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    # API constants
+    "CLAIM_API_GROUP",
+    "CLAIM_API_VERSION",
+    "SANDBOX_API_GROUP",
+    "SANDBOX_API_VERSION",
+    "TEMPLATE_API_GROUP",
+    "TEMPLATE_API_VERSION",
+    "SNAPSHOT_API_GROUP",
+    "SNAPSHOT_API_VERSION",
+    "WATCH_TIMEOUT_SECONDS",
+    # Sandbox image / security constants
+    "SANDBOX_HOME_DIR",
+    "SANDBOX_UID",
+    "SANDBOX_GID",
+    "SANDBOX_READ_ONLY_ROOT_FILESYSTEM",
+    # Probe defaults
+    "DEFAULT_STARTUP_PROBE",
+    "DEFAULT_READINESS_PROBE",
+    # Label / annotation keys
+    "ANNOTATION_ALLOWED_STORAGE_SIZES",
+    "LABEL_SANDBOX_ID",
+    "LABEL_OWNER_ID",
+    "LABEL_TEMPLATE",
+    "LABEL_PROVISION_MODE",
+    "LABEL_WORKLOAD",
+    "LABEL_STORAGE_ROLE",
+    "WORKLOAD_SANDBOX",
+    "PROVISION_MODE_CLAIM",
+    "PROVISION_MODE_DIRECT",
+    "STORAGE_ROLE_WORKSPACE",
+    "ANNOTATION_SANDBOX_NAME",
+    "ANNOTATION_CREATED_AT",
+    # Classes
+    "WatchExpiredError",
+    "K8sClientProtocol",
+    "Kr8sClient",
+    "FakeK8sClient",
+    # Public functions
+    "format_shutdown_time",
+    "get_k8s_client",
+    "set_k8s_client",
+    # Private helpers re-exported by shim
+    "_parse_sandbox_template",
+    "_sandbox_init_container_security_context",
+    "_sandbox_main_container_security_context",
+    "_sandbox_pod_security_context",
+]
+
 CLAIM_API_GROUP = "extensions.agents.x-k8s.io"
 CLAIM_API_VERSION = "v1alpha1"
 SANDBOX_API_GROUP = "agents.x-k8s.io"

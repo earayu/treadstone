@@ -7,6 +7,10 @@ from treadstone.config import settings
 from treadstone.infra.services.k8s_client import get_k8s_client
 from treadstone.sandbox.services.sandbox_templates import load_sandbox_template_catalog
 
+__all__ = [
+    "router",
+]
+
 router = APIRouter(prefix="/v1/sandbox-templates", tags=["sandbox-templates"])
 
 

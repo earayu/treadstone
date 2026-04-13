@@ -13,6 +13,13 @@ from treadstone.sandbox.models.sandbox import SandboxStatus
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "LeaderControlledSyncSupervisor",
+    # Private helpers re-exported by shim
+    "_k8s_delete_sandbox",
+    "_k8s_stop_sandbox",
+]
+
 
 async def _k8s_stop_sandbox(session, sandbox) -> None:
     """Stop a sandbox via K8s scale-down (used as grace-period enforcement callback).

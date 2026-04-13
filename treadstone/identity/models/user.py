@@ -8,6 +8,14 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from treadstone.core.database import Base
 
+__all__ = [
+    "OAuthAccount",
+    "Role",
+    "User",
+    "random_id",
+    "utc_now",
+]
+
 
 def utc_now() -> datetime:
     return datetime.now(UTC)

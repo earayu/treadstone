@@ -5,6 +5,11 @@ from urllib.parse import urlparse
 from treadstone.config import settings
 from treadstone.core.errors import ValidationError
 
+__all__ = [
+    "extract_sandbox_id_from_return_host",
+    "validate_browser_return_to",
+]
+
 
 def extract_sandbox_id_from_return_host(host: str) -> str | None:
     if not settings.sandbox_domain:

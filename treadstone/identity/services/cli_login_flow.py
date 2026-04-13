@@ -6,6 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from treadstone.identity.models.cli_login_flow import CliLoginFlow
 from treadstone.identity.models.user import utc_now
 
+__all__ = [
+    "approve_cli_flow",
+    "consume_cli_flow",
+]
+
 
 async def approve_cli_flow(
     session: AsyncSession,

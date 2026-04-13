@@ -16,6 +16,20 @@ from treadstone.identity.models.email_verification_log import EmailVerificationL
 from treadstone.identity.models.user import OAuthAccount, Role, User
 from treadstone.identity.services.email import get_email_backend
 
+__all__ = [
+    "COOKIE_MAX_AGE",
+    "UserManager",
+    "auth_backend",
+    "cookie_transport",
+    "fastapi_users",
+    "get_github_oauth_client",
+    "get_google_oauth_client",
+    "get_jwt_strategy",
+    "get_user_db",
+    "get_user_manager",
+    "should_use_secure_cookies",
+]
+
 COOKIE_MAX_AGE = settings.session_ttl_seconds
 
 

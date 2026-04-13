@@ -26,6 +26,10 @@ from treadstone.sandbox.models.sandbox import Sandbox, SandboxStatus
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "router",
+]
+
 router = APIRouter(prefix="/v1/sandboxes", tags=["sandbox-proxy"])
 
 

@@ -11,6 +11,10 @@ from treadstone.api.schemas import SandboxTemplateResponse
 from treadstone.core.errors import SandboxTemplateCatalogUnavailableError
 from treadstone.infra.services.k8s_client import K8sClientProtocol
 
+__all__ = [
+    "load_sandbox_template_catalog",
+]
+
 logger = logging.getLogger(__name__)
 
 

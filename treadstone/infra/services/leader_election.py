@@ -9,6 +9,19 @@ from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "K8sLeaseConflictError",
+    "K8sLeaseError",
+    "K8sLeaseStore",
+    "LEASE_API_GROUP",
+    "LEASE_API_VERSION",
+    "LeaderElector",
+    "LeadershipState",
+    "LeaseStoreProtocol",
+    "format_lease_time",
+    "parse_lease_time",
+]
+
 LEASE_API_GROUP = "coordination.k8s.io"
 LEASE_API_VERSION = "v1"
 
