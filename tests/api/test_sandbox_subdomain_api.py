@@ -108,14 +108,14 @@ def _enable_subdomain(monkeypatch, domain: str = "sandbox.localhost", app_base_u
     from treadstone.config import Settings
 
     s = Settings()
-    monkeypatch.setattr("treadstone.services.browser_login.settings", s)
-    monkeypatch.setattr("treadstone.api.sandboxes.settings", s)
-    monkeypatch.setattr("treadstone.core.users.settings", s)
-    monkeypatch.setattr("treadstone.middleware.sandbox_subdomain.settings", s)
-    monkeypatch.setattr("treadstone.services.sandbox_service.settings", s)
-    monkeypatch.setattr("treadstone.services.browser_auth.settings", s)
-    monkeypatch.setattr("treadstone.services.sandbox_proxy.settings", s)
-    monkeypatch.setattr("treadstone.middleware.sandbox_subdomain.async_session", _test_session_factory)
+    monkeypatch.setattr("treadstone.identity.services.browser_login.settings", s)
+    monkeypatch.setattr("treadstone.sandbox.api.sandboxes.settings", s)
+    monkeypatch.setattr("treadstone.identity.services.users.settings", s)
+    monkeypatch.setattr("treadstone.proxy.middleware.sandbox_subdomain.settings", s)
+    monkeypatch.setattr("treadstone.sandbox.services.sandbox_service.settings", s)
+    monkeypatch.setattr("treadstone.identity.services.browser_auth.settings", s)
+    monkeypatch.setattr("treadstone.proxy.services.sandbox_proxy.settings", s)
+    monkeypatch.setattr("treadstone.proxy.middleware.sandbox_subdomain.async_session", _test_session_factory)
 
 
 async def _create_ready_sandbox(auth_client: AsyncClient, name: str = "mybox") -> str:
@@ -192,7 +192,7 @@ class TestSubdomainDisabled:
         from treadstone.config import Settings
 
         s = Settings()
-        monkeypatch.setattr("treadstone.middleware.sandbox_subdomain.settings", s)
+        monkeypatch.setattr("treadstone.proxy.middleware.sandbox_subdomain.settings", s)
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get("/health")
@@ -238,8 +238,8 @@ class TestSubdomainRouting:
         )
         auth_client.cookies.set("prefs", "a b", domain=f"sandbox-{sandbox_id}.sandbox.localhost", path="/")
 
-        with patch("treadstone.services.sandbox_proxy._http_client", mock_client):
-            with patch("treadstone.middleware.sandbox_subdomain.get_http_client", return_value=mock_client):
+        with patch("treadstone.proxy.services.sandbox_proxy._http_client", mock_client):
+            with patch("treadstone.proxy.middleware.sandbox_subdomain.get_http_client", return_value=mock_client):
                 bootstrap = await auth_client.get(
                     f"https://sandbox-{sandbox_id}.sandbox.localhost/",
                     follow_redirects=True,
@@ -285,8 +285,8 @@ class TestSubdomainRouting:
         open_link = link_resp.json()["open_link"]
 
         mock_client, _ = _capture_mock()
-        with patch("treadstone.services.sandbox_proxy._http_client", mock_client):
-            with patch("treadstone.middleware.sandbox_subdomain.get_http_client", return_value=mock_client):
+        with patch("treadstone.proxy.services.sandbox_proxy._http_client", mock_client):
+            with patch("treadstone.proxy.middleware.sandbox_subdomain.get_http_client", return_value=mock_client):
                 async with AsyncClient(transport=ASGITransport(app=app), base_url="https://app.localhost") as client:
                     resp = await client.get(open_link, follow_redirects=True)
                     followup = await client.get(
@@ -324,8 +324,8 @@ class TestSubdomainRouting:
         cookie_val = issue_sandbox_web_cookie(sandbox_id=sandbox_id, issued_via="test")
         mock_client, _ = _capture_mock()
 
-        with patch("treadstone.services.sandbox_proxy._http_client", mock_client):
-            with patch("treadstone.middleware.sandbox_subdomain.get_http_client", return_value=mock_client):
+        with patch("treadstone.proxy.services.sandbox_proxy._http_client", mock_client):
+            with patch("treadstone.proxy.middleware.sandbox_subdomain.get_http_client", return_value=mock_client):
                 async with AsyncClient(transport=ASGITransport(app=app), base_url="https://app.localhost") as browser:
                     browser.cookies.set(
                         "ts_bui",
@@ -358,7 +358,8 @@ class TestSubdomainRouting:
             if on_activity is not None:
                 await on_activity()
 
-        with patch("treadstone.middleware.sandbox_subdomain.proxy_websocket", side_effect=capturing_proxy_websocket):
+        ws_target = "treadstone.proxy.middleware.sandbox_subdomain.proxy_websocket"
+        with patch(ws_target, side_effect=capturing_proxy_websocket):
             sends = await _run_ws_asgi(scope)
 
         accept_msgs = [msg for msg in sends if msg.get("type") == "websocket.accept"]
@@ -560,7 +561,7 @@ class TestSubdomainErrorPages:
         mock_client.build_request.return_value = httpx.Request("GET", "http://fake/")
         mock_client.send.side_effect = httpx.ConnectError("Connection refused")
 
-        with patch("treadstone.middleware.sandbox_subdomain.get_http_client", return_value=mock_client):
+        with patch("treadstone.proxy.middleware.sandbox_subdomain.get_http_client", return_value=mock_client):
             async with AsyncClient(transport=ASGITransport(app=app), base_url="https://app.localhost") as browser:
                 browser.cookies.set("ts_bui", cookie_val, domain=f"sandbox-{sandbox_id}.sandbox.localhost", path="/")
                 resp = await browser.get(f"https://sandbox-{sandbox_id}.sandbox.localhost/", follow_redirects=False)

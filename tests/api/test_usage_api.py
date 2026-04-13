@@ -162,7 +162,7 @@ async def test_get_usage_includes_credit_pool_and_grants(user_client):
 
 async def test_get_usage_clips_cross_period_cumulative_usage(user_client, monkeypatch):
     fixed_now = datetime(2026, 3, 15, 12, 0, 0, tzinfo=UTC)
-    monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: fixed_now)
+    monkeypatch.setattr("treadstone.metering.services.metering_service.utc_now", lambda: fixed_now)
 
     async with _test_session_factory() as session:
         user = (await session.execute(select(User).where(User.email == "user@example.com"))).unique().scalar_one()
@@ -240,8 +240,8 @@ async def test_get_usage_surfaces_negative_total_remaining_when_user_has_overage
 
 async def test_grants_exactly_at_expiry_align_with_usage_summary(user_client, monkeypatch):
     fixed_now = datetime(2026, 3, 15, 12, 0, 0, tzinfo=UTC)
-    monkeypatch.setattr("treadstone.services.metering_service.utc_now", lambda: fixed_now)
-    monkeypatch.setattr("treadstone.api.metering_serializers.utc_now", lambda: fixed_now)
+    monkeypatch.setattr("treadstone.metering.services.metering_service.utc_now", lambda: fixed_now)
+    monkeypatch.setattr("treadstone.metering.api.metering_serializers.utc_now", lambda: fixed_now)
 
     async with _test_session_factory() as session:
         user = (await session.execute(select(User).where(User.email == "user@example.com"))).unique().scalar_one()

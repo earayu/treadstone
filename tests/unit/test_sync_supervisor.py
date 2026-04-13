@@ -94,8 +94,8 @@ async def test_supervisor_metering_loop_runs_once_before_first_sleep(monkeypatch
         calls.append("sleep")
         raise asyncio.CancelledError
 
-    import treadstone.services.metering_tasks as metering_tasks
-    import treadstone.services.sync_supervisor as sync_supervisor
+    import treadstone.infra.services.sync_supervisor as sync_supervisor
+    import treadstone.metering.services.metering_tasks as metering_tasks
 
     monkeypatch.setattr(metering_tasks, "run_metering_tick", fake_run_metering_tick)
     monkeypatch.setattr(sync_supervisor.asyncio, "sleep", fake_sleep)
@@ -125,8 +125,8 @@ async def test_supervisor_lifecycle_loop_runs_once_before_first_sleep(monkeypatc
         calls.append("sleep")
         raise asyncio.CancelledError
 
-    import treadstone.services.sandbox_lifecycle_tasks as lifecycle_tasks
-    import treadstone.services.sync_supervisor as sync_supervisor
+    import treadstone.infra.services.sandbox_lifecycle_tasks as lifecycle_tasks
+    import treadstone.infra.services.sync_supervisor as sync_supervisor
 
     monkeypatch.setattr(lifecycle_tasks, "run_lifecycle_tick", fake_run_lifecycle_tick)
     monkeypatch.setattr(sync_supervisor.asyncio, "sleep", fake_sleep)
