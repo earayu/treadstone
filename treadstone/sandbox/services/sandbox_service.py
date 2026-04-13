@@ -10,6 +10,7 @@ start/stop use scale_sandbox on the Sandbox CR regardless of path.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -100,6 +101,19 @@ def _effective_resource_limits(requests: dict[str, str], limits: dict[str, str] 
     return requests
 
 
+@dataclass
+class _CreateParams:
+    """Validated parameters produced by ``_validate_create``.
+
+    Passed through the create pipeline so each phase has access to the
+    pre-validated values without re-deriving them.
+    """
+
+    effective_storage_size: str
+    max_duration: int | None
+    sandbox_name: str
+
+
 class SandboxService:
     def __init__(
         self,
@@ -131,20 +145,25 @@ class SandboxService:
 
         return max_duration
 
-    async def create(
+    # ── create() pipeline ───────────────────────────────────────────────────
+
+    async def _validate_create(
         self,
         owner_id: str,
         template: str,
-        name: str | None = None,
-        labels: dict | None = None,
-        auto_stop_interval: int = 15,
-        auto_delete_interval: int = -1,
-        persist: bool = False,
-        storage_size: str | None = None,
-    ) -> Sandbox:
+        name: str | None,
+        auto_stop_interval: int,
+        persist: bool,
+        storage_size: str | None,
+    ) -> _CreateParams:
+        """Pure validation — no DB writes, no K8s calls, no metering mutations.
+
+        Raises on the first failed check so the caller can abort early.
+        Returns a ``_CreateParams`` with the resolved/validated values.
+        """
         effective_storage_size = storage_size or settings.sandbox_default_storage_size
 
-        # ── Validate storage size against template annotation (if persistent) ──
+        # Validate storage size against template annotation (if persistent)
         if persist:
             tmpl = await self._resolve_template(settings.sandbox_namespace, template)
             allowed = tmpl.get("allowed_storage_sizes") or list(SANDBOX_STORAGE_SIZE_VALUES)
@@ -154,7 +173,7 @@ class SandboxService:
                     f"Allowed sizes: {', '.join(allowed)}"
                 )
 
-        # ── Metering: enforcement checks (gated by config) ──
+        # Metering enforcement checks (gated by config)
         max_duration: int | None = None
         if self._metering is not None and settings.metering_enforcement_enabled:
             await self._metering.check_template_allowed(self.session, owner_id, template)
@@ -167,26 +186,48 @@ class SandboxService:
 
             max_duration = await self._validate_auto_stop_interval_for_tier(owner_id, auto_stop_interval)
 
-        # ── Create sandbox record ──
-        sandbox_id = "sb" + random_id()
+        # Resolve sandbox name
         if name:
             sandbox_name = name
         else:
-            # Human-readable default name, e.g. sb-lively-otter-3f9a
             try:
                 from treadstone.core.naming import generate_sandbox_name
 
                 sandbox_name = generate_sandbox_name()
             except Exception:
-                # Fallback to legacy scheme on any unexpected error
                 sandbox_name = f"sb-{random_id(8)}"
 
+        # Ensure persistent storage backend is available
         if persist:
             await self._ensure_persistent_storage_backend_ready()
 
+        return _CreateParams(
+            effective_storage_size=effective_storage_size,
+            max_duration=max_duration,
+            sandbox_name=sandbox_name,
+        )
+
+    async def _persist_sandbox(
+        self,
+        owner_id: str,
+        template: str,
+        params: _CreateParams,
+        labels: dict | None,
+        auto_stop_interval: int,
+        auto_delete_interval: int,
+        persist: bool,
+    ) -> Sandbox:
+        """Build and commit the Sandbox DB row.
+
+        On ``IntegrityError`` (name conflict) the transaction is rolled back
+        and ``SandboxNameConflictError`` is raised.  For any other failure the
+        caller relies on the session's implicit rollback.
+        """
+        sandbox_id = "sb" + random_id()
+
         sandbox = Sandbox()
         sandbox.id = sandbox_id
-        sandbox.name = sandbox_name
+        sandbox.name = params.sandbox_name
         sandbox.owner_id = owner_id
         sandbox.template = template
         sandbox.labels = labels or {}
@@ -199,7 +240,7 @@ class SandboxService:
         sandbox.gmt_last_active = utc_now()
         sandbox.k8s_namespace = settings.sandbox_namespace
         sandbox.persist = persist
-        sandbox.storage_size = effective_storage_size if persist else None
+        sandbox.storage_size = params.effective_storage_size if persist else None
 
         if persist:
             sandbox.provision_mode = "direct"
@@ -214,15 +255,25 @@ class SandboxService:
             await self.session.commit()
         except IntegrityError:
             await self.session.rollback()
-            raise SandboxNameConflictError(sandbox_name)
+            raise SandboxNameConflictError(params.sandbox_name)
         await self.session.refresh(sandbox)
+        return sandbox
 
-        shutdown_time: datetime | None = None
-        if max_duration is not None and max_duration > 0:
-            shutdown_time = datetime.now(UTC) + timedelta(seconds=max_duration)
+    async def _provision_k8s(
+        self,
+        sandbox: Sandbox,
+        template: str,
+        effective_storage_size: str,
+        shutdown_time: datetime | None,
+    ) -> None:
+        """Create the K8s resource (SandboxClaim or direct Sandbox CR).
 
+        On ``TemplateNotFoundError`` the DB record is cleaned up (deleted).
+        On other K8s failures the sandbox is marked ERROR with a compensating
+        DB update (the record survives for debugging).
+        """
         try:
-            if persist:
+            if sandbox.persist:
                 await self._create_direct(sandbox, template, effective_storage_size, shutdown_time=shutdown_time)
             else:
                 await self._create_via_claim(sandbox, template, shutdown_time=shutdown_time)
@@ -231,32 +282,76 @@ class SandboxService:
             await self.session.commit()
             raise
         except Exception:
-            logger.exception("Failed to create K8s resource for sandbox %s", sandbox_id)
+            logger.exception("Failed to create K8s resource for sandbox %s", sandbox.id)
             sandbox.status = SandboxStatus.ERROR
-            sandbox.status_message = f"Failed to create {'Sandbox CR' if persist else 'SandboxClaim'}"
+            sandbox.status_message = (
+                f"Failed to create {'Sandbox CR' if sandbox.persist else 'SandboxClaim'}"
+            )
             sandbox.version += 1
             self.session.add(sandbox)
             await self.session.commit()
             logger.info(
                 "Sandbox %s status creating -> error (source=api_create) message=%r",
-                sandbox_id,
+                sandbox.id,
                 sandbox.status_message,
             )
 
-        # ── Metering: record storage allocation for persistent sandboxes (best-effort) ──
-        if self._metering is not None and persist and sandbox.status != SandboxStatus.ERROR:
-            try:
-                size_gib = parse_storage_size_gib(effective_storage_size)
-                await self._metering.record_storage_allocation(
-                    self.session,
-                    owner_id,
-                    sandbox.id,
-                    size_gib,
-                    backend_mode=StorageBackendMode.LIVE_DISK,
-                )
-                await self.session.commit()
-            except Exception:
-                logger.exception("Failed to record storage allocation for sandbox %s", sandbox_id)
+    async def _record_metering(
+        self,
+        sandbox: Sandbox,
+        owner_id: str,
+        effective_storage_size: str,
+    ) -> None:
+        """Best-effort storage allocation recording for persistent sandboxes.
+
+        Failures are logged but never propagated — metering is an async
+        side-effect that must not block sandbox creation.
+        """
+        if self._metering is None or not sandbox.persist or sandbox.status == SandboxStatus.ERROR:
+            return
+        try:
+            size_gib = parse_storage_size_gib(effective_storage_size)
+            await self._metering.record_storage_allocation(
+                self.session,
+                owner_id,
+                sandbox.id,
+                size_gib,
+                backend_mode=StorageBackendMode.LIVE_DISK,
+            )
+            await self.session.commit()
+        except Exception:
+            logger.exception("Failed to record storage allocation for sandbox %s", sandbox.id)
+
+    async def create(
+        self,
+        owner_id: str,
+        template: str,
+        name: str | None = None,
+        labels: dict | None = None,
+        auto_stop_interval: int = 15,
+        auto_delete_interval: int = -1,
+        persist: bool = False,
+        storage_size: str | None = None,
+    ) -> Sandbox:
+        # Phase 1: Validate — pure decision, no side effects
+        params = await self._validate_create(
+            owner_id, template, name, auto_stop_interval, persist, storage_size,
+        )
+
+        # Phase 2: Persist — DB write (auto-rollback on failure)
+        sandbox = await self._persist_sandbox(
+            owner_id, template, params, labels, auto_stop_interval, auto_delete_interval, persist,
+        )
+
+        # Phase 3: Provision — K8s side effect (compensating DB update on failure)
+        shutdown_time: datetime | None = None
+        if params.max_duration is not None and params.max_duration > 0:
+            shutdown_time = datetime.now(UTC) + timedelta(seconds=params.max_duration)
+
+        await self._provision_k8s(sandbox, template, params.effective_storage_size, shutdown_time)
+
+        # Phase 4: Metering — best-effort async side effect
+        await self._record_metering(sandbox, owner_id, params.effective_storage_size)
 
         return sandbox
 
