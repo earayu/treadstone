@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Test Report</title>
+    <style>
+        body {
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    font-size: 1.125rem;
+    line-height: 1.4;
+}
+
+.container {
+    max-width: 1200px;
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+h2 {
+    color: #ff0288;
+    font-size: 2.5rem;
+}
+
+.summary {
+    margin: 32px 0 32px 0;
+    font-size: 1.25rem;
+}
+
+.date {
+    margin-bottom: 20px;
+}
+
+td {
+    padding: 4px 8px 4px 0;
+}
+
+thead {
+    font-weight: bold;
+}
+
+.success, .success a {
+    color: green;
+}
+
+.failure, .failure a {
+    color: red;
+}
+
+@media (prefers-color-scheme: dark) {
+    body {
+        background-color: #19191c;
+        color: #c2c2c2;
+    }
+}
+
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Report</h2>
+    <div class="summary">
+        <div class="date">Mon, 13 Apr 2026 19:22:28 +0000</div>
+        <div class="count">Executed: 15 (100%)</div>
+        <div class="count">Succeeded: 11 (73.3%)</div>
+        <div class="count">Failed: 4 (26.7%)</div>
+    </div>
+    <table>
+        <thead>
+        <td>File</td>
+        <td>Status</td>
+        <td>Start Time</td>
+        <td>Duration</td>
+        </thead>
+        <tbody>
+        <tr class="failure" data-duration="3574" data-status="failure" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/01-auth-session.hurl" data-id="cf6c81a7-e6ba-4379-93a8-e95b9cacb7ed" data-timestamp="1776107543">
+    <td><a href="store/cf6c81a7-e6ba-4379-93a8-e95b9cacb7ed-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/01-auth-session.hurl</a></td>
+    <td>failure</td>
+    <td>2026-04-13T19:12:23+00:00</td>
+    <td>3.574</td>
+</tr>
+<tr class="success" data-duration="24136" data-status="success" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/02-auth-apikey.hurl" data-id="8d6ec5b9-1768-4af7-a111-0ef422472a08" data-timestamp="1776107546">
+    <td><a href="store/8d6ec5b9-1768-4af7-a111-0ef422472a08-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/02-auth-apikey.hurl</a></td>
+    <td>success</td>
+    <td>2026-04-13T19:12:26+00:00</td>
+    <td>24.136</td>
+</tr>
+<tr class="failure" data-duration="6876" data-status="failure" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/03-auth-password.hurl" data-id="01e05795-09c0-41ca-90be-63b42e72b237" data-timestamp="1776107570">
+    <td><a href="store/01e05795-09c0-41ca-90be-63b42e72b237-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/03-auth-password.hurl</a></td>
+    <td>failure</td>
+    <td>2026-04-13T19:12:50+00:00</td>
+    <td>6.876</td>
+</tr>
+<tr class="success" data-duration="28203" data-status="success" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/04-sandbox-crud.hurl" data-id="a55125d7-fff7-4acb-bbd6-c25026ded834" data-timestamp="1776107577">
+    <td><a href="store/a55125d7-fff7-4acb-bbd6-c25026ded834-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/04-sandbox-crud.hurl</a></td>
+    <td>success</td>
+    <td>2026-04-13T19:12:57+00:00</td>
+    <td>28.203</td>
+</tr>
+<tr class="success" data-duration="93356" data-status="success" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/05-sandbox-dual-path.hurl" data-id="01b6874c-030c-43e9-be26-0fe0fd5f708c" data-timestamp="1776107605">
+    <td><a href="store/01b6874c-030c-43e9-be26-0fe0fd5f708c-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/05-sandbox-dual-path.hurl</a></td>
+    <td>success</td>
+    <td>2026-04-13T19:13:25+00:00</td>
+    <td>93.356</td>
+</tr>
+<tr class="success" data-duration="57384" data-status="success" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/06-sandbox-names-web-link.hurl" data-id="58b19b13-446a-4ece-8cdc-bde7535257cb" data-timestamp="1776107699">
+    <td><a href="store/58b19b13-446a-4ece-8cdc-bde7535257cb-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/06-sandbox-names-web-link.hurl</a></td>
+    <td>success</td>
+    <td>2026-04-13T19:14:59+00:00</td>
+    <td>57.384</td>
+</tr>
+<tr class="success" data-duration="20005" data-status="success" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/07-metering-usage.hurl" data-id="a578aee6-4320-4e5e-a891-4548784f6ab9" data-timestamp="1776107756">
+    <td><a href="store/a578aee6-4320-4e5e-a891-4548784f6ab9-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/07-metering-usage.hurl</a></td>
+    <td>success</td>
+    <td>2026-04-13T19:15:56+00:00</td>
+    <td>20.005</td>
+</tr>
+<tr class="success" data-duration="29093" data-status="success" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/08-metering-admin.hurl" data-id="d237323c-a6d7-4895-b892-e5ffcd21fc1b" data-timestamp="1776107776">
+    <td><a href="store/d237323c-a6d7-4895-b892-e5ffcd21fc1b-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/08-metering-admin.hurl</a></td>
+    <td>success</td>
+    <td>2026-04-13T19:16:16+00:00</td>
+    <td>29.093</td>
+</tr>
+<tr class="success" data-duration="30999" data-status="success" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/09-data-plane-proxy.hurl" data-id="c0d8bc74-3537-4a53-8abb-1998816a2f5c" data-timestamp="1776107805">
+    <td><a href="store/c0d8bc74-3537-4a53-8abb-1998816a2f5c-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/09-data-plane-proxy.hurl</a></td>
+    <td>success</td>
+    <td>2026-04-13T19:16:45+00:00</td>
+    <td>30.999</td>
+</tr>
+<tr class="success" data-duration="69362" data-status="success" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/10-sandbox-lifecycle.hurl" data-id="6e2dc5d0-7ac5-45b2-97ba-b86dec83f273" data-timestamp="1776107836">
+    <td><a href="store/6e2dc5d0-7ac5-45b2-97ba-b86dec83f273-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/10-sandbox-lifecycle.hurl</a></td>
+    <td>success</td>
+    <td>2026-04-13T19:17:16+00:00</td>
+    <td>69.362</td>
+</tr>
+<tr class="success" data-duration="39035" data-status="success" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/11-sandbox-lifecycle-ephemeral.hurl" data-id="5514ccc2-c0f9-4360-befe-c8c356d56201" data-timestamp="1776107906">
+    <td><a href="store/5514ccc2-c0f9-4360-befe-c8c356d56201-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/11-sandbox-lifecycle-ephemeral.hurl</a></td>
+    <td>success</td>
+    <td>2026-04-13T19:18:26+00:00</td>
+    <td>39.035</td>
+</tr>
+<tr class="failure" data-duration="102119" data-status="failure" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/12-sandbox-lifecycle-persistent.hurl" data-id="5dd47bbe-e7f3-467d-8991-64408f8d8ba1" data-timestamp="1776107945">
+    <td><a href="store/5dd47bbe-e7f3-467d-8991-64408f8d8ba1-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/12-sandbox-lifecycle-persistent.hurl</a></td>
+    <td>failure</td>
+    <td>2026-04-13T19:19:05+00:00</td>
+    <td>102.119</td>
+</tr>
+<tr class="failure" data-duration="22633" data-status="failure" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/13-sandbox-quota-enforcement.hurl" data-id="581f2ad7-1920-4290-bede-091c8794ce93" data-timestamp="1776108047">
+    <td><a href="store/581f2ad7-1920-4290-bede-091c8794ce93-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/13-sandbox-quota-enforcement.hurl</a></td>
+    <td>failure</td>
+    <td>2026-04-13T19:20:47+00:00</td>
+    <td>22.633</td>
+</tr>
+<tr class="success" data-duration="22236" data-status="success" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/14-metering-usage-extended.hurl" data-id="b4c693a2-b8ab-4a2a-8574-7f6c865da15f" data-timestamp="1776108069">
+    <td><a href="store/b4c693a2-b8ab-4a2a-8574-7f6c865da15f-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/14-metering-usage-extended.hurl</a></td>
+    <td>success</td>
+    <td>2026-04-13T19:21:09+00:00</td>
+    <td>22.236</td>
+</tr>
+<tr class="success" data-duration="56446" data-status="success" data-filename="/home/runner/work/treadstone/treadstone/tests/e2e/15-data-plane-proxy-extended.hurl" data-id="08ea3c0c-85be-4b95-9ce6-18ebae54616e" data-timestamp="1776108092">
+    <td><a href="store/08ea3c0c-85be-4b95-9ce6-18ebae54616e-timeline.html">/home/runner/work/treadstone/treadstone/tests/e2e/15-data-plane-proxy-extended.hurl</a></td>
+    <td>success</td>
+    <td>2026-04-13T19:21:32+00:00</td>
+    <td>56.446</td>
+</tr>
+
+        </tbody>
+    </table>
+</div>
+</body>
+</html>
