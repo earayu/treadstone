@@ -123,7 +123,7 @@
 ```
 1. GET /health → 200（服务就绪门控）
 2. POST /v1/auth/register → 201（注册新用户）
-3. POST /v1/auth/register 同一 email → 409（重复注册拒绝）
+3. POST /v1/auth/register 同一 email → 409（重复注册拒绝，error code: `conflict`）
 4. POST /v1/auth/login → 200（登录，获取 session cookie）
 5. GET /v1/auth/user → 200（获取当前用户，验证字段）
 6. POST /v1/auth/logout → 200（登出）
@@ -436,3 +436,4 @@ email_21="e2e-21-${UNIQUE}@test.treadstone.dev"  # error-boundaries
    - 并发限制错误码为 `concurrent_limit_exceeded`（非 `sandbox_quota_exceeded`）
    - `POST /v1/auth/register` 响应：`{id, email, role, is_verified, verification_email_sent}` — **不含** `is_active`（见 `api/auth.py:628-634`）
    - `GET /v1/auth/user` 响应：`{id, email, username, role, is_active, is_verified, has_local_password}` — 验证字段为 `is_verified`（非 `email_verified`，见 `api/auth.py:931-935`）
+   - `ConflictError`（409）的 error code 是 `conflict`（非 `user_already_exists`，见 `core/errors.py:42`）——所有使用 `ConflictError` 的端点（重复注册、重复 waitlist 等）均返回 `conflict`
