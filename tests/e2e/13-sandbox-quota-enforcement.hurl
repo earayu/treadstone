@@ -8,7 +8,7 @@
 POST {{base_url}}/v1/auth/register
 Content-Type: application/json
 {
-    "email": "e2e-08-{{unique}}@test.treadstone.dev",
+    "email": "e2e-13-{{unique}}@test.treadstone.dev",
     "password": "{{test_password}}"
 }
 HTTP 201
@@ -23,7 +23,7 @@ Content-Type: application/json
 }
 HTTP 200
 
-GET {{base_url}}/v1/admin/verification-token-by-email?email=e2e-08-{{unique}}@test.treadstone.dev
+GET {{base_url}}/v1/admin/verification-token-by-email?email=e2e-13-{{unique}}@test.treadstone.dev
 HTTP 200
 [Captures]
 verify_token: jsonpath "$.token"
@@ -31,7 +31,7 @@ verify_token: jsonpath "$.token"
 POST {{base_url}}/v1/auth/login
 Content-Type: application/json
 {
-    "email": "e2e-08-{{unique}}@test.treadstone.dev",
+    "email": "e2e-13-{{unique}}@test.treadstone.dev",
     "password": "{{test_password}}"
 }
 HTTP 200
@@ -154,7 +154,7 @@ HTTP 201
 POST {{base_url}}/v1/auth/login
 Content-Type: application/json
 {
-    "email": "e2e-08-{{unique}}@test.treadstone.dev",
+    "email": "e2e-13-{{unique}}@test.treadstone.dev",
     "password": "{{test_password}}"
 }
 HTTP 200
