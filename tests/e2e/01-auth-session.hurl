@@ -77,7 +77,7 @@ HTTP 200
 jsonpath "$.id" == "{{user_id}}"
 jsonpath "$.email" == "{{email_01}}"
 jsonpath "$.is_active" == true
-jsonpath "$.email_verified" == true
+jsonpath "$.is_verified" == true
 jsonpath "$.role" isString
 
 
@@ -123,4 +123,4 @@ Content-Type: application/json
 }
 HTTP 409
 [Asserts]
-jsonpath "$.error.code" == "user_already_exists"
+jsonpath "$.error.code" == "conflict"
