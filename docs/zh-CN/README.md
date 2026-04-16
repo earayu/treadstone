@@ -24,6 +24,7 @@
 - [服务端日志打印审计](./modules/08-logging-audit.md) — 日志位置与级别评估、Debug/Info/Warning/Error 分级准则、重复与关联字段缺口
 - [Persistent Sandbox 冷存快照与恢复](./modules/09-cold-snapshot-restore.md) — `cold` 状态、`snapshot/start` 单入口恢复、VolumeSnapshot 编排、失败补偿与当前边界
 - [模块化与领域边界拆分指导](./modules/10-modularization-and-domain-boundaries.md) — 面向长期演进的模块职责、领域边界、服务单元化与阶段性判断原则
+- [Treadstone Sandbox Image：架构与实施说明](./modules/11-treadstone-sandbox-image.md) — 自建 sandbox image 第一版的边界、CLI 预装策略、GHCR 发布流程与实施约束
 
 ## 这次重组覆盖了什么
 
