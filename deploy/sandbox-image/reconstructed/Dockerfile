@@ -193,7 +193,8 @@ RUN npm install -g \
 
 COPY runtime/ /
 
-RUN python3 -m pip install --no-cache-dir /opt/gem-server \
+RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel \
+  && python3 -m pip install --no-cache-dir /opt/gem-server \
   && python3 -m pip install --no-cache-dir "jupyter-client==${JUPYTER_CLIENT_VERSION}" "ipykernel==${IPYKERNEL_VERSION}" \
   && /opt/python3.11/bin/python -m pip install --no-cache-dir "jupyter-client==${JUPYTER_CLIENT_VERSION}" "ipykernel==${IPYKERNEL_VERSION}" \
   && ln -sf /usr/bin/python3 /usr/local/bin/python \
