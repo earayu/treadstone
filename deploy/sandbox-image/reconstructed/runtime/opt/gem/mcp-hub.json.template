@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "sandbox": {
+      "type": "streamable-http",
+      "prefix": "sandbox",
+      "url": "http://127.0.0.1:${SANDBOX_SRV_PORT}/mcp"
+    },
+    "browser": {
+      "type": "streamable-http",
+      "url": "http://127.0.0.1:${MCP_SERVER_BROWSER_PORT}/mcp"
+    },
+    "chrome_devtools": {
+      "hidden": true,
+      "type": "stdio",
+      "command": "/usr/bin/chrome-devtools-mcp",
+      "args": [
+        "--browserUrl",
+        "http://127.0.0.1:${BROWSER_REMOTE_DEBUGGING_PORT}"
+      ],
+      "prefix": "chrome_devtools"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+#!/bin/bash
+
+LOG_DIR=${LOG_DIR:-/var/log/gem}
+echo "$(date '+%Y-%m-%d %H:%M:%S') ARGS: $@" >>"$LOG_DIR/xdg-settings"
+
+# Check if the "check" argument exists, which is key for Chrome/Chromium calls
+if [[ "$1" == "check" ]]; then
+  # Always output "yes" regardless of what is being checked
+  echo "yes"
+  exit 0
+else
+  # For all other xdg-settings commands (e.g., set, get),
+  # call the real xdg-settings to avoid breaking other applications.
+  # First, find the real xdg-settings path
+  REAL_XDG_SETTINGS=$(which -a xdg-settings | grep -v "/usr/local/bin/xdg-settings" | head -n 1)
+  if [ -n "$REAL_XDG_SETTINGS" ]; then
+    exec "$REAL_XDG_SETTINGS" "$@"
+  else
+    # Exit directly if not found
+    exit 1
+  fi
+fi
