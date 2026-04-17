@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>/home/runner/work/treadstone/treadstone/tests/e2e/04-sandbox-crud.hurl</title>
+    <style>
+        body {
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    font-size: 1.125rem;
+    line-height: 1.4;
+}
+
+.container {
+    max-width: 1200px;
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+h4:target {
+    color: #ff0288;
+}
+
+table {
+    display: block;
+    font-size: 15px;
+    width: 100%;
+    max-width: 100%;
+    overflow: auto;
+    border-collapse: collapse;
+    margin-top: 16px;
+    margin-bottom: 16px;
+}
+
+th, td {
+    border-width: 1px;
+    border-style: solid;
+    border-color: #ddd;
+}
+
+th {
+    padding: 6px 8px;
+    text-align: left;
+    background: #f5f5f5;
+}
+
+td {
+    padding: 6px 8px;
+    vertical-align: text-top;
+}
+
+.name {
+    width: 120px;
+    font-weight: bold;
+    background: #fbfafd;
+}
+
+.value {
+    width: 800px;
+    word-break: break-all
+}
+
+details {
+    margin-bottom: 20px;
+}
+
+summary {
+    font-size: 1.3rem;
+    line-height: 1.4;
+    font-weight: bold;
+}
+
+@media (prefers-color-scheme: dark) {
+    body {
+        background-color: #19191c;
+        color: #c2c2c2;
+    }
+
+    th, td {
+        border-color: #444;
+    }
+
+    th, table tr:nth-child(2n) {
+        background-color: #27272c;
+    }
+
+    table tr:nth-child(2n+1) {
+        background-color: #19191c;
+    }
+
+    .name {
+        background-color: #19191c;
+    }
+}
+
+        .report-nav {
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+.report-nav-links {
+    display: flex;
+    margin-bottom: 20px;
+    font-weight: bold;
+}
+
+.report-nav a {
+    color: royalblue;
+    margin-right: 20px;
+}
+
+.report-nav a[aria-selected="true"] {
+    color: #ff0288;
+}
+
+.report-nav-summary > div {
+    display: flex;
+}
+
+.report-nav-summary .item-name {
+    min-width: 100px;
+    font-weight: bold;
+}
+
+.error {
+    margin-top: 10px;
+    margin-bottom: 10px;
+    border-left: red 4px solid;
+}
+
+.error-desc {
+    background: #f5f5f5;
+}
+
+.error-desc pre {
+    font-size: 0.8rem;
+    line-height: 1.2;
+    margin: 0.75rem;
+    padding: 0.8rem;
+    overflow-x: auto;
+}
+
+.error-desc pre code {
+    font-size: 0.8rem;
+    line-height: 1.2;
+}
+
+.success, .success a {
+    color: green;
+}
+
+.failure, .failure a {
+    color: red;
+}
+
+@media (prefers-color-scheme: dark) {
+    .report-nav a {
+        color: #34a7ff;
+    }
+
+    .report-nav a[aria-selected="true"] {
+        color: #ff0288;
+    }
+
+    .error-desc {
+        background: #27272c;
+    }
+}
+
+    </style>
+<body>
+<div>
+    <div class="container">
+        <div class="report-nav">
+    <div class="report-nav-links">
+        <div><a href="../index.html">Report</a></div>
+        <div><a aria-selected="false" href="543a06a7-2a4b-4d3a-88ac-c9097eabd379-timeline.html">Timeline</a></div>
+        <div><a aria-selected="true" href="543a06a7-2a4b-4d3a-88ac-c9097eabd379-run.html">Run</a></div>
+        <div><a aria-selected="false" href="543a06a7-2a4b-4d3a-88ac-c9097eabd379-source.html">Source</a></div>
+    </div>
+    <div class="report-nav-summary">
+        <div><div class="item-name">File:</div><div><a href="543a06a7-2a4b-4d3a-88ac-c9097eabd379-source.html">/home/runner/work/treadstone/treadstone/tests/e2e/04-sandbox-crud.hurl</a></div></div>
+        <div><div class="item-name">Status:</div><div><span class="success">Success</span></div></div>
+        <div><div class="item-name">Duration:</div><div>83343 ms</div></div>
+        <div><div class="item-name">Errors:</div><div>-</div></div>
+        <div></div>
+    </div>
+    <div class="errors"></div>
+</div>
+
+        <details open><summary>Entry 1</summary><h4 id="e1:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/auth/register">http://api.localhost/v1/auth/register</a></td></tr><tr><td class="name">Request Method</td><td class="value">POST</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">201</td></tr><tr><td class="name">Source</td><td class="value"><a href="543a06a7-2a4b-4d3a-88ac-c9097eabd379-source.html#l7">/home/runner/work/treadstone/treadstone/tests/e2e/04-sandbox-crud.hurl:7</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Content-Length</td><td class="value">89</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Length</td><td class="value">147</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 17:32:50 GMT</td></tr><tr><td class="name">set-cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYWY5ZWVjMmNjZTdkMWRlZCIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDUxOTcwfQ.JENgtYPHt1QtmXVUdCRujqozwzzBRD4oQ56U5tDtPnQ; HttpOnly; Max-Age=604800; Path=/; SameSite=lax</td></tr><tr><td class="name">x-request-id</td><td class="value">0c8de115efaae7fb70c27bae83d45f69</td></tr></tbody></table></details><details open><summary>Entry 2</summary><h4 id="e2:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/auth/login">http://api.localhost/v1/auth/login</a></td></tr><tr><td class="name">Request Method</td><td class="value">POST</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">200</td></tr><tr><td class="name">Source</td><td class="value"><a href="543a06a7-2a4b-4d3a-88ac-c9097eabd379-source.html#l15">/home/runner/work/treadstone/treadstone/tests/e2e/04-sandbox-crud.hurl:15</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Content-Length</td><td class="value">89</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYWY5ZWVjMmNjZTdkMWRlZCIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDUxOTcwfQ.JENgtYPHt1QtmXVUdCRujqozwzzBRD4oQ56U5tDtPnQ</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Length</td><td class="value">29</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 17:32:52 GMT</td></tr><tr><td class="name">set-cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYWY5ZWVjMmNjZTdkMWRlZCIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDUxOTcxfQ.Ak6x8OZg6lkDt2Cn0iW1nq6bD5IDbRzR1gmA3r_FHmU; HttpOnly; Max-Age=604800; Path=/; SameSite=lax</td></tr><tr><td class="name">x-request-id</td><td class="value">bea61e75eba673ac034ff185e37e66c3</td></tr></tbody></table></details><details open><summary>Entry 3</summary><h4 id="e3:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/auth/login">http://api.localhost/v1/auth/login</a></td></tr><tr><td class="name">Request Method</td><td class="value">POST</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">200</td></tr><tr><td class="name">Source</td><td class="value"><a href="543a06a7-2a4b-4d3a-88ac-c9097eabd379-source.html#l25">/home/runner/work/treadstone/treadstone/tests/e2e/04-sandbox-crud.hurl:25</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Content-Length</td><td class="value">83</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYWY5ZWVjMmNjZTdkMWRlZCIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDUxOTcxfQ.Ak6x8OZg6lkDt2Cn0iW1nq6bD5IDbRzR1gmA3r_FHmU</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Length</td><td class="value">29</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 17:32:53 GMT</td></tr><tr><td class="name">set-cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyNWNhZjRkODM3Njk4ZDFhNyIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDUxOTcyfQ.40oJRs7ThJXfSF2LcT1vAVY7YSOxYu8SRDS2gn5fTMw; HttpOnly; Max-Age=604800; Path=/; SameSite=lax</td></tr><tr><td class="name">x-request-id</td><td class="value">0830d4262b9dd62023987f5a178bf06e</td></tr></tbody></table></details><details open><summary>Entry 4</summary><table><thead><tr><th colspan="2">Captures</tr></th></thead><tbody><tr><td class="name">verify_token</td><td class="value">eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYWY5ZWVjMmNjZTdkMWRlZCIsImVtYWlsIjoiZTJlLTAzLWNiYjQzYTYxQHRlc3QudHJlYWRzdG9uZS5kZXYiLCJhdWQiOiJmYXN0YXBpLXVzZXJzOnZlcmlmeSIsImV4cCI6MTc3NjQ1MDc3MH0.kzvX07VKPFcO60mFJyk3vtA3WPTl1pqfGE8J-SitL00</td></tr></tbody></table><h4 id="e4:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/admin/verification-token-by-email?email=e2e-03-cbb43a61@test.treadstone.dev">http://api.localhost/v1/admin/verification-token-by-email?email=e2e-03-cbb43a61@test.treadstone.dev</a></td></tr><tr><td class="name">Request Method</td><td class="value">GET</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">200</td></tr><tr><td class="name">Source</td><td class="value"><a href="543a06a7-2a4b-4d3a-88ac-c9097eabd379-source.html#l33">/home/runner/work/treadstone/treadstone/tests/e2e/04-sandbox-crud.hurl:33</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyNWNhZjRkODM3Njk4ZDFhNyIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDUxOTcyfQ.40oJRs7ThJXfSF2LcT1vAVY7YSOxYu8SRDS2gn5fTMw</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Length</td><td class="value">688</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 17:32:54 GMT</td></tr><tr><td class="name">x-request-id</td><td class="value">67e09db01a198245f379b5c0490f8a99</td></tr></tbody></table></details><details open><summary>Entry 5</summary><h4 id="e5:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/auth/login">http://api.localhost/v1/auth/login</a></td></tr><tr><td class="name">Request Method</td><td class="value">POST</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">200</td></tr><tr><td class="name">Source</td><td class="value"><a href="543a06a7-2a4b-4d3a-88ac-c9097eabd379-source.html#l38">/home/runner/work/treadstone/treadstone/tests/e2e/04-sandbox-crud.hurl:38</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Content-Length</td><td class="value">89</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyNWNhZjRkODM3Njk4ZDFhNyIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDUxOTcyfQ.40oJRs7ThJXfSF2LcT1vAVY7YSOxYu8SRDS2gn5fTMw</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Length</td><td class="value">29</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 17:32:59 GMT</td></tr><tr><td class="name">set-cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYWY5ZWVjMmNjZTdkMWRlZCIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDUxOTc3fQ.wyJDCnALygdujWswUKH4dfXcSjwj-8ZJcgp3qV7s_0A; HttpOnly; Max-Age=604800; Path=/; SameSite=lax</td></tr><tr><td class="name">x-request-id</td><td class="value">593652ec5b31121d136fba7b5f9f3613</td></tr></tbody></table></details><details open><summary>Entry 6</summary><h4 id="e6:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/auth/verification/confirm">http://api.localhost/v1/auth/verification/confirm</a></td></tr><tr><td class="name">Request Method</td><td class="value">POST</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">200</td></tr><tr><td class="name">Source</td><td class="value"><a href="543a06a7-2a4b-4d3a-88ac-c9097eabd379-source.html#l46">/home/runner/work/treadstone/treadstone/tests/e2e/04-sandbox-crud.hurl:46</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Content-Length</td><td class="value">263</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYWY5ZWVjMmNjZTdkMWRlZCIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDUxOTc3fQ.wyJDCnALygdujWswUKH4dfXcSjwj-8ZJcgp3qV7s_0A</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Length</td><td class="value">27</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 17:33:01 GMT</td></tr><tr><td class="name">x-request-id</td><td class="value">5bc6b9dba906c6c14064743d77e60661</td></tr></tbody></table></details><details open><summary>Entry 7</summary><table><thead><tr><th colspan="2">Captures</tr></th></thead><tbody><tr><td class="name">api_key</td><td class="value">sk-2d4f3a6a643ea38722a069b76e1a655dd1fccec302c6654b</td></tr><tr><td class="name">api_key_id</td><td class="value">keyff0fd39afcef32ef</td></tr></tbody></table><h4 id="e7:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/auth/api-keys">http://api.localhost/v1/auth/api-keys</a></td></tr><tr><td class="name">Request Method</td><td class="value">POST</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">201</td></tr><tr><td class="name">Source</td><td class="value"><a href="543a06a7-2a4b-4d3a-88ac-c9097eabd379-source.html#l53">/home/runner/work/treadstone/treadstone/tests/e2e/04-sandbox-crud.hurl:53</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Content-Length</td><td class="value">27</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYWY5ZWVjMmNjZTdkMWRlZCIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDUxOTc3fQ.wyJDCnALygdujWswUKH4dfXcSjwj-8ZJcgp3qV7s_0A</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Length</td><td class="value">311</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 17:33:07 GMT</td></tr><tr><td class="name">x-request-id</td><td class="value">ebe1512d2541dfc0faf88eb89372087f</td></tr></tbody></table></details><details open><summary>Entry 8</summary><h4 id="e8:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/sandbox-templates">http://api.localhost/v1/sandbox-templates</a></td></tr><tr><td class="name">Request Method</td><td class="value">GET</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">200</td></tr><tr><td class="name">Source</td><td class="value"><a href="543a06a7-2a4b-4d3a-88ac-c9097eabd379-source.html#l64">/home/runner/work/treadstone/treadstone/tests/e2e/04-sandbox-crud.hurl:64</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Authorization</td><td class="value">Bearer sk-2d4f3a6a643ea38722a069b76e1a655dd1fccec302c6654b</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYWY5ZWVjMmNjZTdkMWRlZCIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDUxOTc3fQ.wyJDCnALygdujWswUKH4dfXcSjwj-8ZJcgp3qV7s_0A</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Length</td><td class="value">1341</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 17:33:07 GMT</td></tr><tr><td class="name">x-request-id</td><td class="value">f27d353cdd52f8179eaf56d6a429d5b3</td></tr></tbody></table></details><details open><summary>Entry 9</summary><table><thead><tr><th colspan="2">Captures</tr></th></thead><tbody><tr><td class="name">sandbox_id</td><td class="value">sb24123185bdb371b4</td></tr></tbody></table><h4 id="e9:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/sandboxes">http://api.localhost/v1/sandboxes</a></td></tr><tr><td class="name">Request Method</td><td class="value">POST</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">202</td></tr><tr><td class="name">Source</td><td class="value"><a href="543a06a7-2a4b-4d3a-88ac-c9097eabd379-source.html#l73">/home/runner/work/treadstone/treadstone/tests/e2e/04-sandbox-crud.hurl:73</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Authorization</td><td class="value">Bearer sk-2d4f3a6a643ea38722a069b76e1a655dd1fccec302c6654b</td></tr><tr><td class="name">Content-Length</td><td class="value">66</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYWY5ZWVjMmNjZTdkMWRlZCIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDUxOTc3fQ.wyJDCnALygdujWswUKH4dfXcSjwj-8ZJcgp3qV7s_0A</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Length</td><td class="value">540</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 17:33:59 GMT</td></tr><tr><td class="name">x-request-id</td><td class="value">7d4d5135d623a67a38ec6ecf96298347</td></tr></tbody></table></details><details open><summary>Entry 10</summary><h4 id="e10:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/sandboxes/sb24123185bdb371b4">http://api.localhost/v1/sandboxes/sb24123185bdb371b4</a></td></tr><tr><td class="name">Request Method</td><td class="value">GET</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">200</td></tr><tr><td class="name">Source</td><td class="value"><a href="543a06a7-2a4b-4d3a-88ac-c9097eabd379-source.html#l91">/home/runner/work/treadstone/treadstone/tests/e2e/04-sandbox-crud.hurl:91</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Authorization</td><td class="value">Bearer sk-2d4f3a6a643ea38722a069b76e1a655dd1fccec302c6654b</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYWY5ZWVjMmNjZTdkMWRlZCIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDUxOTc3fQ.wyJDCnALygdujWswUKH4dfXcSjwj-8ZJcgp3qV7s_0A</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Length</td><td class="value">611</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 17:34:01 GMT</td></tr><tr><td class="name">x-request-id</td><td class="value">60147b66177006032680b66229ebf291</td></tr></tbody></table></details><details open><summary>Entry 11</summary><h4 id="e11:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/sandboxes">http://api.localhost/v1/sandboxes</a></td></tr><tr><td class="name">Request Method</td><td class="value">GET</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">200</td></tr><tr><td class="name">Source</td><td class="value"><a href="543a06a7-2a4b-4d3a-88ac-c9097eabd379-source.html#l101">/home/runner/work/treadstone/treadstone/tests/e2e/04-sandbox-crud.hurl:101</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Authorization</td><td class="value">Bearer sk-2d4f3a6a643ea38722a069b76e1a655dd1fccec302c6654b</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYWY5ZWVjMmNjZTdkMWRlZCIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDUxOTc3fQ.wyJDCnALygdujWswUKH4dfXcSjwj-8ZJcgp3qV7s_0A</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Length</td><td class="value">562</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 17:34:04 GMT</td></tr><tr><td class="name">x-request-id</td><td class="value">bef6ac8df5ca953ce9aa6256a36045c7</td></tr></tbody></table></details><details open><summary>Entry 12</summary><h4 id="e12:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/sandboxes/sb24123185bdb371b4">http://api.localhost/v1/sandboxes/sb24123185bdb371b4</a></td></tr><tr><td class="name">Request Method</td><td class="value">DELETE</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">204</td></tr><tr><td class="name">Source</td><td class="value"><a href="543a06a7-2a4b-4d3a-88ac-c9097eabd379-source.html#l111">/home/runner/work/treadstone/treadstone/tests/e2e/04-sandbox-crud.hurl:111</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Authorization</td><td class="value">Bearer sk-2d4f3a6a643ea38722a069b76e1a655dd1fccec302c6654b</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYWY5ZWVjMmNjZTdkMWRlZCIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDUxOTc3fQ.wyJDCnALygdujWswUKH4dfXcSjwj-8ZJcgp3qV7s_0A</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 17:34:09 GMT</td></tr><tr><td class="name">x-request-id</td><td class="value">5070ffbc7dfa4339eec189cfc3a8b388</td></tr></tbody></table></details><details open><summary>Entry 13</summary><h4 id="e13:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/auth/api-keys/keyff0fd39afcef32ef">http://api.localhost/v1/auth/api-keys/keyff0fd39afcef32ef</a></td></tr><tr><td class="name">Request Method</td><td class="value">DELETE</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">204</td></tr><tr><td class="name">Source</td><td class="value"><a href="543a06a7-2a4b-4d3a-88ac-c9097eabd379-source.html#l118">/home/runner/work/treadstone/treadstone/tests/e2e/04-sandbox-crud.hurl:118</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYWY5ZWVjMmNjZTdkMWRlZCIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDUxOTc3fQ.wyJDCnALygdujWswUKH4dfXcSjwj-8ZJcgp3qV7s_0A</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 17:34:11 GMT</td></tr><tr><td class="name">x-request-id</td><td class="value">25972eb27e34f74478a938d076f89cf8</td></tr></tbody></table></details>
+    </div>
+</div>
+</body>
+</html>
