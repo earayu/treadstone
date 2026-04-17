@@ -119,6 +119,8 @@ uv tool install --python 3.13 kimi-cli
 
 因此其本质是通过 `uv tool` 安装 `kimi` 可执行文件。
 
+**运行时注意（`gem` 用户）**：`kimi`/`kimi-cli` 的 shebang 可能指向 `uv` 管理的 Python，而默认会落在 **`/root/.local/share/uv/...`**。`gem` 无法使用该解释器路径时会报 **`bad interpreter: Permission denied`**。构建阶段需要把 uv 的 python store **镜像到 `/opt/uv`**，并同步修正 `pyvenv.cfg` 与 `python` shim（见 Dockerfile）。
+
 #### Cursor Agent CLI
 
 Cursor 官方安装方式是：
@@ -128,6 +130,8 @@ curl https://cursor.com/install -fsS | bash
 ```
 
 在之前的实机验证中，这个安装器会把二进制落到 `~/.local/bin/`，并提供 `cursor-agent` 命令。
+
+**运行时注意（`gem` 用户）**：sandbox 里常见交互用户是 `gem`（uid 1000），默认 **无法进入** `/root`（0700）。如果 Cursor 只装在 `/root/.local/bin`，则会出现 **`agent: command not found`**（即使 root 下可用）。因此 Dockerfile 在构建阶段会把安装目录镜像到 **`/opt/cursor-agent/share`**，并在 **`/usr/local/bin`** 放置全局可用的 `agent` / `cursor-agent` 符号链接。
 
 ### 4.2 PATH 设计
 
