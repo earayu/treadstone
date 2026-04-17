@@ -5,8 +5,11 @@
 Treadstone 当前已有一条自建 sandbox image 主线：`deploy/sandbox-image/Dockerfile` 在
 `ghcr.io/agent-infra/sandbox:1.0.0.152` 之上继续安装 Claude Code、Codex、Kimi、Cursor Agent。
 
-这条文档记录的是另一条实验线：在**不再 `FROM ghcr.io/agent-infra/sandbox`** 的前提下，尽可能把
+这条文档最初记录的是一条实验线：在**不再 `FROM ghcr.io/agent-infra/sandbox`** 的前提下，尽可能把
 `agent-infra/sandbox:1.0.0.152` 的运行时行为重建出来，便于后续脱离上游镜像继续演进。
+
+在 `v0.1.2` 这一轮完成双人验证后，这条 reconstructed line 已经不只是实验线，也开始作为
+`deploy/sandbox-image/Dockerfile` 的固定 base 候选来源，供 `treadstone-sandbox` 产品 image 继续加层。
 
 ## 已确认事实
 

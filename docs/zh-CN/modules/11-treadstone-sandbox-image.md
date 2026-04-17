@@ -9,7 +9,7 @@
 
 第一版 `treadstone-sandbox` image 的目标很收敛：
 
-1. 以 `ghcr.io/agent-infra/sandbox:1.0.0.152` 为固定 base image。
+1. 以已经双人验证通过的 reconstructed base image 为固定 base image。
 2. 不修改 base image 对外暴露的 HTTP / WebSocket / MCP / VNC 等接口行为。
 3. 仅在镜像层新增常用 coding agent CLI，供进入 sandbox 的 agent 直接使用。
 4. 在主仓库内建立独立的 sandbox image 构建与发布流水线，推送到 GHCR。
@@ -21,36 +21,48 @@
 - 不通过控制面暴露这些 CLI
 - 不改动 sandbox runtime 的服务编排、端口、认证模型
 
-这意味着第一版是一个“保守加层”的镜像方案：保留 upstream sandbox 的运行语义，只扩展工具链。
+这意味着第一版是一个“保守加层”的镜像方案：保留已经验证过的 sandbox 运行语义，只扩展工具链。
 
 ---
 
 ## 2. 架构决策
 
-### 2.1 为什么直接 `FROM agent-infra/sandbox`
+### 2.1 为什么改为 `FROM reconstructed sandbox base`
 
-`agent-infra/sandbox:1.0.0.152` 已经提供了 Treadstone 需要的完整运行底座：
+`ghcr.io/earayu/treadstone-sandbox-reconstructed:v0.1.2` 已经在这条线里完成了双人行为验证，当前确认对齐的关键面包括：
+
+- Entrypoint / Cmd / Env / ExposedPorts
+- gem-server / MCP / browser / Jupyter / code-server 主链路
+- `/cdp/json/version`、`/v1/browser/info`、`/v1/shell/exec`、`/v1/code/execute`
+
+也就是说，Treadstone 现在可以继续复用这套完整运行底座，而不再直接依赖 upstream 发布的 `ghcr.io/agent-infra/sandbox:1.0.0.152`：
 
 - nginx 统一入口
 - python-server / gem-server / mcp-hub
 - Chromium / CDP / VNC / code-server / Jupyter
 - shell、文件、browser、MCP 等现成能力
 
-第一版不需要重做这些基础设施。直接继承 upstream image 可以把变更面压到最小，也方便后续对比和回滚。
+对产品线来说，这比继续直接 `FROM upstream` 更稳，原因是：
+
+- base image 已经在 Treadstone 自己的 GHCR 下可控
+- 后续继续修 runtime 细节时，不需要再受 upstream 镜像可见性限制
+- 对外产品 image 名称仍保持 `ghcr.io/<owner>/treadstone-sandbox`，无需同步改 runtime 默认引用
 
 ### 2.2 为什么 pin base image 版本
 
 Dockerfile 固定使用：
 
 ```dockerfile
-FROM ghcr.io/agent-infra/sandbox:1.0.0.152
+ARG RECONSTRUCTED_BASE_IMAGE=ghcr.io/earayu/treadstone-sandbox-reconstructed:v0.1.2
+FROM ${RECONSTRUCTED_BASE_IMAGE}
 ```
 
 原因：
 
 - 保证构建可复现
-- 避免上游 `latest` 漂移带来行为变化
-- 后续排查问题时可以清楚区分“上游升级”与“Treadstone 自己加层”
+- 避免 `reconstructed` base 的 `latest` 漂移带来行为变化
+- 后续排查问题时可以清楚区分“runtime base 升级”与“Treadstone 自己加层”
+- 对 deploy/runtime/control-plane 而言，当前仍消费同一条 `treadstone-sandbox` 产品 image 线，替换面最小
 
 ### 2.3 为什么只预装 CLI，不改服务面
 
@@ -170,7 +182,7 @@ RUN claude --version \
 
 因此：
 
-- **base image 是固定版本**
+- **reconstructed base image 是固定版本**
 - **部分预装 CLI 是 latest 策略**
 
 这是一个有意识的折中：先把 image pipeline 和工具链打通，再根据运行稳定性决定是否为这些 CLI 建立更强的版本锁定策略。
@@ -239,6 +251,23 @@ ghcr.io/<github.repository_owner>/treadstone-sandbox
 
 - 可以按显式版本回滚
 - 也能让试验环境直接消费最新镜像
+
+### 5.4 当前 base image 关系
+
+当前产品线关系已经变成：
+
+```text
+ghcr.io/<owner>/treadstone-sandbox-reconstructed:v0.1.2
+  -> 作为固定 base
+ghcr.io/<owner>/treadstone-sandbox:vX.Y.Z
+  -> 在其上继续安装 Claude / Codex / Kimi / Cursor Agent
+```
+
+也就是说：
+
+- `reconstructed` 线负责承载 sandbox runtime 本体
+- `treadstone-sandbox` 线继续承载 Treadstone 额外预装 CLI 的产品化加层
+- runtime / chart / control-plane 默认值暂时不需要改 registry/name，只需要在需要时升级 `treadstone-sandbox` 的版本标签
 
 ---
 
