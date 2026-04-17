@@ -10,6 +10,7 @@ service:
   port: 8000
 
 envSecretRef: treadstone-secrets
+sandboxServiceAccountName: ""
 
 resources:
   limits:

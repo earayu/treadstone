@@ -34,6 +34,8 @@ from copy import deepcopy
 from datetime import UTC, datetime
 from typing import Any, Protocol, runtime_checkable
 
+from treadstone.config import settings
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -148,6 +150,12 @@ def _sandbox_main_container_security_context() -> dict[str, Any]:
         "readOnlyRootFilesystem": SANDBOX_READ_ONLY_ROOT_FILESYSTEM,
         "seccompProfile": {"type": "RuntimeDefault"},
     }
+
+
+def _sandbox_service_account_name() -> str | None:
+    """Optional dedicated service account for sandbox pods, configured by the control plane."""
+    name = settings.sandbox_service_account_name.strip()
+    return name or None
 
 
 def _sandbox_init_container_security_context() -> dict[str, Any]:
@@ -352,10 +360,13 @@ class Kr8sClient:
 
         pod_spec: dict[str, Any] = {
             "automountServiceAccountToken": False,
+            "enableServiceLinks": False,
             "containers": [container],
             "restartPolicy": "OnFailure",
             "securityContext": _sandbox_pod_security_context(with_pvc=bool(volume_claim_templates)),
         }
+        if service_account_name := _sandbox_service_account_name():
+            pod_spec["serviceAccountName"] = service_account_name
 
         if volume_claim_templates:
             vol_names = [vct["metadata"]["name"] for vct in volume_claim_templates]
@@ -861,6 +872,7 @@ class FakeK8sClient:
                 "podTemplate": {
                     "spec": {
                         "automountServiceAccountToken": False,
+                        "enableServiceLinks": False,
                         "restartPolicy": "OnFailure",
                         "securityContext": _sandbox_pod_security_context(with_pvc=False),
                         "containers": [container],
@@ -874,6 +886,8 @@ class FakeK8sClient:
                 "replicas": 0,
             },
         }
+        if service_account_name := _sandbox_service_account_name():
+            self._sandboxes[key]["spec"]["podTemplate"]["spec"]["serviceAccountName"] = service_account_name
         return claim
 
     async def delete_sandbox_claim(self, name: str, namespace: str) -> bool:
@@ -926,10 +940,13 @@ class FakeK8sClient:
 
         pod_spec: dict[str, Any] = {
             "automountServiceAccountToken": False,
+            "enableServiceLinks": False,
             "containers": [main],
             "restartPolicy": "OnFailure",
             "securityContext": _sandbox_pod_security_context(with_pvc=bool(volume_claim_templates)),
         }
+        if service_account_name := _sandbox_service_account_name():
+            pod_spec["serviceAccountName"] = service_account_name
 
         if volume_claim_templates:
             vol_names = [vct["metadata"]["name"] for vct in volume_claim_templates]

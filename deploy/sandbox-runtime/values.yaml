@@ -1,6 +1,10 @@
 image: ghcr.io/agent-infra/sandbox:1.0.0.152
 containerPort: 8080
 
+serviceAccount:
+  create: true
+  name: ""
+
 sandboxProbes:
   startup:
     enabled: true

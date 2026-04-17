@@ -23,6 +23,8 @@ spec:
         treadstone-ai.dev/provision-mode: "claim"
     spec:
       automountServiceAccountToken: false
+      enableServiceLinks: false
+      serviceAccountName: {{ include "sandbox-runtime.serviceAccountName" $ }}
       {{- with $.Values.sandboxPodSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}

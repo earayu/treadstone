@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     sandbox_storage_class: str = "treadstone-workspace"
     sandbox_volume_snapshot_class: str = "treadstone-workspace-snapshot"
     sandbox_default_storage_size: Literal["5Gi", "10Gi", "20Gi"] = "5Gi"
+    sandbox_service_account_name: str = ""
 
     # Metering — enforcement (quota checks) can be disabled independently of recording
     metering_enforcement_enabled: bool = False

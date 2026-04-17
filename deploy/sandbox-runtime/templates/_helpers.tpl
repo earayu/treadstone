@@ -12,3 +12,11 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
 {{- end }}
+
+{{- define "sandbox-runtime.serviceAccountName" -}}
+{{- if .Values.serviceAccount.name }}
+{{- .Values.serviceAccount.name }}
+{{- else }}
+{{- include "sandbox-runtime.fullname" . }}
+{{- end }}
+{{- end }}
