@@ -12,10 +12,10 @@ Pod/container ``securityContext`` defaults here should stay aligned with
 ``deploy/sandbox-runtime/values.yaml`` (``sandboxPodSecurityContext``,
 ``sandboxContainerSecurityContext``).
 
-Security note: the stock ``ghcr.io/agent-infra/sandbox`` image is **not
-rootless-compatible**. Its entrypoint bootstraps the ``gem`` user/group and
-other runtime state as root on every start. Defaults here therefore target a
-**compatible hardening baseline**: keep seccomp and no-new-privilege style
+Security note: the default ``ghcr.io/earayu/treadstone-sandbox`` image is **not
+rootless-compatible**. Its entrypoint still bootstraps the ``gem`` user/group
+and other runtime state as root on every start. Defaults here therefore target
+a **compatible hardening baseline**: keep seccomp and no-new-privilege style
 controls, retain a writable root filesystem, and avoid explicit Linux
 capability overrides. Some ACS/ECI policies reject any ``capabilities`` stanza
 even when the image starts fine with runtime defaults. This is not Kubernetes
@@ -97,7 +97,8 @@ SNAPSHOT_API_VERSION = "v1"
 
 WATCH_TIMEOUT_SECONDS = 300
 
-# Sandbox runtime image conventions (default ``ghcr.io/earayu/treadstone-sandbox``, extends agent-infra/sandbox).
+# Sandbox runtime image conventions:
+# default ``ghcr.io/earayu/treadstone-sandbox`` built on the reconstructed sandbox base.
 # The image creates a non-root user `gem` with this UID/GID.  All internal
 # services (code-server, python-server, su - gem) use SANDBOX_HOME_DIR as
 # workspace.  Persistent volumes must be mounted here with matching ownership.
@@ -719,7 +720,7 @@ def _make_ready_condition(status: str = "False", reason: str = "DependenciesNotR
 class FakeK8sClient:
     """In-memory stub for testing — simulates the agent-sandbox controller behavior."""
 
-    _DEFAULT_IMAGE = "ghcr.io/earayu/treadstone-sandbox:v0.1.0"
+    _DEFAULT_IMAGE = "ghcr.io/earayu/treadstone-sandbox:v0.2.0"
 
     _DEFAULT_TEMPLATES: tuple[dict[str, Any], ...] = (
         {

@@ -1,5 +1,7 @@
-FROM ghcr.io/agent-infra/sandbox:1.0.0.152
+ARG RECONSTRUCTED_BASE_IMAGE=ghcr.io/earayu/treadstone-sandbox-reconstructed:v0.1.2
+FROM ${RECONSTRUCTED_BASE_IMAGE}
 
+ARG RECONSTRUCTED_BASE_IMAGE
 ARG TREADSTONE_SANDBOX_VERSION=dev
 ARG CLAUDE_CODE_VERSION=latest
 ARG CODEX_VERSION=latest
@@ -7,6 +9,7 @@ ARG CODEX_VERSION=latest
 LABEL org.opencontainers.image.source="https://github.com/earayu/treadstone"
 LABEL org.opencontainers.image.description="Treadstone Agent Sandbox"
 LABEL org.opencontainers.image.version="${TREADSTONE_SANDBOX_VERSION}"
+LABEL org.opencontainers.image.base.name="${RECONSTRUCTED_BASE_IMAGE}"
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ENV PATH="/root/.local/bin:${PATH}"

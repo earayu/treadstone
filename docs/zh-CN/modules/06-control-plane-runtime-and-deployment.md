@@ -123,7 +123,7 @@
 - **数据库**：Neon Serverless PostgreSQL
 - **控制面**：FastAPI + SQLAlchemy async
 - **编排层**：Kubernetes + `agent-sandbox`
-- **运行时镜像**：`ghcr.io/earayu/treadstone-sandbox`（例如 `v0.1.0`；与 `deploy/sandbox-runtime/values*.yaml` 对齐）
+- **运行时镜像**：`ghcr.io/earayu/treadstone-sandbox`（例如 `v0.2.0`；与 `deploy/sandbox-runtime/values*.yaml` 对齐）
 - **本地集群**：Kind
 
 本地开发常用入口：
