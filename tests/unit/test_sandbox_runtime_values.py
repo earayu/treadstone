@@ -53,7 +53,6 @@ EXPECTED_SANDBOX_CONTAINER_SECURITY_CONTEXT = {
 }
 EXPECTED_SANDBOX_SERVICE_ACCOUNT = {
     "create": True,
-    "name": "",
 }
 
 

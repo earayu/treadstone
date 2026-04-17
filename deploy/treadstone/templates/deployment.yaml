@@ -34,10 +34,6 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            {{- if .Values.sandboxServiceAccountName }}
-            - name: TREADSTONE_SANDBOX_SERVICE_ACCOUNT_NAME
-              value: {{ .Values.sandboxServiceAccountName | quote }}
-            {{- end }}
           envFrom:
             {{- if .Values.envSecretRef }}
             - secretRef:

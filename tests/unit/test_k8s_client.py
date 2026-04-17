@@ -2,9 +2,9 @@
 
 from datetime import UTC, datetime, timedelta
 
-import treadstone.infra.services.k8s_client as k8s_client_module
 from treadstone.services.k8s_client import (
     SANDBOX_HOME_DIR,
+    SANDBOX_SERVICE_ACCOUNT_NAME,
     WATCH_TIMEOUT_SECONDS,
     FakeK8sClient,
     Kr8sClient,
@@ -161,6 +161,7 @@ async def test_create_claim_also_creates_sandbox():
     ps = sb["spec"]["podTemplate"]["spec"]
     assert ps["automountServiceAccountToken"] is False
     assert ps["enableServiceLinks"] is False
+    assert ps["serviceAccountName"] == SANDBOX_SERVICE_ACCOUNT_NAME
     assert ps["securityContext"] == _sandbox_pod_security_context(with_pvc=False)
     assert ps["containers"][0]["securityContext"] == _sandbox_main_container_security_context()
     assert ps["securityContext"] == {"seccompProfile": {"type": "RuntimeDefault"}}
@@ -287,6 +288,7 @@ async def test_create_sandbox_direct_without_storage():
     ps = sb["spec"]["podTemplate"]["spec"]
     assert ps["automountServiceAccountToken"] is False
     assert ps["enableServiceLinks"] is False
+    assert ps["serviceAccountName"] == SANDBOX_SERVICE_ACCOUNT_NAME
     assert ps["securityContext"] == _sandbox_pod_security_context(with_pvc=False)
     assert ps["containers"][0]["securityContext"] == _sandbox_main_container_security_context()
 
@@ -406,6 +408,7 @@ async def test_create_sandbox_requests_expected_manifest_with_probes():
     pod_spec = call["json"]["spec"]["podTemplate"]["spec"]
     assert pod_spec["automountServiceAccountToken"] is False
     assert pod_spec["enableServiceLinks"] is False
+    assert pod_spec["serviceAccountName"] == SANDBOX_SERVICE_ACCOUNT_NAME
     assert pod_spec["securityContext"] == _sandbox_pod_security_context(with_pvc=False)
     assert pod_spec["securityContext"] == {"seccompProfile": {"type": "RuntimeDefault"}}
     container = pod_spec["containers"][0]
@@ -419,7 +422,7 @@ async def test_create_sandbox_requests_expected_manifest_with_probes():
     assert "livenessProbe" not in container
 
 
-async def test_create_sandbox_uses_configured_sandbox_service_account(monkeypatch):
+async def test_create_sandbox_uses_fixed_sandbox_service_account():
     client = Kr8sClient()
     api = _RecordingAPI()
 
@@ -427,7 +430,6 @@ async def test_create_sandbox_uses_configured_sandbox_service_account(monkeypatc
         return api
 
     client._get_api = fake_get_api  # type: ignore[method-assign]
-    monkeypatch.setattr(k8s_client_module.settings, "sandbox_service_account_name", "sandbox-runtime")
 
     await client.create_sandbox(
         name="direct-sb",
@@ -438,7 +440,7 @@ async def test_create_sandbox_uses_configured_sandbox_service_account(monkeypatc
     )
 
     pod_spec = api.calls[0]["json"]["spec"]["podTemplate"]["spec"]
-    assert pod_spec["serviceAccountName"] == "sandbox-runtime"
+    assert pod_spec["serviceAccountName"] == SANDBOX_SERVICE_ACCOUNT_NAME
 
 
 # ── Kr8sClient manifest structure (persist=true) ──

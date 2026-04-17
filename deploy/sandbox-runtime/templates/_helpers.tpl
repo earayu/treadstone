@@ -14,9 +14,5 @@ helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
 {{- end }}
 
 {{- define "sandbox-runtime.serviceAccountName" -}}
-{{- if .Values.serviceAccount.name }}
-{{- .Values.serviceAccount.name }}
-{{- else }}
-{{- include "sandbox-runtime.fullname" . }}
-{{- end }}
+{{- "treadstone-sandbox" -}}
 {{- end }}

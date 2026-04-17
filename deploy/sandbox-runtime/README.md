@@ -27,7 +27,7 @@ The default V1 policy set is intentionally compatibility-first:
 - `sandbox-allow-from-api`: allows only Treadstone API pods to reach sandbox `TCP/8080`
 - `sandbox-allow-dns`: allows DNS to `kube-system`
 - `sandbox-allow-public-egress`: allows public egress while excluding `exceptCidrs`
-- sandbox templates pin `enableServiceLinks: false` and a dedicated zero-permission service account to reduce in-pod cluster discovery
+- sandbox templates pin `enableServiceLinks: false` and a dedicated zero-permission service account (`treadstone-sandbox`) to reduce in-pod cluster discovery
 
 `exceptCidrs` starts with common private and cluster-internal ranges, but it is only a starting point. Override it in `values-local.yaml`, `values-demo.yaml`, or `values-prod.yaml` with the real Pod/Service/VPC networks for that environment.
 
