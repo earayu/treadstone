@@ -195,7 +195,7 @@ class SandboxResponse(BaseModel):
 
 
 class SandboxDetailResponse(SandboxResponse):
-    image: str | None = Field(default=None, examples=["ghcr.io/agent-infra/sandbox:1.0.0.152"])
+    image: str | None = Field(default=None, examples=["ghcr.io/earayu/treadstone-sandbox:v0.1.0"])
     status_message: str | None = Field(default=None, examples=[None])
     started_at: datetime | None = Field(default=None, examples=["2026-03-21T12:01:00+00:00"])
     stopped_at: datetime | None = Field(default=None, examples=[None])
@@ -234,7 +234,7 @@ class SandboxTemplateResponse(BaseModel):
     name: str = Field(..., examples=["aio-sandbox-tiny"])
     display_name: str = Field(..., examples=["AIO Sandbox Tiny"])
     description: str = Field(..., examples=["Lightweight sandbox for code execution and scripting"])
-    image: str = Field(..., examples=["ghcr.io/agent-infra/sandbox:1.0.0.152"])
+    image: str = Field(..., examples=["ghcr.io/earayu/treadstone-sandbox:v0.1.0"])
     resource_spec: ResourceSpec
     allowed_storage_sizes: list[str] = Field(default_factory=list, examples=[["5Gi", "10Gi", "20Gi"]])
 

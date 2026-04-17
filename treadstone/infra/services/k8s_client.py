@@ -96,7 +96,7 @@ SNAPSHOT_API_VERSION = "v1"
 
 WATCH_TIMEOUT_SECONDS = 300
 
-# AIO Sandbox image conventions (ghcr.io/agent-infra/sandbox).
+# Sandbox runtime image conventions (default ``ghcr.io/earayu/treadstone-sandbox``, extends agent-infra/sandbox).
 # The image creates a non-root user `gem` with this UID/GID.  All internal
 # services (code-server, python-server, su - gem) use SANDBOX_HOME_DIR as
 # workspace.  Persistent volumes must be mounted here with matching ownership.
@@ -715,7 +715,7 @@ def _make_ready_condition(status: str = "False", reason: str = "DependenciesNotR
 class FakeK8sClient:
     """In-memory stub for testing — simulates the agent-sandbox controller behavior."""
 
-    _DEFAULT_IMAGE = "ghcr.io/agent-infra/sandbox:1.0.0.152"
+    _DEFAULT_IMAGE = "ghcr.io/earayu/treadstone-sandbox:v0.1.0"
 
     _DEFAULT_TEMPLATES: tuple[dict[str, Any], ...] = (
         {
