@@ -39,6 +39,7 @@ env:
   KUBECTL_VERSION: v1.31.0
   HELM_VERSION: v3.16.2
   HURL_VERSION: 5.0.1
+  SANDBOX_RUNTIME_IMAGE: ghcr.io/earayu/treadstone-sandbox:v0.2.0
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
@@ -148,7 +149,7 @@ jobs:
       - name: Sandbox runtime image override (GitHub-hosted runners)
         run: |
           cat > /tmp/ci-sandbox-runtime-image.yaml <<'EOF'
-          image: ghcr.io/earayu/treadstone-sandbox:v0.1.0
+          image: ${{ env.SANDBOX_RUNTIME_IMAGE }}
           EOF
 
       # Mirrors scripts/up.sh local + make deploy-all, but applies extension CRDs and waits for
@@ -163,8 +164,8 @@ jobs:
           kind load docker-image treadstone:latest --name treadstone
           make image-web
           kind load docker-image treadstone-web:latest --name treadstone
-          docker pull ghcr.io/earayu/treadstone-sandbox:v0.1.0
-          kind load docker-image ghcr.io/earayu/treadstone-sandbox:v0.1.0 --name treadstone
+          docker pull "${SANDBOX_RUNTIME_IMAGE}"
+          kind load docker-image "${SANDBOX_RUNTIME_IMAGE}" --name treadstone
           bash scripts/check-k8s-context.sh local
           make deploy-storage deploy-infra ENV=local
           kubectl apply -f deploy/agent-sandbox/upstream/extensions.yaml
