@@ -99,7 +99,7 @@ def _mock_k8s_client():
         return_value=[
             {
                 "name": "aio-sandbox-small",
-                "image": "ghcr.io/agent-infra/sandbox:1.0.0.152",
+                "image": "ghcr.io/earayu/treadstone-sandbox:v0.1.0",
                 "resource_spec": {"cpu": "500m", "memory": "1Gi"},
             },
         ]

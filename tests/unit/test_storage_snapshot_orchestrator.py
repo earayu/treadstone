@@ -53,7 +53,7 @@ async def _create_live_sandbox(
     await k8s.create_sandbox(
         name=sandbox_id,
         namespace="treadstone-local",
-        image="ghcr.io/agent-infra/sandbox:1.0.0.152",
+        image="ghcr.io/earayu/treadstone-sandbox:v0.1.0",
         container_port=8080,
         resources={"requests": {"cpu": "250m", "memory": "1Gi"}, "limits": {"cpu": "250m", "memory": "1Gi"}},
         replicas=0 if status == SandboxStatus.STOPPED else 1,

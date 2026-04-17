@@ -148,7 +148,7 @@ jobs:
       - name: Sandbox runtime image override (GitHub-hosted runners)
         run: |
           cat > /tmp/ci-sandbox-runtime-image.yaml <<'EOF'
-          image: ghcr.io/agent-infra/sandbox:1.0.0.152
+          image: ghcr.io/earayu/treadstone-sandbox:v0.1.0
           EOF
 
       # Mirrors scripts/up.sh local + make deploy-all, but applies extension CRDs and waits for
@@ -163,8 +163,8 @@ jobs:
           kind load docker-image treadstone:latest --name treadstone
           make image-web
           kind load docker-image treadstone-web:latest --name treadstone
-          docker pull ghcr.io/agent-infra/sandbox:1.0.0.152
-          kind load docker-image ghcr.io/agent-infra/sandbox:1.0.0.152 --name treadstone
+          docker pull ghcr.io/earayu/treadstone-sandbox:v0.1.0
+          kind load docker-image ghcr.io/earayu/treadstone-sandbox:v0.1.0 --name treadstone
           bash scripts/check-k8s-context.sh local
           make deploy-storage deploy-infra ENV=local
           kubectl apply -f deploy/agent-sandbox/upstream/extensions.yaml

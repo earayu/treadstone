@@ -175,7 +175,7 @@ This rollout does **not** migrate existing PVCs across zones. If `best-effort` i
 
 ### Sandbox runtime image (local)
 
-`deploy/sandbox-runtime/values-local.yaml` defaults to a **mainland China** mirror for the all-in-one sandbox image (see the `image:` field). This matches typical developer networks in China. If you are outside mainland China or the mirror is unreachable, switch the `image` value to `ghcr.io/agent-infra/sandbox:1.0.0.152` (same as `values-prod.yaml`) and redeploy the runtime chart. You can also `docker pull` + `kind load docker-image` that tag before creating sandboxes.
+`deploy/sandbox-runtime/values-local.yaml` defaults to the same **Treadstone sandbox** image as prod (`ghcr.io/earayu/treadstone-sandbox:v0.1.0`). For faster pulls in mainland China, mirror that tag to your registry (see the commented example in the file), set `image:` accordingly, and redeploy the runtime chart. You can also `docker pull` + `kind load docker-image` that tag before creating sandboxes.
 
 ### 4. Verify Deployment
 
