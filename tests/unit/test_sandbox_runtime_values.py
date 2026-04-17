@@ -51,6 +51,9 @@ EXPECTED_SANDBOX_CONTAINER_SECURITY_CONTEXT = {
     "readOnlyRootFilesystem": False,
     "seccompProfile": {"type": "RuntimeDefault"},
 }
+EXPECTED_SANDBOX_SERVICE_ACCOUNT = {
+    "create": True,
+}
 
 
 def _load_values(name: str) -> dict:
@@ -80,6 +83,12 @@ def test_default_values_define_compatible_sandbox_security_contexts() -> None:
 
     assert values["sandboxPodSecurityContext"] == EXPECTED_SANDBOX_POD_SECURITY_CONTEXT
     assert values["sandboxContainerSecurityContext"] == EXPECTED_SANDBOX_CONTAINER_SECURITY_CONTEXT
+
+
+def test_default_values_create_dedicated_sandbox_service_account() -> None:
+    values = _load_values("values.yaml")
+
+    assert values["serviceAccount"] == EXPECTED_SANDBOX_SERVICE_ACCOUNT
 
 
 def test_prod_values_enable_direct_acs_with_expected_unit_order() -> None:

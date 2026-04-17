@@ -51,6 +51,7 @@ __all__ = [
     "SANDBOX_HOME_DIR",
     "SANDBOX_UID",
     "SANDBOX_GID",
+    "SANDBOX_SERVICE_ACCOUNT_NAME",
     "SANDBOX_READ_ONLY_ROOT_FILESYSTEM",
     # Probe defaults
     "DEFAULT_STARTUP_PROBE",
@@ -103,6 +104,7 @@ WATCH_TIMEOUT_SECONDS = 300
 SANDBOX_HOME_DIR = "/home/gem"
 SANDBOX_UID = 1000
 SANDBOX_GID = 1000
+SANDBOX_SERVICE_ACCOUNT_NAME = "treadstone-sandbox"
 
 # Align default with deploy/sandbox-runtime/values.yaml sandboxContainerSecurityContext.
 # False = compatible with the stock opaque image, which writes outside declared
@@ -352,6 +354,8 @@ class Kr8sClient:
 
         pod_spec: dict[str, Any] = {
             "automountServiceAccountToken": False,
+            "enableServiceLinks": False,
+            "serviceAccountName": SANDBOX_SERVICE_ACCOUNT_NAME,
             "containers": [container],
             "restartPolicy": "OnFailure",
             "securityContext": _sandbox_pod_security_context(with_pvc=bool(volume_claim_templates)),
@@ -861,6 +865,8 @@ class FakeK8sClient:
                 "podTemplate": {
                     "spec": {
                         "automountServiceAccountToken": False,
+                        "enableServiceLinks": False,
+                        "serviceAccountName": SANDBOX_SERVICE_ACCOUNT_NAME,
                         "restartPolicy": "OnFailure",
                         "securityContext": _sandbox_pod_security_context(with_pvc=False),
                         "containers": [container],
@@ -926,6 +932,8 @@ class FakeK8sClient:
 
         pod_spec: dict[str, Any] = {
             "automountServiceAccountToken": False,
+            "enableServiceLinks": False,
+            "serviceAccountName": SANDBOX_SERVICE_ACCOUNT_NAME,
             "containers": [main],
             "restartPolicy": "OnFailure",
             "securityContext": _sandbox_pod_security_context(with_pvc=bool(volume_claim_templates)),

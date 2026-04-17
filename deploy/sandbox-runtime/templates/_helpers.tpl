@@ -12,3 +12,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
 {{- end }}
+
+{{- define "sandbox-runtime.serviceAccountName" -}}
+{{- "treadstone-sandbox" -}}
+{{- end }}
