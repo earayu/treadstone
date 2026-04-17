@@ -7,6 +7,8 @@ ARG CODE_SERVER_VERSION=4.104.0
 ARG MCP_HUB_VERSION=1.1.0
 ARG MCP_SERVER_BROWSER_VERSION=1.2.21
 ARG CHROME_DEVTOOLS_MCP_VERSION=0.9.0
+ARG JUPYTER_CLIENT_VERSION=8.6.3
+ARG IPYKERNEL_VERSION=7.1.0
 ARG NOVNC_URL=https://github.com/novnc/noVNC/archive/refs/tags/v1.4.0.zip
 ARG WEBSOCAT_VERSION=v1.13.0
 ARG CHROMIUM_VERSION=133.0.6943.16
@@ -192,8 +194,55 @@ RUN npm install -g \
 COPY runtime/ /
 
 RUN python3 -m pip install --no-cache-dir /opt/gem-server \
-  && mkdir -p /opt/python3.12/lib/python3.12/site-packages \
+  && python3 -m pip install --no-cache-dir "jupyter-client==${JUPYTER_CLIENT_VERSION}" "ipykernel==${IPYKERNEL_VERSION}" \
+  && /opt/python3.11/bin/python -m pip install --no-cache-dir "jupyter-client==${JUPYTER_CLIENT_VERSION}" "ipykernel==${IPYKERNEL_VERSION}" \
+  && ln -sf /usr/bin/python3 /usr/local/bin/python \
+  && python3 -m ipykernel install --prefix /usr/local --name python3.10 --display-name "Python 3.10" \
+  && python3 -m ipykernel install --prefix /usr/local --name python3 --display-name "Python 3 (ipykernel)" \
+  && /opt/python3.11/bin/python -m ipykernel install --prefix /usr/local --name python3.11 --display-name "Python 3.11"
+
+RUN python3 - <<'PY'
+import json
+from pathlib import Path
+
+specs = {
+    "python3.10": {
+        "argv": ["/usr/bin/python3.10", "-m", "ipykernel_launcher", "-f", "{connection_file}"],
+        "display_name": "Python 3.10",
+        "language": "python",
+        "metadata": {"debugger": True},
+    },
+    "python3": {
+        "argv": ["python", "-m", "ipykernel_launcher", "-f", "{connection_file}"],
+        "display_name": "Python 3 (ipykernel)",
+        "language": "python",
+        "metadata": {"debugger": True},
+    },
+    "python3.11": {
+        "argv": ["/opt/python3.11/bin/python", "-Xfrozen_modules=off", "-m", "ipykernel_launcher", "-f", "{connection_file}"],
+        "display_name": "Python 3.11",
+        "language": "python",
+        "metadata": {"debugger": True},
+    },
+}
+
+base = Path("/usr/local/share/jupyter/kernels")
+for name, spec in specs.items():
+    path = base / name / "kernel.json"
+    path.write_text(json.dumps(spec, indent=1) + "\n")
+PY
+RUN mkdir -p /opt/python3.12/lib/python3.12/site-packages \
   && if [ -d /opt/python3.12/site-packages ]; then cp -a /opt/python3.12/site-packages/. /opt/python3.12/lib/python3.12/site-packages/; fi \
+  && printf '%s\n' \
+    '#!/usr/bin/python3' \
+    'import sys' \
+    'from gem.cli import cli' \
+    "if __name__ == '__main__':" \
+    "    if sys.argv[0].endswith('.exe'):" \
+    "        sys.argv[0] = sys.argv[0][:-4]" \
+    '    sys.exit(cli())' \
+    > /usr/local/bin/gem-server \
+  && chmod +x /usr/local/bin/gem-server \
   && printf '%s\n' \
     '#!/opt/python3.12/bin/python3.12' \
     'import re' \
