@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>/home/runner/work/treadstone/treadstone/tests/e2e/09-data-plane-proxy.hurl</title>
+    <style>
+        body {
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    font-size: 1.125rem;
+    line-height: 1.4;
+}
+
+.container {
+    max-width: 1200px;
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+h4:target {
+    color: #ff0288;
+}
+
+table {
+    display: block;
+    font-size: 15px;
+    width: 100%;
+    max-width: 100%;
+    overflow: auto;
+    border-collapse: collapse;
+    margin-top: 16px;
+    margin-bottom: 16px;
+}
+
+th, td {
+    border-width: 1px;
+    border-style: solid;
+    border-color: #ddd;
+}
+
+th {
+    padding: 6px 8px;
+    text-align: left;
+    background: #f5f5f5;
+}
+
+td {
+    padding: 6px 8px;
+    vertical-align: text-top;
+}
+
+.name {
+    width: 120px;
+    font-weight: bold;
+    background: #fbfafd;
+}
+
+.value {
+    width: 800px;
+    word-break: break-all
+}
+
+details {
+    margin-bottom: 20px;
+}
+
+summary {
+    font-size: 1.3rem;
+    line-height: 1.4;
+    font-weight: bold;
+}
+
+@media (prefers-color-scheme: dark) {
+    body {
+        background-color: #19191c;
+        color: #c2c2c2;
+    }
+
+    th, td {
+        border-color: #444;
+    }
+
+    th, table tr:nth-child(2n) {
+        background-color: #27272c;
+    }
+
+    table tr:nth-child(2n+1) {
+        background-color: #19191c;
+    }
+
+    .name {
+        background-color: #19191c;
+    }
+}
+
+        .report-nav {
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+.report-nav-links {
+    display: flex;
+    margin-bottom: 20px;
+    font-weight: bold;
+}
+
+.report-nav a {
+    color: royalblue;
+    margin-right: 20px;
+}
+
+.report-nav a[aria-selected="true"] {
+    color: #ff0288;
+}
+
+.report-nav-summary > div {
+    display: flex;
+}
+
+.report-nav-summary .item-name {
+    min-width: 100px;
+    font-weight: bold;
+}
+
+.error {
+    margin-top: 10px;
+    margin-bottom: 10px;
+    border-left: red 4px solid;
+}
+
+.error-desc {
+    background: #f5f5f5;
+}
+
+.error-desc pre {
+    font-size: 0.8rem;
+    line-height: 1.2;
+    margin: 0.75rem;
+    padding: 0.8rem;
+    overflow-x: auto;
+}
+
+.error-desc pre code {
+    font-size: 0.8rem;
+    line-height: 1.2;
+}
+
+.success, .success a {
+    color: green;
+}
+
+.failure, .failure a {
+    color: red;
+}
+
+@media (prefers-color-scheme: dark) {
+    .report-nav a {
+        color: #34a7ff;
+    }
+
+    .report-nav a[aria-selected="true"] {
+        color: #ff0288;
+    }
+
+    .error-desc {
+        background: #27272c;
+    }
+}
+
+    </style>
+<body>
+<div>
+    <div class="container">
+        <div class="report-nav">
+    <div class="report-nav-links">
+        <div><a href="../index.html">Report</a></div>
+        <div><a aria-selected="false" href="df6bd958-9be3-49b5-b26a-be4c63426220-timeline.html">Timeline</a></div>
+        <div><a aria-selected="true" href="df6bd958-9be3-49b5-b26a-be4c63426220-run.html">Run</a></div>
+        <div><a aria-selected="false" href="df6bd958-9be3-49b5-b26a-be4c63426220-source.html">Source</a></div>
+    </div>
+    <div class="report-nav-summary">
+        <div><div class="item-name">File:</div><div><a href="df6bd958-9be3-49b5-b26a-be4c63426220-source.html">/home/runner/work/treadstone/treadstone/tests/e2e/09-data-plane-proxy.hurl</a></div></div>
+        <div><div class="item-name">Status:</div><div><span class="success">Success</span></div></div>
+        <div><div class="item-name">Duration:</div><div>44047 ms</div></div>
+        <div><div class="item-name">Errors:</div><div>-</div></div>
+        <div></div>
+    </div>
+    <div class="errors"></div>
+</div>
+
+        <details open><summary>Entry 1</summary><h4 id="e1:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/auth/register">http://api.localhost/v1/auth/register</a></td></tr><tr><td class="name">Request Method</td><td class="value">POST</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">201</td></tr><tr><td class="name">Source</td><td class="value"><a href="df6bd958-9be3-49b5-b26a-be4c63426220-source.html#l10">/home/runner/work/treadstone/treadstone/tests/e2e/09-data-plane-proxy.hurl:10</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Content-Length</td><td class="value">89</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Length</td><td class="value">147</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 16:32:47 GMT</td></tr><tr><td class="name">set-cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYmMzMmIzOGEzZmMwYzAzYiIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDQ4MzY3fQ.-t4qcYDRtLUv72La9cl8ff3OEHWKR062-YRB4woA9N8; HttpOnly; Max-Age=604800; Path=/; SameSite=lax</td></tr><tr><td class="name">x-request-id</td><td class="value">f6887e7293e3093c56870e595a3285e6</td></tr></tbody></table></details><details open><summary>Entry 2</summary><h4 id="e2:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/auth/login">http://api.localhost/v1/auth/login</a></td></tr><tr><td class="name">Request Method</td><td class="value">POST</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">200</td></tr><tr><td class="name">Source</td><td class="value"><a href="df6bd958-9be3-49b5-b26a-be4c63426220-source.html#l18">/home/runner/work/treadstone/treadstone/tests/e2e/09-data-plane-proxy.hurl:18</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Content-Length</td><td class="value">83</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYmMzMmIzOGEzZmMwYzAzYiIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDQ4MzY3fQ.-t4qcYDRtLUv72La9cl8ff3OEHWKR062-YRB4woA9N8</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Length</td><td class="value">29</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 16:32:48 GMT</td></tr><tr><td class="name">set-cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMmVmZDQyMjJiYjU3Nzk0NyIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDQ4MzY4fQ.QW-d12sZXABGrk0n8PSbr_JTG60pvdKvSguz770k3iM; HttpOnly; Max-Age=604800; Path=/; SameSite=lax</td></tr><tr><td class="name">x-request-id</td><td class="value">d931e46bb5a129169b67275575e51548</td></tr></tbody></table></details><details open><summary>Entry 3</summary><table><thead><tr><th colspan="2">Captures</tr></th></thead><tbody><tr><td class="name">verify_token</td><td class="value">eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYmMzMmIzOGEzZmMwYzAzYiIsImVtYWlsIjoiZTJlLTA5LTg0MTIyNjUxQHRlc3QudHJlYWRzdG9uZS5kZXYiLCJhdWQiOiJmYXN0YXBpLXVzZXJzOnZlcmlmeSIsImV4cCI6MTc3NjQ0NzE2N30.CtkHwx0takUa2v1NOSdzIEcegbBr6gbimAoihfblY4w</td></tr></tbody></table><h4 id="e3:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/admin/verification-token-by-email?email=e2e-09-84122651@test.treadstone.dev">http://api.localhost/v1/admin/verification-token-by-email?email=e2e-09-84122651@test.treadstone.dev</a></td></tr><tr><td class="name">Request Method</td><td class="value">GET</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">200</td></tr><tr><td class="name">Source</td><td class="value"><a href="df6bd958-9be3-49b5-b26a-be4c63426220-source.html#l26">/home/runner/work/treadstone/treadstone/tests/e2e/09-data-plane-proxy.hurl:26</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMmVmZDQyMjJiYjU3Nzk0NyIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDQ4MzY4fQ.QW-d12sZXABGrk0n8PSbr_JTG60pvdKvSguz770k3iM</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Length</td><td class="value">688</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 16:32:51 GMT</td></tr><tr><td class="name">x-request-id</td><td class="value">261976f05c6b50067402d770268ee9cc</td></tr></tbody></table></details><details open><summary>Entry 4</summary><h4 id="e4:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/auth/login">http://api.localhost/v1/auth/login</a></td></tr><tr><td class="name">Request Method</td><td class="value">POST</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">200</td></tr><tr><td class="name">Source</td><td class="value"><a href="df6bd958-9be3-49b5-b26a-be4c63426220-source.html#l31">/home/runner/work/treadstone/treadstone/tests/e2e/09-data-plane-proxy.hurl:31</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Content-Length</td><td class="value">89</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMmVmZDQyMjJiYjU3Nzk0NyIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDQ4MzY4fQ.QW-d12sZXABGrk0n8PSbr_JTG60pvdKvSguz770k3iM</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Length</td><td class="value">29</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 16:32:53 GMT</td></tr><tr><td class="name">set-cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYmMzMmIzOGEzZmMwYzAzYiIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDQ4MzcyfQ.yarkeLMe5eApxlEO8BJzLQ4-JxXkWjRQzf2i7etifuM; HttpOnly; Max-Age=604800; Path=/; SameSite=lax</td></tr><tr><td class="name">x-request-id</td><td class="value">f5bf1eb4a46d70820b297622ebe7a004</td></tr></tbody></table></details><details open><summary>Entry 5</summary><h4 id="e5:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/auth/verification/confirm">http://api.localhost/v1/auth/verification/confirm</a></td></tr><tr><td class="name">Request Method</td><td class="value">POST</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">200</td></tr><tr><td class="name">Source</td><td class="value"><a href="df6bd958-9be3-49b5-b26a-be4c63426220-source.html#l39">/home/runner/work/treadstone/treadstone/tests/e2e/09-data-plane-proxy.hurl:39</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Content-Length</td><td class="value">263</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYmMzMmIzOGEzZmMwYzAzYiIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDQ4MzcyfQ.yarkeLMe5eApxlEO8BJzLQ4-JxXkWjRQzf2i7etifuM</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Length</td><td class="value">27</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 16:32:56 GMT</td></tr><tr><td class="name">x-request-id</td><td class="value">78bc263d1bae2f8f94ac167b669f0685</td></tr></tbody></table></details><details open><summary>Entry 6</summary><table><thead><tr><th colspan="2">Captures</tr></th></thead><tbody><tr><td class="name">api_key</td><td class="value">sk-a619a7b441cfffa775795bff361284f625a10767edd57603</td></tr><tr><td class="name">api_key_id</td><td class="value">keye241397380a21ee2</td></tr></tbody></table><h4 id="e6:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/auth/api-keys">http://api.localhost/v1/auth/api-keys</a></td></tr><tr><td class="name">Request Method</td><td class="value">POST</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">201</td></tr><tr><td class="name">Source</td><td class="value"><a href="df6bd958-9be3-49b5-b26a-be4c63426220-source.html#l46">/home/runner/work/treadstone/treadstone/tests/e2e/09-data-plane-proxy.hurl:46</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Content-Length</td><td class="value">31</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYmMzMmIzOGEzZmMwYzAzYiIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDQ4MzcyfQ.yarkeLMe5eApxlEO8BJzLQ4-JxXkWjRQzf2i7etifuM</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Length</td><td class="value">315</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 16:33:00 GMT</td></tr><tr><td class="name">x-request-id</td><td class="value">8d111c71e1c46a86dafeceeaa86d848c</td></tr></tbody></table></details><details open><summary>Entry 7</summary><h4 id="e7:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/sandbox-templates">http://api.localhost/v1/sandbox-templates</a></td></tr><tr><td class="name">Request Method</td><td class="value">GET</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">200</td></tr><tr><td class="name">Source</td><td class="value"><a href="df6bd958-9be3-49b5-b26a-be4c63426220-source.html#l57">/home/runner/work/treadstone/treadstone/tests/e2e/09-data-plane-proxy.hurl:57</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Authorization</td><td class="value">Bearer sk-a619a7b441cfffa775795bff361284f625a10767edd57603</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYmMzMmIzOGEzZmMwYzAzYiIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDQ4MzcyfQ.yarkeLMe5eApxlEO8BJzLQ4-JxXkWjRQzf2i7etifuM</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Length</td><td class="value">1341</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 16:33:00 GMT</td></tr><tr><td class="name">x-request-id</td><td class="value">f71ffa04ab23584b8e4db180b61fdb93</td></tr></tbody></table></details><details open><summary>Entry 8</summary><table><thead><tr><th colspan="2">Captures</tr></th></thead><tbody><tr><td class="name">sandbox_id</td><td class="value">sbc1289ba1c891eb69</td></tr></tbody></table><h4 id="e8:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/sandboxes">http://api.localhost/v1/sandboxes</a></td></tr><tr><td class="name">Request Method</td><td class="value">POST</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">202</td></tr><tr><td class="name">Source</td><td class="value"><a href="df6bd958-9be3-49b5-b26a-be4c63426220-source.html#l63">/home/runner/work/treadstone/treadstone/tests/e2e/09-data-plane-proxy.hurl:63</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Authorization</td><td class="value">Bearer sk-a619a7b441cfffa775795bff361284f625a10767edd57603</td></tr><tr><td class="name">Content-Length</td><td class="value">69</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYmMzMmIzOGEzZmMwYzAzYiIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDQ4MzcyfQ.yarkeLMe5eApxlEO8BJzLQ4-JxXkWjRQzf2i7etifuM</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Length</td><td class="value">543</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 16:33:10 GMT</td></tr><tr><td class="name">x-request-id</td><td class="value">508907db503da8b90572aac0c059b296</td></tr></tbody></table></details><details open><summary>Entry 9</summary><h4 id="e9:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/sandboxes/sbc1289ba1c891eb69">http://api.localhost/v1/sandboxes/sbc1289ba1c891eb69</a></td></tr><tr><td class="name">Request Method</td><td class="value">GET</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">200</td></tr><tr><td class="name">Source</td><td class="value"><a href="df6bd958-9be3-49b5-b26a-be4c63426220-source.html#l78">/home/runner/work/treadstone/treadstone/tests/e2e/09-data-plane-proxy.hurl:78</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Authorization</td><td class="value">Bearer sk-a619a7b441cfffa775795bff361284f625a10767edd57603</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYmMzMmIzOGEzZmMwYzAzYiIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDQ4MzcyfQ.yarkeLMe5eApxlEO8BJzLQ4-JxXkWjRQzf2i7etifuM</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Length</td><td class="value">662</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 16:33:12 GMT</td></tr><tr><td class="name">x-request-id</td><td class="value">c122a5e11003695533ec22d809db3961</td></tr></tbody></table></details><details open><summary>Entry 10</summary><h4 id="e10:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/sandboxes/sbc1289ba1c891eb69/proxy/v1/browser/info">http://api.localhost/v1/sandboxes/sbc1289ba1c891eb69/proxy/v1/browser/info</a></td></tr><tr><td class="name">Request Method</td><td class="value">GET</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">401</td></tr><tr><td class="name">Source</td><td class="value"><a href="df6bd958-9be3-49b5-b26a-be4c63426220-source.html#l91">/home/runner/work/treadstone/treadstone/tests/e2e/09-data-plane-proxy.hurl:91</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYmMzMmIzOGEzZmMwYzAzYiIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDQ4MzcyfQ.yarkeLMe5eApxlEO8BJzLQ4-JxXkWjRQzf2i7etifuM</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Length</td><td class="value">98</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 16:33:13 GMT</td></tr><tr><td class="name">x-request-id</td><td class="value">53088cf56f359b50641ca8ecf4ed6f1f</td></tr></tbody></table></details><details open><summary>Entry 11</summary><table><thead><tr><th colspan="2">Captures</tr></th></thead><tbody><tr><td class="name">cp_only_key</td><td class="value">sk-221e1896089626b4f84ed430fd69f6f6838b22d6b637ad38</td></tr><tr><td class="name">cp_only_key_id</td><td class="value">key0175b9be52e18396</td></tr></tbody></table><h4 id="e11:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/auth/api-keys">http://api.localhost/v1/auth/api-keys</a></td></tr><tr><td class="name">Request Method</td><td class="value">POST</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">201</td></tr><tr><td class="name">Source</td><td class="value"><a href="df6bd958-9be3-49b5-b26a-be4c63426220-source.html#l99">/home/runner/work/treadstone/treadstone/tests/e2e/09-data-plane-proxy.hurl:99</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Authorization</td><td class="value">Bearer sk-a619a7b441cfffa775795bff361284f625a10767edd57603</td></tr><tr><td class="name">Content-Length</td><td class="value">134</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYmMzMmIzOGEzZmMwYzAzYiIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDQ4MzcyfQ.yarkeLMe5eApxlEO8BJzLQ4-JxXkWjRQzf2i7etifuM</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Length</td><td class="value">319</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 16:33:16 GMT</td></tr><tr><td class="name">x-request-id</td><td class="value">574cae446e01c7a619359a5172c9a5c3</td></tr></tbody></table></details><details open><summary>Entry 12</summary><h4 id="e12:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/sandboxes/sbc1289ba1c891eb69/proxy/v1/shell/exec">http://api.localhost/v1/sandboxes/sbc1289ba1c891eb69/proxy/v1/shell/exec</a></td></tr><tr><td class="name">Request Method</td><td class="value">POST</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">403</td></tr><tr><td class="name">Source</td><td class="value"><a href="df6bd958-9be3-49b5-b26a-be4c63426220-source.html#l114">/home/runner/work/treadstone/treadstone/tests/e2e/09-data-plane-proxy.hurl:114</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Authorization</td><td class="value">Bearer sk-221e1896089626b4f84ed430fd69f6f6838b22d6b637ad38</td></tr><tr><td class="name">Content-Length</td><td class="value">64</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYmMzMmIzOGEzZmMwYzAzYiIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDQ4MzcyfQ.yarkeLMe5eApxlEO8BJzLQ4-JxXkWjRQzf2i7etifuM</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Length</td><td class="value">101</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 16:33:17 GMT</td></tr><tr><td class="name">x-request-id</td><td class="value">8e184b637e8f996ec20a0ab1c795fa92</td></tr></tbody></table></details><details open><summary>Entry 13</summary><h4 id="e13:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/auth/api-keys/key0175b9be52e18396">http://api.localhost/v1/auth/api-keys/key0175b9be52e18396</a></td></tr><tr><td class="name">Request Method</td><td class="value">DELETE</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">204</td></tr><tr><td class="name">Source</td><td class="value"><a href="df6bd958-9be3-49b5-b26a-be4c63426220-source.html#l125">/home/runner/work/treadstone/treadstone/tests/e2e/09-data-plane-proxy.hurl:125</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Authorization</td><td class="value">Bearer sk-a619a7b441cfffa775795bff361284f625a10767edd57603</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYmMzMmIzOGEzZmMwYzAzYiIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDQ4MzcyfQ.yarkeLMe5eApxlEO8BJzLQ4-JxXkWjRQzf2i7etifuM</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 16:33:19 GMT</td></tr><tr><td class="name">x-request-id</td><td class="value">f43a93ca8fa08c7da4e8fc926eeb19a8</td></tr></tbody></table></details><details open><summary>Entry 14</summary><h4 id="e14:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/sandboxes/sbc1289ba1c891eb69/proxy/v1/shell/exec">http://api.localhost/v1/sandboxes/sbc1289ba1c891eb69/proxy/v1/shell/exec</a></td></tr><tr><td class="name">Request Method</td><td class="value">POST</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">200</td></tr><tr><td class="name">Source</td><td class="value"><a href="df6bd958-9be3-49b5-b26a-be4c63426220-source.html#l132">/home/runner/work/treadstone/treadstone/tests/e2e/09-data-plane-proxy.hurl:132</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Authorization</td><td class="value">Bearer sk-a619a7b441cfffa775795bff361284f625a10767edd57603</td></tr><tr><td class="name">Content-Length</td><td class="value">74</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYmMzMmIzOGEzZmMwYzAzYiIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDQ4MzcyfQ.yarkeLMe5eApxlEO8BJzLQ4-JxXkWjRQzf2i7etifuM</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Length</td><td class="value">320</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 16:33:23 GMT</td></tr><tr><td class="name">x-request-id</td><td class="value">f9af878eaa7756f45ca0e4682aaeb36d</td></tr></tbody></table></details><details open><summary>Entry 15</summary><h4 id="e15:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/sandboxes/sbc1289ba1c891eb69">http://api.localhost/v1/sandboxes/sbc1289ba1c891eb69</a></td></tr><tr><td class="name">Request Method</td><td class="value">DELETE</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">204</td></tr><tr><td class="name">Source</td><td class="value"><a href="df6bd958-9be3-49b5-b26a-be4c63426220-source.html#l151">/home/runner/work/treadstone/treadstone/tests/e2e/09-data-plane-proxy.hurl:151</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Authorization</td><td class="value">Bearer sk-a619a7b441cfffa775795bff361284f625a10767edd57603</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYmMzMmIzOGEzZmMwYzAzYiIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDQ4MzcyfQ.yarkeLMe5eApxlEO8BJzLQ4-JxXkWjRQzf2i7etifuM</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 16:33:26 GMT</td></tr><tr><td class="name">x-request-id</td><td class="value">2f1e48cc9349e2255d53cd270948278a</td></tr></tbody></table></details><details open><summary>Entry 16</summary><h4 id="e16:c1">Call 1</h3><table><thead><tr><th colspan="2">General</tr></th></thead><tbody><tr><td class="name">Request URL</td><td class="value"><a href="http://api.localhost/v1/auth/api-keys/keye241397380a21ee2">http://api.localhost/v1/auth/api-keys/keye241397380a21ee2</a></td></tr><tr><td class="name">Request Method</td><td class="value">DELETE</td></tr><tr><td class="name">Version</td><td class="value">HTTP/1.1</td></tr><tr><td class="name">Status code</td><td class="value">204</td></tr><tr><td class="name">Source</td><td class="value"><a href="df6bd958-9be3-49b5-b26a-be4c63426220-source.html#l155">/home/runner/work/treadstone/treadstone/tests/e2e/09-data-plane-proxy.hurl:155</a></td></tr></tbody></table><table><thead><tr><th colspan="2">Request Headers</tr></th></thead><tbody><tr><td class="name">Accept</td><td class="value">*/*</td></tr><tr><td class="name">Authorization</td><td class="value">Bearer sk-a619a7b441cfffa775795bff361284f625a10767edd57603</td></tr><tr><td class="name">Cookie</td><td class="value">session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyYmMzMmIzOGEzZmMwYzAzYiIsImF1ZCI6WyJmYXN0YXBpLXVzZXJzOmF1dGgiXSwiZXhwIjoxNzc3MDQ4MzcyfQ.yarkeLMe5eApxlEO8BJzLQ4-JxXkWjRQzf2i7etifuM</td></tr><tr><td class="name">Host</td><td class="value">api.localhost</td></tr><tr><td class="name">User-Agent</td><td class="value">hurl/5.0.1</td></tr></tbody></table><table><thead><tr><th colspan="2">Response Headers</tr></th></thead><tbody><tr><td class="name">Connection</td><td class="value">keep-alive</td></tr><tr><td class="name">Content-Type</td><td class="value">application/json</td></tr><tr><td class="name">Date</td><td class="value">Fri, 17 Apr 2026 16:33:27 GMT</td></tr><tr><td class="name">x-request-id</td><td class="value">8ddf2ae627d9069af94b6f6bde651899</td></tr></tbody></table></details>
+    </div>
+</div>
+</body>
+</html>
