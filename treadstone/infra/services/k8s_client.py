@@ -97,7 +97,8 @@ SNAPSHOT_API_VERSION = "v1"
 
 WATCH_TIMEOUT_SECONDS = 300
 
-# Sandbox runtime image conventions (default ``ghcr.io/earayu/treadstone-sandbox``, built on the reconstructed sandbox base).
+# Sandbox runtime image conventions:
+# default ``ghcr.io/earayu/treadstone-sandbox`` built on the reconstructed sandbox base.
 # The image creates a non-root user `gem` with this UID/GID.  All internal
 # services (code-server, python-server, su - gem) use SANDBOX_HOME_DIR as
 # workspace.  Persistent volumes must be mounted here with matching ownership.
