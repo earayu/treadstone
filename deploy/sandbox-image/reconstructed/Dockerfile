@@ -193,6 +193,7 @@ COPY runtime/ /
 
 RUN python3 -m pip install --no-cache-dir /opt/gem-server \
   && mkdir -p /opt/python3.12/lib/python3.12/site-packages \
+  && if [ -d /opt/python3.12/site-packages ]; then cp -a /opt/python3.12/site-packages/. /opt/python3.12/lib/python3.12/site-packages/; fi \
   && printf '%s\n' \
     '#!/opt/python3.12/bin/python3.12' \
     'import re' \
