@@ -203,13 +203,16 @@ RUN python3 -m pip install --no-cache-dir /opt/gem-server \
     '    sys.exit(cli())' \
     > /usr/local/bin/python-server \
   && chmod +x /usr/local/bin/python-server \
-  && chmod +x \
+  && shopt -s nullglob \
+  && executables=( \
     /opt/gem/*.sh \
     /opt/gem/run.sh \
     /opt/gem/entrypoint.sh \
     /opt/gem/xdg-settings \
     /opt/gem-server/gem-server \
     /opt/python3.12/lib/python3.12/site-packages/app/scripts/*.sh \
+  ) \
+  && if [ "${#executables[@]}" -gt 0 ]; then chmod +x "${executables[@]}"; fi \
   && chmod -R a+rX /opt/gem /opt/gem-server /opt/aio /opt/terminal /opt/application /opt/python3.12/lib/python3.12/site-packages/app /opt/python3.12/lib/python3.12/site-packages/vendors
 
 RUN printf '%s\n' "${VERSION}" > /etc/aio_version
