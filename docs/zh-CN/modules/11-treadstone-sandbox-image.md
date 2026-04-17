@@ -216,8 +216,8 @@ workflow_dispatch:
 
 约定：
 
-- git tag 用 `sandbox-v0.1.0`
-- 最终镜像 tag 用 `v0.1.0`
+- git tag 用 `sandbox-v0.2.0`
+- 最终镜像 tag 用 `v0.2.0`
 - `workflow_dispatch` 仅作为“从 `main` 手动发布一个新的 version”的入口，不允许从任意 branch 发布正式版本
 
 工作流里会把 `sandbox-` 前缀剥掉，得到真正的 image version。
@@ -244,7 +244,7 @@ ghcr.io/<github.repository_owner>/treadstone-sandbox
 
 标签策略：
 
-- `${version}`，例如 `v0.1.0`
+- `${version}`，例如 `v0.2.0`
 - `latest`
 
 这保证了：
@@ -267,32 +267,32 @@ ghcr.io/<owner>/treadstone-sandbox:vX.Y.Z
 
 - `reconstructed` 线负责承载 sandbox runtime 本体
 - `treadstone-sandbox` 线继续承载 Treadstone 额外预装 CLI 的产品化加层
-- runtime / chart / control-plane 默认值暂时不需要改 registry/name，只需要在需要时升级 `treadstone-sandbox` 的版本标签
+- runtime / chart / control-plane 默认值已经在同一轮一起切到新的 `treadstone-sandbox` 版本标签，不再继续停留在旧的 `v0.1.0`
 
 ---
 
 ## 6. 推荐发布流程
 
-### 6.1 首次发布
+### 6.1 本轮发布
 
 1. 合并包含 Dockerfile 和 workflow 的 PR
 2. 在主仓库打 tag：
 
 ```bash
-git tag sandbox-v0.1.0
-git push origin sandbox-v0.1.0
+git tag sandbox-v0.2.0
+git push origin sandbox-v0.2.0
 ```
 
 3. GitHub Actions 自动构建并推送：
 
 ```text
-ghcr.io/earayu/treadstone-sandbox:v0.1.0
+ghcr.io/earayu/treadstone-sandbox:v0.2.0
 ghcr.io/earayu/treadstone-sandbox:latest
 ```
 
 ### 6.2 手动重建
 
-如果不想重新打 tag，也可以直接在 GitHub Actions 中使用 `workflow_dispatch`，手工输入一个**尚未发布过的新版本号**（例如 `v0.1.1`）从 `main` 触发构建。
+如果不想重新打 tag，也可以直接在 GitHub Actions 中使用 `workflow_dispatch`，手工输入一个**尚未发布过的新版本号**（例如 `v0.2.0`）从 `main` 触发构建。
 
 工作流会额外做三层保护：
 

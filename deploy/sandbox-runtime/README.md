@@ -39,7 +39,7 @@ This is a practical V1 control, not a final hard-isolation model:
 
 ## Sandbox Security Context Baseline
 
-The default runtime image (`ghcr.io/earayu/treadstone-sandbox`, built on `ghcr.io/agent-infra/sandbox`) inherits the same opaque upstream entrypoint behavior and is **not rootless-compatible**. Its startup scripts create the `gem` user/group and perform other bootstrap steps as root on every start. Because of that, Treadstone does **not** force the main sandbox container to run as UID/GID 1000.
+The default runtime image (`ghcr.io/earayu/treadstone-sandbox`, now built on the validated reconstructed sandbox base) still inherits the same opaque bootstrap behavior and is **not rootless-compatible**. Its startup scripts create the `gem` user/group and perform other bootstrap steps as root on every start. Because of that, Treadstone does **not** force the main sandbox container to run as UID/GID 1000.
 
 The default Treadstone baseline is therefore **compatibility-first hardening**:
 
