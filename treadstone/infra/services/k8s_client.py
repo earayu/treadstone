@@ -34,8 +34,6 @@ from copy import deepcopy
 from datetime import UTC, datetime
 from typing import Any, Protocol, runtime_checkable
 
-from treadstone.config import settings
-
 logger = logging.getLogger(__name__)
 
 __all__ = [
