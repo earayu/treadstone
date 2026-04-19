@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "result": "fail",
+  "github": {
+    "run_id": 24623348723,
+    "run_attempt": 1,
+    "repository": "earayu/treadstone",
+    "workflow": "K8s E2E",
+    "run_url": "https://github.com/earayu/treadstone/actions/runs/24623348723"
+  },
+  "git": {
+    "sha": "647c875da236a918c285a28f9bf3286b6a832e4f",
+    "sha_short": "647c875",
+    "ref_name": "tygg/rootless-sandbox-image",
+    "commit_url": "https://github.com/earayu/treadstone/commit/647c875da236a918c285a28f9bf3286b6a832e4f"
+  },
+  "published_at": "2026-04-19T07:44:27Z"
+}
