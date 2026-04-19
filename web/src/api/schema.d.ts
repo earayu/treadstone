@@ -2192,7 +2192,7 @@ export interface components {
             created_at: string;
             /**
              * Image
-             * @example ghcr.io/earayu/treadstone-sandbox:v0.1.0
+             * @example ghcr.io/earayu/treadstone-sandbox:v0.2.1
              */
             image?: string | null;
             /**
@@ -2355,7 +2355,7 @@ export interface components {
             description: string;
             /**
              * Image
-             * @example ghcr.io/earayu/treadstone-sandbox:v0.1.0
+             * @example ghcr.io/earayu/treadstone-sandbox:v0.2.1
              */
             image: string;
             resource_spec: components["schemas"]["ResourceSpec"];

@@ -72,7 +72,7 @@ def _mock_k8s_client():
         return_value=[
             {
                 "name": "aio-sandbox-tiny",
-                "image": "ghcr.io/earayu/treadstone-sandbox:v0.1.0",
+                "image": "ghcr.io/earayu/treadstone-sandbox:v0.2.1",
                 "resource_spec": {"cpu": "250m", "memory": "1Gi"},
                 "resource_limits": {"cpu": "250m", "memory": "1Gi"},
                 "startup_probe": {

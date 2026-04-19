@@ -175,7 +175,7 @@ This rollout does **not** migrate existing PVCs across zones. If `best-effort` i
 
 ### Sandbox runtime image (local)
 
-`deploy/sandbox-runtime/values-local.yaml` defaults to the same **Treadstone sandbox** image as prod (`ghcr.io/earayu/treadstone-sandbox:v0.1.0`). For faster pulls in mainland China, mirror that tag to your registry (see the commented example in the file), set `image:` accordingly, and redeploy the runtime chart. You can also `docker pull` + `kind load docker-image` that tag before creating sandboxes.
+`deploy/sandbox-runtime/values-local.yaml` defaults to the same **Treadstone sandbox** image as prod (`ghcr.io/earayu/treadstone-sandbox:v0.2.1`). For faster pulls in mainland China, mirror that tag to your registry (see the commented example in the file), set `image:` accordingly, and redeploy the runtime chart. You can also `docker pull` + `kind load docker-image` that tag before creating sandboxes.
 
 ### 4. Verify Deployment
 
@@ -426,4 +426,3 @@ make port-forward-api  # Forward the API to localhost:8000
 make undeploy-env      # Uninstall namespace-scoped layers
 make test-e2e          # Run E2E tests against deployed service
 ```
-
