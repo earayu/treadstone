@@ -125,7 +125,9 @@ jsonpath "$.web_url" startsWith "http://sandbox-{{sandbox_id_a}}.sandbox.localho
 GET {{base_url}}/v1/sandboxes/{{sandbox_id_a}}
 Authorization: Bearer {{api_key_a}}
 [Options]
-retry: 30
+# CI / loaded clusters can keep a sandbox in "creating" longer than local runs;
+# allow the same ~3 min readiness window used by the lifecycle/data-plane files.
+retry: 90
 retry-interval: 2s
 HTTP 200
 [Asserts]
@@ -138,7 +140,8 @@ HTTP 200
 GET {{base_url}}/v1/sandboxes/{{sandbox_id_a}}
 Authorization: Bearer {{api_key_a}}
 [Options]
-retry: 20
+# Stop is async via the K8s control loop; give it up to ~60s in CI.
+retry: 30
 retry-interval: 2s
 HTTP 200
 [Asserts]

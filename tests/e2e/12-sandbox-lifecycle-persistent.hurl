@@ -151,7 +151,8 @@ HTTP 200
 GET {{base_url}}/v1/sandboxes/{{sandbox_id}}
 Authorization: Bearer {{api_key}}
 [Options]
-retry: 20
+# Persistent sandbox stop can be slower in CI because storage/K8s teardown is async.
+retry: 30
 retry-interval: 2s
 HTTP 200
 [Asserts]

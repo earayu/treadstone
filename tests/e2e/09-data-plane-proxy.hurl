@@ -133,7 +133,9 @@ POST {{base_url}}/v1/sandboxes/{{sandbox_id}}/proxy/v1/shell/exec
 Authorization: Bearer {{api_key}}
 Content-Type: application/json
 [Options]
-retry: 8
+# A sandbox can report status=ready slightly before the proxied workload is
+# consistently reachable; keep a second retry window for proxy-path readiness.
+retry: 12
 retry-interval: 3s
 {
     "command": "echo e2e-data-plane-ok && pwd",
