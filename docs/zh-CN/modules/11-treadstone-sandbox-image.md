@@ -286,7 +286,7 @@ git push origin sandbox-v0.2.0
 3. GitHub Actions 自动构建并推送：
 
 ```text
-ghcr.io/earayu/treadstone-sandbox:v0.2.0
+ghcr.io/earayu/treadstone-sandbox:v0.2.1
 ghcr.io/earayu/treadstone-sandbox:latest
 ```
 

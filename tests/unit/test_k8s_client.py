@@ -18,11 +18,13 @@ from treadstone.services.k8s_client import (
 EXPECTED_MAIN_SECURITY_CONTEXT = {
     "allowPrivilegeEscalation": False,
     "readOnlyRootFilesystem": False,
+    "runAsNonRoot": True,
+    "runAsUser": 1000,
+    "runAsGroup": 1000,
     "seccompProfile": {"type": "RuntimeDefault"},
 }
 EXPECTED_INIT_SECURITY_CONTEXT = {
     "allowPrivilegeEscalation": False,
-    "capabilities": {"drop": ["ALL"]},
     "runAsNonRoot": True,
     "runAsUser": 1000,
     "runAsGroup": 1000,
@@ -96,7 +98,7 @@ def test_parse_sandbox_template_extracts_probes():
                     "spec": {
                         "containers": [
                             {
-                                "image": "ghcr.io/earayu/treadstone-sandbox:v0.2.0",
+                                "image": "ghcr.io/earayu/treadstone-sandbox:v0.2.1",
                                 "resources": {
                                     "requests": {"cpu": "250m", "memory": "1Gi"},
                                     "limits": {"cpu": "250m", "memory": "1Gi"},
@@ -235,7 +237,7 @@ async def test_create_sandbox_direct():
     sb = await client.create_sandbox(
         name="direct-sb",
         namespace="treadstone-local",
-        image="ghcr.io/earayu/treadstone-sandbox:v0.2.0",
+        image="ghcr.io/earayu/treadstone-sandbox:v0.2.1",
         container_port=8080,
         resources={"requests": {"cpu": "250m", "memory": "512Mi"}},
         startup_probe={
@@ -279,7 +281,7 @@ async def test_create_sandbox_direct_without_storage():
     sb = await client.create_sandbox(
         name="no-storage-sb",
         namespace="treadstone-local",
-        image="ghcr.io/earayu/treadstone-sandbox:v0.2.0",
+        image="ghcr.io/earayu/treadstone-sandbox:v0.2.1",
         container_port=8080,
         resources={"requests": {"cpu": "250m", "memory": "512Mi"}},
     )
@@ -305,7 +307,7 @@ async def test_delete_sandbox_direct():
     await client.create_sandbox(
         name="del-direct",
         namespace="treadstone-local",
-        image="ghcr.io/earayu/treadstone-sandbox:v0.2.0",
+        image="ghcr.io/earayu/treadstone-sandbox:v0.2.1",
         container_port=8080,
         resources={"requests": {"cpu": "250m", "memory": "512Mi"}},
     )
@@ -320,7 +322,7 @@ async def test_direct_sandbox_in_list():
     await client.create_sandbox(
         name="direct-sb",
         namespace="treadstone-local",
-        image="ghcr.io/earayu/treadstone-sandbox:v0.2.0",
+        image="ghcr.io/earayu/treadstone-sandbox:v0.2.1",
         container_port=8080,
         resources={"requests": {"cpu": "1", "memory": "2Gi"}},
     )
@@ -383,7 +385,7 @@ async def test_create_sandbox_requests_expected_manifest_with_probes():
     await client.create_sandbox(
         name="direct-sb",
         namespace="treadstone-prod",
-        image="ghcr.io/earayu/treadstone-sandbox:v0.2.0",
+        image="ghcr.io/earayu/treadstone-sandbox:v0.2.1",
         container_port=8080,
         resources={"requests": {"cpu": "250m", "memory": "1Gi"}},
         startup_probe={
@@ -414,9 +416,9 @@ async def test_create_sandbox_requests_expected_manifest_with_probes():
     container = pod_spec["containers"][0]
     assert container["securityContext"] == _sandbox_main_container_security_context()
     assert container["securityContext"] == EXPECTED_MAIN_SECURITY_CONTEXT
-    assert "runAsNonRoot" not in container["securityContext"]
-    assert "runAsUser" not in container["securityContext"]
-    assert "runAsGroup" not in container["securityContext"]
+    assert container["securityContext"]["runAsNonRoot"] is True
+    assert container["securityContext"]["runAsUser"] == 1000
+    assert container["securityContext"]["runAsGroup"] == 1000
     assert container["startupProbe"]["httpGet"]["path"] == "/v1/sandbox"
     assert container["readinessProbe"]["failureThreshold"] == 3
     assert "livenessProbe" not in container
@@ -457,7 +459,7 @@ async def test_create_sandbox_manifest_mounts_pvc_at_home_dir():
 
     client._get_api = fake_get_api  # type: ignore[method-assign]
 
-    image = "ghcr.io/earayu/treadstone-sandbox:v0.2.0"
+    image = "ghcr.io/earayu/treadstone-sandbox:v0.2.1"
     await client.create_sandbox(
         name="persist-sb",
         namespace="treadstone-local",
@@ -486,9 +488,9 @@ async def test_create_sandbox_manifest_mounts_pvc_at_home_dir():
     assert main["volumeMounts"] == [{"name": "workspace", "mountPath": SANDBOX_HOME_DIR}]
     assert main["securityContext"] == _sandbox_main_container_security_context()
     assert main["securityContext"] == EXPECTED_MAIN_SECURITY_CONTEXT
-    assert "runAsNonRoot" not in main["securityContext"]
-    assert "runAsUser" not in main["securityContext"]
-    assert "runAsGroup" not in main["securityContext"]
+    assert main["securityContext"]["runAsNonRoot"] is True
+    assert main["securityContext"]["runAsUser"] == 1000
+    assert main["securityContext"]["runAsGroup"] == 1000
 
     assert pod_spec["securityContext"] == _sandbox_pod_security_context(with_pvc=True)
     assert pod_spec["securityContext"] == {
@@ -507,6 +509,7 @@ async def test_create_sandbox_manifest_mounts_pvc_at_home_dir():
     assert init["volumeMounts"] == [{"name": "workspace", "mountPath": "/mnt/home"}]
     script = init["command"][2]
     assert ".treadstone-home-initialized" in script
+    assert "/opt/treadstone/home-template/." in script
     assert "chown" not in script
 
 
@@ -523,7 +526,7 @@ async def test_create_sandbox_manifest_without_pvc_has_baseline_security_no_init
     await client.create_sandbox(
         name="ephemeral-sb",
         namespace="treadstone-local",
-        image="ghcr.io/earayu/treadstone-sandbox:v0.2.0",
+        image="ghcr.io/earayu/treadstone-sandbox:v0.2.1",
         container_port=8080,
         resources={"requests": {"cpu": "250m", "memory": "512Mi"}},
     )
@@ -549,7 +552,7 @@ async def test_create_sandbox_preserves_explicit_pod_labels() -> None:
     sb = await client.create_sandbox(
         name="labeled-sb",
         namespace="treadstone-prod",
-        image="ghcr.io/earayu/treadstone-sandbox:v0.2.0",
+        image="ghcr.io/earayu/treadstone-sandbox:v0.2.1",
         container_port=8080,
         resources={"requests": {"cpu": "500m", "memory": "2Gi"}},
         pod_labels={
@@ -571,7 +574,7 @@ async def test_create_sandbox_has_no_extra_labels_without_pod_labels() -> None:
     sb = await client.create_sandbox(
         name="plain-sb",
         namespace="treadstone-local",
-        image="ghcr.io/earayu/treadstone-sandbox:v0.2.0",
+        image="ghcr.io/earayu/treadstone-sandbox:v0.2.1",
         container_port=8080,
         resources={"requests": {"cpu": "250m", "memory": "512Mi"}},
     )
@@ -589,7 +592,7 @@ async def test_kr8s_client_preserves_explicit_pod_labels() -> None:
     await client.create_sandbox(
         name="kr8s-labeled-sb",
         namespace="treadstone-prod",
-        image="ghcr.io/earayu/treadstone-sandbox:v0.2.0",
+        image="ghcr.io/earayu/treadstone-sandbox:v0.2.1",
         container_port=8080,
         resources={"requests": {"cpu": "500m"}},
         pod_labels={
