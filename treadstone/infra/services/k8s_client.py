@@ -723,7 +723,7 @@ def _make_ready_condition(status: str = "False", reason: str = "DependenciesNotR
 class FakeK8sClient:
     """In-memory stub for testing — simulates the agent-sandbox controller behavior."""
 
-    _DEFAULT_IMAGE = "ghcr.io/earayu/treadstone-sandbox:v0.1.0"
+    _DEFAULT_IMAGE = "ghcr.io/earayu/treadstone-sandbox:v0.2.1"
 
     _DEFAULT_TEMPLATES: tuple[dict[str, Any], ...] = (
         {

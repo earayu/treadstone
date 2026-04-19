@@ -1,6 +1,6 @@
-image: ghcr.io/earayu/treadstone-sandbox:v0.1.0
+image: ghcr.io/earayu/treadstone-sandbox:v0.2.1
 # For users in mainland China (mirror this tag locally if needed):
-# image: enterprise-public-cn-beijing.cr.volces.com/vefaas-public/treadstone-sandbox:v0.1.0
+# image: enterprise-public-cn-beijing.cr.volces.com/vefaas-public/treadstone-sandbox:v0.2.1
 containerPort: 8080
 
 # Override `networkPolicies.egress.allowPublicInternet.exceptCidrs` with the

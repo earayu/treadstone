@@ -1,7 +1,7 @@
 # Default: same runtime image as prod (see values.yaml). For faster pulls in mainland China,
-# mirror ``ghcr.io/earayu/treadstone-sandbox:v0.1.0`` to your registry and set ``image`` here.
-# image: enterprise-public-cn-beijing.cr.volces.com/vefaas-public/treadstone-sandbox:v0.1.0
-image: ghcr.io/earayu/treadstone-sandbox:v0.1.0
+# mirror ``ghcr.io/earayu/treadstone-sandbox:v0.2.1`` to your registry and set ``image`` here.
+# image: enterprise-public-cn-beijing.cr.volces.com/vefaas-public/treadstone-sandbox:v0.2.1
+image: ghcr.io/earayu/treadstone-sandbox:v0.2.1
 containerPort: 8080
 
 # Override `networkPolicies.egress.allowPublicInternet.exceptCidrs` here with the
