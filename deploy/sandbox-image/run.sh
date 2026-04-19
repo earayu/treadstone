@@ -59,12 +59,16 @@ envsubst '${XDG_RUNTIME_DIR}' \
   </opt/treadstone/templates/nginx.conf.template >/opt/gem/nginx.conf
 envsubst '${MCP_HUB_PORT} ${SANDBOX_SRV_PORT}' \
   </opt/gem/nginx/nginx.python_srv.conf >/opt/gem/nginx/python_srv.conf
+rm -f /opt/gem/nginx/nginx.python_srv.conf
 envsubst '${MCP_HUB_PORT}' \
   </opt/gem/nginx/nginx.mcp_hub.conf >/opt/gem/nginx/mcp_hub.conf
+rm -f /opt/gem/nginx/nginx.mcp_hub.conf
 envsubst '${JUPYTER_LAB_PORT}' \
   </opt/gem/nginx/nginx.jupyter_lab.conf >/opt/gem/nginx/jupyter_lab.conf
+rm -f /opt/gem/nginx/nginx.jupyter_lab.conf
 envsubst '${CODE_SERVER_PORT}' \
   </opt/gem/nginx/nginx.code_server.conf >/opt/gem/nginx/code_server.conf
+rm -f /opt/gem/nginx/nginx.code_server.conf
 envsubst '${PUBLIC_PORT}' \
   </opt/gem/nginx-server-port-proxy.conf.template >/opt/gem/nginx-server-port-proxy.conf
 envsubst '${SANDBOX_SRV_PORT} ${MCP_SERVER_BROWSER_PORT} ${BROWSER_REMOTE_DEBUGGING_PORT}' \
