@@ -184,7 +184,10 @@ jobs:
 
       - name: make test-e2e
         env:
-          HURL_JOBS: "1"
+          # Controlled concurrency experiment: keep Hurl below full fan-out while
+          # we measure whether sandbox creation stalls are caused by shared Kind /
+          # runtime resource contention rather than strict test ordering.
+          HURL_JOBS: "2"
           E2E_FILE: ${{ github.event.inputs.file || '' }}
         run: |
           if [ -n "${E2E_FILE:-}" ]; then
