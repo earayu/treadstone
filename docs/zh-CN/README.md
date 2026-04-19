@@ -25,6 +25,7 @@
 - [Persistent Sandbox 冷存快照与恢复](./modules/09-cold-snapshot-restore.md) — `cold` 状态、`snapshot/start` 单入口恢复、VolumeSnapshot 编排、失败补偿与当前边界
 - [模块化与领域边界拆分指导](./modules/10-modularization-and-domain-boundaries.md) — 面向长期演进的模块职责、领域边界、服务单元化与阶段性判断原则
 - [Treadstone Sandbox Image：架构与实施说明](./modules/11-treadstone-sandbox-image.md) — 自建 sandbox image 第一版的边界、CLI 预装策略、GHCR 发布流程与实施约束
+- [`agent-infra/sandbox:1.0.0.152` 重建方案](./modules/12-agent-infra-sandbox-reconstruction.md) — 基于已发布镜像的高保真重建目录、Dockerfile、工作流和当前边界
 
 ## 这次重组覆盖了什么
 

@@ -140,7 +140,8 @@ HTTP 200
 GET {{base_url}}/v1/sandboxes/{{sandbox_id}}
 Authorization: Bearer {{api_key}}
 [Options]
-retry: 20
+# Stop is async via the K8s control loop; allow ~60s in CI.
+retry: 30
 retry-interval: 2s
 HTTP 200
 [Asserts]

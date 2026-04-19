@@ -46,7 +46,7 @@ The **K8s E2E** workflow merges each successful HTML report into the **`gh-pages
 
 - **Self-contained files**: each registers its own users (except `08` which relies on `admin_email` from the runner).
 - **Email verification**: several flows use `GET /v1/admin/verification-token-by-email` as admin (first user is admin on fresh DB).
-- **Retries**: Hurl `[Options] retry` + `retry-interval` poll async state (`ready`, `stopped`).
+- **Retries**: Hurl `[Options] retry` + `retry-interval` poll async state (`ready`, `stopped`). Sandbox readiness waits intentionally use wider CI-safe windows than local runs, and data-plane proxy calls keep an additional retry window because `status=ready` can precede full proxy-path availability by a few seconds.
 - **Sandbox template**: `scripts/e2e-test.sh` sets `sandbox_template` (default `aio-sandbox-tiny`) to match the seeded free-tier `allowed_templates`. Do not use `GET /v1/sandbox-templates` `items[0]` — sort order may pick a template the free tier is not allowed to use (→ HTTP 403 `template_not_allowed`).
 - **Persist + storage**: free tier seeds `storage_capacity_gib` = 0. Tests needing `persist=true` use admin `POST /v1/admin/users/{id}/storage-grants` first (otherwise HTTP 402 `storage_quota_exceeded`).
 - **Web link after sandbox delete**: `GET /v1/sandboxes/{id}/web-link` may return **404** `sandbox_not_found` once the row is gone (fast reconcile); it is not always **200** with `enabled: false`.

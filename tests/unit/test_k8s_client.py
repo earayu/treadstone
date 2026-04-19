@@ -436,7 +436,7 @@ async def test_create_sandbox_uses_fixed_sandbox_service_account():
     await client.create_sandbox(
         name="direct-sb",
         namespace="treadstone-prod",
-        image="ghcr.io/agent-infra/sandbox:1.0.0.152",
+        image="ghcr.io/earayu/treadstone-sandbox:v0.2.0",
         container_port=8080,
         resources={"requests": {"cpu": "250m", "memory": "1Gi"}},
     )

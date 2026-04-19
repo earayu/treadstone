@@ -113,7 +113,9 @@ jsonpath "$.storage_size" == null
 GET {{base_url}}/v1/sandboxes/{{claim_sandbox_id}}
 Authorization: Bearer {{api_key}}
 [Options]
-retry: 30
+# CI / loaded clusters can keep a sandbox in "creating" longer than local runs;
+# allow the same ~3 min readiness window used by the dedicated lifecycle tests.
+retry: 90
 retry-interval: 2s
 HTTP 200
 [Asserts]
@@ -126,7 +128,8 @@ HTTP 200
 GET {{base_url}}/v1/sandboxes/{{claim_sandbox_id}}
 Authorization: Bearer {{api_key}}
 [Options]
-retry: 20
+# Stop is also async via the K8s control loop; give it up to ~60s in CI.
+retry: 30
 retry-interval: 2s
 HTTP 200
 [Asserts]

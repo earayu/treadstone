@@ -39,6 +39,7 @@ env:
   KUBECTL_VERSION: v1.31.0
   HELM_VERSION: v3.16.2
   HURL_VERSION: 5.0.1
+  SANDBOX_RUNTIME_IMAGE: ghcr.io/earayu/treadstone-sandbox:v0.2.1
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
@@ -191,7 +192,10 @@ jobs:
 
       - name: make test-e2e
         env:
-          HURL_JOBS: "1"
+          # Controlled concurrency experiment: keep Hurl below full fan-out while
+          # we measure whether sandbox creation stalls are caused by shared Kind /
+          # runtime resource contention rather than strict test ordering.
+          HURL_JOBS: "2"
           E2E_FILE: ${{ github.event.inputs.file || '' }}
         run: |
           if [ -n "${E2E_FILE:-}" ]; then
@@ -285,10 +289,73 @@ jobs:
 
       - name: Collect diagnostics
         if: failure()
+        env:
+          APP_NS: treadstone-local
+          AGENT_NS: agent-sandbox-system
+          SANDBOX_SELECTOR: treadstone-ai.dev/workload=sandbox
         run: |
+          set +e
+
+          echo "=== cluster overview ==="
           kubectl get all -A || true
-          kubectl get sandboxclaims,sandboxes,sandboxwarmpools,sandboxtemplates,pvc -A 2>/dev/null || true
-          kubectl get events -A --sort-by=.lastTimestamp 2>/dev/null | tail -n 80 || true
+          echo
+
+          echo "=== sandbox resources overview ==="
+          kubectl get sandboxclaims,sandboxes,sandboxwarmpools,sandboxtemplates,pvc -A -o wide 2>/dev/null || true
+          echo
+
+          echo "=== recent events ==="
+          kubectl get events -A --sort-by=.lastTimestamp 2>/dev/null | tail -n 120 || true
+          echo
+
+          echo "=== agent-sandbox controller pods ==="
+          kubectl -n "$AGENT_NS" get pods -o wide 2>/dev/null || true
+          echo
+
+          echo "=== agent-sandbox controller logs ==="
+          kubectl -n "$AGENT_NS" logs deploy/agent-sandbox-controller --all-containers=true --tail=400 2>/dev/null || true
+          echo
+
+          echo "=== application namespace pods ==="
+          kubectl -n "$APP_NS" get pods -o wide 2>/dev/null || true
+          echo
+
+          echo "=== sandbox CR yaml ==="
+          kubectl -n "$APP_NS" get sandboxclaims,sandboxes -o yaml 2>/dev/null || true
+          echo
+
+          for resource in sandboxclaims sandboxes; do
+            for obj in $(kubectl -n "$APP_NS" get "$resource" -o name 2>/dev/null || true); do
+              echo "=== describe ${obj} ==="
+              kubectl -n "$APP_NS" describe "$obj" || true
+              echo
+            done
+          done
+
+          sandbox_pods=$(kubectl -n "$APP_NS" get pods -l "$SANDBOX_SELECTOR" -o name 2>/dev/null || true)
+          for pod in $sandbox_pods; do
+            echo "=== describe ${pod} ==="
+            kubectl -n "$APP_NS" describe "$pod" || true
+            echo
+
+            for container in $(kubectl -n "$APP_NS" get "$pod" -o jsonpath='{range .spec.initContainers[*]}{.name}{"\n"}{end}' 2>/dev/null || true); do
+              echo "=== logs ${pod} init/${container} ==="
+              kubectl -n "$APP_NS" logs "$pod" -c "$container" --tail=200 2>/dev/null || true
+              echo
+              echo "=== previous logs ${pod} init/${container} ==="
+              kubectl -n "$APP_NS" logs "$pod" -c "$container" --previous --tail=200 2>/dev/null || true
+              echo
+            done
+
+            for container in $(kubectl -n "$APP_NS" get "$pod" -o jsonpath='{range .spec.containers[*]}{.name}{"\n"}{end}' 2>/dev/null || true); do
+              echo "=== logs ${pod} ${container} ==="
+              kubectl -n "$APP_NS" logs "$pod" -c "$container" --tail=200 2>/dev/null || true
+              echo
+              echo "=== previous logs ${pod} ${container} ==="
+              kubectl -n "$APP_NS" logs "$pod" -c "$container" --previous --tail=200 2>/dev/null || true
+              echo
+            done
+          done
 
       - name: Cleanup Kind cluster
         if: always()
