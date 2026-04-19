@@ -73,6 +73,7 @@ RUN set -euo pipefail \
     && install -d -m 755 -o gem -g gem \
          /opt/treadstone \
          /opt/treadstone/home-template \
+         /var/log/nginx \
          /var/lib/nginx \
     && for home_dir in /home/gem /opt/treadstone/home-template; do \
          install -d -m 755 -o gem -g gem \
@@ -96,7 +97,9 @@ RUN set -euo pipefail \
          /opt/jupyter \
          /opt/aio \
          /etc/browser/policies/managed \
+         /var/log/nginx \
          /var/lib/nginx \
+    && touch /var/log/nginx/error.log \
     && chmod 755 /opt/gem/run.sh /opt/gem/entrypoint.sh /opt/gem/jupyter-lab.sh /opt/gem/tinyproxy.sh
 
 RUN claude --version \
