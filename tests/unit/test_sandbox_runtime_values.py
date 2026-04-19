@@ -49,6 +49,9 @@ EXPECTED_SANDBOX_POD_SECURITY_CONTEXT = {
 EXPECTED_SANDBOX_CONTAINER_SECURITY_CONTEXT = {
     "allowPrivilegeEscalation": False,
     "readOnlyRootFilesystem": False,
+    "runAsNonRoot": True,
+    "runAsUser": 1000,
+    "runAsGroup": 1000,
     "seccompProfile": {"type": "RuntimeDefault"},
 }
 EXPECTED_SANDBOX_SERVICE_ACCOUNT = {

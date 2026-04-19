@@ -143,13 +143,22 @@ jobs:
           EOF
           sed -i 's/^[[:space:]]*//' .env.local
 
-      # Pin the same tag as values-prod / deploy/README.md — not :latest (moving tag can break
-      # controller compatibility or stall warm-pool readiness for the full wait-k8s loop).
+      # Build the sandbox image from the current branch/tag so rootfs/runtime
+      # contract changes are exercised in the same PR and through the same
+      # Kind path as `make local`.
       - name: Sandbox runtime image override (GitHub-hosted runners)
         run: |
           cat > /tmp/ci-sandbox-runtime-image.yaml <<'EOF'
-          image: ghcr.io/earayu/treadstone-sandbox:v0.1.0
+          image: treadstone-sandbox:e2e
           EOF
+
+      - name: Build sandbox runtime image
+        run: |
+          docker build \
+            -f deploy/sandbox-image/Dockerfile \
+            -t treadstone-sandbox:e2e \
+            --build-arg TREADSTONE_SANDBOX_VERSION="ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            deploy/sandbox-image
 
       # Mirrors scripts/up.sh local + make deploy-all, but applies extension CRDs and waits for
       # Established before sandbox-runtime (Helm otherwise errors: SandboxTemplate kind unknown).
@@ -163,8 +172,7 @@ jobs:
           kind load docker-image treadstone:latest --name treadstone
           make image-web
           kind load docker-image treadstone-web:latest --name treadstone
-          docker pull ghcr.io/earayu/treadstone-sandbox:v0.1.0
-          kind load docker-image ghcr.io/earayu/treadstone-sandbox:v0.1.0 --name treadstone
+          kind load docker-image treadstone-sandbox:e2e --name treadstone
           bash scripts/check-k8s-context.sh local
           make deploy-storage deploy-infra ENV=local
           kubectl apply -f deploy/agent-sandbox/upstream/extensions.yaml

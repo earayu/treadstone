@@ -70,13 +70,11 @@ networkPolicies:
     # Use this for environment-specific allow rules without changing chart code.
     extraAllowRules: []
 
-# Baseline-compatible hardening for the current opaque AIO image.
-# The stock image is not rootless-compatible: it bootstraps the `gem` account
-# and other runtime state as root on every start. Keep the main container on
-# the image default user and retain seccomp + no-new-privilege style controls.
-# Do not set explicit Linux capabilities here: some ACS/ECI policies reject
-# capability overrides entirely, while the stock image still starts correctly
-# with the runtime defaults when no capabilities stanza is present.
+# Rootless baseline for the maintained Treadstone sandbox image. The image now
+# creates `gem` at build time and prepares its writable runtime paths ahead of
+# time, so the main container can run as UID/GID 1000. Keep the root
+# filesystem writable for now because browser/Jupyter/nginx still use
+# container-local transient state.
 sandboxPodSecurityContext:
   seccompProfile:
     type: RuntimeDefault
@@ -84,6 +82,9 @@ sandboxPodSecurityContext:
 sandboxContainerSecurityContext:
   allowPrivilegeEscalation: false
   readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
   seccompProfile:
     type: RuntimeDefault
 

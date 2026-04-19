@@ -51,8 +51,62 @@ RUN set -euo pipefail \
 
 ENV TREADSTONE_SANDBOX_VERSION="${TREADSTONE_SANDBOX_VERSION}"
 
+COPY run.sh /opt/gem/run.sh
+COPY entrypoint.sh /opt/gem/entrypoint.sh
+COPY supervisord.conf /opt/gem/supervisord.conf
+COPY supervisord.nginx.conf /opt/gem/supervisord/nginx.conf
+COPY jupyter-lab.sh /opt/gem/jupyter-lab.sh
+COPY nginx.conf.template /opt/treadstone/templates/nginx.conf.template
+COPY tinyproxy-base.conf /opt/gem/tinyproxy/base.conf
+
+# Make the upstream AIO runtime genuinely rootless-compatible. The base image
+# bootstraps `gem` at runtime and writes privileged state on every start; move
+# that user/home setup into build time, prepare a reusable home skeleton for
+# PVC seeding, and hand ownership of writable runtime paths to `gem`.
+RUN set -euo pipefail \
+    && if ! getent group gem >/dev/null; then groupadd --gid 1000 gem; fi \
+    && if ! id -u gem >/dev/null 2>&1; then useradd --uid 1000 --gid 1000 --shell /bin/bash --create-home gem; fi \
+    && install -d -m 755 -o gem -g gem \
+         /opt/treadstone \
+         /opt/treadstone/home-template \
+         /var/lib/nginx \
+    && for home_dir in /home/gem /opt/treadstone/home-template; do \
+         install -d -m 755 -o gem -g gem \
+           "${home_dir}" \
+           "${home_dir}/.npm-global/lib" \
+           "${home_dir}/.config/code-server" \
+           "${home_dir}/.local/share/code-server" \
+           "${home_dir}/.config/matplotlib" \
+           "${home_dir}/.config/browser/Default"; \
+         cp -f /opt/gem/bashrc "${home_dir}/.bashrc"; \
+         cp -rf /opt/gem/vscode "${home_dir}/.config/code-server/vscode"; \
+         cp -rf /opt/gem/jupyter "${home_dir}/.jupyter"; \
+         cp -f /opt/gem/matplotlibrc "${home_dir}/.config/matplotlib/matplotlibrc"; \
+         cp -f /opt/gem/preferences.json "${home_dir}/.config/browser/Default/Preferences"; \
+         touch "${home_dir}/.Xauthority"; \
+       done \
+    && chown -R gem:gem \
+         /home/gem \
+         /opt/treadstone \
+         /opt/gem \
+         /opt/jupyter \
+         /opt/aio \
+         /etc/browser/policies/managed \
+         /var/lib/nginx \
+    && chmod 755 /opt/gem/run.sh /opt/gem/entrypoint.sh /opt/gem/jupyter-lab.sh
+
 RUN claude --version \
     && codex --version \
     && kimi --version \
     && cursor-agent --version \
     && agent --version
+
+ENV USER=gem \
+    USER_UID=1000 \
+    USER_GID=1000 \
+    HOME=/home/gem \
+    PATH="/home/gem/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+    LOG_DIR=/tmp/treadstone/log \
+    XDG_RUNTIME_DIR=/tmp/runtime-gem
+
+USER gem

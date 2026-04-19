@@ -18,11 +18,13 @@ from treadstone.services.k8s_client import (
 EXPECTED_MAIN_SECURITY_CONTEXT = {
     "allowPrivilegeEscalation": False,
     "readOnlyRootFilesystem": False,
+    "runAsNonRoot": True,
+    "runAsUser": 1000,
+    "runAsGroup": 1000,
     "seccompProfile": {"type": "RuntimeDefault"},
 }
 EXPECTED_INIT_SECURITY_CONTEXT = {
     "allowPrivilegeEscalation": False,
-    "capabilities": {"drop": ["ALL"]},
     "runAsNonRoot": True,
     "runAsUser": 1000,
     "runAsGroup": 1000,
@@ -414,9 +416,9 @@ async def test_create_sandbox_requests_expected_manifest_with_probes():
     container = pod_spec["containers"][0]
     assert container["securityContext"] == _sandbox_main_container_security_context()
     assert container["securityContext"] == EXPECTED_MAIN_SECURITY_CONTEXT
-    assert "runAsNonRoot" not in container["securityContext"]
-    assert "runAsUser" not in container["securityContext"]
-    assert "runAsGroup" not in container["securityContext"]
+    assert container["securityContext"]["runAsNonRoot"] is True
+    assert container["securityContext"]["runAsUser"] == 1000
+    assert container["securityContext"]["runAsGroup"] == 1000
     assert container["startupProbe"]["httpGet"]["path"] == "/v1/sandbox"
     assert container["readinessProbe"]["failureThreshold"] == 3
     assert "livenessProbe" not in container
@@ -486,9 +488,9 @@ async def test_create_sandbox_manifest_mounts_pvc_at_home_dir():
     assert main["volumeMounts"] == [{"name": "workspace", "mountPath": SANDBOX_HOME_DIR}]
     assert main["securityContext"] == _sandbox_main_container_security_context()
     assert main["securityContext"] == EXPECTED_MAIN_SECURITY_CONTEXT
-    assert "runAsNonRoot" not in main["securityContext"]
-    assert "runAsUser" not in main["securityContext"]
-    assert "runAsGroup" not in main["securityContext"]
+    assert main["securityContext"]["runAsNonRoot"] is True
+    assert main["securityContext"]["runAsUser"] == 1000
+    assert main["securityContext"]["runAsGroup"] == 1000
 
     assert pod_spec["securityContext"] == _sandbox_pod_security_context(with_pvc=True)
     assert pod_spec["securityContext"] == {
@@ -507,6 +509,7 @@ async def test_create_sandbox_manifest_mounts_pvc_at_home_dir():
     assert init["volumeMounts"] == [{"name": "workspace", "mountPath": "/mnt/home"}]
     script = init["command"][2]
     assert ".treadstone-home-initialized" in script
+    assert "/opt/treadstone/home-template/." in script
     assert "chown" not in script
 
 

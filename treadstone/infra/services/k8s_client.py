@@ -5,21 +5,21 @@ Treadstone uses dual-path sandbox provisioning:
   Pods come from Helm ``SandboxTemplate`` resources (no PVC in template, no init container).
 - Direct Sandbox path (agents.x-k8s.io) — persistent storage via ``volumeClaimTemplates``.
   When PVCs mount ``SANDBOX_HOME_DIR``, the volume hides the image home; ``init-home``
-  seeds the PVC from the image layer on first boot (see ``Kr8sClient.create_sandbox``).
+  seeds the PVC from a read-only home template on first boot (see ``Kr8sClient.create_sandbox``).
 - SandboxTemplate (extensions.agents.x-k8s.io) — read-only catalog for the claim path.
 
 Pod/container ``securityContext`` defaults here should stay aligned with
 ``deploy/sandbox-runtime/values.yaml`` (``sandboxPodSecurityContext``,
 ``sandboxContainerSecurityContext``).
 
-Security note: the stock ``ghcr.io/agent-infra/sandbox`` image is **not
-rootless-compatible**. Its entrypoint bootstraps the ``gem`` user/group and
-other runtime state as root on every start. Defaults here therefore target a
-**compatible hardening baseline**: keep seccomp and no-new-privilege style
-controls, retain a writable root filesystem, and avoid explicit Linux
-capability overrides. Some ACS/ECI policies reject any ``capabilities`` stanza
-even when the image starts fine with runtime defaults. This is not Kubernetes
-Pod Security Standards ``restricted`` compliance.
+Security note: Treadstone's maintained sandbox image is now treated as
+**rootless-compatible by contract**. The image creates the ``gem`` user/group
+and prepares writable runtime paths at build time, so the main container can
+consistently run as UID/GID 1000. Keep the writable root filesystem for now
+because browser/Jupyter/nginx sidecars still write transient runtime state in
+container-local paths. The direct-path ``init-home`` container remains
+non-root and avoids capability overrides because some ACS/ECI policies reject
+any explicit ``capabilities`` stanza.
 
 Two implementations:
 - FakeK8sClient: In-memory stub for testing
@@ -49,6 +49,7 @@ __all__ = [
     "WATCH_TIMEOUT_SECONDS",
     # Sandbox image / security constants
     "SANDBOX_HOME_DIR",
+    "SANDBOX_HOME_TEMPLATE_DIR",
     "SANDBOX_UID",
     "SANDBOX_GID",
     "SANDBOX_SERVICE_ACCOUNT_NAME",
@@ -98,17 +99,19 @@ SNAPSHOT_API_VERSION = "v1"
 WATCH_TIMEOUT_SECONDS = 300
 
 # Sandbox runtime image conventions (default ``ghcr.io/earayu/treadstone-sandbox``, extends agent-infra/sandbox).
-# The image creates a non-root user `gem` with this UID/GID.  All internal
-# services (code-server, python-server, su - gem) use SANDBOX_HOME_DIR as
-# workspace.  Persistent volumes must be mounted here with matching ownership.
+# The image creates a non-root user `gem` with this UID/GID at build time and
+# ships a read-only home skeleton for PVC initialization. All internal
+# services use SANDBOX_HOME_DIR as the primary workspace.
 SANDBOX_HOME_DIR = "/home/gem"
+SANDBOX_HOME_TEMPLATE_DIR = "/opt/treadstone/home-template"
 SANDBOX_UID = 1000
 SANDBOX_GID = 1000
 SANDBOX_SERVICE_ACCOUNT_NAME = "treadstone-sandbox"
 
 # Align default with deploy/sandbox-runtime/values.yaml sandboxContainerSecurityContext.
-# False = compatible with the stock opaque image, which writes outside declared
-# volumes during bootstrap. True would require image/layout changes first.
+# The maintained sandbox image still needs writable container-local paths for
+# browser/Jupyter/nginx runtime state, so keep the root filesystem writable for
+# now even though the process runs as non-root.
 SANDBOX_READ_ONLY_ROOT_FILESYSTEM = False
 
 DEFAULT_STARTUP_PROBE: dict[str, Any] = {
@@ -144,19 +147,21 @@ def _sandbox_pod_security_context(*, with_pvc: bool) -> dict[str, Any]:
 
 
 def _sandbox_main_container_security_context() -> dict[str, Any]:
-    """Main sandbox container: compatible baseline mirrored from Helm defaults."""
+    """Main sandbox container: rootless baseline mirrored from Helm defaults."""
     return {
         "allowPrivilegeEscalation": False,
         "readOnlyRootFilesystem": SANDBOX_READ_ONLY_ROOT_FILESYSTEM,
+        "runAsNonRoot": True,
+        "runAsUser": SANDBOX_UID,
+        "runAsGroup": SANDBOX_GID,
         "seccompProfile": {"type": "RuntimeDefault"},
     }
 
 
 def _sandbox_init_container_security_context() -> dict[str, Any]:
-    """init-home remains non-root; the incompatibility is in the main image entrypoint bootstrap."""
+    """init-home remains non-root and keeps to an ACS-compatible baseline."""
     return {
         "allowPrivilegeEscalation": False,
-        "capabilities": {"drop": ["ALL"]},
         "runAsNonRoot": True,
         "runAsUser": SANDBOX_UID,
         "runAsGroup": SANDBOX_GID,
@@ -365,17 +370,16 @@ class Kr8sClient:
             vol_names = [vct["metadata"]["name"] for vct in volume_claim_templates]
             container["volumeMounts"] = [{"name": n, "mountPath": SANDBOX_HOME_DIR} for n in vol_names]
 
-            # On first boot the PVC shadows the image's home dir.  Seed the
-            # volume with the image-layer skeleton (dotfiles from useradd -m,
-            # etc.) so the main container's entrypoint can layer runtime state
-            # on top.  A sentinel file tracks whether seeding has happened —
-            # `ls -A` empty-checks break on ext4 volumes that ship lost+found.
-            # init-home stays non-root and avoids chown; the main opaque image
-            # still boots as root to create its runtime user/group.
+            # On first boot the PVC shadows the image's home dir. Seed the
+            # volume from the explicit read-only home template so `/home/gem`
+            # keeps a stable user-facing meaning while the writable volume is
+            # still initialized outside the main container startup path.
+            # A sentinel file tracks whether seeding has happened — `ls -A`
+            # empty-checks break on ext4 volumes that ship lost+found.
             _sentinel = "/mnt/home/.treadstone-home-initialized"
             init_script = (
                 f"if [ ! -f {_sentinel} ]; then "
-                f"cp -a {SANDBOX_HOME_DIR}/. /mnt/home/ 2>/dev/null || true; "
+                f"cp -a {SANDBOX_HOME_TEMPLATE_DIR}/. /mnt/home/ 2>/dev/null || true; "
                 f"touch {_sentinel}; "
                 f"fi"
             )
