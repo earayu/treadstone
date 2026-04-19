@@ -56,6 +56,7 @@ COPY entrypoint.sh /opt/gem/entrypoint.sh
 COPY supervisord.conf /opt/gem/supervisord.conf
 COPY supervisord.nginx.conf /opt/gem/supervisord/nginx.conf
 COPY jupyter-lab.sh /opt/gem/jupyter-lab.sh
+COPY tinyproxy.sh /opt/gem/tinyproxy.sh
 COPY nginx.conf.template /opt/treadstone/templates/nginx.conf.template
 COPY tinyproxy-base.conf /opt/gem/tinyproxy/base.conf
 
@@ -93,7 +94,7 @@ RUN set -euo pipefail \
          /opt/aio \
          /etc/browser/policies/managed \
          /var/lib/nginx \
-    && chmod 755 /opt/gem/run.sh /opt/gem/entrypoint.sh /opt/gem/jupyter-lab.sh
+    && chmod 755 /opt/gem/run.sh /opt/gem/entrypoint.sh /opt/gem/jupyter-lab.sh /opt/gem/tinyproxy.sh
 
 RUN claude --version \
     && codex --version \
