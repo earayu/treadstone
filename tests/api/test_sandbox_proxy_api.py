@@ -172,6 +172,37 @@ async def test_proxy_success_for_ready_sandbox(auth_client):
     assert resp.json() == {"ok": True}
 
 
+async def test_proxy_base_path_does_not_redirect(auth_client):
+    create_resp = await auth_client.post(
+        "/v1/sandboxes",
+        json={"template": "aio-sandbox-tiny", "name": "proxy-root-sb"},
+    )
+    sandbox_id = create_resp.json()["id"]
+
+    async with _test_session_factory() as session:
+        from treadstone.models.sandbox import Sandbox
+
+        sb = await session.get(Sandbox, sandbox_id)
+        sb.status = "ready"
+        session.add(sb)
+        await session.commit()
+
+    mock_client = _mock_upstream(
+        body=b'{"ok": true}',
+        headers={"content-type": "application/json"},
+    )
+    key_resp = await auth_client.post("/v1/auth/api-keys", json={"name": "proxy-root"})
+    api_key = key_resp.json()["key"]
+
+    with patch("treadstone.proxy.services.sandbox_proxy._http_client", mock_client):
+        resp = await auth_client.get(
+            f"/v1/sandboxes/{sandbox_id}/proxy",
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True}
+
+
 async def test_proxy_ignores_x_sandbox_override_headers(auth_client):
     """Client-supplied X-Sandbox-* must not change upstream host/port or k8s id."""
     create_resp = await auth_client.post(

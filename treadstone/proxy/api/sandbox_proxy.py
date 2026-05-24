@@ -33,12 +33,7 @@ __all__ = [
 router = APIRouter(prefix="/v1/sandboxes", tags=["sandbox-proxy"])
 
 
-@router.api_route(
-    "/{sandbox_id}/proxy/{path:path}",
-    methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
-    include_in_schema=False,
-)
-async def http_proxy(
+async def _http_proxy_impl(
     request: Request,
     sandbox_id: str,
     path: str,
@@ -88,6 +83,36 @@ async def http_proxy(
         status_code=status_code,
         headers=resp_headers,
     )
+
+
+@router.api_route(
+    "/{sandbox_id}/proxy",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+    include_in_schema=False,
+)
+async def http_proxy_root(
+    request: Request,
+    sandbox_id: str,
+    user: User = Depends(get_current_data_plane_user),
+    session: AsyncSession = Depends(get_session),
+) -> StreamingResponse:
+    """Proxy the bare ``/proxy`` path without triggering framework slash redirects."""
+    return await _http_proxy_impl(request=request, sandbox_id=sandbox_id, path="", user=user, session=session)
+
+
+@router.api_route(
+    "/{sandbox_id}/proxy/{path:path}",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+    include_in_schema=False,
+)
+async def http_proxy(
+    request: Request,
+    sandbox_id: str,
+    path: str,
+    user: User = Depends(get_current_data_plane_user),
+    session: AsyncSession = Depends(get_session),
+) -> StreamingResponse:
+    return await _http_proxy_impl(request=request, sandbox_id=sandbox_id, path=path, user=user, session=session)
 
 
 @router.websocket("/{sandbox_id}/proxy/{path:path}")
