@@ -5,6 +5,27 @@ containerPort: 8080
 
 # Override `networkPolicies.egress.allowPublicInternet.exceptCidrs` with the
 # real production Pod/Service/VPC networks before enabling the denylist in prod.
+networkPolicies:
+  ingress:
+    # ACK prod hotfix: API/router traffic may arrive from cluster-private 10/8
+    # addresses that do not match the podSelector-only allow rule.
+    extraAllowRules:
+      - from:
+          - ipBlock:
+              cidr: "10.0.0.0/8"
+        ports:
+          - protocol: TCP
+            port: 8080
+  egress:
+    allowPublicInternet:
+      # ACK prod uses cluster-private 10/8 addresses for Pod/Service/VPC paths.
+      # Do not keep 10/8 in the prod denylist, or sandbox<->API traffic breaks.
+      exceptCidrs:
+        - "172.16.0.0/12"
+        - "192.168.0.0/16"
+        - "100.64.0.0/10"
+        - "169.254.0.0/16"
+        - "127.0.0.0/8"
 
 sandboxTemplates:
   - name: aio-sandbox-tiny

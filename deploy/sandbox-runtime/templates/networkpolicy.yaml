@@ -2,6 +2,7 @@
 {{- $fullname := include "sandbox-runtime.fullname" . }}
 {{- $sandboxSelector := .Values.networkPolicies.sandboxPodSelector }}
 {{- $allowFromApi := .Values.networkPolicies.ingress.allowFromApi }}
+{{- $extraIngressRules := .Values.networkPolicies.ingress.extraAllowRules }}
 {{- $allowDns := .Values.networkPolicies.egress.allowDns }}
 {{- $allowPublicInternet := .Values.networkPolicies.egress.allowPublicInternet }}
 {{- $extraAllowRules := .Values.networkPolicies.egress.extraAllowRules }}
@@ -42,6 +43,24 @@ spec:
               {{- toYaml $allowFromApi.podSelector | nindent 14 }}
       ports:
         {{- toYaml $allowFromApi.ports | nindent 8 }}
+{{- end }}
+{{- if $extraIngressRules }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ printf "%s-sandbox-extra-ingress" $fullname | trunc 63 | trimSuffix "-" }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sandbox-runtime.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- toYaml $sandboxSelector | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    {{- toYaml $extraIngressRules | nindent 4 }}
 {{- end }}
 {{- if $allowDns.enabled }}
 ---

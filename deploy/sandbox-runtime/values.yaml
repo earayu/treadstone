@@ -41,6 +41,10 @@ networkPolicies:
         - protocol: TCP
           port: 8080
 
+    # Appended verbatim as extra NetworkPolicy ingress rules.
+    # Use this for environment-specific allow rules without changing chart code.
+    extraAllowRules: []
+
   egress:
     allowDns:
       enabled: true
