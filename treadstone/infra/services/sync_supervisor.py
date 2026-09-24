@@ -22,7 +22,7 @@ __all__ = [
 
 
 async def _k8s_stop_sandbox(session, sandbox) -> None:
-    """Stop a sandbox via K8s scale-down (used as grace-period enforcement callback).
+    """Stop a sandbox via the K8s operating mode (used as grace-period enforcement callback).
 
     Exceptions propagate to the caller (_enforce_stop) so it can accurately
     track which sandbox stops failed and preserve grace state accordingly.
@@ -31,7 +31,11 @@ async def _k8s_stop_sandbox(session, sandbox) -> None:
 
     k8s = get_k8s_client()
     k8s_name = sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.id
-    await k8s.scale_sandbox(name=k8s_name, namespace=sandbox.k8s_namespace, replicas=0)
+    await k8s.set_sandbox_operating_mode(
+        name=k8s_name,
+        namespace=sandbox.k8s_namespace,
+        operating_mode="Suspended",
+    )
 
 
 async def _k8s_delete_sandbox(session, sandbox) -> None:

@@ -447,7 +447,7 @@ async def test_auto_delete_cold_k8s_path_persists_error_when_storage_release_fai
 
 @patch("treadstone.infra.services.k8s_client.get_k8s_client")
 async def test_k8s_stop_sandbox_uses_actual_adopted_sandbox_name(mock_get_k8s_client):
-    """Lifecycle stop must scale the real adopted Sandbox, not the claim name."""
+    """Lifecycle stop must suspend the real adopted Sandbox, not the claim name."""
     k8s = AsyncMock()
     mock_get_k8s_client.return_value = k8s
     sandbox = _make_sandbox(
@@ -459,10 +459,10 @@ async def test_k8s_stop_sandbox_uses_actual_adopted_sandbox_name(mock_get_k8s_cl
 
     await _k8s_stop_sandbox(None, sandbox)
 
-    k8s.scale_sandbox.assert_called_once_with(
+    k8s.set_sandbox_operating_mode.assert_called_once_with(
         name="aio-sandbox-tiny-pool-7dpvv",
         namespace="treadstone-local",
-        replicas=0,
+        operating_mode="Suspended",
     )
 
 

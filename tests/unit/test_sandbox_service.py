@@ -56,7 +56,7 @@ def _mock_k8s_client():
     k8s.delete_sandbox_claim = AsyncMock(return_value=True)
     k8s.create_sandbox = AsyncMock(return_value={"metadata": {"name": "test-sb"}, "kind": "Sandbox"})
     k8s.delete_sandbox = AsyncMock(return_value=True)
-    k8s.scale_sandbox = AsyncMock(return_value=True)
+    k8s.set_sandbox_operating_mode = AsyncMock(return_value=True)
     k8s.get_storage_class = AsyncMock(return_value={"metadata": {"name": "treadstone-workspace"}})
     k8s.get_volume_snapshot_class = AsyncMock(return_value={"metadata": {"name": "treadstone-workspace-snapshot"}})
     k8s.get_volume_snapshot = AsyncMock(return_value=None)
@@ -131,7 +131,7 @@ class TestSandboxServiceCreate:
         k8s.create_sandbox_claim.assert_called_once()
         call_kwargs = k8s.create_sandbox_claim.call_args
         assert call_kwargs.kwargs["name"].startswith("sb")
-        assert call_kwargs.kwargs["template_ref"] == "aio-sandbox-tiny"
+        assert call_kwargs.kwargs["warm_pool_ref"] == "aio-sandbox-tiny-pool"
 
 
 class TestSandboxServiceGet:
@@ -234,7 +234,7 @@ class TestSandboxServiceDelete:
 
 
 class TestSandboxServiceStartStop:
-    async def test_start_calls_scale_sandbox_1(self):
+    async def test_start_sets_operating_mode_running(self):
         from treadstone.services.sandbox_service import SandboxService
 
         sb = _make_sandbox(status=SandboxStatus.STOPPED)
@@ -244,9 +244,13 @@ class TestSandboxServiceStartStop:
 
         result = await service.start(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
         assert result.status == SandboxStatus.CREATING
-        k8s.scale_sandbox.assert_called_once_with(name="sb1234567890abcdef", namespace="treadstone-local", replicas=1)
+        k8s.set_sandbox_operating_mode.assert_called_once_with(
+            name="sb1234567890abcdef",
+            namespace="treadstone-local",
+            operating_mode="Running",
+        )
 
-    async def test_stop_calls_scale_sandbox_0(self):
+    async def test_stop_sets_operating_mode_suspended(self):
         from treadstone.services.sandbox_service import SandboxService
 
         sb = _make_sandbox(status=SandboxStatus.READY)
@@ -256,7 +260,11 @@ class TestSandboxServiceStartStop:
 
         result = await service.stop(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
         assert result.status == SandboxStatus.STOPPED
-        k8s.scale_sandbox.assert_called_once_with(name="sb1234567890abcdef", namespace="treadstone-local", replicas=0)
+        k8s.set_sandbox_operating_mode.assert_called_once_with(
+            name="sb1234567890abcdef",
+            namespace="treadstone-local",
+            operating_mode="Suspended",
+        )
 
     async def test_start_from_ready_raises(self):
         from treadstone.services.sandbox_service import SandboxService
@@ -288,7 +296,11 @@ class TestSandboxServiceStartStop:
 
         result = await service.start(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
         assert result.status == SandboxStatus.CREATING
-        k8s.scale_sandbox.assert_called_once_with(name="sb1234567890abcdef", namespace="treadstone-local", replicas=1)
+        k8s.set_sandbox_operating_mode.assert_called_once_with(
+            name="sb1234567890abcdef",
+            namespace="treadstone-local",
+            operating_mode="Running",
+        )
 
     async def test_stop_claim_path_uses_actual_k8s_sandbox_name_after_adoption(self):
         from treadstone.services.sandbox_service import SandboxService
@@ -305,10 +317,10 @@ class TestSandboxServiceStartStop:
 
         await service.stop(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
 
-        k8s.scale_sandbox.assert_called_once_with(
+        k8s.set_sandbox_operating_mode.assert_called_once_with(
             name="aio-sandbox-tiny-pool-7dpvv",
             namespace="treadstone-local",
-            replicas=0,
+            operating_mode="Suspended",
         )
 
     async def test_start_claim_path_uses_actual_k8s_sandbox_name_after_adoption(self):
@@ -326,10 +338,10 @@ class TestSandboxServiceStartStop:
 
         await service.start(sandbox_id="sb1234567890abcdef", owner_id="user1234567890abcd")
 
-        k8s.scale_sandbox.assert_called_once_with(
+        k8s.set_sandbox_operating_mode.assert_called_once_with(
             name="aio-sandbox-tiny-pool-7dpvv",
             namespace="treadstone-local",
-            replicas=1,
+            operating_mode="Running",
         )
 
 

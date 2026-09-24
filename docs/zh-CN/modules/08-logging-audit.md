@@ -84,7 +84,7 @@ flowchart LR
 
 ### 2.2 K8s 客户端（高频）
 
-[`treadstone/services/k8s_client.py`](../../../treadstone/services/k8s_client.py)：**当前实现**下，SandboxClaim/Sandbox 的 `POST`/`DELETE`、`scale` 的 `PATCH`、`watch_sandboxes` 启动、`Using Kr8sClient` 等低层调用均已为 **`DEBUG`**，避免 Watch/对账循环刷屏。
+[`treadstone/services/k8s_client.py`](../../../treadstone/services/k8s_client.py)：**当前实现**下，SandboxClaim/Sandbox 的 `POST`/`DELETE`、`operatingMode` 的 `PATCH`、`watch_sandboxes` 启动、`Using Kr8sClient` 等低层调用均已为 **`DEBUG`**，避免 Watch/对账循环刷屏。
 
 - **仍建议关注**：这些日志与 `request_id` 仍无关联；跨请求排障需依赖访问日志时间窗或 Pod 名。
 - **保持不变**：`Malformed Watch event line` → **WARNING**；Watch `ERROR` 非 410 → **ERROR**；410 由 `WatchExpiredError` 交给上层处理。
@@ -242,7 +242,7 @@ flowchart LR
 | debug | `Starting K8s Watch on …` |
 | warning | `Malformed Watch event line` |
 | error | `Watch ERROR event`（非 410） |
-| debug | `K8s PATCH`（scale） |
+| debug | `K8s PATCH`（operatingMode） |
 | debug | `Using Kr8sClient` |
 
 ### `treadstone/services/k8s_sync.py`
@@ -283,9 +283,9 @@ flowchart LR
 
 | 级别 | 消息要点 / 上下文 |
 |------|-------------------|
-| exception | 创建/删除 K8s 资源、记录 storage、scale 失败 |
+| exception | 创建/删除 K8s 资源、记录 storage、operatingMode 切换失败 |
 | info | 创建 SandboxClaim、创建 Sandbox CR（persist）、删除 CR/Claim |
-| info | Scale 到 1/0、启动后已 READY 立即更新 DB |
+| info | operatingMode 切换到 Running/Suspended、启动后已 READY 立即更新 DB |
 | debug | Post-start K8s 状态检查失败 |
 
 ### `treadstone/services/sandbox_proxy.py`
@@ -403,7 +403,7 @@ flowchart LR
 
 ### 9.6 控制台检索建议（与第 4、5 节互补）
 
-除 **`CR missing` / `Invalid transition` / `Unexpected DELETED` / `Failed to scale`** 外，可搜 **`Sandbox … status … -> error`** / **`-> deleting`**（来自 `_record_status_change` 或 API 的显式状态迁移 **INFO**），用于对照同一时间段内的状态变更。
+除 **`CR missing` / `Invalid transition` / `Unexpected DELETED` / `Failed to change operating mode`** 外，可搜 **`Sandbox … status … -> error`** / **`-> deleting`**（来自 `_record_status_change` 或 API 的显式状态迁移 **INFO**），用于对照同一时间段内的状态变更。
 
 ---
 

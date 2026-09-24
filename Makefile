@@ -26,7 +26,7 @@ install: install-py install-web install-hooks ## Install repo dependencies and h
 
 install-py: ## Install Python dependencies
 	uv sync
-	@echo "✓ Dependencies installed. Copy .env.example to .env and fill in your Neon connection string."
+	@echo "✓ Dependencies installed. Copy .env.example to .env and fill in your PostgreSQL connection string."
 
 install-web: ## Install web dependencies
 	cd web && pnpm install --frozen-lockfile
@@ -173,6 +173,13 @@ deploy-infra: ## Deploy agent-sandbox controller (once per cluster)
 	helm upgrade --install agent-sandbox deploy/agent-sandbox \
 		-f deploy/agent-sandbox/values-$(ENV).yaml \
 		--create-namespace
+	@for crd in \
+		sandboxes.agents.x-k8s.io \
+		sandboxclaims.extensions.agents.x-k8s.io \
+		sandboxtemplates.extensions.agents.x-k8s.io \
+		sandboxwarmpools.extensions.agents.x-k8s.io; do \
+		kubectl wait --for=condition=Established "crd/$$crd" --timeout=120s; \
+	done
 
 deploy-runtime: ## Deploy sandbox templates + warmpool
 	helm upgrade --install $(RT_RELEASE) deploy/sandbox-runtime \

@@ -27,7 +27,7 @@ rules:
       - list
       - watch
   # Sandbox CRs: create/delete for direct path (persist=true),
-  # watch for state sync, patch for replicas (start/stop)
+  # watch for state sync, patch operatingMode for start/stop
   - apiGroups:
       - agents.x-k8s.io
     resources:
@@ -46,14 +46,6 @@ rules:
       - sandboxes/status
     verbs:
       - get
-  # Sandbox scale subresource: start (replicas=1) / stop (replicas=0)
-  - apiGroups:
-      - agents.x-k8s.io
-    resources:
-      - sandboxes/scale
-    verbs:
-      - get
-      - patch
   # StorageClasses: read-only for persistent sandbox storage backend checks
   - apiGroups:
       - storage.k8s.io

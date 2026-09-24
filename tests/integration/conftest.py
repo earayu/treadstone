@@ -26,7 +26,7 @@ async def reset_engine_for_integration():
     """Dispose and rebuild the global engine for each test.
 
     If tests/integration/.env.test exists and contains TREADSTONE_DATABASE_URL,
-    that URL is used (typically a Neon test branch). Otherwise falls back to
+    that isolated test database is used. Otherwise falls back to
     the default settings.database_url.
     """
     await db_mod.engine.dispose()

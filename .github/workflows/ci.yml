@@ -33,18 +33,30 @@ jobs:
   integration:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: treadstone
+          POSTGRES_PASSWORD: treadstone
+          POSTGRES_DB: treadstone_test
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U treadstone -d treadstone_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      TREADSTONE_DATABASE_URL: "postgresql+asyncpg://treadstone:treadstone@localhost:5432/treadstone_test"
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --frozen
       - name: Apply database migrations
         run: make migrate
-        env:
-          TREADSTONE_DATABASE_URL: ${{ secrets.TREADSTONE_DATABASE_URL }}
       - name: Run integration tests
         run: make test-integration
-        env:
-          TREADSTONE_DATABASE_URL: ${{ secrets.TREADSTONE_DATABASE_URL }}
 
   openapi:
     runs-on: ubuntu-latest

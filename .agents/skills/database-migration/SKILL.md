@@ -1,6 +1,6 @@
 ---
 name: database-migration
-description: Database model design and Alembic migration workflow for Treadstone. Use whenever adding or modifying SQLAlchemy models, generating Alembic migrations, or applying schema changes to Neon. Also use when the user mentions "migration", "add table", "add column", "schema change", "database model", or any task involving treadstone/models/.
+description: Database model design and Alembic migration workflow for Treadstone. Use whenever adding or modifying SQLAlchemy models, generating Alembic migrations, or applying schema changes to PostgreSQL. Also use when the user mentions "migration", "add table", "add column", "schema change", "database model", or any task involving treadstone/models/.
 ---
 
 # Database Model & Migration Workflow
@@ -8,7 +8,7 @@ description: Database model design and Alembic migration workflow for Treadstone
 All schema changes flow through this pipeline — never modify a shared database by hand:
 
 ```
-SQLAlchemy model → Alembic autogenerate → review migration → apply to test branch → verify → apply to target environment
+SQLAlchemy model → Alembic autogenerate → review migration → apply to test database → verify → apply to target environment
 ```
 
 Quick reference:
@@ -157,30 +157,27 @@ Open the generated file in `alembic/versions/` and verify:
 
 ---
 
-## Step 5: Apply to Neon Test Branch First
+## Step 5: Apply to an Isolated Test Database First
 
-Never migrate production directly. Neon branches are instant, copy-on-write clones — use one as a staging environment.
+Never test migrations directly on production. Use a disposable PostgreSQL database
+for clean-install checks and a sanitized staging copy for upgrade checks.
 
-```
-Shared branch / environment
-    └── Test branch (fork, apply migration here first)
-```
-
-1. Create a test branch via Neon Console or CLI (if not already existing)
-2. Apply migration to the test branch:
+1. Start a disposable PostgreSQL instance; see `tests/integration/README.md`.
+2. Point both migrations and tests at that database:
    ```bash
-   TREADSTONE_DATABASE_URL="<test-branch-url>" make migrate
+   export TREADSTONE_DATABASE_URL="<test-database-url>"
+   make migrate
    ```
 3. Run the most relevant verification:
    ```bash
    make test-integration
    ```
    If the change also affects API or unit behavior, run `make test-all`.
-4. If tests pass, apply to the shared target branch / environment:
+4. If tests pass, select the intended target environment explicitly, then apply:
    ```bash
-   make migrate
+   TREADSTONE_DATABASE_URL="<target-database-url>" make migrate
    ```
-5. If tests fail, fix and retry. Use `make downgrade` or reset the Neon branch from its parent.
+5. If tests fail, fix and retry. Use `make downgrade` or recreate only the disposable test database.
 
 ---
 
@@ -203,7 +200,8 @@ uv run alembic downgrade -2      # Rollback 2 steps
 uv run alembic downgrade base    # Rollback to empty
 ```
 
-To reset a Neon test branch entirely, use the Neon Console "Reset from parent" feature.
+To reset a disposable test database entirely, recreate its container or database, then reapply migrations.
+Never reset a shared or production database as part of test cleanup.
 
 ---
 
@@ -215,7 +213,7 @@ To reset a Neon test branch entirely, use the Neon Console "Reset from parent" f
 - [ ] Integration/API coverage added when the schema change affects real DB behavior
 - [ ] Migration generated with `make migration MSG="..."`
 - [ ] Migration file reviewed manually
-- [ ] Migration applied to Neon test branch
+- [ ] Migration applied to an isolated PostgreSQL test database
 - [ ] Relevant verification passing (`make test-integration` or `make test-all`)
 - [ ] Migration applied to the target shared environment
 - [ ] Committed together: model + migration + tests

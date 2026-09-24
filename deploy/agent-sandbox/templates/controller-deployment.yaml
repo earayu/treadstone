@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-sandbox-controller
+  namespace: {{ include "agent-sandbox.namespace" . }}
+  labels:
+    app: agent-sandbox-controller
+    {{- include "agent-sandbox.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.controller.replicas }}
+  selector:
+    matchLabels:
+      app: agent-sandbox-controller
+  template:
+    metadata:
+      labels:
+        app: agent-sandbox-controller
+    spec:
+      serviceAccountName: agent-sandbox-controller
+      containers:
+        - name: agent-sandbox-controller
+          image: "{{ .Values.controller.image.repository }}:{{ .Values.controller.image.tag }}"
+          imagePullPolicy: {{ .Values.controller.image.pullPolicy }}
+          args:
+            - --leader-elect=true
+            # VENDOR PATCH: run core and extension reconcilers in one Deployment.
+            - --extensions
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/sandbox-config
+              readOnly: true
+          ports:
+            - name: metrics
+              containerPort: 8080
+              protocol: TCP
+            - name: healthz
+              containerPort: 8081
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.controller.resources | nindent 12 }}
+      volumes:
+        - name: config-volume
+          configMap:
+            name: agent-sandbox-config
+            optional: true

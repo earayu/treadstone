@@ -991,7 +991,7 @@ ACS 官方文档也明确说明：
 | `aio-sandbox-large` | `2` → `2` | `4Gi` → `8Gi` |
 | `aio-sandbox-xlarge` | `4` → `4` | `8Gi` → `16Gi` |
 
-warm pool 在 `values.yaml`（dev 环境）保留 tiny `enabled: true replicas: 1`，其余环境全部关闭。
+WarmPool 在各环境的 `values*.yaml` 中为五个默认模板全部启用，每个模板默认 `replicas: 1`，以满足 v1beta1 `SandboxClaim.spec.warmPoolRef` 的强制引用。
 
 ### 13.3 计量静态表与 CU 公式
 

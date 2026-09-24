@@ -15,7 +15,7 @@ SANDBOX_STORAGE_SIZE_VALUES = ("5Gi", "10Gi", "20Gi")
 class Settings(BaseSettings):
     app_name: str = "treadstone"
     debug: bool = False
-    database_url: str = "postgresql+asyncpg://user:pass@ep-xxx.us-east-2.aws.neon.tech/treadstone?sslmode=require"
+    database_url: str = "postgresql+asyncpg://treadstone:treadstone@localhost:5432/treadstone"
     # Public web-app origin used for browser auth flows (OAuth callbacks, sandbox
     # bootstrap redirects, CLI browser login).  In production this should point to
     # the frontend domain (e.g. https://app.treadstone-ai.dev) whose nginx reverse-

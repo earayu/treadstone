@@ -45,10 +45,11 @@
 
 从 K8s CR 回写 DB 时，当前状态归纳规则是：
 
-- Ready + `replicas=1` -> `ready`
-- Ready + `replicas=0` -> `stopped`
+- `spec.operatingMode=Running` + `Ready=True` -> `ready`
+- `spec.operatingMode=Suspended` / `Ready=False, reason=SandboxSuspended` -> `stopped`
 - `ReconcilerError` -> `error`
 - `SandboxExpired` -> `stopped`
+- `Finished=True` -> `stopped`
 - 依赖未就绪 -> `creating`
 
 ## 3. Leader Election
@@ -120,7 +121,7 @@
 
 当前仓库的真实部署模型是：
 
-- **数据库**：Neon Serverless PostgreSQL
+- **数据库**：PostgreSQL，通过 `TREADSTONE_DATABASE_URL` 指定；CI 使用隔离的临时实例
 - **控制面**：FastAPI + SQLAlchemy async
 - **编排层**：Kubernetes + `agent-sandbox`
 - **运行时镜像**：`ghcr.io/earayu/treadstone-sandbox`（例如 `v0.2.0`；与 `deploy/sandbox-runtime/values*.yaml` 对齐）

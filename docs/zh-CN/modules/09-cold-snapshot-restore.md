@@ -31,7 +31,7 @@
   - 自动从绑定 snapshot 恢复 live disk
   - 等待恢复后的 sandbox 重新 `ready`
 
-当前产品面不再公开 `restore-only`。原因是 ACK 当前依赖 `WaitForFirstConsumer`，而“只恢复磁盘、不启动 workload”会天然和 `replicas=0` 冲突，带来额外分支和隐式临时行为。为降低状态复杂度和测试面，公开恢复入口收敛为：
+当前产品面不再公开 `restore-only`。原因是 ACK 当前依赖 `WaitForFirstConsumer`，而“只恢复磁盘、不启动 workload”会天然和 `operatingMode=Suspended` 的生命周期语义冲突，带来额外分支和隐式临时行为。为降低状态复杂度和测试面，公开恢复入口收敛为：
 
 - `cold -> start`
 
@@ -121,7 +121,7 @@ API 返回里新增：
 
 当前有两条路径：
 
-- `stopped|error`：沿用原来的 scale-up
+- `stopped|error`：沿用原来的 operating mode 切换到 `Running`
 - `cold`：走 `restore_on_start`
 
 即：
@@ -204,7 +204,7 @@ RBAC 新增权限：
 恢复顺序是：
 
 1. `start(cold)` 把 sandbox 置为 `pending_operation=restoring`
-2. 编排器创建新的 direct Sandbox CR，`replicas=1`
+2. 编排器创建新的 direct Sandbox CR，`operatingMode=Running`
 3. `workspace` PVC 从绑定 snapshot 恢复
 4. 等待 PVC/PV materialize
 5. 等待恢复出的 Sandbox CR 进入 `READY`
@@ -316,7 +316,7 @@ delete 路径会先尝试清理残留的 bound snapshot。
 - live disk 成本释放
 - 从“绑定在原 AZ 的 PVC”切到“从 snapshot 重新 materialize 的 PVC”
 
-但它还不是“完全透明的 Neon 风格 auto-resume 平台”。后续如果继续演进，顺序仍然建议是：
+但它还不是“完全透明的按需自动恢复平台”。后续如果继续演进，顺序仍然建议是：
 
 1. `auto-stop`
 2. `auto-snapshot-to-cold`
@@ -384,11 +384,11 @@ delete 路径会先尝试清理残留的 bound snapshot。
 观察到的关键切换如下：
 
 - 初始 `ready/live_disk`：K8s 有 CR、PVC 已 `Bound`、DB 里的 ledger 是 `live_disk`
-- `POST /snapshot` 之后：DB 立刻变成 `stopped + snapshotting`，K8s `replicas=0`，PVC 仍保留
+- `POST /snapshot` 之后：DB 立刻变成 `stopped + snapshotting`，K8s `operatingMode=Suspended`，PVC 仍保留
 - 第 1 个 tick：日志出现 `Creating cold snapshot ...`，DB 写入 `snapshot_k8s_volume_snapshot_name`、`k8s_workspace_pvc_name`、`k8s_workspace_pv_name`、`workspace_zone`
 - 第 2 个 tick：日志出现 `Cold snapshot became ready` 与 `Cold snapshot cutover completed`，DB 切到 `cold/standard_snapshot`，PVC/PV 字段清空，ledger 同步切到 `standard_snapshot`
 - `POST /start` 之后：DB 变成 `cold + restoring`
-- 第 1 个 restore tick：重新创建 `replicas=1` 的 Sandbox CR，PVC 已重新 `Bound`，但 DB 仍保持 `cold + restoring`
+- 第 1 个 restore tick：重新创建 `operatingMode=Running` 的 Sandbox CR，PVC 已重新 `Bound`，但 DB 仍保持 `cold + restoring`
 - 第 2 个 restore tick（手工把 fake CR 置为 ready 后）：DB 切到 `ready/live_disk`，bound snapshot 被清掉，ledger 回到 `live_disk`
 
 这证明当前唯一公开恢复入口 `cold -> start` 的底层资产切换顺序是闭环的，而且 snapshot 不会在恢复完成前被提前删除。

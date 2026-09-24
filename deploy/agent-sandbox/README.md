@@ -4,36 +4,63 @@ Thin Helm wrapper around the upstream [kubernetes-sigs/agent-sandbox](https://gi
 
 ## Vendor Patch
 
-The upstream release provides two files meant to be applied sequentially:
+The upstream release provides a core controller manifest and a separate
+extensions controller manifest meant to be applied sequentially:
 
 ```bash
-kubectl apply -f manifest.yaml    # core install
-kubectl apply -f extensions.yaml  # add extensions (updates the Deployment)
+kubectl apply -f k8s/controller.yaml
+kubectl apply -f k8s/extensions.controller.yaml
 ```
 
-`kubectl apply` is idempotent — the second command updates the existing Deployment
-by adding the `--extensions` flag. Helm's fresh install cannot do this; it tries to
-**create** both Deployments and fails with `already exists`.
+The second apply updates the existing Deployment by adding the `--extensions`
+flag. This chart renders one equivalent Deployment so a fresh Helm install
+does not create the same object twice.
 
 **What we changed:**
 
-- `upstream/manifest.yaml` — added `--extensions` to the controller Deployment args
-- `upstream/extensions.yaml` — removed the duplicate Deployment block (only the
-  Deployment was duplicated; all CRDs and RBAC are unique and unchanged)
+- `upstream/manifest.yaml` — assembled the v1.0.3 core controller resources,
+  core CRD, and core RBAC; the upstream Deployment is rendered by Helm
+- `upstream/extensions.yaml` — assembled the v1.0.3 extension CRDs and RBAC;
+  the duplicate Deployment block is omitted
+- `templates/controller-deployment.yaml` — one controller Deployment with
+  `--extensions`, configurable image, replicas, and resources
 
-The end result is identical to applying both files sequentially with `kubectl apply`.
+The rendered result preserves the upstream controller behavior while allowing
+environment-specific image and replica/resource values.
+
+## Breaking Upgrade From v0.3.x
+
+This chart intentionally serves only the upstream `v1beta1` APIs. It does not
+preserve or convert Treadstone's former `v1alpha1` Sandbox, SandboxClaim,
+SandboxTemplate, or SandboxWarmPool resources.
+
+For a disposable Treadstone cluster, remove the old Treadstone sandbox
+resources and release before installing this chart again:
+
+```bash
+helm uninstall sandbox-runtime-<env> -n treadstone-<env> || true
+kubectl delete sandboxclaims,sandboxes -n treadstone-<env> --all
+helm uninstall agent-sandbox || true
+kubectl delete crd \
+  sandboxclaims.extensions.agents.x-k8s.io \
+  sandboxtemplates.extensions.agents.x-k8s.io \
+  sandboxwarmpools.extensions.agents.x-k8s.io \
+  sandboxes.agents.x-k8s.io
+make deploy-infra ENV=<env>
+make deploy-runtime ENV=<env>
+```
+
+Do not run this procedure on a shared cluster: deleting the CRDs deletes
+resources for every namespace served by this controller.
 
 ## Upgrading Upstream Version
 
 When a new upstream version is released:
 
-1. Download the new `manifest.yaml` and `extensions.yaml` from the release page and
-   overwrite the files in `upstream/`.
-2. Diff the new `extensions.yaml` Deployment against the new `manifest.yaml` Deployment.
-3. Merge any new args/fields from the `extensions.yaml` Deployment into `manifest.yaml`.
-4. Remove the Deployment block from `extensions.yaml`.
-5. Re-add the `# VENDOR PATCH` comments so the next person knows why.
-
-A better long-term fix is to upgrade to Helm ≥ 3.13 and add `--server-side` to the
-`deploy-infra` Makefile target, which lets Helm use server-side apply semantics and
-handles the update naturally — no vendor modification required.
+1. Download the new upstream release archive.
+2. Assemble the core controller, core CRD, and core RBAC into `upstream/manifest.yaml`.
+3. Assemble the extension CRDs and extension RBAC into `upstream/extensions.yaml`.
+4. Merge any new Deployment args or fields from the extension controller into
+   the single Deployment in `templates/controller-deployment.yaml`.
+5. Keep the controller image tag and resource defaults in all `values*.yaml`
+   files aligned with the vendored release.

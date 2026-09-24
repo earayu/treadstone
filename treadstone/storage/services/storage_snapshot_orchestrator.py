@@ -332,7 +332,7 @@ class StorageSnapshotOrchestrator:
 
         if cr is None:
             try:
-                await self._create_restored_sandbox(sandbox, replicas=1)
+                await self._create_restored_sandbox(sandbox, operating_mode="Running")
                 sandbox.status_message = "Restoring sandbox from cold storage."
                 self.session.add(sandbox)
             except Exception as exc:
@@ -406,7 +406,7 @@ class StorageSnapshotOrchestrator:
             self._clear_snapshot_binding(sandbox)
             self.session.add(sandbox)
 
-    async def _create_restored_sandbox(self, sandbox: Sandbox, *, replicas: int) -> None:
+    async def _create_restored_sandbox(self, sandbox: Sandbox, *, operating_mode: str) -> None:
         template = await self._resolve_template(sandbox.k8s_namespace, sandbox.template)
         image = template.get("image", "")
         if not image:
@@ -454,7 +454,7 @@ class StorageSnapshotOrchestrator:
             image=image,
             container_port=settings.sandbox_port,
             resources=resources,
-            replicas=replicas,
+            operating_mode=operating_mode,
             startup_probe=template.get("startup_probe"),
             readiness_probe=template.get("readiness_probe"),
             liveness_probe=template.get("liveness_probe"),

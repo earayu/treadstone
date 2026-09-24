@@ -35,6 +35,7 @@ EXPECTED_INIT_SECURITY_CONTEXT = {
 class _EmptyStreamResponse:
     def __init__(self, payload: dict | None = None):
         self._payload = payload or {}
+        self.status_code = 200
 
     async def aiter_lines(self):
         for line in ():
@@ -132,7 +133,7 @@ async def test_create_and_get_sandbox_claim():
     client = FakeK8sClient()
     claim = await client.create_sandbox_claim("my-sb", "aio-sandbox-tiny", "treadstone-local")
     assert claim["kind"] == "SandboxClaim"
-    assert claim["spec"]["sandboxTemplateRef"]["name"] == "aio-sandbox-tiny"
+    assert claim["spec"]["warmPoolRef"]["name"] == "aio-sandbox-tiny-pool"
     assert claim["status"]["sandbox"]["name"] == "my-sb"
 
     fetched = await client.get_sandbox_claim("my-sb", "treadstone-local")
@@ -188,19 +189,19 @@ async def test_list_sandboxes():
     assert len(sbs) == 2
 
 
-async def test_scale_sandbox_stop_and_start():
+async def test_set_sandbox_operating_mode_stop_and_start():
     client = FakeK8sClient()
     await client.create_sandbox_claim("sb-scale", "aio-sandbox-tiny", "treadstone-local")
     client.simulate_sandbox_ready("sb-scale", "treadstone-local")
 
-    await client.scale_sandbox("sb-scale", "treadstone-local", 0)
+    await client.set_sandbox_operating_mode("sb-scale", "treadstone-local", "Suspended")
     sb = await client.get_sandbox("sb-scale", "treadstone-local")
-    assert sb["spec"]["replicas"] == 0
-    assert sb["status"]["replicas"] == 0
+    assert sb["spec"]["operatingMode"] == "Suspended"
+    assert sb["status"]["conditions"][0]["reason"] == "SandboxSuspended"
 
-    await client.scale_sandbox("sb-scale", "treadstone-local", 1)
+    await client.set_sandbox_operating_mode("sb-scale", "treadstone-local", "Running")
     sb = await client.get_sandbox("sb-scale", "treadstone-local")
-    assert sb["spec"]["replicas"] == 1
+    assert sb["spec"]["operatingMode"] == "Running"
 
 
 async def test_create_with_shutdown_time():
@@ -345,7 +346,7 @@ async def test_watch_sandboxes_passes_query_params_separately():
     assert len(api.calls) == 1
     call = api.calls[0]
     assert call["method"] == "GET"
-    assert call["base"] == "/apis/agents.x-k8s.io/v1alpha1/namespaces/treadstone-prod/sandboxes"
+    assert call["base"] == "/apis/agents.x-k8s.io/v1beta1/namespaces/treadstone-prod/sandboxes"
     assert call["version"] == ""
     assert call["stream"] is True
     assert call["params"] == {
@@ -406,7 +407,9 @@ async def test_create_sandbox_requests_expected_manifest_with_probes():
     assert len(api.calls) == 1
     call = api.calls[0]
     assert call["method"] == "POST"
-    assert call["base"] == "/apis/agents.x-k8s.io/v1alpha1/namespaces/treadstone-prod/sandboxes"
+    assert call["base"] == "/apis/agents.x-k8s.io/v1beta1/namespaces/treadstone-prod/sandboxes"
+    assert call["json"]["spec"]["operatingMode"] == "Running"
+    assert call["json"]["spec"]["service"] is True
     pod_spec = call["json"]["spec"]["podTemplate"]["spec"]
     assert pod_spec["automountServiceAccountToken"] is False
     assert pod_spec["enableServiceLinks"] is False
@@ -422,6 +425,33 @@ async def test_create_sandbox_requests_expected_manifest_with_probes():
     assert container["startupProbe"]["httpGet"]["path"] == "/v1/sandbox"
     assert container["readinessProbe"]["failureThreshold"] == 3
     assert "livenessProbe" not in container
+
+
+async def test_set_sandbox_operating_mode_requests_merge_patch():
+    client = Kr8sClient()
+    api = _RecordingAPI()
+
+    async def fake_get_api():
+        return api
+
+    client._get_api = fake_get_api  # type: ignore[method-assign]
+
+    result = await client.set_sandbox_operating_mode(
+        name="direct-sb",
+        namespace="treadstone-prod",
+        operating_mode="Suspended",
+    )
+
+    assert result is True
+    assert api.calls == [
+        {
+            "method": "PATCH",
+            "base": "/apis/agents.x-k8s.io/v1beta1/namespaces/treadstone-prod/sandboxes/direct-sb",
+            "version": "",
+            "json": {"spec": {"operatingMode": "Suspended"}},
+            "headers": {"Content-Type": "application/merge-patch+json"},
+        }
+    ]
 
 
 async def test_create_sandbox_uses_fixed_sandbox_service_account():

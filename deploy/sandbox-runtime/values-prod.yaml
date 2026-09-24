@@ -41,7 +41,7 @@ sandboxTemplates:
     description: "Small sandbox for simple development tasks"
     cpu: { requests: "500m", limits: "500m" }
     memory: { requests: "2Gi", limits: "2Gi" }
-    warmPool: { enabled: false, replicas: 1 }
+    warmPool: { enabled: true, replicas: 1 }
     allowedStorageSizes: ["5Gi", "10Gi", "20Gi"]
 
   - name: aio-sandbox-medium
@@ -49,7 +49,7 @@ sandboxTemplates:
     description: "General-purpose development environment"
     cpu: { requests: "1", limits: "1" }
     memory: { requests: "4Gi", limits: "4Gi" }
-    warmPool: { enabled: false, replicas: 1 }
+    warmPool: { enabled: true, replicas: 1 }
     allowedStorageSizes: ["5Gi", "10Gi", "20Gi"]
 
   - name: aio-sandbox-large
@@ -57,7 +57,7 @@ sandboxTemplates:
     description: "Full-featured sandbox with browser automation"
     cpu: { requests: "2", limits: "2" }
     memory: { requests: "8Gi", limits: "8Gi" }
-    warmPool: { enabled: false, replicas: 1 }
+    warmPool: { enabled: true, replicas: 1 }
     allowedStorageSizes: ["5Gi", "10Gi", "20Gi"]
 
   - name: aio-sandbox-xlarge
@@ -65,7 +65,7 @@ sandboxTemplates:
     description: "Heavy workloads with maximum resources"
     cpu: { requests: "4", limits: "4" }
     memory: { requests: "16Gi", limits: "16Gi" }
-    warmPool: { enabled: false, replicas: 1 }
+    warmPool: { enabled: true, replicas: 1 }
     allowedStorageSizes: ["5Gi", "10Gi", "20Gi"]
 
 claimAcsScheduling:

@@ -11,7 +11,6 @@ Use the matching local skill before you act:
 | Set up this repo for the first time | `dev-setup` |
 | Ship code, PRs, merges, releases (GitHub Actions), or prod deploy | `dev-lifecycle` |
 | Add or change SQLAlchemy models / Alembic migrations | `database-migration` |
-| Answer Neon-specific questions or plan Neon usage | `neon-postgres` |
 | Audit a subsystem against the current code and write a detailed report | `system-audit-report` |
 | Refresh an existing audit report against the latest code | `audit-report-refresh` |
 | Trace runtime architecture and end-to-end data flow | `architecture-data-flow-trace` |
@@ -23,7 +22,7 @@ Skills live under `.agents/skills/*/SKILL.md`. AGENTS.md defines repo facts and 
 ## Tech Stack
 
 - Python 3.12+, FastAPI, Uvicorn, SQLAlchemy (async), asyncpg
-- Database: Neon (Serverless PostgreSQL)
+- Database: PostgreSQL
 - Package managers: uv (Python), pnpm (web)
 - Lint/format: ruff (Python), ESLint (web)
 - Testing: pytest + pytest-asyncio + httpx; Hurl for E2E
@@ -63,7 +62,6 @@ scripts/           # Helper scripts (release, install, deploy, E2E)
 | `dev-setup` | First-time environment setup (once per clone) |
 | `dev-lifecycle` | Feature/fix: branch, TDD, ship, PR, merge; release via Actions; agreed codewords (合并代码 / 发版本 / 发生产); see skill |
 | `database-migration` | Adding/modifying SQLAlchemy models and Alembic migrations |
-| `neon-postgres` | Neon-specific questions (branching, connection methods, SDKs) |
 | `system-audit-report` | First-pass or general subsystem audits grounded in the current code |
 | `audit-report-refresh` | Re-auditing a subsystem and updating an existing report against the latest code |
 | `architecture-data-flow-trace` | Tracing runtime architecture, state transitions, and end-to-end data flow |
@@ -103,10 +101,11 @@ Rules:
 
 ## Database
 
-- Neon Serverless PostgreSQL. Connection string injected via `TREADSTONE_DATABASE_URL` env var.
+- PostgreSQL. Connection string injected via `TREADSTONE_DATABASE_URL` env var.
 - SQLAlchemy async engine + asyncpg driver.
 - Alembic migrations (Alembic uses a sync URL — `env.py` strips `+asyncpg` automatically).
-- All connection strings must include `?sslmode=require`.
+- Remote database connections must include `?sslmode=require`. Isolated local/CI PostgreSQL may omit TLS.
+- CI uses disposable PostgreSQL instances; it does not require an external database account or credentials.
 - For local `make dev-api`, use `.env`. For Kubernetes deployment, use `.env.<ENV>` such as `.env.local`.
 - For model design conventions and the migration workflow, see the `database-migration` skill.
 
