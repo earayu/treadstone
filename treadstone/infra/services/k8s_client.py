@@ -98,7 +98,7 @@ SNAPSHOT_API_VERSION = "v1"
 
 WATCH_TIMEOUT_SECONDS = 300
 
-# Sandbox runtime image conventions (default ``ghcr.io/earayu/treadstone-sandbox``, extends agent-infra/sandbox).
+# Sandbox runtime image conventions (default ``ghcr.io/earayu/treadstone-sandbox``, browser and shell runtime).
 # The image creates a non-root user `gem` with this UID/GID at build time and
 # ships a read-only home skeleton for PVC initialization. All internal
 # services use SANDBOX_HOME_DIR as the primary workspace.
@@ -725,12 +725,12 @@ def _make_ready_condition(status: str = "False", reason: str = "DependenciesNotR
 class FakeK8sClient:
     """In-memory stub for testing — simulates the agent-sandbox controller behavior."""
 
-    _DEFAULT_IMAGE = "ghcr.io/earayu/treadstone-sandbox:v0.2.1"
+    _DEFAULT_IMAGE = "ghcr.io/earayu/treadstone-sandbox:v0.3.0"
 
     _DEFAULT_TEMPLATES: tuple[dict[str, Any], ...] = (
         {
             "name": "aio-sandbox-tiny",
-            "display_name": "AIO Sandbox Tiny",
+            "display_name": "Treadstone Sandbox Tiny",
             "description": "Lightweight sandbox for code execution and scripting",
             "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "250m", "memory": "1Gi"},
@@ -742,7 +742,7 @@ class FakeK8sClient:
         },
         {
             "name": "aio-sandbox-small",
-            "display_name": "AIO Sandbox Small",
+            "display_name": "Treadstone Sandbox Small",
             "description": "Small sandbox for simple development tasks",
             "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "500m", "memory": "2Gi"},
@@ -754,7 +754,7 @@ class FakeK8sClient:
         },
         {
             "name": "aio-sandbox-medium",
-            "display_name": "AIO Sandbox Medium",
+            "display_name": "Treadstone Sandbox Medium",
             "description": "General-purpose development environment",
             "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "1", "memory": "4Gi"},
@@ -766,7 +766,7 @@ class FakeK8sClient:
         },
         {
             "name": "aio-sandbox-large",
-            "display_name": "AIO Sandbox Large",
+            "display_name": "Treadstone Sandbox Large",
             "description": "Full-featured sandbox with browser automation",
             "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "2", "memory": "8Gi"},
@@ -778,7 +778,7 @@ class FakeK8sClient:
         },
         {
             "name": "aio-sandbox-xlarge",
-            "display_name": "AIO Sandbox XLarge",
+            "display_name": "Treadstone Sandbox XLarge",
             "description": "Heavy workloads with maximum resources",
             "image": _DEFAULT_IMAGE,
             "resource_spec": {"cpu": "4", "memory": "16Gi"},

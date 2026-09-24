@@ -7,6 +7,10 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
+
+from treadstone.api.schemas import SandboxDetailResponse, SandboxTemplateResponse
+from treadstone.infra.services.k8s_client import FakeK8sClient
 
 ROOT = Path(__file__).resolve().parents[2]
 IMAGE = ROOT / "deploy/sandbox-image"
@@ -71,3 +75,16 @@ def test_direct_browser_and_terminal_urls_remain_supported() -> None:
     assert "location ~ ^/(vnc/)?websockify$" in nginx
     terminal = (IMAGE / "runtime/opt/terminal/index.html").read_text()
     assert "this.baseLocation = new URL('../', document.baseURI);" in terminal
+
+
+def test_runtime_catalog_and_api_examples_match_helm_defaults() -> None:
+    values = yaml.safe_load((ROOT / "deploy/sandbox-runtime/values.yaml").read_text())
+    templates = {template["name"]: template for template in values["sandboxTemplates"]}
+    for template in FakeK8sClient._DEFAULT_TEMPLATES:
+        assert template["image"] == values["image"]
+        assert template["display_name"] == templates[template["name"]]["displayName"]
+    for schema in (SandboxDetailResponse, SandboxTemplateResponse):
+        assert schema.model_fields["image"].examples == [values["image"]]
+    assert SandboxTemplateResponse.model_fields["display_name"].examples == [
+        templates["aio-sandbox-tiny"]["displayName"]
+    ]
