@@ -14,6 +14,8 @@ def test_image_is_built_from_distribution_not_aio() -> None:
     assert "RECONSTRUCTED_BASE_IMAGE" not in dockerfile
     assert "USER gem" in dockerfile
     assert "ENTRYPOINT" in dockerfile
+    assert "libtk8.6" in dockerfile
+    assert "XDG_SESSION_TYPE=x11" in dockerfile
     for removed in ("code-server", "jupyter", "ipykernel", "mcp-hub", "markitdown"):
         assert removed not in dockerfile.lower()
         assert removed not in (IMAGE / "requirements-python-runtime.txt").read_text().lower()

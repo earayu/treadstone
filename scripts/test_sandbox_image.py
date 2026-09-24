@@ -47,6 +47,8 @@ async def check_mcp() -> None:
             names = {tool.name for tool in (await session.list_tools()).tools}
             assert {"browser_screenshot", "get_browser_info", "execute_bash"} <= names, names
             assert not any("jupyter" in name or "code_execute" in name or "markdown" in name for name in names)
+            result = await session.call_tool("execute_bash", {"cmd": "printf mcp-ok"})
+            assert not result.isError and "mcp-ok" in result.model_dump_json(), result
 
 
 async def main() -> None:
@@ -101,6 +103,18 @@ async def main() -> None:
         assert result["success"], result
         result = (await client.post("/v1/file/read", json={"file": "/home/gem/smoke.txt"})).json()
         assert result["data"]["content"] == "runtime-ok", result
+        result = (
+            await client.post(
+                "/v1/file/str_replace_editor",
+                json={
+                    "command": "str_replace",
+                    "path": "/home/gem/smoke.txt",
+                    "old_str": "runtime-ok",
+                    "new_str": "edited-ok",
+                },
+            )
+        ).json()
+        assert result["success"], result
         info = (await client.get("/v1/browser/info")).json()
         assert info["success"] and "/cdp/" in info["data"]["cdp_url"], info
         screenshot = await client.get("/v1/browser/screenshot")

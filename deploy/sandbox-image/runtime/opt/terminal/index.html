@@ -2,7 +2,12 @@
 <html>
 <head>
     <title>Web Terminal</title>
-    <link rel="stylesheet" href="./terminal/xterm.css" />
+    <script>
+        const assetBase = document.createElement('base');
+        assetBase.href = location.pathname.replace(/\/terminal(?:\/(?:index\.html)?)?$/, '/terminal/');
+        document.head.append(assetBase);
+    </script>
+    <link rel="stylesheet" href="xterm.css" />
     <style>
         * {
             box-sizing: border-box;
@@ -52,8 +57,8 @@
 <body>
     <div id="terminal"></div>
 
-    <script src="./terminal/xterm.js"></script>
-    <script src="./terminal/xterm-addon-fit.js"></script>
+    <script src="xterm.js"></script>
+    <script src="xterm-addon-fit.js"></script>
 
     <script>
         class WebTerminal {

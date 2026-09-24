@@ -16,7 +16,7 @@ LABEL org.opencontainers.image.version="${TREADSTONE_SANDBOX_VERSION}"
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ENV DEBIAN_FRONTEND=noninteractive \
     USER=gem USER_UID=1000 USER_GID=1000 HOME=/home/gem \
-    DISPLAY=:99.0 DISPLAY_WIDTH=1280 DISPLAY_HEIGHT=1024 DISPLAY_DEPTH=24 \
+    DISPLAY=:99.0 DISPLAY_WIDTH=1280 DISPLAY_HEIGHT=1024 DISPLAY_DEPTH=24 XDG_SESSION_TYPE=x11 \
     XDG_RUNTIME_DIR=/tmp/runtime-gem LOG_DIR=/tmp/treadstone/log \
     BROWSER_EXECUTABLE_PATH=/usr/local/bin/browser BROWSER_REMOTE_DEBUGGING_PORT=9222 \
     BROWSER_COMMANDLINE_ARGS="--disable-backgrounding-occluded-windows --disable-background-timer-throttling --disable-dev-shm-usage --disable-gpu --no-default-browser-check --no-first-run --remote-allow-origins=* --remote-debugging-port=9222 --start-maximized" \
@@ -39,12 +39,13 @@ RUN apt-get update -o Acquire::Retries=5 \
        xauth dbus-x11 tmux scrot xclip x11-xserver-utils xdg-utils procps \
        build-essential pkg-config ripgrep vim-tiny nano tree rsync \
        libasound2 libatk-bridge2.0-0 libatk1.0-0 libcairo2 libcups2 libdrm2 \
-       libgbm1 libglib2.0-0 libgtk-3-0 libnss3 libnspr4 libpango-1.0-0 \
+       libgbm1 libglib2.0-0 libgtk-3-0 libnss3 libnspr4 libpango-1.0-0 libtk8.6 \
        libx11-6 libx11-xcb1 libxcb-dri3-0 libxcomposite1 libxdamage1 \
        libxfixes3 libxkbcommon0 libxrandr2 libxshmfence1 \
        fonts-liberation fonts-noto-color-emoji fonts-wqy-zenhei \
     && sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
-    && locale-gen && rm -rf /var/lib/apt/lists/*
+    && locale-gen && rm -rf /var/lib/apt/lists/* \
+    && python -c 'import tkinter'
 
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
