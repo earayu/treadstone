@@ -22,7 +22,7 @@ ALLOWED_PAIRS = {
     (640, 480)
 }
 
-allowed_resolutions_str = ", ".join([f"{w}x{h}" for w, h in ALLOWED_PAIRS])
+allowed_resolutions_str = ", ".join(f"{w}x{h}" for w, h in sorted(ALLOWED_PAIRS))
 
 class BrowserConfigRequest(BaseModel):
     """Browser configuration request"""
@@ -37,7 +37,6 @@ class BrowserConfigRequest(BaseModel):
             width = self.resolution.width
             height = self.resolution.height
             if (width, height) not in ALLOWED_PAIRS:
-                allowed_resolutions_str = ", ".join([f"{w}x{h}" for w, h in ALLOWED_PAIRS])
                 raise ValueError(
                     f"not supported: {width}x{height}。 "
                     f"allowed values are: {allowed_resolutions_str}"

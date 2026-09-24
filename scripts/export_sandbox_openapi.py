@@ -1,6 +1,7 @@
 """Export the maintained runtime contract using its own dependency environment."""
 
 import argparse
+import difflib
 import json
 import sys
 from pathlib import Path
@@ -19,7 +20,15 @@ def main() -> None:
     spec["info"]["version"] = "1.0.0"
     path = ROOT / "scripts/sandbox_openapi_base.json"
     if args.check:
-        assert json.loads(path.read_text()) == spec, "Regenerate the sandbox OpenAPI snapshot"
+        expected = json.loads(path.read_text())
+        assert expected == spec, "\n".join(
+            difflib.unified_diff(
+                json.dumps(expected, indent=2, sort_keys=True).splitlines(),
+                json.dumps(spec, indent=2, sort_keys=True).splitlines(),
+                fromfile="snapshot",
+                tofile="runtime",
+            )
+        )
     else:
         path.write_text(json.dumps(spec, indent=2, ensure_ascii=False) + "\n")
 

@@ -1,7 +1,9 @@
 """Build-time contracts for the browser/shell-only sandbox runtime."""
 
 import configparser
+import importlib.util
 import json
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -48,3 +50,13 @@ def test_workspace_only_has_browser_and_terminal_tabs() -> None:
     assert "Treadstone" in page
     for removed in ("jupyter", "code-server", "vscode"):
         assert removed not in page.lower()
+
+
+def test_browser_resolution_schema_has_stable_order(monkeypatch) -> None:
+    path = IMAGE / "runtime/opt/treadstone/python/app/schemas/browser.py"
+    spec = importlib.util.spec_from_file_location("_runtime_browser_schema", path)
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, module)
+    spec.loader.exec_module(module)
+    expected = ", ".join(f"{width}x{height}" for width, height in sorted(module.ALLOWED_PAIRS))
+    assert module.BrowserConfigRequest.model_fields["resolution"].description.endswith(f"{expected}.")

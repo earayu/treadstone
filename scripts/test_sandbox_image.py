@@ -1,6 +1,7 @@
 """Run inside a sandbox container on CI; no image building is performed here."""
 
 import asyncio
+import difflib
 import importlib.util
 import io
 import json
@@ -84,7 +85,14 @@ async def main() -> None:
         spec = (await client.get("/v1/openapi.json")).json()
         expected = json.loads(Path("/tmp/sandbox_openapi_base.json").read_text())
         spec["info"]["version"] = expected["info"]["version"]
-        assert spec == expected, "Published OpenAPI snapshot differs from the image"
+        assert spec == expected, "\n".join(
+            difflib.unified_diff(
+                json.dumps(expected, indent=2, sort_keys=True).splitlines(),
+                json.dumps(spec, indent=2, sort_keys=True).splitlines(),
+                fromfile="snapshot",
+                tofile="runtime",
+            )
+        )
         result = (
             await client.post(
                 "/v1/shell/exec",
