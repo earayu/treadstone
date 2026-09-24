@@ -33,13 +33,13 @@ The default V1 policy set is intentionally compatibility-first:
 
 This is a practical V1 control, not a final hard-isolation model:
 
-- public internet access stays enabled by default for AIO sandbox compatibility
+- public internet access stays enabled by default for browser and shell workloads
 - cluster-internal reachability is reduced through the denylist, not fully auto-discovered
 - future tightening can move to `80/443`-only defaults or plan-specific exceptions without changing sandbox lifecycle code
 
 ## Sandbox Security Context Baseline
 
-The maintained runtime image (`ghcr.io/earayu/treadstone-sandbox`, built on `ghcr.io/agent-infra/sandbox`) now treats **rootless startup as part of the image contract**. The image creates the `gem` user/group at build time, prepares `/home/gem`, and keeps the runtime bootstrap out of the container's root path.
+The maintained runtime image (`ghcr.io/earayu/treadstone-sandbox`, built directly from Python/Debian and Node.js) treats **rootless startup as part of the image contract**. The image creates the `gem` user/group at build time, prepares `/home/gem`, and keeps the runtime bootstrap out of the container's root path. It provides browser and shell capabilities without VS Code or notebook services; see [the image contract](../sandbox-image/README.md).
 
 The default Treadstone baseline is therefore **rootless-first hardening**:
 

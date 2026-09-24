@@ -47,78 +47,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/admin/stats": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Platform Stats
-         * @description Return aggregated platform-level operational statistics.
-         */
-        get: operations["admin-get_platform_stats"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/admin/platform-limits": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Platform Limits */
-        get: operations["admin-get_platform_limits"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Update Platform Limits */
-        patch: operations["admin-update_platform_limits"];
-        trace?: never;
-    };
-    "/v1/admin/tier-templates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Tier Templates */
-        get: operations["admin-list_tier_templates"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/admin/tier-templates/{tier_name}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Update Tier Template */
-        patch: operations["admin-update_tier_template"];
-        trace?: never;
-    };
     "/v1/admin/users/lookup-by-email": {
         parameters: {
             query?: never;
@@ -255,6 +183,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Platform Stats
+         * @description Return aggregated platform-level operational statistics.
+         */
+        get: operations["admin-get_platform_stats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/platform-limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Platform Limits */
+        get: operations["admin-get_platform_limits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Platform Limits */
+        patch: operations["admin-update_platform_limits"];
+        trace?: never;
+    };
+    "/v1/admin/tier-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Tier Templates */
+        get: operations["admin-list_tier_templates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/tier-templates/{tier_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Tier Template */
+        patch: operations["admin-update_tier_template"];
+        trace?: never;
+    };
     "/v1/admin/waitlist": {
         parameters: {
             query?: never;
@@ -267,26 +267,6 @@ export interface paths {
          * @description List waitlist applications with optional filters.
          */
         get: operations["admin-list_waitlist_applications"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/admin/support/feedback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List User Feedback
-         * @description List user-submitted support feedback (newest first).
-         */
-        get: operations["admin-list_user_feedback"];
         put?: never;
         post?: never;
         delete?: never;
@@ -313,6 +293,26 @@ export interface paths {
          * @description Approve or reject a waitlist application.
          */
         patch: operations["admin-update_waitlist_application"];
+        trace?: never;
+    };
+    "/v1/admin/support/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List User Feedback
+         * @description List user-submitted support feedback (newest first).
+         */
+        get: operations["admin-list_user_feedback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/admin/sandboxes/{sandbox_id}/force-reset-pending": {
@@ -1874,7 +1874,7 @@ export interface components {
             expires_at?: string | null;
             /**
              * Grace Period Seconds
-             * @example 1800
+             * @example 7200
              */
             grace_period_seconds: number;
         };
@@ -2192,7 +2192,7 @@ export interface components {
             created_at: string;
             /**
              * Image
-             * @example ghcr.io/earayu/treadstone-sandbox:v0.2.1
+             * @example ghcr.io/earayu/treadstone-sandbox:v0.3.0
              */
             image?: string | null;
             /**
@@ -2345,7 +2345,7 @@ export interface components {
             name: string;
             /**
              * Display Name
-             * @example AIO Sandbox Tiny
+             * @example Treadstone Sandbox Tiny
              */
             display_name: string;
             /**
@@ -2355,7 +2355,7 @@ export interface components {
             description: string;
             /**
              * Image
-             * @example ghcr.io/earayu/treadstone-sandbox:v0.2.1
+             * @example ghcr.io/earayu/treadstone-sandbox:v0.3.0
              */
             image: string;
             resource_spec: components["schemas"]["ResourceSpec"];
@@ -2585,22 +2585,22 @@ export interface components {
             tier: string;
             /**
              * Compute Units Monthly
-             * @example 100
+             * @example 180
              */
             compute_units_monthly: number;
             /**
              * Storage Capacity Gib
-             * @example 10
+             * @example 20
              */
             storage_capacity_gib: number;
             /**
              * Max Concurrent Running
-             * @example 3
+             * @example 5
              */
             max_concurrent_running: number;
             /**
              * Max Sandbox Duration Seconds
-             * @example 7200
+             * @example 0
              */
             max_sandbox_duration_seconds: number;
             /**
@@ -2614,7 +2614,7 @@ export interface components {
             allowed_templates: string[];
             /**
              * Grace Period Seconds
-             * @example 1800
+             * @example 7200
              */
             grace_period_seconds: number;
             /**
@@ -2737,12 +2737,12 @@ export interface components {
         UpdateTierTemplateRequest: {
             /**
              * Compute Units Monthly
-             * @example 150
+             * @example 180
              */
             compute_units_monthly?: number | null;
             /**
              * Storage Capacity Gib
-             * @example 15
+             * @example 20
              */
             storage_capacity_gib?: number | null;
             /**
@@ -2752,7 +2752,7 @@ export interface components {
             max_concurrent_running?: number | null;
             /**
              * Max Sandbox Duration Seconds
-             * @example 14400
+             * @example 0
              */
             max_sandbox_duration_seconds?: number | null;
             /**
@@ -2767,7 +2767,7 @@ export interface components {
             allowed_templates?: string[] | null;
             /**
              * Grace Period Seconds
-             * @example 3600
+             * @example 7200
              */
             grace_period_seconds?: number | null;
             /**
@@ -2785,22 +2785,22 @@ export interface components {
             tier: string;
             /**
              * Compute Units Monthly
-             * @example 100
+             * @example 180
              */
             compute_units_monthly: number;
             /**
              * Storage Capacity Gib
-             * @example 10
+             * @example 20
              */
             storage_capacity_gib: number;
             /**
              * Max Concurrent Running
-             * @example 3
+             * @example 5
              */
             max_concurrent_running: number;
             /**
              * Max Sandbox Duration Seconds
-             * @example 7200
+             * @example 0
              */
             max_sandbox_duration_seconds: number;
             /**
@@ -2814,7 +2814,7 @@ export interface components {
             allowed_templates: string[];
             /**
              * Grace Period Seconds
-             * @example 1800
+             * @example 7200
              */
             grace_period_seconds: number;
             /**
@@ -2975,7 +2975,7 @@ export interface components {
             tier: string;
             /**
              * Compute Units Monthly Limit
-             * @example 100
+             * @example 180
              */
             compute_units_monthly_limit: number;
             /**
@@ -2985,17 +2985,17 @@ export interface components {
             compute_units_monthly_used: number;
             /**
              * Storage Capacity Limit Gib
-             * @example 10
+             * @example 20
              */
             storage_capacity_limit_gib: number;
             /**
              * Max Concurrent Running
-             * @example 3
+             * @example 5
              */
             max_concurrent_running: number;
             /**
              * Max Sandbox Duration Seconds
-             * @example 7200
+             * @example 0
              */
             max_sandbox_duration_seconds: number;
             /**
@@ -3009,7 +3009,7 @@ export interface components {
             allowed_templates: string[];
             /**
              * Grace Period Seconds
-             * @example 1800
+             * @example 7200
              */
             grace_period_seconds: number;
             /** Overrides */
@@ -3236,134 +3236,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    "admin-get_platform_stats": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PlatformStatsResponse"];
-                };
-            };
-        };
-    };
-    "admin-get_platform_limits": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PlatformLimitsResponse"];
-                };
-            };
-        };
-    };
-    "admin-update_platform_limits": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdatePlatformLimitsRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PlatformLimitsResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    "admin-list_tier_templates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TierTemplateListResponse"];
-                };
-            };
-        };
-    };
-    "admin-update_tier_template": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                tier_name: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateTierTemplateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UpdateTierTemplateResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3644,6 +3516,134 @@ export interface operations {
             };
         };
     };
+    "admin-get_platform_stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformStatsResponse"];
+                };
+            };
+        };
+    };
+    "admin-get_platform_limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformLimitsResponse"];
+                };
+            };
+        };
+    };
+    "admin-update_platform_limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePlatformLimitsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformLimitsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "admin-list_tier_templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TierTemplateListResponse"];
+                };
+            };
+        };
+    };
+    "admin-update_tier_template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tier_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTierTemplateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateTierTemplateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     "admin-list_waitlist_applications": {
         parameters: {
             query?: {
@@ -3680,40 +3680,6 @@ export interface operations {
             };
         };
     };
-    "admin-list_user_feedback": {
-        parameters: {
-            query?: {
-                limit?: number;
-                offset?: number;
-                /** @description Optional case-insensitive substring match on submitter email. */
-                email?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FeedbackListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     "admin-update_waitlist_application": {
         parameters: {
             query?: never;
@@ -3736,6 +3702,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WaitlistApplicationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    "admin-list_user_feedback": {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                /** @description Optional case-insensitive substring match on submitter email. */
+                email?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackListResponse"];
                 };
             };
             /** @description Validation Error */
