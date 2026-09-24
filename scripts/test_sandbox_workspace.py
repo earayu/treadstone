@@ -40,6 +40,8 @@ async def main() -> None:
                     )
                     await frame.locator("canvas").click(position={"x": 150, "y": 150})
                     await page.keyboard.press("F6")
+                    # VNC key delivery precedes the remote browser's focus update.
+                    await asyncio.sleep(1)
                     title = f"workspace-{width}"
                     await page.keyboard.type(f"data:text/html,<title>{title}</title><h1>Browser ready</h1>", delay=30)
                     await page.keyboard.press("Enter")
