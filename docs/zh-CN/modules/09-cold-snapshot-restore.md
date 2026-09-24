@@ -316,7 +316,7 @@ delete 路径会先尝试清理残留的 bound snapshot。
 - live disk 成本释放
 - 从“绑定在原 AZ 的 PVC”切到“从 snapshot 重新 materialize 的 PVC”
 
-但它还不是“完全透明的 Neon 风格 auto-resume 平台”。后续如果继续演进，顺序仍然建议是：
+但它还不是“完全透明的按需自动恢复平台”。后续如果继续演进，顺序仍然建议是：
 
 1. `auto-stop`
 2. `auto-snapshot-to-cold`

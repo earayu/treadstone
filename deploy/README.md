@@ -26,7 +26,7 @@ The API/web/runtime layers use the `ENV` variable (`local`, `demo`, `prod`). Clu
 - kubectl installed (`brew install kubectl`)
 - Helm installed (`brew install helm`)
 - Hurl installed (`brew install hurl`) — for E2E tests
-- Neon database connection string ready
+- PostgreSQL connection string reachable from Kubernetes pods
 
 ## Primary workflow (recommended)
 
@@ -52,7 +52,7 @@ Before deploying, prepare a `.env.{ENV}` file (e.g. `.env.local`). Refer to `.en
 ```bash
 cp .env.example .env.local
 # Edit .env.local and fill in at minimum:
-#   TREADSTONE_DATABASE_URL   — Neon connection string
+#   TREADSTONE_DATABASE_URL   — PostgreSQL connection string reachable from pods
 #   TREADSTONE_JWT_SECRET     — at least 32 characters (see .env.example)
 #   TREADSTONE_APP_BASE_URL     — http://app.localhost (Web UI origin; matches Helm for local)
 #   TREADSTONE_LEADER_ELECTION_ENABLED=true  — Recommended for every K8s environment (default in .env.example)
@@ -65,6 +65,32 @@ For OAuth provider setup, register callback URLs that match `TREADSTONE_APP_BASE
 
 - local (Kind + Ingress): `http://app.localhost/v1/auth/google/callback` and `http://app.localhost/v1/auth/github/callback`
 - demo/prod: `https://app-demo.treadstone-ai.dev/...` / `https://app.treadstone-ai.dev/...` (see `.env.example` comments)
+
+### Disposable PostgreSQL for Kind
+
+For local development without an external database, create Kind and deploy the
+development-only database before `make local`:
+
+```bash
+make kind-create
+kubectl --context kind-treadstone apply -f deploy/kind/postgres.yaml
+kubectl --context kind-treadstone -n treadstone-db rollout status deployment/postgres --timeout=180s
+```
+
+Set this URL in `.env.local`, then run `make local`:
+
+```dotenv
+TREADSTONE_DATABASE_URL=postgresql+asyncpg://treadstone:treadstone@postgres.treadstone-db.svc.cluster.local:5432/treadstone
+```
+
+This database uses an `emptyDir` and test-only credentials. Its data is lost when
+the pod is replaced or Kind is destroyed. Never use it for production or valuable
+development data. K8s E2E uses this same manifest and needs no external database
+secrets. For a persistent or remote database, supply your own URL and credentials;
+remote connections must use TLS (`?sslmode=require`).
+
+The root `.env.example` uses `localhost` for `make dev-api`. That host does not work
+inside an API pod; do not copy it unchanged into `.env.local`.
 
 ## kubectl context
 

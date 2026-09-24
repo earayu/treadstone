@@ -13,7 +13,7 @@ Quality bar blends external references (adapt ideas, do not paste long text):
 - **[Diátaxis](https://diataxis.fr/)**: four user intents—learning, task, facts, understanding—mapped to distinct doc **forms**; do not blur them on one page.
 - **[Doc co-authoring](https://github.com/anthropics/skills/blob/main/skills/doc-coauthoring/SKILL.md)** (Anthropic): context → draft → **reader test** before shipping large rewrites.
 
-**WeSQL-inspired structure (documentation shape only):** progressive paths (intro / map → hands-on steps → feature topics with prerequisites → cold reference) resemble how strong infra docs teach—**not** a claim about database technology. Treadstone uses Neon PostgreSQL for the control-plane DB; that is unrelated to this pattern name.
+**WeSQL-inspired structure (documentation shape only):** progressive paths (intro / map → hands-on steps → feature topics with prerequisites → cold reference) resemble how strong infra docs teach—**not** a claim about database technology. Treadstone uses PostgreSQL for the control-plane DB; that is unrelated to this pattern name.
 
 ## Keep One Source of Truth
 

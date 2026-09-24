@@ -26,7 +26,7 @@ install: install-py install-web install-hooks ## Install repo dependencies and h
 
 install-py: ## Install Python dependencies
 	uv sync
-	@echo "✓ Dependencies installed. Copy .env.example to .env and fill in your Neon connection string."
+	@echo "✓ Dependencies installed. Copy .env.example to .env and fill in your PostgreSQL connection string."
 
 install-web: ## Install web dependencies
 	cd web && pnpm install --frozen-lockfile

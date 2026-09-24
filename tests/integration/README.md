@@ -1,43 +1,48 @@
 # Integration Tests
 
-Integration tests run against a real Neon PostgreSQL database to verify end-to-end database interactions.
+Integration tests run against real PostgreSQL. Use an isolated test database,
+never a shared development or production database.
 
-## Prerequisites
-
-1. Create a **test branch** in your Neon project (do not use the main branch)
-2. Copy `.env.test.example` to `.env.test` and fill in the test branch connection string:
+## Quick Start
 
 ```bash
-cp tests/integration/.env.test.example tests/integration/.env.test
-# Edit .env.test with your Neon test branch connection string
-```
-
-3. Ensure Alembic migrations have been applied on the test branch:
-
-```bash
+docker run -d --rm --name treadstone-test-postgres \
+  -p 127.0.0.1:55432:5432 \
+  -e POSTGRES_USER=treadstone -e POSTGRES_PASSWORD=treadstone \
+  -e POSTGRES_DB=treadstone_test postgres:16
+docker exec treadstone-test-postgres pg_isready -U treadstone -d treadstone_test
+export TREADSTONE_DATABASE_URL=postgresql+asyncpg://treadstone:treadstone@localhost:55432/treadstone_test
 make migrate
+make test-integration
+docker stop treadstone-test-postgres
 ```
 
-> **Note:** `.env.test` contains database credentials and is excluded by `.gitignore`. It will never be committed.
+Wait for `pg_isready` to report accepting connections before running migrations.
+The container and its data are disposable. These credentials are only for local
+testing; use TLS (`?sslmode=require`) for remote databases.
+
+## Connection Configuration
+
+Alternatively, copy `tests/integration/.env.test.example` to
+`tests/integration/.env.test` and set the test database URL there.
+This file is gitignored. The integration fixture uses its URL when present;
+otherwise it uses the application settings, including `TREADSTONE_DATABASE_URL`.
+
+`make migrate` does not read `.env.test`. Export the same URL explicitly before
+running migrations. Avoid keeping a stale `.env.test` pointing at another database.
+
+CI starts a fresh PostgreSQL service container, applies all Alembic migrations,
+and runs the integration suite without external database credentials.
 
 ## Running
 
 ```bash
-make test-all          # Run all tests (including integration)
+make test-integration  # Real database tests only
+make test-all          # Unit, API, and integration tests
 ```
 
-Or run integration tests only:
-
-```bash
-uv run pytest tests/integration/ -v -m integration
-```
-
-## How It Works
-
-- `conftest.py` reads `TREADSTONE_DATABASE_URL` from `.env.test` before each test function
-- It rebuilds the SQLAlchemy async engine with that URL, replacing the global engine
-- If `.env.test` does not exist, falls back to the default connection string in the root `.env`
-- Each test automatically cleans up any data it created (using unique token prefixes)
+The fixture rebuilds the async engine for each test. Auth tests use unique email
+prefixes and clean up their own data.
 
 ## Test Inventory
 
@@ -47,12 +52,5 @@ uv run pytest tests/integration/ -v -m integration
 | `test_register_creates_user_in_db` | Register API creates a user record in the real DB |
 | `test_full_auth_flow` | Full flow: register → login → get user → change password → login with new password |
 | `test_duplicate_register_returns_409` | Duplicate email registration returns 409 Conflict |
-| `test_config_endpoint_returns_auth_info` | `/api/config` returns correct auth configuration |
-| `test_neon_connection_and_version` | Basic connectivity check (in `test_db.py`) |
-
-## Why Use a Neon Test Branch?
-
-- **Isolation** — Test data never pollutes the production/development branch
-- **Consistency** — Test branch is forked from main, keeping the schema in sync
-- **Resettable** — Reset the test branch to main at any time via Neon Console
-- **Zero cost** — Neon branches are copy-on-write and consume no extra storage
+| `test_config_endpoint_returns_auth_info` | `/v1/config` returns correct auth configuration |
+| `test_postgres_connection_and_version` | Connectivity and PostgreSQL version using the selected test database |

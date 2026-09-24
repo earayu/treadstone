@@ -92,7 +92,7 @@ done
 if [ -z "${E2E_ADMIN_EMAIL:-}" ]; then
     # Register admin user with retry — also serves as a DB readiness gate.
     # The /health endpoint does not touch the database; a real DB-backed request
-    # is needed to confirm the backend + Neon compute are fully ready.
+    # is needed to confirm the backend and database are fully ready.
     # Retry until we get 201 (created) or 409 (already exists — DB is up).
     printf "Pre-registering admin user (DB readiness gate) "
     for i in $(seq 1 20); do

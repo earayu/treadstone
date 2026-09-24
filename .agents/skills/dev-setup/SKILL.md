@@ -1,6 +1,6 @@
 ---
 name: dev-setup
-description: First-time Treadstone local development environment setup. Run once after cloning the repo and before starting any development. Covers system dependency installation, Python environment, Neon database connection, migrations, and environment verification. Use this skill when the user/agent just entered the project, needs to rebuild the environment, or encounters setup-related issues like missing dependencies, broken .env, or failed migrations.
+description: First-time Treadstone local development environment setup. Run once after cloning the repo and before starting any development. Covers system dependency installation, Python environment, PostgreSQL connection, migrations, and environment verification. Use this skill when the user/agent just entered the project, needs to rebuild the environment, or encounters setup-related issues like missing dependencies, broken .env, or failed migrations.
 ---
 
 # First-Time Dev Environment Setup
@@ -37,9 +37,20 @@ make install
 
 This installs Python dependencies with `uv`, installs web dependencies with `pnpm`, and configures git hooks.
 
-## 3. Configure Database (Neon)
+## 3. Configure PostgreSQL
 
-The project uses [Neon](https://neon.tech) Serverless PostgreSQL — no local Postgres needed.
+Use a dedicated PostgreSQL database. For local API development, start a database with Docker:
+
+```bash
+docker run -d --name treadstone-postgres \
+  -p 127.0.0.1:5432:5432 \
+  -e POSTGRES_USER=treadstone -e POSTGRES_PASSWORD=treadstone \
+  -e POSTGRES_DB=treadstone \
+  -v treadstone-postgres:/var/lib/postgresql/data postgres:16
+docker exec treadstone-postgres pg_isready -U treadstone -d treadstone
+```
+
+These credentials are for local development only. Use separate credentials and TLS for remote environments.
 
 For local API development (`make dev-api`), start from:
 
@@ -50,11 +61,11 @@ cp .env.example .env
 Edit `.env` and set at least:
 
 ```
-TREADSTONE_DATABASE_URL=postgresql+asyncpg://neondb_owner:xxx@ep-xxx.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+TREADSTONE_DATABASE_URL=postgresql+asyncpg://treadstone:treadstone@localhost:5432/treadstone
 TREADSTONE_JWT_SECRET=CHANGE_ME
 ```
 
-The URL scheme must be `postgresql+asyncpg://` (not `postgresql://`). Keep `?sslmode=require`.
+The URL scheme must be `postgresql+asyncpg://` (not `postgresql://`). Add `?sslmode=require` for remote databases.
 
 For local Kubernetes deployment (`make local`), also prepare:
 
@@ -69,6 +80,9 @@ TREADSTONE_DATABASE_URL=postgresql+asyncpg://...
 TREADSTONE_JWT_SECRET=CHANGE_ME
 TREADSTONE_LEADER_ELECTION_ENABLED=true
 ```
+
+The database host must be reachable from pods; `localhost` points at the API pod itself.
+For disposable Kind PostgreSQL, follow `deploy/README.md`.
 
 ## 4. Apply Database Migrations
 
@@ -120,7 +134,7 @@ Pure API development (`make dev-api`) does not require a K8s cluster.
 **Database connection fails (`could not connect`):**
 - Check the connection string in `.env`
 - Confirm the URL uses `postgresql+asyncpg://` not `postgresql://`
-- Neon free-tier projects auto-suspend; first connection may be slow (~1s cold start)
+- Confirm PostgreSQL is ready and reachable from the API host or Kubernetes pod
 
 **`alembic upgrade head` reports `authentication failed`:**
 - Confirm `.env` exists in the project root

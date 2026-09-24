@@ -1,0 +1,66 @@
+# Disposable development/CI database only. Data is lost when the pod is replaced.
+# Never deploy this manifest or its test-only credentials to production.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: treadstone-db
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: treadstone-db
+spec:
+  selector:
+    app: treadstone-postgres
+  ports:
+    - port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: treadstone-db
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: treadstone-postgres
+  template:
+    metadata:
+      labels:
+        app: treadstone-postgres
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: postgres
+          image: postgres:16
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: treadstone
+            - name: POSTGRES_PASSWORD
+              value: treadstone
+            - name: POSTGRES_DB
+              value: treadstone
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "treadstone", "-d", "treadstone"]
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: data
+          emptyDir: {}

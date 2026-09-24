@@ -1,5 +1,5 @@
 # Kind + `make local` + Hurl E2E (same path as developer machines).
-# Requires Neon secrets/vars for a disposable DB branch.
+# Uses a disposable PostgreSQL instance inside the Kind cluster.
 
 name: K8s E2E
 
@@ -98,37 +98,13 @@ jobs:
           sudo dpkg -i /tmp/hurl.deb
           hurl --version
 
-      - name: Compute Neon branch expiry (RFC3339)
-        id: neon_expiry
-        run: echo "expires_at=$(date -u -d '+24 hours' +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-
-      - name: Create Neon branch
-        id: neon
-        uses: neondatabase/create-branch-action@v6
-        with:
-          api_key: ${{ secrets.NEON_API_KEY }}
-          project_id: ${{ vars.NEON_PROJECT_ID }}
-          branch_name: gha-${{ github.run_id }}-${{ github.run_attempt }}
-          parent_branch: ${{ vars.NEON_CI_PARENT_BRANCH || 'ci-base' }}
-          database: ${{ vars.NEON_CI_DATABASE || 'ci_empty' }}
-          role: neondb_owner
-          suspend_timeout: 300
-          expires_at: ${{ steps.neon_expiry.outputs.expires_at }}
-
       - name: Write .env.local
         run: |
           set -euo pipefail
           umask 077
-          DB_URL="${{ steps.neon.outputs.db_url }}"
-          case "$DB_URL" in
-            postgresql+asyncpg://*) ;;
-            postgresql://*) DB_URL="postgresql+asyncpg://${DB_URL#postgresql://}" ;;
-            postgres://*) DB_URL="postgresql+asyncpg://${DB_URL#postgres://}" ;;
-            *) echo "Unexpected DB URL scheme" >&2; exit 1 ;;
-          esac
           JWT="$(openssl rand -hex 32)"
           cat > .env.local <<EOF
-          TREADSTONE_DATABASE_URL=${DB_URL}
+          TREADSTONE_DATABASE_URL=postgresql+asyncpg://treadstone:treadstone@postgres.treadstone-db.svc.cluster.local:5432/treadstone
           TREADSTONE_APP_NAME=treadstone
           TREADSTONE_DEBUG=false
           TREADSTONE_APP_BASE_URL=http://app.localhost
@@ -169,6 +145,8 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/kind-setup.sh
+          kubectl --context kind-treadstone apply -f deploy/kind/postgres.yaml
+          kubectl --context kind-treadstone -n treadstone-db rollout status deployment/postgres --timeout=180s
           make image-api
           kind load docker-image treadstone:latest --name treadstone
           make image-web

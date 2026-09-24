@@ -1,7 +1,7 @@
-"""Integration tests for the auth system against real Neon DB.
+"""Integration tests for the auth system against real PostgreSQL.
 
 These tests create real users in the database and clean up after themselves.
-Uses Neon test branch if tests/integration/.env.test exists; otherwise falls back
+Uses the test database if tests/integration/.env.test exists; otherwise falls back
 to the default TREADSTONE_DATABASE_URL.
 
 Run with: make test-all
