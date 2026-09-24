@@ -95,6 +95,12 @@ def memory_sample(name: str) -> float:
     return sum(values) / len(values)
 
 
+def container_base(name: str) -> str:
+    inspect = json.loads(command("docker", "inspect", name))[0]
+    port = inspect["NetworkSettings"]["Ports"]["8080/tcp"][0]["HostPort"]
+    return f"http://127.0.0.1:{port}"
+
+
 def sample(image_id: str, output: Path, index: int, *, measure_memory: bool = True) -> dict[str, Any]:
     name = f"sandbox-bench-{uuid.uuid4().hex[:12]}"
     result: dict[str, Any] = {"index": index, "error": None, "ready_seconds": None}
@@ -114,9 +120,7 @@ def sample(image_id: str, output: Path, index: int, *, measure_memory: bool = Tr
             "127.0.0.1::8080",
             image_id,
         )
-        inspect = json.loads(command("docker", "inspect", name))[0]
-        port = inspect["NetworkSettings"]["Ports"]["8080/tcp"][0]["HostPort"]
-        base = f"http://127.0.0.1:{port}"
+        base = container_base(name)
         wait_ready(base)
         result["ready_seconds"] = time.monotonic() - started
         if measure_memory:
@@ -142,6 +146,7 @@ def sample(image_id: str, output: Path, index: int, *, measure_memory: bool = Tr
             result["active_memory_bytes"] = memory_sample(name)
             started = time.monotonic()
             command("docker", "restart", "--time", "30", name)
+            base = container_base(name)
             wait_ready(base)
             result["restart_seconds"] = time.monotonic() - started
     except Exception as exc:
@@ -150,6 +155,20 @@ def sample(image_id: str, output: Path, index: int, *, measure_memory: bool = Tr
             result["error"] += f"\n{exc.stderr}"
         logs = subprocess.run(["docker", "logs", name], capture_output=True, text=True, timeout=30)
         (output / f"failure-{index}.log").write_text(logs.stdout + logs.stderr)
+        diagnostics = subprocess.run(
+            [
+                "docker",
+                "exec",
+                name,
+                "sh",
+                "-c",
+                'nginx -t -c /opt/gem/nginx.conf; tail -n 80 "$LOG_DIR"/*.log',
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        (output / f"diagnostics-{index}.log").write_text(diagnostics.stdout + diagnostics.stderr)
     finally:
         subprocess.run(["docker", "rm", "-fv", name], capture_output=True, timeout=60)
     return result
@@ -197,14 +216,25 @@ def run(image: str, output: Path, samples: int, concurrency: int) -> dict[str, A
         result["image_id"] = inspect["Id"]
         result["repo_digests"] = inspect["RepoDigests"]
         result["uncompressed_bytes"] = inspect["Size"]
-        result["sequential_samples"] = [sample(inspect["Id"], output, i) for i in range(samples)]
-        with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
-            result["concurrent_samples"] = list(
-                executor.map(
-                    lambda i: sample(inspect["Id"], output, i + samples, measure_memory=False),
-                    range(samples),
+        result["requested_samples"] = samples
+        result["sequential_samples"] = []
+        result["concurrent_samples"] = []
+        for i in range(samples):
+            trial = sample(inspect["Id"], output, i)
+            result["sequential_samples"].append(trial)
+            (output / "result.json").write_text(json.dumps(result, indent=2) + "\n")
+            print(f"Sequential sample {i + 1}/{samples}: {trial}", flush=True)
+            if trial["ready_seconds"] is None:
+                result["aborted_reason"] = "Startup failed; remaining trials skipped, not counted as successes."
+                break
+        if "aborted_reason" not in result:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
+                result["concurrent_samples"] = list(
+                    executor.map(
+                        lambda i: sample(inspect["Id"], output, i + samples, measure_memory=False),
+                        range(samples),
+                    )
                 )
-            )
         result["sequential"] = aggregate(result["sequential_samples"])
         result["concurrent"] = aggregate(result["concurrent_samples"])
     except Exception as exc:

@@ -77,3 +77,30 @@ def test_failed_pull_still_writes_evidence(
     report = json.loads((tmp_path / "result.json").read_text())
     assert report["error"] == "unavailable manifest"
     assert "not a production SLO" in " ".join(report["notes"])
+
+
+def test_restart_rediscovers_random_host_port(
+    benchmark: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    ports = iter(("18080", "28080"))
+    waited: list[str] = []
+
+    def command(*args: str, **kwargs: object) -> str:
+        if args[1] == "inspect":
+            return json.dumps([{"NetworkSettings": {"Ports": {"8080/tcp": [{"HostPort": next(ports)}]}}}])
+        return ""
+
+    def request(base: str, path: str, **kwargs: object) -> list[dict[str, str]]:
+        return [{"title": "benchmark-active"}]
+
+    monkeypatch.setattr(benchmark, "command", command)
+    monkeypatch.setattr(benchmark, "wait_ready", lambda base: waited.append(base))
+    monkeypatch.setattr(benchmark, "request", request)
+    monkeypatch.setattr(benchmark, "memory_sample", lambda name: 1024)
+    monkeypatch.setattr(benchmark.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(
+        benchmark.subprocess, "run", lambda args, **kwargs: subprocess.CompletedProcess(args, 0, "", "")
+    )
+    result = benchmark.sample("sha256:tested", tmp_path, 0)
+    assert result["error"] is None
+    assert waited == ["http://127.0.0.1:18080", "http://127.0.0.1:28080"]
