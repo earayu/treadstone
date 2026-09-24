@@ -3,6 +3,7 @@
 import configparser
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -88,3 +89,52 @@ def test_runtime_catalog_and_api_examples_match_helm_defaults() -> None:
     assert SandboxTemplateResponse.model_fields["display_name"].examples == [
         templates["aio-sandbox-tiny"]["displayName"]
     ]
+
+
+def test_image_tool_versions_are_pinned() -> None:
+    dockerfile = (IMAGE / "Dockerfile").read_text()
+    for name in ("CLAUDE_CODE", "CODEX", "KIMI_CLI", "CURSOR_AGENT"):
+        version = re.search(rf"^ARG {name}_VERSION=(.+)$", dockerfile, re.MULTILINE)
+        assert version and version[1] != "latest", name
+    assert "https://cursor.com/install" not in dockerfile
+    assert 'uv tool install "kimi-cli==${KIMI_CLI_VERSION}"' in dockerfile
+    for line in dockerfile.splitlines():
+        if line.startswith("FROM "):
+            assert "@sha256:" in line
+
+
+def test_publish_verifies_loaded_image_before_push_without_rebuilding() -> None:
+    workflow = yaml.safe_load((ROOT / ".github/workflows/sandbox-image.yml").read_text())
+    steps = workflow["jobs"]["docker"]["steps"]
+    builds = [step for step in steps if step.get("uses", "").startswith("docker/build-push-action@")]
+    assert len(builds) == 1
+    assert builds[0]["with"]["load"] is True
+    assert builds[0]["with"].get("push", False) is False
+    verify = next(i for i, step in enumerate(steps) if "verify-sandbox-image.sh" in step.get("run", ""))
+    push = next(i for i, step in enumerate(steps) if "docker push" in step.get("run", ""))
+    assert steps.index(builds[0]) < verify < push
+    assert "docker build" not in steps[push]["run"]
+    assert "TESTED_IMAGE_ID" in steps[push]["run"]
+
+
+def test_published_verification_and_benchmark_are_manual_and_read_only() -> None:
+    workflow = yaml.safe_load((ROOT / ".github/workflows/sandbox-image.yml").read_text())
+    triggers = workflow.get("on", workflow.get(True))
+    assert "schedule" not in triggers
+    assert triggers["workflow_dispatch"]["inputs"]["mode"]["default"] == "verify"
+    for name in ("verify", "benchmark"):
+        job = workflow["jobs"][name]
+        assert "workflow_dispatch" in job["if"]
+        assert workflow["permissions"].get("packages") != "write"
+        assert "permissions" not in job or job["permissions"].get("packages") != "write"
+
+
+def test_k8s_can_verify_published_image_without_rebuilding_it() -> None:
+    workflow = yaml.safe_load((ROOT / ".github/workflows/k8s-e2e.yml").read_text())
+    triggers = workflow.get("on", workflow.get(True))
+    assert "sandbox_image" in triggers["workflow_dispatch"]["inputs"]
+    steps = workflow["jobs"]["k8s-e2e"]["steps"]
+    build = next(step for step in steps if step.get("name") == "Build sandbox runtime image")
+    assert "SANDBOX_IMAGE" in build["if"]
+    assert any("docker pull" in step.get("run", "") for step in steps)
+    assert any("verify-sandbox-image.sh" in step.get("run", "") for step in steps)
