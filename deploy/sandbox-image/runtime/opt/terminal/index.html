@@ -85,7 +85,7 @@
                 this.ws = null;
                 this.sessionId = this.getSessionIdFromUrl() || null;
                 this.resizeTimeout = null;
-                this.baseLocation = new URL('.', window.location.href);
+                this.baseLocation = new URL('../', document.baseURI);
 
                 // 心跳相关配置
                 this.heartbeatInterval = null;

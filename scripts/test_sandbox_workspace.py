@@ -46,6 +46,7 @@ async def main() -> None:
                 await page.get_by_role("tab", name="Terminal").click()
                 terminal_element = await page.query_selector("#terminal")
                 terminal = await terminal_element.content_frame()
+                await terminal.wait_for_function("document.body.textContent.includes('Terminal ready')")
                 await terminal.locator(".xterm-helper-textarea").focus()
                 await page.keyboard.type("printf 'ui-%s-ok\\n' terminal")
                 await page.keyboard.press("Enter")

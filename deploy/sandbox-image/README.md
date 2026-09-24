@@ -7,7 +7,8 @@ Node.js 22. It does not inherit an AIO or reconstructed sandbox image.
 
 - Chromium with CDP, screenshots, mouse/keyboard control and noVNC handoff.
 - Bash sessions over HTTP and WebSocket, file upload/download/edit APIs.
-- A single Python API with an in-process MCP adapter for browser, shell and files.
+- Python runtime API with an in-process MCP adapter for browser, shell and files.
+- GEM proxy for CDP and browser control.
 - Python, Node.js, uv and coding CLIs available from the shell.
 - UID/GID 1000 (`gem`); persistent workspaces remain at `/home/gem`.
 

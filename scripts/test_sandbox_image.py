@@ -36,9 +36,10 @@ async def check_websockets() -> None:
         await ws.send(json.dumps({"id": 1, "method": "Browser.getVersion"}))
         result = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
         assert result["id"] == 1 and "product" in result["result"], result
-    async with websockets.connect("ws://127.0.0.1:8080/websockify") as ws:
-        greeting = await asyncio.wait_for(ws.recv(), timeout=10)
-        assert greeting.startswith(b"RFB "), greeting
+    for path in ("/websockify", "/vnc/websockify"):
+        async with websockets.connect(f"ws://127.0.0.1:8080{path}") as ws:
+            greeting = await asyncio.wait_for(ws.recv(), timeout=10)
+            assert greeting.startswith(b"RFB "), greeting
 
 
 async def check_mcp() -> None:

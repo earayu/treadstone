@@ -64,3 +64,10 @@ def test_browser_resolution_schema_has_stable_order(monkeypatch: pytest.MonkeyPa
     spec.loader.exec_module(module)
     expected = ", ".join(f"{width}x{height}" for width, height in sorted(module.ALLOWED_PAIRS))
     assert module.BrowserConfigRequest.model_fields["resolution"].description.endswith(f"{expected}.")
+
+
+def test_direct_browser_and_terminal_urls_remain_supported() -> None:
+    nginx = (IMAGE / "runtime/opt/gem/nginx.vnc.conf").read_text()
+    assert "location ~ ^/(vnc/)?websockify$" in nginx
+    terminal = (IMAGE / "runtime/opt/terminal/index.html").read_text()
+    assert "this.baseLocation = new URL('../', document.baseURI);" in terminal
