@@ -186,7 +186,7 @@ Control plane  →  treadstone_sdk.AuthenticatedClient
                   Manages: sandbox lifecycle, templates, API keys
 
 Data plane     →  agent_sandbox.Sandbox(base_url=sandbox.urls.proxy)
-                  Operates inside: shell, file, browser, jupyter, mcp
+                  Operates inside: shell, file, browser, mcp
 ```
 
 The Treadstone Python SDK intentionally does **not** include data-plane methods.

@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { DOCS_SANDBOX_ENDPOINTS, buildMcpClientConfigJson } from "@/lib/sandbox-endpoints-meta"
 import { cn } from "@/lib/utils"
 
-const ENDPOINT_TOOLTIP_WEB = `For humans: opens in your browser so you can use the built-in Chrome, VS Code, Terminal, Jupyter, and other tools inside the sandbox. Click opens this URL in a new tab. Full reference: ${DOCS_SANDBOX_ENDPOINTS}`
+const ENDPOINT_TOOLTIP_WEB = `For humans: opens the sandbox browser and terminal. Click opens this URL in a new tab. Full reference: ${DOCS_SANDBOX_ENDPOINTS}`
 
 const ENDPOINT_TOOLTIP_MCP = `For AI assistants: MCP clients connect here to work inside the sandbox—browser automation, VS Code, Share, and more. Click copies a sample mcp.json-style snippet (url + Authorization header). Replace the placeholder with an API key from Settings → API Keys. Full reference: ${DOCS_SANDBOX_ENDPOINTS}`
 

@@ -25,7 +25,7 @@ http {
     # SSL Settings
     ##
 
-    ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+    ssl_protocols TLSv1.2 TLSv1.3;
     ssl_prefer_server_ciphers on;
 
     ##
@@ -47,5 +47,4 @@ http {
     }
 
     include /opt/gem/nginx-server-active.conf;
-    include /opt/gem/nginx-server-port-proxy.conf;
 }

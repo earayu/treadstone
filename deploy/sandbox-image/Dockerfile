@@ -1,119 +1,113 @@
-ARG RECONSTRUCTED_BASE_IMAGE=ghcr.io/earayu/treadstone-sandbox-reconstructed:v0.1.2
-FROM ${RECONSTRUCTED_BASE_IMAGE}
+FROM node:22-bookworm-slim AS node
+FROM python:3.12-slim-bookworm
 
-ARG RECONSTRUCTED_BASE_IMAGE
+ARG TARGETARCH
 ARG TREADSTONE_SANDBOX_VERSION=dev
+ARG CHROMIUM_VERSION=154.0.8037.57
+ARG NOVNC_VERSION=1.6.0
+ARG WEBSOCAT_VERSION=v1.13.0
 ARG CLAUDE_CODE_VERSION=latest
 ARG CODEX_VERSION=latest
 
 LABEL org.opencontainers.image.source="https://github.com/earayu/treadstone"
-LABEL org.opencontainers.image.description="Treadstone Agent Sandbox"
+LABEL org.opencontainers.image.description="Treadstone browser and shell sandbox"
 LABEL org.opencontainers.image.version="${TREADSTONE_SANDBOX_VERSION}"
-LABEL org.opencontainers.image.base.name="${RECONSTRUCTED_BASE_IMAGE}"
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-ENV PATH="/root/.local/bin:${PATH}"
+ENV DEBIAN_FRONTEND=noninteractive \
+    USER=gem USER_UID=1000 USER_GID=1000 HOME=/home/gem \
+    DISPLAY=:99.0 DISPLAY_WIDTH=1280 DISPLAY_HEIGHT=1024 DISPLAY_DEPTH=24 XDG_SESSION_TYPE=x11 \
+    XDG_RUNTIME_DIR=/tmp/runtime-gem LOG_DIR=/tmp/treadstone/log \
+    BROWSER_EXECUTABLE_PATH=/usr/local/bin/browser BROWSER_REMOTE_DEBUGGING_PORT=9222 \
+    BROWSER_COMMANDLINE_ARGS="--disable-backgrounding-occluded-windows --disable-background-timer-throttling --disable-dev-shm-usage --disable-gpu --no-default-browser-check --no-first-run --remote-allow-origins=* --remote-debugging-port=9222 --start-maximized" \
+    BROWSER_EXTRA_ARGS="" BROWSER_NO_SANDBOX=--no-sandbox \
+    DNS_OVER_HTTPS_TEMPLATES="" JWT_PUBLIC_KEY="" \
+    VNC_SERVER_PORT=5900 WEBSOCKET_PROXY_PORT=6080 GEM_SERVER_PORT=8088 \
+    PUBLIC_PORT=8080 AUTH_BACKEND_PORT=8081 SANDBOX_SRV_PORT=8091 \
+    MAX_SHELL_SESSIONS=50 WORKSPACE=/home/gem \
+    LANG=en_US.UTF-8 LANGUAGE=en_US:en LC_ALL=en_US.UTF-8 TZ=Etc/UTC \
+    UV_TOOL_BIN_DIR=/usr/local/bin UV_TOOL_DIR=/usr/local/share/uv/tools \
+    UV_PYTHON_INSTALL_DIR=/opt/uv/python \
+    PYTHONPATH=/opt/treadstone/python \
+    TREADSTONE_SANDBOX_VERSION="${TREADSTONE_SANDBOX_VERSION}"
 
-# Base image already includes Node.js, so the two npm-based coding CLIs can be
-# installed directly without changing any sandbox runtime behavior.
-RUN npm install -g \
-    "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
-    "@openai/codex@${CODEX_VERSION}"
+RUN test "${TARGETARCH:-amd64}" = amd64
+RUN apt-get update -o Acquire::Retries=5 \
+    && apt-get install -y --no-install-recommends -o Acquire::Retries=5 \
+       ca-certificates curl wget git jq unzip zip gettext-base locales \
+       supervisor nginx openbox tigervnc-standalone-server netcat-openbsd \
+       xauth dbus-x11 tmux scrot xclip x11-xserver-utils xdg-utils procps \
+       build-essential pkg-config ripgrep vim-tiny nano tree rsync \
+       libasound2 libatk-bridge2.0-0 libatk1.0-0 libcairo2 libcups2 libdrm2 \
+       libgbm1 libglib2.0-0 libgtk-3-0 libnss3 libnspr4 libpango-1.0-0 libtk8.6 \
+       libx11-6 libx11-xcb1 libxcb-dri3-0 libxcomposite1 libxdamage1 \
+       libxfixes3 libxkbcommon0 libxrandr2 libxshmfence1 \
+       fonts-liberation fonts-noto-color-emoji fonts-wqy-zenhei \
+    && sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
+    && locale-gen && rm -rf /var/lib/apt/lists/* \
+    && python -c 'import tkinter'
 
-# Kimi Code CLI ships through the official installer, which installs uv when
-# needed and then installs kimi-cli via uv tool into ~/.local/bin.
-RUN curl -LsSf https://code.kimi.com/install.sh | bash
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
-# Kimi installs a managed Python under `/root/.local/share/uv`, but `gem` cannot execute
-# interpreters referenced via that path. Mirror the uv store to `/opt/uv` and rewrite the
-# venv metadata + `python` shim used by `/usr/local/bin/kimi`.
-RUN set -euo pipefail \
-  && cp -a /root/.local/share/uv /opt/uv \
-  && chmod -R a+rX /opt/uv \
-  && sed -i 's#/root/.local/share/uv#/opt/uv#g' /usr/local/share/uv/tools/kimi-cli/pyvenv.cfg \
-  && py="$(find /opt/uv/python -type f -path '*/bin/python3.13' | head -n 1)" \
-  && test -n "${py}" \
-  && ln -sf "${py}" /usr/local/share/uv/tools/kimi-cli/bin/python
+COPY requirements-python-runtime.txt /tmp/requirements-python-runtime.txt
+RUN pip install --no-cache-dir -r /tmp/requirements-python-runtime.txt
 
-# Cursor Agent CLI currently ships through the official installer and does not
-# expose a stable versioned download URL, so this always pulls the current
-# upstream release at build time.
-RUN curl https://cursor.com/install -fsS | bash
+RUN curl --retry 5 -fsSL \
+      "https://storage.googleapis.com/chrome-for-testing-public/${CHROMIUM_VERSION}/linux64/chrome-linux64.zip" \
+      -o /tmp/browser.zip \
+    && unzip -q /tmp/browser.zip -d /opt \
+    && ln -s /opt/chrome-linux64/chrome /usr/local/bin/browser \
+    && rm /tmp/browser.zip \
+    && curl --retry 5 -fsSL "https://github.com/novnc/noVNC/archive/refs/tags/v${NOVNC_VERSION}.zip" -o /tmp/novnc.zip \
+    && unzip -q /tmp/novnc.zip -d /opt \
+    && mv "/opt/noVNC-${NOVNC_VERSION}" /opt/novnc \
+    && ln -s vnc.html /opt/novnc/index.html \
+    && rm /tmp/novnc.zip \
+    && curl --retry 5 -fsSL \
+      "https://github.com/vi/websocat/releases/download/${WEBSOCAT_VERSION}/websocat.x86_64-unknown-linux-musl" \
+      -o /usr/local/bin/websocat \
+    && chmod 755 /usr/local/bin/websocat
 
-# The installer places binaries under `/root/.local`, but interactive sandbox sessions
-# typically run as the unprivileged `gem` user, which cannot traverse `/root` (0700).
-# Mirror the install to `/opt` (world-readable) and expose `agent` / `cursor-agent` on PATH.
-RUN set -euo pipefail \
-  && ver_dir="$(find /root/.local/share/cursor-agent/versions -mindepth 1 -maxdepth 1 -type d | head -n 1)" \
-  && ver="$(basename "${ver_dir}")" \
-  && install -d -m 755 /opt/cursor-agent \
-  && cp -a /root/.local/share/cursor-agent /opt/cursor-agent/share \
-  && ln -sf "/opt/cursor-agent/share/versions/${ver}/cursor-agent" /usr/local/bin/cursor-agent \
-  && ln -sf "/opt/cursor-agent/share/versions/${ver}/cursor-agent" /usr/local/bin/agent \
-  && chmod -R a+rX /opt/cursor-agent/share
+# Coding CLIs are shell tools, not additional background services.
+RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" "@openai/codex@${CODEX_VERSION}" \
+    && mkdir -p /opt/uv \
+    && uv tool install kimi-cli \
+    && chmod -R a+rX /opt/uv /usr/local/share/uv
+RUN curl -fsSL https://cursor.com/install | HOME=/root bash \
+    && install -d /opt/cursor-agent \
+    && cp -a /root/.local/share/cursor-agent /opt/cursor-agent/share \
+    && ver_dir="$(find /opt/cursor-agent/share/versions -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)" \
+    && ln -s "${ver_dir}/cursor-agent" /usr/local/bin/cursor-agent \
+    && ln -s "${ver_dir}/cursor-agent" /usr/local/bin/agent \
+    && chmod -R a+rX /opt/cursor-agent
 
-ENV TREADSTONE_SANDBOX_VERSION="${TREADSTONE_SANDBOX_VERSION}"
-
-COPY run.sh /opt/gem/run.sh
-COPY entrypoint.sh /opt/gem/entrypoint.sh
+COPY runtime/ /
+RUN pip install --no-cache-dir /opt/gem-server
+RUN curl --retry 5 -fsSL https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css -o /opt/terminal/xterm.css \
+    && curl --retry 5 -fsSL https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js -o /opt/terminal/xterm.js \
+    && curl --retry 5 -fsSL https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js -o /opt/terminal/xterm-addon-fit.js
+COPY run.sh entrypoint.sh /opt/gem/
 COPY supervisord.conf /opt/gem/supervisord.conf
-COPY supervisord.nginx.conf /opt/gem/supervisord/nginx.conf
-COPY jupyter-lab.sh /opt/gem/jupyter-lab.sh
-COPY tinyproxy.sh /opt/gem/tinyproxy.sh
 COPY nginx.conf.template /opt/treadstone/templates/nginx.conf.template
-COPY tinyproxy-base.conf /opt/gem/tinyproxy/base.conf
 
-# Make the upstream AIO runtime genuinely rootless-compatible. The base image
-# bootstraps `gem` at runtime and writes privileged state on every start; move
-# that user/home setup into build time, prepare a reusable home skeleton for
-# PVC seeding, and hand ownership of writable runtime paths to `gem`.
-RUN set -euo pipefail \
-    && if ! getent group gem >/dev/null; then groupadd --gid 1000 gem; fi \
-    && if ! id -u gem >/dev/null 2>&1; then useradd --uid 1000 --gid 1000 --shell /bin/bash --create-home gem; fi \
-    && install -d -m 755 -o gem -g gem \
-         /opt/treadstone \
-         /opt/treadstone/home-template \
-         /var/log/nginx \
-         /var/lib/nginx \
-    && for home_dir in /home/gem /opt/treadstone/home-template; do \
-         install -d -m 755 -o gem -g gem \
-           "${home_dir}" \
-           "${home_dir}/.npm-global/lib" \
-           "${home_dir}/.config/code-server" \
-           "${home_dir}/.local/share/code-server" \
-           "${home_dir}/.config/matplotlib" \
-           "${home_dir}/.config/browser/Default"; \
-         cp -f /opt/gem/bashrc "${home_dir}/.bashrc"; \
-         cp -rf /opt/gem/vscode "${home_dir}/.config/code-server/vscode"; \
-         cp -rf /opt/gem/jupyter "${home_dir}/.jupyter"; \
-         cp -f /opt/gem/matplotlibrc "${home_dir}/.config/matplotlib/matplotlibrc"; \
-         cp -f /opt/gem/preferences.json "${home_dir}/.config/browser/Default/Preferences"; \
-         touch "${home_dir}/.Xauthority"; \
-       done \
-    && chown -R gem:gem \
-         /home/gem \
-         /opt/treadstone \
-         /opt/gem \
-         /opt/jupyter \
-         /opt/aio \
-         /etc/browser/policies/managed \
-         /var/log/nginx \
-         /var/lib/nginx \
-    && touch /var/log/nginx/error.log \
-    && chmod 755 /opt/gem/run.sh /opt/gem/entrypoint.sh /opt/gem/jupyter-lab.sh /opt/gem/tinyproxy.sh
+# Seed empty PVCs without overwriting user data on subsequent starts.
+RUN groupadd --gid 1000 gem \
+    && useradd --uid 1000 --gid 1000 --shell /bin/bash --create-home gem \
+    && install -d /opt/treadstone/home-template/.config/browser/Default \
+       /etc/browser/policies/managed /var/log/nginx /var/lib/nginx \
+    && cp /opt/gem/bashrc /opt/treadstone/home-template/.bashrc \
+    && cp /opt/gem/preferences.json /opt/treadstone/home-template/.config/browser/Default/Preferences \
+    && chmod 755 /opt/gem/*.sh /opt/treadstone/python/app/scripts/*.sh \
+    && chown -R gem:gem /home/gem /opt/gem /opt/treadstone \
+       /etc/browser/policies/managed /var/log/nginx /var/lib/nginx
 
-RUN claude --version \
-    && codex --version \
-    && kimi --version \
-    && cursor-agent --version \
-    && agent --version
-
-ENV USER=gem \
-    USER_UID=1000 \
-    USER_GID=1000 \
-    HOME=/home/gem \
-    PATH="/home/gem/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
-    LOG_DIR=/tmp/treadstone/log \
-    XDG_RUNTIME_DIR=/tmp/runtime-gem
-
+ENV PATH="/home/gem/.npm-global/bin:/home/gem/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 USER gem
+WORKDIR /home/gem
+RUN claude --version && codex --version && kimi --version && cursor-agent --version
+ENTRYPOINT ["/opt/gem/run.sh"]
+EXPOSE 8080
+HEALTHCHECK --interval=10s --timeout=5s --retries=8 CMD curl -fsS http://127.0.0.1:8080/health || exit 1

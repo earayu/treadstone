@@ -19,12 +19,9 @@ fi
 
 TRIMMED_DOH_TEMPLATES="$(echo -n "${DNS_OVER_HTTPS_TEMPLATES:-}" | xargs)"
 if [ -n "${TRIMMED_DOH_TEMPLATES}" ]; then
-  cat >/etc/browser/policies/managed/dns_over_https.json <<EOF
-{
-  "DnsOverHttpsMode": "secure",
-  "DnsOverHttpsTemplates": "${TRIMMED_DOH_TEMPLATES}"
-}
-EOF
+  jq -n --arg templates "${TRIMMED_DOH_TEMPLATES}" \
+    '{DnsOverHttpsMode: "secure", DnsOverHttpsTemplates: $templates}' \
+    >/etc/browser/policies/managed/dns_over_https.json
 else
   rm -f /etc/browser/policies/managed/dns_over_https.json
 fi
@@ -45,12 +42,6 @@ fi
 envsubst '${BROWSER_REMOTE_DEBUGGING_PORT}' </opt/gem/nginx.legacy.conf >/opt/gem/nginx/legacy.conf
 envsubst '${GEM_SERVER_PORT}' </opt/gem/nginx.srv.conf >/opt/gem/nginx/srv.conf
 envsubst '${WEBSOCKET_PROXY_PORT}' </opt/gem/nginx.vnc.conf >/opt/gem/nginx/vnc.conf
-
-if [ ! -f /opt/gem/mcp.disabled ]; then
-  envsubst '${MCP_SERVER_PORT}' </opt/gem/nginx.mcp.conf >/opt/gem/nginx/mcp.conf
-else
-  rm -f /opt/gem/nginx/mcp.conf
-fi
 
 log "Starting supervisord as ${USER}..."
 exec /usr/bin/supervisord -n -c /opt/gem/supervisord.conf

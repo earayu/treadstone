@@ -137,6 +137,29 @@ jobs:
             --build-arg TREADSTONE_SANDBOX_VERSION="ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             deploy/sandbox-image
 
+      - name: Check browser and shell image contract
+        run: |
+          set -euo pipefail
+          docker run -d --name sandbox-smoke --security-opt no-new-privileges \
+            --shm-size=512m treadstone-sandbox:e2e
+          trap 'docker cp sandbox-smoke:/tmp/workspace-validation /tmp/workspace-validation || true; docker logs sandbox-smoke; docker exec sandbox-smoke sh -c "tail -n 60 /tmp/treadstone/log/*.log" || true; docker rm -f sandbox-smoke' EXIT
+          docker cp scripts/test_sandbox_image.py sandbox-smoke:/tmp/test_sandbox_image.py
+          docker cp scripts/sandbox_openapi_base.json sandbox-smoke:/tmp/sandbox_openapi_base.json
+          docker exec sandbox-smoke python /tmp/test_sandbox_image.py
+          docker restart sandbox-smoke
+          docker exec sandbox-smoke python /tmp/test_sandbox_image.py
+          docker exec --user root sandbox-smoke pip install playwright==1.55.0
+          docker cp scripts/test_sandbox_workspace.py sandbox-smoke:/tmp/test_sandbox_workspace.py
+          docker exec sandbox-smoke python /tmp/test_sandbox_workspace.py
+
+      - name: Upload sandbox workspace screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sandbox-workspace
+          path: /tmp/workspace-validation/
+          if-no-files-found: ignore
+
       # Mirrors scripts/up.sh local + make deploy-all. deploy-infra waits for all
       # agent-sandbox CRDs to become Established before sandbox-runtime is installed.
       - name: Kind cluster, images, deploy

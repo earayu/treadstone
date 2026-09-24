@@ -1,5 +1,9 @@
 # Treadstone Sandbox Image：架构与实施说明
 
+> 历史设计，已由 2026-09-24 的浏览器与 shell 镜像替代。当前镜像直接从
+> Python/Debian 构建，不再依赖 reconstructed image；VS Code、Jupyter 和独立
+> MCP Hub 已移除。当前构建与接口范围见 [sandbox-image README](../../../deploy/sandbox-image/README.md)。
+
 > 作者: @Agent-Infra-Sandbox-专家 | 日期: 2026-04-17
 > 背景: 在主仓库内落地 Treadstone 自建 sandbox image 第一版，并补齐构建/发布流程
 

@@ -16,7 +16,7 @@ Security note: Treadstone's maintained sandbox image is now treated as
 **rootless-compatible by contract**. The image creates the ``gem`` user/group
 and prepares writable runtime paths at build time, so the main container can
 consistently run as UID/GID 1000. Keep the writable root filesystem for now
-because browser/Jupyter/nginx sidecars still write transient runtime state in
+because browser/nginx sidecars still write transient runtime state in
 container-local paths. The direct-path ``init-home`` container remains
 non-root and avoids capability overrides because some ACS/ECI policies reject
 any explicit ``capabilities`` stanza.
@@ -110,7 +110,7 @@ SANDBOX_SERVICE_ACCOUNT_NAME = "treadstone-sandbox"
 
 # Align default with deploy/sandbox-runtime/values.yaml sandboxContainerSecurityContext.
 # The maintained sandbox image still needs writable container-local paths for
-# browser/Jupyter/nginx runtime state, so keep the root filesystem writable for
+# browser/nginx runtime state, so keep the root filesystem writable for
 # now even though the process runs as non-root.
 SANDBOX_READ_ONLY_ROOT_FILESYSTEM = False
 

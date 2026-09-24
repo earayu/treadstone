@@ -2,7 +2,7 @@
 
 ## What this page is for
 
-This page explains how to expose a **Model Context Protocol (MCP)** server that runs **inside** a Treadstone sandbox to external MCP clients (IDEs, desktop apps, scripts) using the **data-plane** HTTP proxy and optional WebSocket. Treadstone terminates TLS and API-key auth at the edge; traffic is forwarded to the sandbox container’s HTTP listener (typically port 8080).
+This page connects external **Model Context Protocol (MCP)** clients to a Treadstone sandbox through the **data-plane** HTTP proxy. The maintained image provides browser, shell and file tools over Streamable HTTP at `urls.mcp`, in the same process as the runtime API. Treadstone terminates TLS and API-key auth at the edge.
 
 It assumes you already understand **control plane vs data plane** ([REST API Guide](/docs/rest-api-guide.md)) and how to **scope API keys** ([API Keys & Auth](/docs/api-keys-auth.md)). It does not replace the general proxy walkthrough in [REST API Guide](/docs/rest-api-guide.md#how-to-use-the-data-plane-proxy) — read that first if you are new to `urls.proxy`.
 
@@ -10,8 +10,8 @@ For how Web, MCP, and Proxy relate to `urls.web`, `urls.mcp`, and `urls.proxy` i
 
 ## Use this when
 
-- You run an MCP server in the sandbox that listens on a path such as `/mcp` (or another path you choose).
-- Your client speaks HTTP with SSE and/or WebSocket MCP transports.
+- Your sandbox uses the maintained image, or a custom image with an MCP server routed through its public HTTP listener.
+- Your client supports Streamable HTTP MCP.
 - You need a stable, documented URL shape instead of inventing hostnames.
 
 ## Shortest path
@@ -61,7 +61,7 @@ Some clients use different keys (`env` for secrets, or a UI instead of a file). 
 | --- | --- |
 | Control plane | Create sandboxes, issue API keys, read `urls.proxy` / `urls.mcp` / `urls.web` |
 | Data plane (`/v1/sandboxes/{id}/proxy/{path}`) | Reverse proxy into the sandbox; your MCP server sees `{path}` and the query string |
-| Sandbox runtime | Runs your MCP process bound to the container HTTP port (default 8080 in sandbox templates) |
+| Sandbox runtime | Serves browser, shell and file MCP tools through the public HTTP listener (port 8080); custom servers require routing in your own image |
 
 Self-hosted operators: wildcard DNS, Ingress, and TLS for sandbox subdomains are documented in the repository at `deploy/README.md` (section *Exposing the Sandbox MCP Endpoint Publicly*).
 

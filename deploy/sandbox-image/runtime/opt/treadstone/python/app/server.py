@@ -1,0 +1,170 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+from typing import TYPE_CHECKING
+
+
+logging.info('before import server')
+
+import os
+import time
+from contextlib import AsyncExitStack, asynccontextmanager
+
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI
+
+
+logging.info('start import app.core')
+
+from app.core.config import settings
+from app.logger import setup_logging
+
+
+setup_logging(settings.LOG_LEVEL)
+logger = logging.getLogger(__name__)
+
+logger.info('start import server')
+
+# from app.core.middleware import auto_extend_timeout_middleware
+
+PREFIX = '/v1'
+
+
+@asynccontextmanager
+async def app_lifespan(app: 'FastAPI'):
+    app_lifespan_start_time = time.time()
+    logger.info('lifespan start import services')
+    from app.core.service_container import services
+    from app.services.browser import BrowserService
+    from app.services.file import FileService
+    from app.services.sandbox import SandboxService
+    from app.services.shell import OpenHandsShellManager
+    from app.services.shell_ws import TerminalWsManager
+
+    services.register('sandbox_service', SandboxService())
+    services.register('terminal_manager', OpenHandsShellManager())
+    services.register('terminal_ws_manager', TerminalWsManager())
+    services.register('file_service', FileService())
+    services.register('browser_service', BrowserService())
+
+    logger.debug('Services registered: %s', services._services)
+
+    logger.info(
+        f'Services initialized in {time.time() - app_lifespan_start_time:.2f} seconds'
+    )
+    await lazy_mcp_mount.ensure_loaded()
+    try:
+        yield
+    finally:
+        await lazy_mcp_mount.shutdown()
+        services.clear()
+
+
+class LazyMCPMount:
+    def __init__(self) -> None:
+        self._app = None
+        self._session_stack: AsyncExitStack | None = None
+        self._initialized = False
+        self._lock = asyncio.Lock()
+
+    async def _initialize(self) -> None:
+        from app.mcp import mcpServer, register_mcp_server
+
+        logger.info('Lazy initializing MCP server')
+        register_mcp_server()
+        mcpServer.settings.streamable_http_path = '/'
+        self._app = mcpServer.streamable_http_app()
+        self._session_stack = AsyncExitStack()
+        await self._session_stack.enter_async_context(mcpServer.session_manager.run())
+        self._initialized = True
+        logger.info('MCP server lazily initialized')
+
+    async def ensure_loaded(self):
+        if not self._initialized:
+            async with self._lock:
+                if not self._initialized:
+                    await self._initialize()
+        return self._app
+
+    async def __call__(self, scope, receive, send):
+        app = await self.ensure_loaded()
+        await app(scope, receive, send)
+
+    async def shutdown(self) -> None:
+        if self._session_stack is not None:
+            await self._session_stack.aclose()
+
+
+lazy_mcp_mount = LazyMCPMount()
+
+
+description = """
+Treadstone browser and shell runtime.
+
+- Browser CDP: `/cdp/json/version`
+- Interactive shell: `/terminal`
+- Browser, shell and file tools over Streamable HTTP: `/mcp`
+"""
+
+
+def create_app() -> 'FastAPI':
+    logger.info('Preparing FastAPI application with lazy MCP mount')
+    from fastapi import FastAPI
+    from fastapi.middleware.cors import CORSMiddleware
+
+    app = FastAPI(
+        title='Treadstone Sandbox',
+        version=os.environ.get('IMAGE_VERSION', '1.0.0'),
+        description=description,
+        docs_url=f'{PREFIX}/docs',  # Swagger UI
+        redoc_url=f'{PREFIX}/redoc',  # 自定义 ReDoc 路径
+        openapi_url=f'{PREFIX}/openapi.json',
+        lifespan=app_lifespan,
+    )
+
+    # Set up CORS
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.ORIGINS,
+        allow_credentials=True,
+        allow_methods=['*'],
+        allow_headers=['*'],
+    )
+
+    logger.info('Sandbox API server starting')
+
+    # Register middleware
+    # api.middleware("http")(auto_extend_timeout_middleware)
+
+    # Register exception handlers
+    from fastapi.exceptions import RequestValidationError
+    from starlette.exceptions import HTTPException as StarletteHTTPException
+
+    from app.core.exceptions import (
+        AppException,
+        app_exception_handler,
+        general_exception_handler,
+        http_exception_handler,
+        validation_exception_handler,
+    )
+
+    app.add_exception_handler(AppException, app_exception_handler)
+    app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    app.add_exception_handler(Exception, general_exception_handler)
+
+    # Register routes
+    logger.info('start import routes')
+    from app.api.router import register_routes
+
+    register_routes(app)
+
+    app.mount('/mcp', lazy_mcp_mount)
+    app.mount('/v1/mcp', lazy_mcp_mount)
+    logger.info('Sandbox MCP endpoint mounted lazily')
+
+    logger.info('Sandbox API routes registered and server ready')
+
+    return app
