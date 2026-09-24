@@ -36,7 +36,7 @@ on:
         type: boolean
         default: false
       legacy_image:
-        description: "Historical baseline only: skip browser/shell-only image contract"
+        description: "Published baseline only: skip the stricter current-image contract"
         type: boolean
         default: false
   workflow_run:

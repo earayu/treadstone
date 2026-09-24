@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "Verify an existing image, or explicitly publish a new version"
+        description: "Verify an existing image, benchmark artifacts, or explicitly publish"
         type: choice
-        options: [verify, publish]
+        options: [verify, benchmark, publish]
         default: verify
       version:
         description: "Publish only: new immutable version, e.g. v0.3.1"
@@ -174,7 +174,7 @@ jobs:
           if-no-files-found: ignore
 
   benchmark:
-    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'verify' && inputs.benchmark
+    if: github.event_name == 'workflow_dispatch' && (inputs.mode == 'benchmark' || (inputs.mode == 'verify' && inputs.benchmark))
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     strategy:

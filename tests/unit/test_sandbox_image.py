@@ -103,6 +103,11 @@ def test_image_tool_versions_are_pinned() -> None:
             assert "@sha256:" in line
 
 
+def test_new_browser_profiles_preserve_persistent_cookies() -> None:
+    preferences = json.loads((IMAGE / "runtime/opt/gem/preferences.json").read_text())
+    assert preferences["profile"]["default_content_setting_values"]["cookies"] == 1
+
+
 def test_publish_verifies_loaded_image_before_push_without_rebuilding() -> None:
     workflow = yaml.safe_load((ROOT / ".github/workflows/sandbox-image.yml").read_text())
     steps = workflow["jobs"]["docker"]["steps"]

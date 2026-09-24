@@ -130,7 +130,9 @@ def sample(image_id: str, output: Path, index: int, *, measure_memory: bool = Tr
                 "x.fillRect((i*7+t/20)%1280,i*3%720,30,30);}requestAnimationFrame(draw);}"
                 "requestAnimationFrame(draw);</script>"
             )
-            request(base, "/cdp/json/new?" + urllib.parse.quote("data:text/html," + html, safe=""), method="PUT")
+            # The legacy /json route forwards PUT directly; GEM's /cdp adapter
+            # intentionally exposes only a subset of HTTP discovery methods.
+            request(base, "/json/new?" + urllib.parse.quote("data:text/html," + html, safe=""), method="PUT")
             deadline = time.monotonic() + 20
             while not any(t.get("title") == "benchmark-active" for t in request(base, "/cdp/json/list")):
                 if time.monotonic() > deadline:

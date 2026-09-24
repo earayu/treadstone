@@ -41,6 +41,13 @@ matching the tools validated in `v0.3.0`. This does not lock every transitive
 Python/npm or Debian package. The release gate tests the actual artifact, not
 the assumption that two builds of the same commit are identical.
 
+New browser profiles allow persistent cookies so browser login state can survive
+normal stop/start and container replacement with the same home volume. Existing
+user profiles are not overwritten. The previously published `v0.3.0` defaulted
+to session-only cookies; strict persistence verification correctly rejects that
+artifact. Do not overwrite its immutable tag or treat it as having passed the
+new release gate.
+
 Never point Helm at an unpublished tag. Publish the image first, then update
 `deploy/sandbox-runtime/values*.yaml` through a PR. Existing pods continue to use
 their original image until replaced; merging code is not a production deployment.
@@ -58,6 +65,8 @@ Do not build images locally.
    sequential startup/restart P50/P95, idle/active browser memory and concurrent
    startup failures. Download `sandbox-image-comparison` for raw samples and a
    Markdown summary.
+   Use `mode=benchmark` for measurements alone when comparing an older artifact
+   that is already known to fail the stricter current-image contract.
 2. Run **K8s E2E** with `sandbox_image` set to the published version or digest.
    Kind loads that artifact instead of rebuilding the sandbox. API/web images
    are still built on the GitHub runner. Full Hurl E2E validates control-plane

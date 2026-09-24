@@ -1,6 +1,8 @@
 """Pure helpers for the opt-in remote image experiment (no Docker required)."""
 
 import importlib.util
+import json
+import subprocess
 from pathlib import Path
 from types import ModuleType
 
@@ -42,3 +44,36 @@ def test_image_ref_rejects_options_and_unqualified_images(benchmark: ModuleType)
             benchmark.validate_image(ref)
     benchmark.validate_image("ghcr.io/earayu/treadstone-sandbox:v0.3.0")
     benchmark.validate_image("ghcr.io/earayu/treadstone-sandbox@sha256:" + "a" * 64)
+
+
+def test_failed_container_is_cleaned_up(benchmark: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    calls: list[list[str]] = []
+
+    def fail(*args: str, **kwargs: object) -> str:
+        raise subprocess.CalledProcessError(1, args, stderr="container failed to start")
+
+    def capture(args: list[str], **kwargs: object) -> subprocess.CompletedProcess:
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0, stdout="startup log", stderr="")
+
+    monkeypatch.setattr(benchmark, "command", fail)
+    monkeypatch.setattr(benchmark.subprocess, "run", capture)
+    result = benchmark.sample("sha256:tested-image", tmp_path, 3)
+    assert result["ready_seconds"] is None
+    assert "container failed to start" in result["error"]
+    assert calls[-1][:3] == ["docker", "rm", "-fv"]
+    assert (tmp_path / "failure-3.log").read_text() == "startup log"
+
+
+def test_failed_pull_still_writes_evidence(
+    benchmark: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    def fail(image: str) -> tuple[str, dict]:
+        raise ValueError("unavailable manifest")
+
+    monkeypatch.setattr(benchmark, "resolve_manifest", fail)
+    with pytest.raises(ValueError, match="unavailable manifest"):
+        benchmark.run("ghcr.io/earayu/treadstone-sandbox:v0.3.0", tmp_path, 1, 1)
+    report = json.loads((tmp_path / "result.json").read_text())
+    assert report["error"] == "unavailable manifest"
+    assert "not a production SLO" in " ".join(report["notes"])

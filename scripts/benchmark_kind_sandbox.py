@@ -50,6 +50,14 @@ def resize(replicas: int) -> None:
     kubectl("patch", "sandboxwarmpool", POOL, "--type=merge", "-p", json.dumps({"spec": {"replicas": replicas}}))
 
 
+def adopted_sandboxes(claims: list[dict[str, Any]], sandbox_ids: list[str]) -> set[str]:
+    return {
+        claim.get("status", {}).get("sandbox", {}).get("name")
+        for claim in claims
+        if claim["metadata"].get("labels", {}).get("treadstone-ai.dev/sandbox-id") in sandbox_ids
+    } - {None}
+
+
 def wait_pool(*, empty: bool) -> list[str]:
     deadline = time.monotonic() + 300
     while time.monotonic() < deadline:
@@ -144,7 +152,8 @@ def main() -> None:
                     run_poll_phase(ids, args.binary, BASE, 300, 1, 1, reporter)
                     record["ready_seconds"] = time.monotonic() - started
                     claims = json.loads(kubectl("get", "sandboxclaims", "-o", "json"))["items"]
-                    adopted = {claim.get("status", {}).get("sandbox", {}).get("name") for claim in claims}
+                    adopted = adopted_sandboxes(claims, ids)
+                    record["adopted_sandboxes"] = sorted(adopted)
                     record["observed_ready_pool"] = observed
                     record["confirmed_warm_adoption"] = bool(set(observed) & adopted)
                     summary = reporter.write_summary(run_id, time.monotonic() - started)
