@@ -24,6 +24,8 @@ async def main() -> None:
                 iframe = await page.query_selector("#browser")
                 frame = await iframe.content_frame()
                 try:
+                    await frame.locator("html.noVNC_connected").wait_for()
+                    await frame.locator("#noVNC_transition").wait_for(state="hidden")
                     await frame.wait_for_function(
                         """() => {
                           const canvas = document.querySelector('canvas');
@@ -36,6 +38,17 @@ async def main() -> None:
                         }""",
                         timeout=60000,
                     )
+                    await frame.locator("canvas").click(position={"x": 150, "y": 150})
+                    await page.keyboard.press("Control+l")
+                    title = f"workspace-{width}"
+                    await page.keyboard.type(f"data:text/html,<title>{title}</title><h1>Browser ready</h1>")
+                    await page.keyboard.press("Enter")
+                    async with asyncio.timeout(30):
+                        while True:
+                            targets = await page.request.get("http://127.0.0.1:8080/cdp/json/list")
+                            if any(target.get("title") == title for target in await targets.json()):
+                                break
+                            await asyncio.sleep(0.25)
                 except Exception:
                     await page.screenshot(path=str(output / f"browser-failed-{width}.png"))
                     print(f"Browser errors: {errors}")
