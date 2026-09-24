@@ -23,18 +23,24 @@ async def main() -> None:
                 assert await page.get_by_role("tab").all_text_contents() == ["Browser", "Terminal"]
                 iframe = await page.query_selector("#browser")
                 frame = await iframe.content_frame()
-                await frame.wait_for_function(
-                    """() => {
-                      const canvas = document.querySelector('canvas');
-                      if (!canvas || canvas.width < 800) return false;
-                      const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
-                      for (let i = 4; i < pixels.length; i += 400) {
-                        if (pixels[i] !== pixels[0] || pixels[i + 1] !== pixels[1]) return true;
-                      }
-                      return false;
-                    }""",
-                    timeout=60000,
-                )
+                try:
+                    await frame.wait_for_function(
+                        """() => {
+                          const canvas = document.querySelector('canvas');
+                          if (!canvas || canvas.width < 800) return false;
+                          const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+                          for (let i = 4; i < pixels.length; i += 400) {
+                            if (pixels[i] !== pixels[0] || pixels[i + 1] !== pixels[1]) return true;
+                          }
+                          return false;
+                        }""",
+                        timeout=60000,
+                    )
+                except Exception:
+                    await page.screenshot(path=str(output / f"browser-failed-{width}.png"))
+                    print(f"Browser errors: {errors}")
+                    print(await frame.locator("body").inner_text())
+                    raise
                 assert await page.evaluate("document.documentElement.scrollWidth <= innerWidth")
                 await page.screenshot(path=str(output / f"browser-{width}.png"))
                 await page.get_by_role("tab", name="Terminal").click()

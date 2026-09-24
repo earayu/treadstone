@@ -37,7 +37,7 @@
     const browserUrl = new URL(`${prefix}/vnc/vnc.html`, location.origin);
     browserUrl.search = new URLSearchParams({
       autoconnect: "true", resize: "scale", reconnect: "true",
-      path: `${prefix}/websockify`.replace(/^\//, "")
+      path: `${prefix}/websockify`
     });
     document.getElementById("browser").src = browserUrl;
     const tabs = [...document.querySelectorAll('[role="tab"]')];

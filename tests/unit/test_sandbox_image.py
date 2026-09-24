@@ -6,6 +6,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 IMAGE = ROOT / "deploy/sandbox-image"
 
@@ -48,11 +50,13 @@ def test_workspace_only_has_browser_and_terminal_tabs() -> None:
     assert 'id="browser-tab"' in page
     assert 'id="terminal-tab"' in page
     assert "Treadstone" in page
+    assert "path: `${prefix}/websockify`" in page
+    assert "`${prefix}/websockify`.replace" not in page
     for removed in ("jupyter", "code-server", "vscode"):
         assert removed not in page.lower()
 
 
-def test_browser_resolution_schema_has_stable_order(monkeypatch) -> None:
+def test_browser_resolution_schema_has_stable_order(monkeypatch: pytest.MonkeyPatch) -> None:
     path = IMAGE / "runtime/opt/treadstone/python/app/schemas/browser.py"
     spec = importlib.util.spec_from_file_location("_runtime_browser_schema", path)
     module = importlib.util.module_from_spec(spec)
