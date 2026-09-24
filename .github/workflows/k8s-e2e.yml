@@ -161,8 +161,8 @@ jobs:
             --build-arg TREADSTONE_SANDBOX_VERSION="ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             deploy/sandbox-image
 
-      # Mirrors scripts/up.sh local + make deploy-all, but applies extension CRDs and waits for
-      # Established before sandbox-runtime (Helm otherwise errors: SandboxTemplate kind unknown).
+      # Mirrors scripts/up.sh local + make deploy-all. deploy-infra waits for all
+      # agent-sandbox CRDs to become Established before sandbox-runtime is installed.
       - name: Kind cluster, images, deploy
         env:
           RT_VALUES_EXTRA: /tmp/ci-sandbox-runtime-image.yaml
@@ -176,8 +176,6 @@ jobs:
           kind load docker-image treadstone-sandbox:e2e --name treadstone
           bash scripts/check-k8s-context.sh local
           make deploy-storage deploy-infra ENV=local
-          kubectl apply -f deploy/agent-sandbox/upstream/extensions.yaml
-          kubectl wait --for=condition=Established crd/sandboxtemplates.extensions.agents.x-k8s.io --timeout=120s
           make deploy-runtime deploy-api deploy-web ENV=local
 
       - name: make wait-k8s

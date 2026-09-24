@@ -4,7 +4,7 @@ Dual-path provisioning:
 - persist=False → SandboxClaim path (WarmPool-eligible, no storage)
 - persist=True  → Direct Sandbox CR path (with volumeClaimTemplates)
 
-start/stop use scale_sandbox on the Sandbox CR regardless of path.
+start/stop update ``spec.operatingMode`` on the Sandbox CR regardless of path.
 """
 
 from __future__ import annotations
@@ -428,7 +428,7 @@ class SandboxService:
         logger.info("Creating SandboxClaim %s (template=%s, ns=%s)", claim_name, template, sandbox.k8s_namespace)
         await self.k8s.create_sandbox_claim(
             name=claim_name,
-            template_ref=template,
+            warm_pool_ref=f"{template}-pool",
             namespace=sandbox.k8s_namespace,
             shutdown_time=shutdown_time,
             labels=labels,
@@ -453,7 +453,7 @@ class SandboxService:
         template: str,
         storage_size: str,
         *,
-        replicas: int = 1,
+        operating_mode: str = "Running",
         data_source_name: str | None = None,
         shutdown_time: datetime | None = None,
     ) -> None:
@@ -499,7 +499,7 @@ class SandboxService:
             image=image,
             container_port=settings.sandbox_port,
             resources=resources,
-            replicas=replicas,
+            operating_mode=operating_mode,
             startup_probe=tmpl.get("startup_probe"),
             readiness_probe=tmpl.get("readiness_probe"),
             liveness_probe=tmpl.get("liveness_probe"),
@@ -699,10 +699,14 @@ class SandboxService:
 
         k8s_name = sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.id
         try:
-            logger.info("Scaling sandbox %s to replicas=1 (ns=%s)", k8s_name, sandbox.k8s_namespace)
-            await self.k8s.scale_sandbox(name=k8s_name, namespace=sandbox.k8s_namespace, replicas=1)
+            logger.info("Resuming sandbox %s (ns=%s)", k8s_name, sandbox.k8s_namespace)
+            await self.k8s.set_sandbox_operating_mode(
+                name=k8s_name,
+                namespace=sandbox.k8s_namespace,
+                operating_mode="Running",
+            )
         except Exception:
-            logger.exception("Failed to scale sandbox %s to 1", sandbox_id)
+            logger.exception("Failed to resume sandbox %s", sandbox_id)
             sandbox.status = SandboxStatus.ERROR
             sandbox.status_message = "Failed to start sandbox"
             sandbox.version += 1
@@ -716,7 +720,7 @@ class SandboxService:
             return sandbox
 
         # The sandbox may already be READY in K8s (e.g. it auto-recovered from ERROR
-        # while the DB still showed ERROR, or a no-op scale was issued).  In that case
+        # while the DB still showed ERROR, or a no-op resume was issued).  In that case
         # K8s will not fire a new Watch MODIFIED event, so we do a single GET and apply
         # the status immediately rather than waiting for the Watch loop or next reconcile.
         try:
@@ -726,14 +730,14 @@ class SandboxService:
 
                 actual_status, msg = derive_status_from_sandbox_cr(cr)
                 if actual_status == SandboxStatus.READY:
-                    # After a scale-up the controller may not have processed the
+                    # After a resume the controller may not have processed the
                     # spec change yet, leaving a stale Ready=True condition from
                     # the previous observation.  Detect this by checking whether
                     # the condition message still describes a non-running state
-                    # (e.g. "Pod does not exist" or "replicas is 0").  In that
+                    # (e.g. "Pod does not exist" or "Sandbox is suspended").  In that
                     # case skip the fast-path and let Watch/reconcile converge.
                     msg_lower = (msg or "").lower()
-                    if "does not exist" in msg_lower or "replicas is 0" in msg_lower:
+                    if "does not exist" in msg_lower or "suspended" in msg_lower:
                         logger.info(
                             "Sandbox %s CR reports READY but message indicates stale condition (%s), "
                             "deferring to Watch/reconcile",
@@ -780,10 +784,14 @@ class SandboxService:
 
         k8s_name = sandbox.k8s_sandbox_name or sandbox.k8s_sandbox_claim_name or sandbox.id
         try:
-            logger.info("Scaling sandbox %s to replicas=0 (ns=%s)", k8s_name, sandbox.k8s_namespace)
-            await self.k8s.scale_sandbox(name=k8s_name, namespace=sandbox.k8s_namespace, replicas=0)
+            logger.info("Suspending sandbox %s (ns=%s)", k8s_name, sandbox.k8s_namespace)
+            await self.k8s.set_sandbox_operating_mode(
+                name=k8s_name,
+                namespace=sandbox.k8s_namespace,
+                operating_mode="Suspended",
+            )
         except Exception:
-            logger.exception("Failed to scale sandbox %s to 0", sandbox_id)
+            logger.exception("Failed to suspend sandbox %s", sandbox_id)
             sandbox.status = SandboxStatus.ERROR
             sandbox.status_message = "Failed to stop sandbox"
             sandbox.version += 1

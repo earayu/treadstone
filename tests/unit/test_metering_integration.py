@@ -93,7 +93,7 @@ def _mock_k8s_client():
     k8s.create_sandbox = AsyncMock(return_value={"metadata": {"name": "test-sb"}})
     k8s.delete_sandbox = AsyncMock(return_value=True)
     k8s.get_sandbox = AsyncMock(return_value=None)
-    k8s.scale_sandbox = AsyncMock(return_value=True)
+    k8s.set_sandbox_operating_mode = AsyncMock(return_value=True)
     k8s.get_storage_class = AsyncMock(return_value={"metadata": {"name": "treadstone-workspace"}})
     k8s.list_sandbox_templates = AsyncMock(
         return_value=[
@@ -385,7 +385,7 @@ class TestSandboxServiceStartWithMetering:
         with pytest.raises(ComputeQuotaExceededError):
             await service.start(sandbox_id=sb.id, owner_id=sb.owner_id)
 
-        k8s.scale_sandbox.assert_not_called()
+        k8s.set_sandbox_operating_mode.assert_not_called()
 
     async def test_start_without_metering_skips_checks(self):
         from treadstone.services.sandbox_service import SandboxService
@@ -397,7 +397,7 @@ class TestSandboxServiceStartWithMetering:
 
         result = await service.start(sandbox_id=sb.id, owner_id=sb.owner_id)
         assert result.status == SandboxStatus.CREATING
-        k8s.scale_sandbox.assert_called_once()
+        k8s.set_sandbox_operating_mode.assert_called_once()
 
     async def test_start_allows_existing_long_interval_when_tier_is_unlimited(self, monkeypatch):
         monkeypatch.setattr("treadstone.sandbox.services.sandbox_service.settings.metering_enforcement_enabled", True)
@@ -413,11 +413,15 @@ class TestSandboxServiceStartWithMetering:
         result = await service.start(sandbox_id=sb.id, owner_id=sb.owner_id)
 
         assert result.status == SandboxStatus.CREATING
-        k8s.scale_sandbox.assert_called_once_with(name=sb.id, namespace="treadstone-local", replicas=1)
+        k8s.set_sandbox_operating_mode.assert_called_once_with(
+            name=sb.id,
+            namespace="treadstone-local",
+            operating_mode="Running",
+        )
 
 
 class TestSandboxServiceStopWithMetering:
-    async def test_stop_closes_compute_session_after_successful_scale(self):
+    async def test_stop_closes_compute_session_after_successful_suspend(self):
         from treadstone.services.sandbox_service import SandboxService
 
         sb = _make_sandbox(status=SandboxStatus.READY)
@@ -437,7 +441,7 @@ class TestSandboxServiceStopWithMetering:
         sb = _make_sandbox(status=SandboxStatus.READY)
         session = _mock_session(sb)
         k8s = _mock_k8s_client()
-        k8s.scale_sandbox = AsyncMock(side_effect=RuntimeError("k8s unavailable"))
+        k8s.set_sandbox_operating_mode = AsyncMock(side_effect=RuntimeError("k8s unavailable"))
         metering = _mock_metering()
         service = SandboxService(session=session, k8s_client=k8s, metering=metering)
 

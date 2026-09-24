@@ -45,10 +45,11 @@
 
 从 K8s CR 回写 DB 时，当前状态归纳规则是：
 
-- Ready + `replicas=1` -> `ready`
-- Ready + `replicas=0` -> `stopped`
+- `spec.operatingMode=Running` + `Ready=True` -> `ready`
+- `spec.operatingMode=Suspended` / `Ready=False, reason=SandboxSuspended` -> `stopped`
 - `ReconcilerError` -> `error`
 - `SandboxExpired` -> `stopped`
+- `Finished=True` -> `stopped`
 - 依赖未就绪 -> `creating`
 
 ## 3. Leader Election

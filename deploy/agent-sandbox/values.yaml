@@ -2,7 +2,9 @@ namespace: agent-sandbox-system
 
 controller:
   image:
-    registry: ""
+    repository: registry.k8s.io/agent-sandbox/agent-sandbox-controller
+    tag: v1.0.3
+    pullPolicy: IfNotPresent
   replicas: 1
   resources:
     limits:

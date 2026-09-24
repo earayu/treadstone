@@ -989,16 +989,17 @@ wheels = [
 
 [[package]]
 name = "k8s-agent-sandbox"
-version = "0.2.1"
+version = "1.0.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "kubernetes" },
+    { name = "prometheus-client" },
     { name = "pydantic" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/58/9c/d1ef864083b1d710377f5636d3362c70118875a690ed290003e74e8ceb3e/k8s_agent_sandbox-0.2.1.tar.gz", hash = "sha256:4cb1b3275fcb75be0065c07fb381623464117606af42d98aba9a9a9aad66d8d3", size = 46032, upload-time = "2026-03-14T00:18:13.981Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c4/f0/d53bdcdf7185f3c31eafeb8380a9ef76d583413e7068d242a0905b04d410/k8s_agent_sandbox-1.0.3.tar.gz", hash = "sha256:b42b435323220dab2247eb253c37e47036a33523a4ae2fc968cd97004fba6ed1", size = 170236, upload-time = "2026-09-17T20:10:26.96Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3d/52/d762b53c4bafb223338694a5784d06e22ba0eed5323a8b085bd340fde7cd/k8s_agent_sandbox-0.2.1-py3-none-any.whl", hash = "sha256:278fc755fa9935bd6d4809f855661c0a845317b8a3036f83f02f0787e2098dc0", size = 26746, upload-time = "2026-03-14T00:18:12.44Z" },
+    { url = "https://files.pythonhosted.org/packages/d5/a5/ee0013fea7a10d8c485d2fc2da37164992d3071a3ea8595ffacf129d9894/k8s_agent_sandbox-1.0.3-py3-none-any.whl", hash = "sha256:f57530837cdb6aef28af54b5c9c6e54fb8f07f71cc89031e5335ce64db27f4d6", size = 98255, upload-time = "2026-09-17T20:10:23.983Z" },
 ]
 
 [[package]]
@@ -1270,6 +1271,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f9/e2/3e91f31a7d2b083fe6ef3fa267035b518369d9511ffab804f839851d2779/pluggy-1.6.0.tar.gz", hash = "sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3", size = 69412, upload-time = "2025-05-15T12:30:07.975Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl", hash = "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746", size = 20538, upload-time = "2025-05-15T12:30:06.134Z" },
+]
+
+[[package]]
+name = "prometheus-client"
+version = "0.26.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/52/73/f1334c29c2af4cd9dba6c7817e61b611bd0215e2eb5565c6064a4de18802/prometheus_client-0.26.0.tar.gz", hash = "sha256:04a91bcf94e2cf74a44a1a874d651a2e853ed354b6e822f3b7487751465d5c2b", size = 92910, upload-time = "2026-07-24T19:36:41.893Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/eb/a3/b69efbf4143b5b9859b977770bbbabcc2796b702fa69dc40271e45cd5a56/prometheus_client-0.26.0-py3-none-any.whl", hash = "sha256:fa93d06737aa02bacd05794768508bb97d2fbee28cb3bca04eaae92f0ca953d6", size = 64494, upload-time = "2026-07-24T19:36:40.854Z" },
 ]
 
 [[package]]
@@ -1923,7 +1933,7 @@ dev = [
     { name = "auth0-python", specifier = ">=4.2.0,<5.0.0" },
     { name = "click", specifier = ">=8.1" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "k8s-agent-sandbox", specifier = ">=0.2.1" },
+    { name = "k8s-agent-sandbox", specifier = "==1.0.3" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-asyncio", specifier = ">=1.3.0" },
     { name = "pytest-cov", specifier = ">=7.0.0" },

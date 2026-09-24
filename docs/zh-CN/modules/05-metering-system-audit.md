@@ -304,7 +304,7 @@
 
 这会导致：
 
-- 如果 K8s scale-down 失败
+- 如果 K8s suspend operating mode 失败
 - 用户 sandbox 事实上还在运行
 - 但当前用户的 grace 状态已经被清掉
 
@@ -714,9 +714,10 @@ Watch 负责消费真实 Sandbox CR 状态变化，并把它们反向同步回�
 
 `derive_status_from_sandbox_cr()` 的当前规则：
 
-- `Ready=True && replicas=1` -> `READY`
-- `Ready=True && replicas=0` -> `STOPPED`
+- `operatingMode=Running && Ready=True` -> `READY`
+- `operatingMode=Suspended` / `Ready=False, reason=SandboxSuspended` -> `STOPPED`
 - `reason=SandboxExpired` -> `STOPPED`
+- `Finished=True` -> `STOPPED`
 - `reason=ReconcilerError` -> `ERROR`
 - `reason=DependenciesNotReady` -> `CREATING`
 
@@ -1002,7 +1003,7 @@ flowchart TD
 默认 stop 回调是：
 
 - `sync_supervisor._k8s_stop_sandbox()`
-- 实际做的是 K8s scale to 0
+- 实际做的是把 K8s `spec.operatingMode` 设为 `Suspended`
 
 如果没有提供 callback，则会走 `_db_only_stop()`，直接：
 

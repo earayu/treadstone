@@ -75,38 +75,70 @@ def _cond(status: str = "False", reason: str = "DependenciesNotReady", message: 
 
 class TestDeriveStatusFromSandboxCR:
     def test_no_conditions_means_creating(self):
-        cr = {"spec": {"replicas": 1}, "status": {}}
+        cr = {"spec": {"operatingMode": "Running"}, "status": {}}
         status, _ = derive_status_from_sandbox_cr(cr)
         assert status == SandboxStatus.CREATING
 
-    def test_ready_true_replicas_1_means_ready(self):
-        cr = {"spec": {"replicas": 1}, "status": {"conditions": [_cond("True", "DependenciesReady")]}}
+    def test_ready_true_running_mode_means_ready(self):
+        cr = {"spec": {"operatingMode": "Running"}, "status": {"conditions": [_cond("True", "DependenciesReady")]}}
         status, _ = derive_status_from_sandbox_cr(cr)
         assert status == SandboxStatus.READY
 
-    def test_ready_true_replicas_0_means_stopped(self):
-        cr = {"spec": {"replicas": 0}, "status": {"conditions": [_cond("True", "DependenciesReady")]}}
+    def test_suspended_mode_means_stopped(self):
+        cr = {
+            "spec": {"operatingMode": "Suspended"},
+            "status": {
+                "conditions": [
+                    _cond("False", "SandboxSuspended", "Sandbox is suspended"),
+                    {"type": "Suspended", "status": "True", "reason": "PodTerminated"},
+                ]
+            },
+        }
         status, _ = derive_status_from_sandbox_cr(cr)
         assert status == SandboxStatus.STOPPED
 
     def test_reconciler_error_means_error(self):
-        cr = {"spec": {"replicas": 1}, "status": {"conditions": [_cond("False", "ReconcilerError", "bad")]}}
+        cr = {
+            "spec": {"operatingMode": "Running"},
+            "status": {"conditions": [_cond("False", "ReconcilerError", "bad")]},
+        }
         status, msg = derive_status_from_sandbox_cr(cr)
         assert status == SandboxStatus.ERROR
         assert msg == "bad"
 
     def test_dependencies_not_ready_means_creating(self):
-        cr = {"spec": {"replicas": 1}, "status": {"conditions": [_cond("False", "DependenciesNotReady")]}}
+        cr = {"spec": {"operatingMode": "Running"}, "status": {"conditions": [_cond("False", "DependenciesNotReady")]}}
         status, _ = derive_status_from_sandbox_cr(cr)
         assert status == SandboxStatus.CREATING
 
     def test_sandbox_expired_means_stopped(self):
-        cr = {"spec": {"replicas": 1}, "status": {"conditions": [_cond("False", "SandboxExpired")]}}
+        cr = {"spec": {"operatingMode": "Running"}, "status": {"conditions": [_cond("False", "SandboxExpired")]}}
         status, _ = derive_status_from_sandbox_cr(cr)
         assert status == SandboxStatus.STOPPED
 
-    def test_dependencies_not_ready_replicas_0_means_stopped(self):
-        cr = {"spec": {"replicas": 0}, "status": {"conditions": [_cond("False", "DependenciesNotReady")]}}
+    def test_finished_condition_means_stopped_even_without_ready(self):
+        cr = {
+            "spec": {"operatingMode": "Running"},
+            "status": {
+                "conditions": [
+                    {"type": "Finished", "status": "True", "reason": "PodFailed", "message": "Pod failed"},
+                ]
+            },
+        }
+        status, message = derive_status_from_sandbox_cr(cr)
+        assert status == SandboxStatus.STOPPED
+        assert message == "Pod failed"
+
+    def test_dependencies_not_ready_suspended_mode_means_stopped(self):
+        cr = {
+            "spec": {"operatingMode": "Suspended"},
+            "status": {
+                "conditions": [
+                    _cond("False", "SandboxSuspended", "Sandbox is suspended"),
+                    {"type": "Suspended", "status": "True", "reason": "PodTerminated"},
+                ]
+            },
+        }
         status, _ = derive_status_from_sandbox_cr(cr)
         assert status == SandboxStatus.STOPPED
 
@@ -116,7 +148,7 @@ class TestHandleWatchEvent:
         await _create_sandbox(session_factory)
         cr = {
             "metadata": {"name": "test-sb", "namespace": "treadstone-local", "resourceVersion": "100"},
-            "spec": {"replicas": 1},
+            "spec": {"operatingMode": "Running"},
             "status": {
                 "conditions": [{"type": "Ready", "status": "True", "reason": "DependenciesReady", "message": "ok"}],
                 "serviceFQDN": "test-sb.treadstone-local.svc.cluster.local",
@@ -158,7 +190,7 @@ class TestHandleWatchEvent:
         await _create_sandbox(session_factory, status=SandboxStatus.ERROR, version=3)
         cr = {
             "metadata": {"name": "test-sb", "namespace": "treadstone-local", "resourceVersion": "400"},
-            "spec": {"replicas": 1},
+            "spec": {"operatingMode": "Running"},
             "status": {
                 "conditions": [{"type": "Ready", "status": "True", "reason": "DependenciesReady", "message": "ok"}],
             },
@@ -175,7 +207,7 @@ class TestHandleWatchEvent:
         await _create_sandbox(session_factory, status=SandboxStatus.ERROR, version=2)
         cr = {
             "metadata": {"name": "test-sb", "namespace": "treadstone-local", "resourceVersion": "410"},
-            "spec": {"replicas": 1},
+            "spec": {"operatingMode": "Running"},
             "status": {
                 "conditions": [_cond("False", "DependenciesNotReady", "waiting for deps")],
             },
@@ -190,7 +222,7 @@ class TestHandleWatchEvent:
     async def test_unknown_cr_ignored(self, session_factory):
         cr = {
             "metadata": {"name": "unknown-cr", "namespace": "treadstone-local", "resourceVersion": "500"},
-            "spec": {"replicas": 1},
+            "spec": {"operatingMode": "Running"},
             "status": {"conditions": [_cond("True", "DependenciesReady")]},
         }
         await handle_watch_event("ADDED", cr, session_factory)
@@ -204,7 +236,7 @@ class TestHandleWatchEvent:
         )
         cr = {
             "metadata": {"name": "test-sb", "namespace": "treadstone-local", "resourceVersion": "505"},
-            "spec": {"replicas": 1},
+            "spec": {"operatingMode": "Running"},
             "status": {"conditions": [_cond("True", "DependenciesReady", "ok")]},
         }
 
@@ -245,7 +277,7 @@ class TestHandleWatchEvent:
                 "resourceVersion": "510",
                 "ownerReferences": [{"kind": "SandboxClaim", "name": "claim-sb", "controller": True}],
             },
-            "spec": {"replicas": 1},
+            "spec": {"operatingMode": "Running"},
             "status": {
                 "conditions": [_cond("True", "DependenciesReady", "ok")],
                 "serviceFQDN": "aio-sandbox-tiny-pool-7dpvv.treadstone-local.svc.cluster.local",
@@ -419,7 +451,7 @@ class TestWatchLoop:
 
         cr = {
             "metadata": {"name": "test-sb", "namespace": "treadstone-local", "resourceVersion": "50"},
-            "spec": {"replicas": 1},
+            "spec": {"operatingMode": "Running"},
             "status": {
                 "conditions": [_cond("True", "DependenciesReady", "ok")],
                 "serviceFQDN": "test-sb.treadstone-local.svc.cluster.local",
@@ -442,13 +474,18 @@ class TestWatchLoop:
 
         cr_ready = {
             "metadata": {"name": "test-sb", "namespace": "treadstone-local", "resourceVersion": "10"},
-            "spec": {"replicas": 1},
+            "spec": {"operatingMode": "Running"},
             "status": {"conditions": [_cond("True", "DependenciesReady", "ok")]},
         }
         cr_stopped = {
             "metadata": {"name": "test-sb", "namespace": "treadstone-local", "resourceVersion": "11"},
-            "spec": {"replicas": 0},
-            "status": {"conditions": [_cond("True", "DependenciesReady", "scaled down")]},
+            "spec": {"operatingMode": "Suspended"},
+            "status": {
+                "conditions": [
+                    _cond("False", "SandboxSuspended", "Sandbox is suspended"),
+                    {"type": "Suspended", "status": "True", "reason": "PodTerminated"},
+                ]
+            },
         }
         k8s.enqueue_watch_event("MODIFIED", cr_ready)
         k8s.enqueue_watch_event("MODIFIED", cr_stopped)

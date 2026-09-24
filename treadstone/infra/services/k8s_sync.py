@@ -4,11 +4,12 @@ Watches K8s Sandbox CRs for changes and updates the DB accordingly.
 Runs periodic reconciliation as a fallback for missed Watch events.
 
 Status derivation from real Sandbox CR (agents.x-k8s.io):
-  - conditions[type=Ready].status == "True" + replicas == 1  → READY
-  - conditions[type=Ready].status == "True" + replicas == 0  → STOPPED
-  - conditions[type=Ready].reason == "ReconcilerError"       → ERROR
-  - conditions[type=Ready].reason == "SandboxExpired"        → STOPPED
-  - conditions[type=Ready].reason == "DependenciesNotReady"  → CREATING
+  - spec.operatingMode == "Suspended"                         → STOPPED
+  - conditions[type=Ready].status == "True"                    → READY
+  - conditions[type=Ready].reason == "ReconcilerError"         → ERROR
+  - conditions[type=Ready].reason == "SandboxExpired"          → STOPPED
+  - conditions[type=Finished].status == "True"                 → STOPPED
+  - conditions[type=Ready].reason == "DependenciesNotReady"    → CREATING
 """
 
 import asyncio
@@ -147,14 +148,22 @@ def derive_status_from_sandbox_cr(cr: dict) -> tuple[str, str]:
 
     Returns (status, message).
     """
-    spec_replicas = cr.get("spec", {}).get("replicas", 1)
+    operating_mode = cr.get("spec", {}).get("operatingMode", "Running")
     conditions = cr.get("status", {}).get("conditions", [])
 
-    ready_cond = None
-    for c in conditions:
-        if c.get("type") == "Ready":
-            ready_cond = c
-            break
+    condition_by_type = {condition.get("type"): condition for condition in conditions}
+    ready_cond = condition_by_type.get("Ready")
+    suspended_cond = condition_by_type.get("Suspended")
+    finished_cond = condition_by_type.get("Finished")
+
+    if operating_mode == "Suspended":
+        if suspended_cond is None or suspended_cond.get("status") == "True":
+            return SandboxStatus.STOPPED, "Sandbox is suspended"
+        if ready_cond and ready_cond.get("reason") == "SandboxSuspended":
+            return SandboxStatus.STOPPED, ready_cond.get("message", "Sandbox is suspending")
+
+    if finished_cond and finished_cond.get("status") == "True":
+        return SandboxStatus.STOPPED, finished_cond.get("message", "Sandbox finished")
 
     if ready_cond is None:
         return SandboxStatus.CREATING, "No Ready condition yet"
@@ -166,17 +175,16 @@ def derive_status_from_sandbox_cr(cr: dict) -> tuple[str, str]:
     if reason == "SandboxExpired":
         return SandboxStatus.STOPPED, "Sandbox expired"
 
+    if reason == "SandboxSuspended":
+        return SandboxStatus.STOPPED, message or "Sandbox is suspended"
+
     if reason == "ReconcilerError":
         return SandboxStatus.ERROR, message
 
     if cond_status == "True":
-        if spec_replicas == 0:
-            return SandboxStatus.STOPPED, "Replicas scaled to 0"
         return SandboxStatus.READY, message
 
     if reason == "DependenciesNotReady":
-        if spec_replicas == 0:
-            return SandboxStatus.STOPPED, "Replicas scaled to 0"
         return SandboxStatus.CREATING, message
 
     return SandboxStatus.CREATING, message

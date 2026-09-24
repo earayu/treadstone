@@ -73,7 +73,19 @@ preload_infra_images() {
     done
 
     echo "Loading infrastructure images into Kind cluster ..."
-    kind load docker-image "${INFRA_IMAGES[@]}" --name "$CLUSTER_NAME"
+    for img in "${INFRA_IMAGES[@]}"; do
+        if kind load docker-image "$img" --name "$CLUSTER_NAME"; then
+            continue
+        fi
+
+        # Docker Desktop may retain only the host platform while kind tries to
+        # import every manifest digest. Import the host image directly into
+        # containerd on each node as a fallback.
+        echo "kind load failed for $img; importing the local image into each node ..."
+        while read -r node; do
+            docker save "$img" | docker exec -i "$node" ctr --namespace=k8s.io images import -
+        done < <(kind get nodes --name "$CLUSTER_NAME")
+    done
     echo "Infrastructure images preloaded."
 }
 

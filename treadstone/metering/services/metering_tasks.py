@@ -277,7 +277,7 @@ async def check_grace_periods(
       any → normal (credits restored, e.g. admin grant)
 
     ``stop_sandbox_callback`` is an async callable ``(session, sandbox) -> None``
-    that scales the sandbox to 0.  When None, a DB-only fallback is used
+    that suspends the sandbox. When None, a DB-only fallback is used
     (marks sandbox as STOPPED and closes the ComputeSession; K8s will be
     corrected by reconcile).
     """
@@ -453,7 +453,7 @@ async def _handle_credits_restored(
 async def _db_only_stop(session: AsyncSession, sandbox: Sandbox) -> None:
     """Fallback stop: update DB status and close ComputeSession.
 
-    K8s reconcile will catch up on the actual pod scaling.
+    K8s reconcile will catch up on the actual pod suspension.
     """
     sandbox.status = SandboxStatus.STOPPED
     sandbox.gmt_stopped = utc_now()

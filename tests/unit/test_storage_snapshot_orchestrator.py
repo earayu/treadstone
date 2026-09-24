@@ -56,7 +56,7 @@ async def _create_live_sandbox(
         image="ghcr.io/earayu/treadstone-sandbox:v0.2.1",
         container_port=8080,
         resources={"requests": {"cpu": "250m", "memory": "1Gi"}, "limits": {"cpu": "250m", "memory": "1Gi"}},
-        replicas=0 if status == SandboxStatus.STOPPED else 1,
+        operating_mode="Suspended" if status == SandboxStatus.STOPPED else "Running",
         volume_claim_templates=[
             {
                 "metadata": {"name": STORAGE_ROLE_WORKSPACE, "labels": labels},
@@ -246,7 +246,7 @@ async def test_snapshot_tick_waits_for_stop_before_creating_snapshot():
 
     assert await k8s.get_volume_snapshot(f"{sandbox_id}-workspace-snapshot", "treadstone-local") is None
 
-    await k8s.scale_sandbox(sandbox_id, "treadstone-local", 0)
+    await k8s.set_sandbox_operating_mode(sandbox_id, "treadstone-local", "Suspended")
     await run_storage_snapshot_tick(factory, k8s)
     await run_storage_snapshot_tick(factory, k8s)
 
@@ -460,7 +460,7 @@ async def test_snapshot_after_restore_reuses_live_disk_without_deleting_fresh_sn
         assert sandbox.snapshot_k8s_volume_snapshot_content_name is None
         assert sandbox.gmt_snapshotted is None
 
-    await k8s.scale_sandbox(sandbox_id, "treadstone-local", 0)
+    await k8s.set_sandbox_operating_mode(sandbox_id, "treadstone-local", "Suspended")
     async with factory() as session:
         sandbox = await session.get(Sandbox, sandbox_id)
         sandbox.status = SandboxStatus.STOPPED
@@ -512,7 +512,7 @@ async def test_snapshotting_does_not_delete_in_flight_snapshot_before_ready():
     await run_storage_snapshot_tick(factory, k8s)
     k8s.simulate_sandbox_ready(sandbox_id, "treadstone-local")
     await run_storage_snapshot_tick(factory, k8s)
-    await k8s.scale_sandbox(sandbox_id, "treadstone-local", 0)
+    await k8s.set_sandbox_operating_mode(sandbox_id, "treadstone-local", "Suspended")
 
     async with factory() as session:
         sandbox = await session.get(Sandbox, sandbox_id)

@@ -88,11 +88,11 @@ __all__ = [
 ]
 
 CLAIM_API_GROUP = "extensions.agents.x-k8s.io"
-CLAIM_API_VERSION = "v1alpha1"
+CLAIM_API_VERSION = "v1beta1"
 SANDBOX_API_GROUP = "agents.x-k8s.io"
-SANDBOX_API_VERSION = "v1alpha1"
+SANDBOX_API_VERSION = "v1beta1"
 TEMPLATE_API_GROUP = "extensions.agents.x-k8s.io"
-TEMPLATE_API_VERSION = "v1alpha1"
+TEMPLATE_API_VERSION = "v1beta1"
 SNAPSHOT_API_GROUP = "snapshot.storage.k8s.io"
 SNAPSHOT_API_VERSION = "v1"
 
@@ -175,7 +175,7 @@ class K8sClientProtocol(Protocol):
     async def create_sandbox_claim(
         self,
         name: str,
-        template_ref: str,
+        warm_pool_ref: str,
         namespace: str,
         shutdown_time: datetime | None = None,
         labels: dict[str, str] | None = None,
@@ -186,7 +186,7 @@ class K8sClientProtocol(Protocol):
 
     async def get_sandbox_claim(self, name: str, namespace: str) -> dict[str, Any] | None: ...
 
-    # ── Sandbox (agents.x-k8s.io) — direct create + read + scale ──
+    # ── Sandbox (agents.x-k8s.io) — direct create + read + operating mode ──
     async def create_sandbox(
         self,
         name: str,
@@ -194,7 +194,7 @@ class K8sClientProtocol(Protocol):
         image: str,
         container_port: int,
         resources: dict[str, Any],
-        replicas: int = 1,
+        operating_mode: str = "Running",
         startup_probe: dict[str, Any] | None = None,
         readiness_probe: dict[str, Any] | None = None,
         liveness_probe: dict[str, Any] | None = None,
@@ -217,7 +217,7 @@ class K8sClientProtocol(Protocol):
         self, namespace: str, resource_version: str = ""
     ) -> AsyncIterator[tuple[str, dict[str, Any]]]: ...
 
-    async def scale_sandbox(self, name: str, namespace: str, replicas: int) -> bool: ...
+    async def set_sandbox_operating_mode(self, name: str, namespace: str, operating_mode: str) -> bool: ...
 
     async def get_storage_class(self, name: str) -> dict[str, Any] | None: ...
     async def get_volume_snapshot_class(self, name: str) -> dict[str, Any] | None: ...
@@ -281,13 +281,14 @@ class Kr8sClient:
     async def create_sandbox_claim(
         self,
         name: str,
-        template_ref: str,
+        warm_pool_ref: str,
         namespace: str,
         shutdown_time: datetime | None = None,
         labels: dict[str, str] | None = None,
         annotations: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         api = await self._get_api()
+        warm_pool_name = warm_pool_ref if warm_pool_ref.endswith("-pool") else f"{warm_pool_ref}-pool"
         metadata: dict[str, Any] = {"name": name, "namespace": namespace}
         if labels:
             metadata["labels"] = labels
@@ -297,7 +298,7 @@ class Kr8sClient:
             "apiVersion": f"{CLAIM_API_GROUP}/{CLAIM_API_VERSION}",
             "kind": "SandboxClaim",
             "metadata": metadata,
-            "spec": {"sandboxTemplateRef": {"name": template_ref}},
+            "spec": {"warmPoolRef": {"name": warm_pool_name}},
         }
         if shutdown_time:
             manifest["spec"]["lifecycle"] = {"shutdownTime": format_shutdown_time(shutdown_time)}
@@ -332,7 +333,7 @@ class Kr8sClient:
         image: str,
         container_port: int,
         resources: dict[str, Any],
-        replicas: int = 1,
+        operating_mode: str = "Running",
         startup_probe: dict[str, Any] | None = None,
         readiness_probe: dict[str, Any] | None = None,
         liveness_probe: dict[str, Any] | None = None,
@@ -408,8 +409,9 @@ class Kr8sClient:
             "kind": "Sandbox",
             "metadata": cr_metadata,
             "spec": {
-                "replicas": replicas,
+                "operatingMode": operating_mode,
                 "podTemplate": pod_template,
+                "service": True,
             },
         }
         if volume_claim_templates:
@@ -429,7 +431,7 @@ class Kr8sClient:
         async with api.call_api("DELETE", base=url, version="") as resp:
             return resp.status_code < 400
 
-    # ── Sandbox (read + scale) ──
+    # ── Sandbox (read + operating mode) ──
 
     async def get_sandbox(self, name: str, namespace: str) -> dict[str, Any] | None:
         api = await self._get_api()
@@ -489,16 +491,16 @@ class Kr8sClient:
                 if event_type in ("ADDED", "MODIFIED", "DELETED"):
                     yield event_type, obj
 
-    async def scale_sandbox(self, name: str, namespace: str, replicas: int) -> bool:
+    async def set_sandbox_operating_mode(self, name: str, namespace: str, operating_mode: str) -> bool:
         api = await self._get_api()
-        url = f"/apis/{SANDBOX_API_GROUP}/{SANDBOX_API_VERSION}/namespaces/{namespace}/sandboxes/{name}/scale"
-        logger.debug("K8s PATCH %s (replicas=%d)", url, replicas)
-        scale_body = {"spec": {"replicas": replicas}}
+        url = f"/apis/{SANDBOX_API_GROUP}/{SANDBOX_API_VERSION}/namespaces/{namespace}/sandboxes/{name}"
+        logger.debug("K8s PATCH %s (operatingMode=%s)", url, operating_mode)
+        mode_body = {"spec": {"operatingMode": operating_mode}}
         async with api.call_api(
             "PATCH",
             base=url,
             version="",
-            json=scale_body,
+            json=mode_body,
             headers={"Content-Type": "application/merge-patch+json"},
         ) as resp:
             return resp.status_code < 400
@@ -818,13 +820,14 @@ class FakeK8sClient:
     async def create_sandbox_claim(
         self,
         name: str,
-        template_ref: str,
+        warm_pool_ref: str,
         namespace: str,
         shutdown_time: datetime | None = None,
         labels: dict[str, str] | None = None,
         annotations: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         key = f"{namespace}/{name}"
+        warm_pool_name = warm_pool_ref if warm_pool_ref.endswith("-pool") else f"{warm_pool_ref}-pool"
         sandbox_name = name
         claim_metadata: dict[str, Any] = {"name": name, "namespace": namespace, "resourceVersion": "1"}
         if labels:
@@ -835,13 +838,14 @@ class FakeK8sClient:
             "apiVersion": f"{CLAIM_API_GROUP}/{CLAIM_API_VERSION}",
             "kind": "SandboxClaim",
             "metadata": claim_metadata,
-            "spec": {"sandboxTemplateRef": {"name": template_ref}},
+            "spec": {"warmPoolRef": {"name": warm_pool_name}},
             "status": {"conditions": [], "sandbox": {"name": sandbox_name, "podIPs": []}},
         }
         if shutdown_time:
             claim["spec"]["lifecycle"] = {"shutdownTime": format_shutdown_time(shutdown_time)}
         self._claims[key] = claim
 
+        template_ref = warm_pool_name.removesuffix("-pool")
         template = next((item for item in self._templates if item["name"] == template_ref), None)
         container: dict[str, Any] = {
             "name": "sandbox",
@@ -865,7 +869,7 @@ class FakeK8sClient:
             "kind": "Sandbox",
             "metadata": {"name": sandbox_name, "namespace": namespace, "resourceVersion": "1"},
             "spec": {
-                "replicas": 1,
+                "operatingMode": "Running",
                 "podTemplate": {
                     "spec": {
                         "automountServiceAccountToken": False,
@@ -876,12 +880,12 @@ class FakeK8sClient:
                         "containers": [container],
                     },
                 },
+                "service": True,
             },
             "status": {
                 "conditions": [_make_ready_condition("False", "DependenciesNotReady", "Pod does not exist")],
                 "serviceFQDN": f"{sandbox_name}.{namespace}.svc.cluster.local",
                 "service": sandbox_name,
-                "replicas": 0,
             },
         }
         return claim
@@ -904,7 +908,7 @@ class FakeK8sClient:
         image: str,
         container_port: int,
         resources: dict[str, Any],
-        replicas: int = 1,
+        operating_mode: str = "Running",
         startup_probe: dict[str, Any] | None = None,
         readiness_probe: dict[str, Any] | None = None,
         liveness_probe: dict[str, Any] | None = None,
@@ -971,14 +975,14 @@ class FakeK8sClient:
             "kind": "Sandbox",
             "metadata": sb_metadata,
             "spec": {
-                "replicas": replicas,
+                "operatingMode": operating_mode,
                 "podTemplate": pod_template,
+                "service": True,
             },
             "status": {
                 "conditions": [_make_ready_condition("False", "DependenciesNotReady", "Pod does not exist")],
                 "serviceFQDN": f"{name}.{namespace}.svc.cluster.local",
                 "service": name,
-                "replicas": 0,
             },
         }
         if volume_claim_templates:
@@ -987,11 +991,11 @@ class FakeK8sClient:
         if shutdown_time:
             sandbox["spec"]["shutdownTime"] = format_shutdown_time(shutdown_time)
         self._sandboxes[key] = sandbox
-        if replicas == 0:
+        if operating_mode == "Suspended":
             sandbox["status"]["conditions"] = [
-                _make_ready_condition("True", "DependenciesReady", "Pod does not exist, replicas is 0")
+                _make_ready_condition("False", "SandboxSuspended", "Sandbox is suspended"),
+                {"type": "Suspended", "status": "True", "reason": "PodTerminated", "message": "Sandbox is suspended"},
             ]
-            sandbox["status"]["replicas"] = 0
         return sandbox
 
     async def delete_sandbox(self, name: str, namespace: str) -> bool:
@@ -1032,20 +1036,26 @@ class FakeK8sClient:
         """Signal the fake watch stream to stop."""
         self._watch_queue.put_nowait(None)
 
-    async def scale_sandbox(self, name: str, namespace: str, replicas: int) -> bool:
+    async def set_sandbox_operating_mode(self, name: str, namespace: str, operating_mode: str) -> bool:
         key = f"{namespace}/{name}"
         sb = self._sandboxes.get(key)
         if sb is None:
             return False
-        sb["spec"]["replicas"] = replicas
-        sb["status"]["replicas"] = replicas
-        if replicas == 0:
+        sb["spec"]["operatingMode"] = operating_mode
+        if operating_mode == "Suspended":
             sb["status"]["conditions"] = [
-                _make_ready_condition("True", "DependenciesReady", "Pod does not exist, replicas is 0")
+                _make_ready_condition("False", "SandboxSuspended", "Sandbox is suspended"),
+                {"type": "Suspended", "status": "True", "reason": "PodTerminated", "message": "Sandbox is suspended"},
             ]
         else:
             sb["status"]["conditions"] = [
-                _make_ready_condition("True", "DependenciesReady", "Pod is Ready; Service Exists")
+                {
+                    "type": "Suspended",
+                    "status": "False",
+                    "reason": "NotSuspended",
+                    "message": "Sandbox is not suspended",
+                },
+                _make_ready_condition("False", "DependenciesNotReady", "Pod does not exist"),
             ]
         rv = str(int(sb["metadata"].get("resourceVersion", "1")) + 1)
         sb["metadata"]["resourceVersion"] = rv
@@ -1173,16 +1183,24 @@ class FakeK8sClient:
         sb = self._sandboxes.get(key)
         if sb:
             sb["status"]["conditions"] = [
-                _make_ready_condition("True", "DependenciesReady", "Pod is Ready; Service Exists")
+                _make_ready_condition("False", "DependenciesNotReady", "Pod is Ready; Service Exists"),
+                {
+                    "type": "Suspended",
+                    "status": "False",
+                    "reason": "NotSuspended",
+                    "message": "Sandbox is not suspended",
+                },
             ]
-            sb["status"]["replicas"] = 1
+            sb["status"]["conditions"][0] = _make_ready_condition(
+                "True", "DependenciesReady", "Pod is Ready; Service Exists"
+            )
             rv = str(int(sb["metadata"].get("resourceVersion", "1")) + 1)
             sb["metadata"]["resourceVersion"] = rv
 
     def simulate_claim_adoption(self, claim_name: str, namespace: str, adopted_sandbox_name: str) -> None:
         """Simulate warm-pool adoption where claim and Sandbox names diverge.
 
-        The agent-sandbox v0.3.x controller can bind a SandboxClaim to an
+        The agent-sandbox v1beta1 controller can bind a SandboxClaim to an
         already-existing warm-pool Sandbox. The resulting Sandbox CR keeps the
         warm-pool-derived ``metadata.name`` and points back to the claim via an
         owner reference.
