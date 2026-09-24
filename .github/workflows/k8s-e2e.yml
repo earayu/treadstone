@@ -20,12 +20,25 @@ on:
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/k8s-e2e.yml"
+      - ".github/workflows/sandbox-image.yml"
   workflow_dispatch:
     inputs:
       file:
         description: "Optional single Hurl file (e.g. 01-auth-flow.hurl)"
         required: false
         type: string
+      sandbox_image:
+        description: "Optional published sandbox image; pull and test it without rebuilding"
+        required: false
+        type: string
+      benchmark:
+        description: "Opt-in small cold/warm-pool experiment on this disposable Kind cluster"
+        type: boolean
+        default: false
+      legacy_image:
+        description: "Published baseline only: skip the stricter current-image contract"
+        type: boolean
+        default: false
   workflow_run:
     workflows: ["Release"]
     types: [completed]
@@ -41,6 +54,7 @@ env:
   HURL_VERSION: 5.0.1
   SANDBOX_RUNTIME_IMAGE: ghcr.io/earayu/treadstone-sandbox:v0.3.0
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  SANDBOX_IMAGE: ${{ inputs.sandbox_image || '' }}
 
 jobs:
   skip-fork:
@@ -130,6 +144,7 @@ jobs:
           EOF
 
       - name: Build sandbox runtime image
+        if: env.SANDBOX_IMAGE == ''
         run: |
           docker build \
             -f deploy/sandbox-image/Dockerfile \
@@ -137,27 +152,26 @@ jobs:
             --build-arg TREADSTONE_SANDBOX_VERSION="ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             deploy/sandbox-image
 
-      - name: Check browser and shell image contract
+      - name: Pull published sandbox runtime image
+        if: env.SANDBOX_IMAGE != ''
         run: |
           set -euo pipefail
-          docker run -d --name sandbox-smoke --security-opt no-new-privileges \
-            --shm-size=512m treadstone-sandbox:e2e
-          trap 'docker cp sandbox-smoke:/tmp/workspace-validation /tmp/workspace-validation || true; docker logs sandbox-smoke; docker exec sandbox-smoke sh -c "tail -n 60 /tmp/treadstone/log/*.log" || true; docker rm -f sandbox-smoke' EXIT
-          docker cp scripts/test_sandbox_image.py sandbox-smoke:/tmp/test_sandbox_image.py
-          docker cp scripts/sandbox_openapi_base.json sandbox-smoke:/tmp/sandbox_openapi_base.json
-          docker exec sandbox-smoke python /tmp/test_sandbox_image.py
-          docker restart sandbox-smoke
-          docker exec sandbox-smoke python /tmp/test_sandbox_image.py
-          docker exec --user root sandbox-smoke pip install playwright==1.55.0
-          docker cp scripts/test_sandbox_workspace.py sandbox-smoke:/tmp/test_sandbox_workspace.py
-          docker exec sandbox-smoke python /tmp/test_sandbox_workspace.py
+          python3 -c 'import sys; sys.path.insert(0, "scripts"); from sandbox_image_benchmark import validate_image; validate_image(sys.argv[1])' "$SANDBOX_IMAGE"
+          docker pull --platform linux/amd64 "$SANDBOX_IMAGE"
+          docker tag "$SANDBOX_IMAGE" treadstone-sandbox:e2e
+          mkdir -p reports/sandbox-image
+          docker image inspect "$SANDBOX_IMAGE" > reports/sandbox-image/pulled-image.json
+
+      - name: Check browser and shell image contract
+        if: github.event_name != 'workflow_dispatch' || !inputs.legacy_image
+        run: bash scripts/verify-sandbox-image.sh treadstone-sandbox:e2e
 
       - name: Upload sandbox workspace screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: sandbox-workspace
-          path: /tmp/workspace-validation/
+          path: reports/sandbox-image/
           if-no-files-found: ignore
 
       # Mirrors scripts/up.sh local + make deploy-all. deploy-infra waits for all
@@ -202,6 +216,22 @@ jobs:
           else
             make test-e2e
           fi
+
+      - name: Small cold and warm-pool experiment
+        if: github.event_name == 'workflow_dispatch' && inputs.benchmark
+        run: |
+          python3 -m venv /tmp/sandbox-benchmark-venv
+          /tmp/sandbox-benchmark-venv/bin/pip install ./cli
+          /tmp/sandbox-benchmark-venv/bin/python scripts/benchmark_kind_sandbox.py \
+            --binary /tmp/sandbox-benchmark-venv/bin/treadstone
+
+      - name: Upload Kind benchmark evidence
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.benchmark
+        uses: actions/upload-artifact@v4
+        with:
+          name: sandbox-kind-benchmark
+          path: reports/sandbox-kind-benchmark/
+          if-no-files-found: ignore
 
       - name: Upload E2E HTML report
         if: always()

@@ -6,10 +6,31 @@ on:
       - "sandbox-v*"
   workflow_dispatch:
     inputs:
+      mode:
+        description: "Verify an existing image, benchmark artifacts, or explicitly publish"
+        type: choice
+        options: [verify, benchmark, publish]
+        default: verify
       version:
-        description: "Image version with v prefix, e.g. v0.1.0"
-        required: true
+        description: "Publish only: new immutable version, e.g. v0.3.1"
+        required: false
         type: string
+      image:
+        description: "Verify/benchmark: existing versioned image or digest"
+        default: ghcr.io/earayu/treadstone-sandbox:v0.3.0
+        type: string
+      benchmark:
+        description: "Also compare existing images on disposable runners (no builds)"
+        default: false
+        type: boolean
+      baseline:
+        description: "Benchmark baseline image"
+        default: ghcr.io/earayu/treadstone-sandbox:v0.2.1
+        type: string
+      samples:
+        description: "Sequential and concurrent samples per image (1-20)"
+        default: 5
+        type: number
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -18,18 +39,29 @@ env:
 
 permissions:
   contents: read
-  packages: write
+  packages: read
+
+concurrency:
+  group: sandbox-image-${{ inputs.mode || 'publish' }}
+  cancel-in-progress: false
 
 jobs:
   docker:
+    if: github.event_name == 'push' || inputs.mode == 'publish'
     runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref_name }}
+          ref: ${{ github.sha }}
 
       - name: Resolve version
         id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         shell: bash
         run: |
           set -euo pipefail
@@ -38,7 +70,7 @@ jobs:
               echo "workflow_dispatch releases must be triggered from the main branch, got: ${GITHUB_REF_NAME}"
               exit 1
             fi
-            VERSION="${{ inputs.version }}"
+            VERSION="$INPUT_VERSION"
           else
             VERSION="${GITHUB_REF_NAME#sandbox-}"
           fi
@@ -76,11 +108,114 @@ jobs:
             type=raw,value=${{ steps.version.outputs.version }}
             type=raw,value=latest
 
-      - uses: docker/build-push-action@v6
+      - name: Build once and load candidate
+        uses: docker/build-push-action@v6
         with:
           context: deploy/sandbox-image
-          push: true
+          platforms: linux/amd64
+          load: true
+          push: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             TREADSTONE_SANDBOX_VERSION=${{ steps.version.outputs.version }}
+
+      - name: Verify the exact release candidate
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: bash scripts/verify-sandbox-image.sh "$IMAGE_NAME:$VERSION"
+
+      - name: Push the tested image without rebuilding
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          TESTED_IMAGE_ID="$(cat reports/sandbox-image/tested-image-id.txt)"
+          test "$(docker image inspect --format '{{.Id}}' "$IMAGE_NAME:$VERSION")" = "$TESTED_IMAGE_ID"
+          test "$(docker image inspect --format '{{.Id}}' "$IMAGE_NAME:latest")" = "$TESTED_IMAGE_ID"
+          docker push "$IMAGE_NAME:$VERSION"
+          docker push "$IMAGE_NAME:latest"
+          docker image inspect "$IMAGE_NAME:$VERSION" > reports/sandbox-image/published-image.json
+          {
+            echo "## Published verified sandbox image"
+            echo "Version: \`$IMAGE_NAME:$VERSION\`"
+            echo "Tested config: \`$TESTED_IMAGE_ID\`"
+            docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$IMAGE_NAME:$VERSION"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sandbox-release-evidence
+          path: reports/sandbox-image/
+          if-no-files-found: ignore
+
+  verify:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'verify'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pull and verify published image
+        env:
+          IMAGE: ${{ inputs.image }}
+        run: |
+          set -euo pipefail
+          python3 -c 'import sys; sys.path.insert(0, "scripts"); from sandbox_image_benchmark import validate_image; validate_image(sys.argv[1])' "$IMAGE"
+          docker pull --platform linux/amd64 "$IMAGE"
+          bash scripts/verify-sandbox-image.sh "$IMAGE"
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sandbox-published-verification
+          path: reports/sandbox-image/
+          if-no-files-found: ignore
+
+  benchmark:
+    if: github.event_name == 'workflow_dispatch' && (inputs.mode == 'benchmark' || (inputs.mode == 'verify' && inputs.benchmark))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: baseline
+            image: ${{ inputs.baseline }}
+          - name: candidate
+            image: ${{ inputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Measure published image (no build or production traffic)
+        env:
+          IMAGE: ${{ matrix.image }}
+          SAMPLES: ${{ inputs.samples }}
+        run: python3 scripts/sandbox_image_benchmark.py --image "$IMAGE" --samples "$SAMPLES"
+      - name: Upload raw samples
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sandbox-benchmark-${{ matrix.name }}
+          path: reports/sandbox-benchmark/
+          if-no-files-found: ignore
+
+  compare:
+    needs: benchmark
+    if: always() && needs.benchmark.result != 'skipped'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: sandbox-benchmark-*
+          path: reports/image-comparison
+      - name: Summarize experiment
+        run: |
+          python3 scripts/sandbox_image_benchmark.py --report reports/image-comparison/*/result.json \
+            | tee reports/image-comparison/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sandbox-image-comparison
+          path: reports/image-comparison/

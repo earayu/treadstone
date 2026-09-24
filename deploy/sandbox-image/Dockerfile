@@ -1,13 +1,15 @@
-FROM node:22-bookworm-slim AS node
-FROM python:3.12-slim-bookworm
+FROM node:22-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c AS node
+FROM python:3.12-slim-bookworm@sha256:392307d22300de8b5986851a12d9176dfc0fc073e65bf6523ebd7dcbeb23564e
 
 ARG TARGETARCH
 ARG TREADSTONE_SANDBOX_VERSION=dev
 ARG CHROMIUM_VERSION=154.0.8037.57
 ARG NOVNC_VERSION=1.6.0
 ARG WEBSOCAT_VERSION=v1.13.0
-ARG CLAUDE_CODE_VERSION=latest
-ARG CODEX_VERSION=latest
+ARG CLAUDE_CODE_VERSION=2.1.281
+ARG CODEX_VERSION=0.156.1
+ARG KIMI_CLI_VERSION=1.52.0
+ARG CURSOR_AGENT_VERSION=2026.09.23-86fc751
 
 LABEL org.opencontainers.image.source="https://github.com/earayu/treadstone"
 LABEL org.opencontainers.image.description="Treadstone browser and shell sandbox"
@@ -74,14 +76,14 @@ RUN curl --retry 5 -fsSL \
 # Coding CLIs are shell tools, not additional background services.
 RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" "@openai/codex@${CODEX_VERSION}" \
     && mkdir -p /opt/uv \
-    && uv tool install kimi-cli \
+    && uv tool install "kimi-cli==${KIMI_CLI_VERSION}" \
     && chmod -R a+rX /opt/uv /usr/local/share/uv
-RUN curl -fsSL https://cursor.com/install | HOME=/root bash \
-    && install -d /opt/cursor-agent \
-    && cp -a /root/.local/share/cursor-agent /opt/cursor-agent/share \
-    && ver_dir="$(find /opt/cursor-agent/share/versions -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)" \
-    && ln -s "${ver_dir}/cursor-agent" /usr/local/bin/cursor-agent \
-    && ln -s "${ver_dir}/cursor-agent" /usr/local/bin/agent \
+RUN install -d "/opt/cursor-agent/${CURSOR_AGENT_VERSION}" \
+    && curl --retry 5 -fsSL \
+       "https://downloads.cursor.com/lab/${CURSOR_AGENT_VERSION}/linux/x64/agent-cli-package.tar.gz" \
+       | tar --strip-components=1 -xz -C "/opt/cursor-agent/${CURSOR_AGENT_VERSION}" \
+    && ln -s "/opt/cursor-agent/${CURSOR_AGENT_VERSION}/cursor-agent" /usr/local/bin/cursor-agent \
+    && ln -s "/opt/cursor-agent/${CURSOR_AGENT_VERSION}/cursor-agent" /usr/local/bin/agent \
     && chmod -R a+rX /opt/cursor-agent
 
 COPY runtime/ /
