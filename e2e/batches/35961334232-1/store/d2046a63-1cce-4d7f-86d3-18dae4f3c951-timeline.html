@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>/home/runner/work/treadstone/treadstone/tests/e2e/03-auth-password.hurl</title>
+    <style>
+        body {
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    font-size: 1.125rem;
+    line-height: 1.4;
+}
+
+.container {
+    max-width: 1200px;
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.timeline-container {
+    max-width: 1400px;
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    border: solid 1px #dcdcde;
+    display: flex;
+}
+
+.calls {
+    position: sticky;
+    left: 0;
+    right: 0;
+    width: 260px;
+    flex-shrink: 0;
+}
+
+.waterfall {
+    overflow: auto;
+    overflow-y: hidden;
+}
+
+@media (prefers-color-scheme: dark) {
+    body {
+        background-color: #19191c;
+        color: #c2c2c2;
+    }
+
+    .timeline-container {
+        border-color: #444;
+    }
+}
+
+        .report-nav {
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+.report-nav-links {
+    display: flex;
+    margin-bottom: 20px;
+    font-weight: bold;
+}
+
+.report-nav a {
+    color: royalblue;
+    margin-right: 20px;
+}
+
+.report-nav a[aria-selected="true"] {
+    color: #ff0288;
+}
+
+.report-nav-summary > div {
+    display: flex;
+}
+
+.report-nav-summary .item-name {
+    min-width: 100px;
+    font-weight: bold;
+}
+
+.error {
+    margin-top: 10px;
+    margin-bottom: 10px;
+    border-left: red 4px solid;
+}
+
+.error-desc {
+    background: #f5f5f5;
+}
+
+.error-desc pre {
+    font-size: 0.8rem;
+    line-height: 1.2;
+    margin: 0.75rem;
+    padding: 0.8rem;
+    overflow-x: auto;
+}
+
+.error-desc pre code {
+    font-size: 0.8rem;
+    line-height: 1.2;
+}
+
+.success, .success a {
+    color: green;
+}
+
+.failure, .failure a {
+    color: red;
+}
+
+@media (prefers-color-scheme: dark) {
+    .report-nav a {
+        color: #34a7ff;
+    }
+
+    .report-nav a[aria-selected="true"] {
+        color: #ff0288;
+    }
+
+    .error-desc {
+        background: #27272c;
+    }
+}
+
+    </style>
+<body>
+<div>
+    <div class="container">
+        <div class="report-nav">
+    <div class="report-nav-links">
+        <div><a href="../index.html">Report</a></div>
+        <div><a aria-selected="true" href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-timeline.html">Timeline</a></div>
+        <div><a aria-selected="false" href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-run.html">Run</a></div>
+        <div><a aria-selected="false" href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-source.html">Source</a></div>
+    </div>
+    <div class="report-nav-summary">
+        <div><div class="item-name">File:</div><div><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-source.html">/home/runner/work/treadstone/treadstone/tests/e2e/03-auth-password.hurl</a></div></div>
+        <div><div class="item-name">Status:</div><div><span class="success">Success</span></div></div>
+        <div><div class="item-name">Duration:</div><div>2898 ms</div></div>
+        <div><div class="item-name">Errors:</div><div>-</div></div>
+        <div></div>
+    </div>
+    <div class="errors"></div>
+</div>
+
+    </div>
+    <div class="timeline-container">
+        <div class="calls"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 516" width="260" height="516"><style>@media (prefers-color-scheme: dark) {
+    .calls-list {
+        fill: #c2c2c2;
+    }
+
+    .calls-back {
+        fill: #27272c;
+    }
+
+    .calls-grid rect {
+        fill: #444;
+    }
+}</style><symbol id="success" viewBox="0 0 512 512"><path d="M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM369 209L241 337c-9.4 9.4-24.6 9.4-33.9 0l-64-64c-9.4-9.4-9.4-24.6 0-33.9s24.6-9.4 33.9 0l47 47L335 175c9.4-9.4 24.6-9.4 33.9 0s9.4 24.6 0 33.9z" fill="#10bb00" /></symbol><symbol id="failure" viewBox="0 0 512 512"><path d="M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zm0-384c13.3 0 24 10.7 24 24V264c0 13.3-10.7 24-24 24s-24-10.7-24-24V152c0-13.3 10.7-24 24-24zM224 352a32 32 0 1 1 64 0 32 32 0 1 1 -64 0z" fill="red" /></symbol><symbol id="retry" viewBox="0 0 512 512"><path d="M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zm0-384c13.3 0 24 10.7 24 24V264c0 13.3-10.7 24-24 24s-24-10.7-24-24V152c0-13.3 10.7-24 24-24zM224 352a32 32 0 1 1 64 0 32 32 0 1 1 -64 0z" fill="gold" /></symbol><rect class="calls-back" x="0" y="0" width="100%" height="100%" fill="#fbfafd" /><g class="calls-grid"><rect x="0" y="50" width="260" height="1" fill="#ddd" /><rect x="0" y="73" width="260" height="1" fill="#ddd" /><rect x="0" y="98" width="260" height="1" fill="#ddd" /><rect x="0" y="121" width="260" height="1" fill="#ddd" /><rect x="0" y="146" width="260" height="1" fill="#ddd" /><rect x="0" y="169" width="260" height="1" fill="#ddd" /><rect x="0" y="194" width="260" height="1" fill="#ddd" /><rect x="0" y="217" width="260" height="1" fill="#ddd" /><rect x="0" y="242" width="260" height="1" fill="#ddd" /><rect x="0" y="265" width="260" height="1" fill="#ddd" /><rect x="259" y="0" width="1" height="516" fill="#ddd" /></g><g class="calls-list" font-size="13px" font-family="sans-serif" fill="#777"><use href="#success" x="7" y="56" width="13" height="13" /><text x="25" y="67">POST api.localhost/v1/au...</text><text x="205" y="67">201</text><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-run.html#e1:c1"><text x="233" y="67" fill="royalblue" text-decoration="underline">run</text></a><use href="#success" x="7" y="80" width="13" height="13" /><text x="25" y="91">POST api.localhost/v1/au...</text><text x="205" y="91">200</text><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-run.html#e2:c1"><text x="233" y="91" fill="royalblue" text-decoration="underline">run</text></a><use href="#success" x="7" y="104" width="13" height="13" /><text x="25" y="115">POST api.localhost/v1/au...</text><text x="205" y="115">200</text><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-run.html#e3:c1"><text x="233" y="115" fill="royalblue" text-decoration="underline">run</text></a><use href="#success" x="7" y="128" width="13" height="13" /><text x="25" y="139">POST api.localhost/v1/au...</text><text x="205" y="139">400</text><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-run.html#e4:c1"><text x="233" y="139" fill="royalblue" text-decoration="underline">run</text></a><use href="#success" x="7" y="152" width="13" height="13" /><text x="25" y="163">POST api.localhost/v1/au...</text><text x="205" y="163">200</text><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-run.html#e5:c1"><text x="233" y="163" fill="royalblue" text-decoration="underline">run</text></a><use href="#success" x="7" y="176" width="13" height="13" /><text x="25" y="187">GET api.localhost/v1/aut...</text><text x="205" y="187">200</text><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-run.html#e6:c1"><text x="233" y="187" fill="royalblue" text-decoration="underline">run</text></a><use href="#success" x="7" y="200" width="13" height="13" /><text x="25" y="211">POST api.localhost/v1/au...</text><text x="205" y="211">200</text><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-run.html#e7:c1"><text x="233" y="211" fill="royalblue" text-decoration="underline">run</text></a><use href="#success" x="7" y="224" width="13" height="13" /><text x="25" y="235">POST api.localhost/v1/au...</text><text x="205" y="235">200</text><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-run.html#e8:c1"><text x="233" y="235" fill="royalblue" text-decoration="underline">run</text></a><use href="#success" x="7" y="248" width="13" height="13" /><text x="25" y="259">POST api.localhost/v1/au...</text><text x="205" y="259">400</text><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-run.html#e9:c1"><text x="233" y="259" fill="royalblue" text-decoration="underline">run</text></a></g></svg></div>
+        <div class="waterfall"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1138 516" width="1138" height="516"><style>.call-detail {
+    display: none;
+}
+
+.call-summary:hover + .call-detail, .call-detail:hover {
+    display: block;
+}
+
+.call-sel {
+    pointer-events: none;
+}
+
+@media (prefers-color-scheme: dark) {
+    .grid-strip rect {
+        fill: #27272c;
+    }
+
+    .grid-ticks {
+        stroke: #444;
+    }
+
+    .call-back {
+        stroke: #444;
+        fill: #19191c;
+    }
+
+    .call-sel {
+        opacity: 0.1;
+    }
+
+    .call-legend {
+        fill: #c2c2c2;
+    }
+}</style><defs><filter id="shadow"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-opacity="0.25" /></filter></defs><symbol id="success" viewBox="0 0 512 512"><path d="M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM369 209L241 337c-9.4 9.4-24.6 9.4-33.9 0l-64-64c-9.4-9.4-9.4-24.6 0-33.9s24.6-9.4 33.9 0l47 47L335 175c9.4-9.4 24.6-9.4 33.9 0s9.4 24.6 0 33.9z" fill="#10bb00" /></symbol><symbol id="failure" viewBox="0 0 512 512"><path d="M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zm0-384c13.3 0 24 10.7 24 24V264c0 13.3-10.7 24-24 24s-24-10.7-24-24V152c0-13.3 10.7-24 24-24zM224 352a32 32 0 1 1 64 0 32 32 0 1 1 -64 0z" fill="red" /></symbol><symbol id="retry" viewBox="0 0 512 512"><path d="M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zm0-384c13.3 0 24 10.7 24 24V264c0 13.3-10.7 24-24 24s-24-10.7-24-24V152c0-13.3 10.7-24 24-24zM224 352a32 32 0 1 1 64 0 32 32 0 1 1 -64 0z" fill="gold" /></symbol><g><g class="grid-strip"><rect x="0" y="50" width="1138" height="24" fill="#f5f5f5" /><rect x="0" y="98" width="1138" height="24" fill="#f5f5f5" /><rect x="0" y="146" width="1138" height="24" fill="#f5f5f5" /><rect x="0" y="194" width="1138" height="24" fill="#f5f5f5" /><rect x="0" y="242" width="1138" height="24" fill="#f5f5f5" /></g><g><g class="grid-ticks" stroke="#ccc"><line x1="196" y1="0" x2="196" y2="516" /><line x1="393" y1="0" x2="393" y2="516" /><line x1="589" y1="0" x2="589" y2="516" /><line x1="785" y1="0" x2="785" y2="516" /><line x1="981" y1="0" x2="981" y2="516" /></g><g font-size="15px" font-family="sans-serif" fill="#777"><text x="5" y="20">0 ms</text><text x="201" y="20">500 ms</text><text x="398" y="20">1000 ms</text><text x="594" y="20">1500 ms</text><text x="790" y="20">2000 ms</text><text x="986" y="20">2500 ms</text></g></g></g><g><g class="call-summary"><rect x="1016.2534519211299" y="245" width="0.009814091103052097" height="18" fill="#1d9688" /><rect x="1016.2809313762184" y="245" width="121.70650658716966" height="18" fill="#18c852" /><rect x="1137.9874379633882" y="245" width="0.005888454661831258" height="18" fill="#36a9f4" /></g><g class="call-detail" font-family="sans-serif" font-size="17px"><rect x="1016.2534519211299" y="0" width="121.74654807887009" height="516" fill="green" opacity="0.05" class="call-sel" /><rect x="532" y="263" width="600" height="235" fill="white" class="call-back" filter="url(#shadow)" stroke="#ccc" stroke-width="1" /><g class="call-legend" fill="#555"><use href="#success" x="546" y="277" width="20" height="20" /><text x="576" y="293" font-weight="bold">POST http://api.localhost/v1/auth/password-reset/confi...  400</text><g><rect x="558" y="309" width="20" height="20" fill="#1d9688" /><text x="594" y="326">DNS lookup</text><text x="738" y="326">25.0 µs</text></g><g><rect x="558" y="339" width="20" height="20" fill="#9933ff" /><text x="594" y="356">SSL handshake</text><text x="738" y="356">0.0 µs</text></g><g><rect x="558" y="369" width="20" height="20" fill="#18c852" /><text x="594" y="386">Wait</text><text x="738" y="386">310.0 ms</text></g><g><rect x="558" y="399" width="20" height="20" fill="#36a9f4" /><text x="594" y="416">Data transfer</text><text x="738" y="416">15.0 µs</text></g><g font-weight="bold"><text x="594" y="446">Total</text><text x="738" y="446">310.1 ms</text></g><g><text x="912" y="327">Start:</text><text x="1012" y="327">2.6 s</text></g><g><text x="912" y="357">Stop:</text><text x="1012" y="357">2.9 s</text></g><g><text x="912" y="387">Transferred:</text><text x="1012" y="387">115.0 B</text></g><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-run.html#e9:c1"><text x="912" y="443" fill="royalblue" text-decoration="underline">(view run)</text></a><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-source.html#l88"><text x="1002" y="443" fill="royalblue" text-decoration="underline">(view source)</text></a><a href="https://hurl.dev/docs/response.html#timings"><text x="912" y="473" fill="royalblue" text-decoration="underline">Explanation</text></a></g></g></g><g><g class="call-summary"><rect x="865.9863699695021" y="221" width="0.010599218391296263" height="18" fill="#1d9688" /><rect x="866.0165973700995" y="221" width="150.19131716831217" height="18" fill="#18c852" /><rect x="1016.2079145384117" y="221" width="0.006281018305953342" height="18" fill="#36a9f4" /></g><g class="call-detail" font-family="sans-serif" font-size="17px"><rect x="865.9863699695021" y="0" width="150.23528429645387" height="516" fill="green" opacity="0.05" class="call-sel" /><rect x="532" y="239" width="600" height="235" fill="white" class="call-back" filter="url(#shadow)" stroke="#ccc" stroke-width="1" /><g class="call-legend" fill="#555"><use href="#success" x="546" y="253" width="20" height="20" /><text x="576" y="269" font-weight="bold">POST http://api.localhost/v1/auth/password-reset/reque...  200</text><g><rect x="558" y="285" width="20" height="20" fill="#1d9688" /><text x="594" y="302">DNS lookup</text><text x="738" y="302">27.0 µs</text></g><g><rect x="558" y="315" width="20" height="20" fill="#9933ff" /><text x="594" y="332">SSL handshake</text><text x="738" y="332">0.0 µs</text></g><g><rect x="558" y="345" width="20" height="20" fill="#18c852" /><text x="594" y="362">Wait</text><text x="738" y="362">382.6 ms</text></g><g><rect x="558" y="375" width="20" height="20" fill="#36a9f4" /><text x="594" y="392">Data transfer</text><text x="738" y="392">16.0 µs</text></g><g font-weight="bold"><text x="594" y="422">Total</text><text x="738" y="422">382.7 ms</text></g><g><text x="912" y="303">Start:</text><text x="1012" y="303">2.2 s</text></g><g><text x="912" y="333">Stop:</text><text x="1012" y="333">2.6 s</text></g><g><text x="912" y="363">Transferred:</text><text x="1012" y="363">65.0 B</text></g><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-run.html#e8:c1"><text x="912" y="419" fill="royalblue" text-decoration="underline">(view run)</text></a><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-source.html#l78"><text x="1002" y="419" fill="royalblue" text-decoration="underline">(view source)</text></a><a href="https://hurl.dev/docs/response.html#timings"><text x="912" y="449" fill="royalblue" text-decoration="underline">Explanation</text></a></g></g></g><g><g class="call-summary"><rect x="747.5043811551513" y="197" width="0.00510332737358709" height="18" fill="#1d9688" /><rect x="747.5244019010016" y="197" width="118.41171992205301" height="18" fill="#18c852" /><rect x="865.9361218230546" y="197" width="0.006281018305953342" height="18" fill="#36a9f4" /></g><g class="call-detail" font-family="sans-serif" font-size="17px"><rect x="747.5043811551513" y="0" width="118.44430270451505" height="516" fill="green" opacity="0.05" class="call-sel" /><rect x="532" y="215" width="600" height="235" fill="white" class="call-back" filter="url(#shadow)" stroke="#ccc" stroke-width="1" /><g class="call-legend" fill="#555"><use href="#success" x="546" y="229" width="20" height="20" /><text x="576" y="245" font-weight="bold">POST http://api.localhost/v1/auth/password-reset/reque...  200</text><g><rect x="558" y="261" width="20" height="20" fill="#1d9688" /><text x="594" y="278">DNS lookup</text><text x="738" y="278">13.0 µs</text></g><g><rect x="558" y="291" width="20" height="20" fill="#9933ff" /><text x="594" y="308">SSL handshake</text><text x="738" y="308">0.0 µs</text></g><g><rect x="558" y="321" width="20" height="20" fill="#18c852" /><text x="594" y="338">Wait</text><text x="738" y="338">301.6 ms</text></g><g><rect x="558" y="351" width="20" height="20" fill="#36a9f4" /><text x="594" y="368">Data transfer</text><text x="738" y="368">16.0 µs</text></g><g font-weight="bold"><text x="594" y="398">Total</text><text x="738" y="398">301.7 ms</text></g><g><text x="912" y="279">Start:</text><text x="1012" y="279">1.9 s</text></g><g><text x="912" y="309">Stop:</text><text x="1012" y="309">2.2 s</text></g><g><text x="912" y="339">Transferred:</text><text x="1012" y="339">65.0 B</text></g><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-run.html#e7:c1"><text x="912" y="395" fill="royalblue" text-decoration="underline">(view run)</text></a><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-source.html#l71"><text x="1002" y="395" fill="royalblue" text-decoration="underline">(view source)</text></a><a href="https://hurl.dev/docs/response.html#timings"><text x="912" y="425" fill="royalblue" text-decoration="underline">Explanation</text></a></g></g></g><g><g class="call-summary"><rect x="744.2684790366529" y="173" width="0.00824383652656376" height="18" fill="#1d9688" /><rect x="744.2916402916561" y="173" width="3.1522860623003335" height="18" fill="#18c852" /><rect x="747.4439263539565" y="173" width="0.004710763729465006" height="18" fill="#36a9f4" /></g><g class="call-detail" font-family="sans-serif" font-size="17px"><rect x="744.2684790366529" y="0" width="3.1864390993389407" height="516" fill="green" opacity="0.05" class="call-sel" /><rect x="532" y="191" width="600" height="235" fill="white" class="call-back" filter="url(#shadow)" stroke="#ccc" stroke-width="1" /><g class="call-legend" fill="#555"><use href="#success" x="546" y="205" width="20" height="20" /><text x="576" y="221" font-weight="bold">GET http://api.localhost/v1/auth/user  200</text><g><rect x="558" y="237" width="20" height="20" fill="#1d9688" /><text x="594" y="254">DNS lookup</text><text x="738" y="254">21.0 µs</text></g><g><rect x="558" y="267" width="20" height="20" fill="#9933ff" /><text x="594" y="284">SSL handshake</text><text x="738" y="284">0.0 µs</text></g><g><rect x="558" y="297" width="20" height="20" fill="#18c852" /><text x="594" y="314">Wait</text><text x="738" y="314">8.0 ms</text></g><g><rect x="558" y="327" width="20" height="20" fill="#36a9f4" /><text x="594" y="344">Data transfer</text><text x="738" y="344">12.0 µs</text></g><g font-weight="bold"><text x="594" y="374">Total</text><text x="738" y="374">8.1 ms</text></g><g><text x="912" y="255">Start:</text><text x="1012" y="255">1.9 s</text></g><g><text x="912" y="285">Stop:</text><text x="1012" y="285">1.9 s</text></g><g><text x="912" y="315">Transferred:</text><text x="1012" y="315">166.0 B</text></g><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-run.html#e6:c1"><text x="912" y="371" fill="royalblue" text-decoration="underline">(view run)</text></a><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-source.html#l63"><text x="1002" y="371" fill="royalblue" text-decoration="underline">(view source)</text></a><a href="https://hurl.dev/docs/response.html#timings"><text x="912" y="401" fill="royalblue" text-decoration="underline">Explanation</text></a></g></g></g><g><g class="call-summary"><rect x="618.3843101487361" y="149" width="0.01020665474717418" height="18" fill="#1d9688" /><rect x="618.6630303360628" y="149" width="125.5379277538012" height="18" fill="#18c852" /><rect x="744.2009580898639" y="149" width="0.01648767305312752" height="18" fill="#36a9f4" /></g><g class="call-detail" font-family="sans-serif" font-size="17px"><rect x="618.3843101487361" y="0" width="125.84137945070756" height="516" fill="green" opacity="0.05" class="call-sel" /><rect x="532" y="167" width="600" height="235" fill="white" class="call-back" filter="url(#shadow)" stroke="#ccc" stroke-width="1" /><g class="call-legend" fill="#555"><use href="#success" x="546" y="181" width="20" height="20" /><text x="576" y="197" font-weight="bold">POST http://api.localhost/v1/auth/login  200</text><g><rect x="558" y="213" width="20" height="20" fill="#1d9688" /><text x="594" y="230">DNS lookup</text><text x="738" y="230">26.0 µs</text></g><g><rect x="558" y="243" width="20" height="20" fill="#9933ff" /><text x="594" y="260">SSL handshake</text><text x="738" y="260">0.0 µs</text></g><g><rect x="558" y="273" width="20" height="20" fill="#18c852" /><text x="594" y="290">Wait</text><text x="738" y="290">319.8 ms</text></g><g><rect x="558" y="303" width="20" height="20" fill="#36a9f4" /><text x="594" y="320">Data transfer</text><text x="738" y="320">42.0 µs</text></g><g font-weight="bold"><text x="594" y="350">Total</text><text x="738" y="350">320.5 ms</text></g><g><text x="912" y="231">Start:</text><text x="1012" y="231">1.6 s</text></g><g><text x="912" y="261">Stop:</text><text x="1012" y="261">1.9 s</text></g><g><text x="912" y="291">Transferred:</text><text x="1012" y="291">29.0 B</text></g><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-run.html#e5:c1"><text x="912" y="347" fill="royalblue" text-decoration="underline">(view run)</text></a><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-source.html#l50"><text x="1002" y="347" fill="royalblue" text-decoration="underline">(view source)</text></a><a href="https://hurl.dev/docs/response.html#timings"><text x="912" y="377" fill="royalblue" text-decoration="underline">Explanation</text></a></g></g></g><g><g class="call-summary"><rect x="501.4929892203679" y="125" width="0.007851272882441676" height="18" fill="#1d9688" /><rect x="501.52007611181233" y="125" width="116.78454361716696" height="18" fill="#18c852" /><rect x="618.3046197289793" y="125" width="0.020020745850226274" height="18" fill="#36a9f4" /></g><g class="call-detail" font-family="sans-serif" font-size="17px"><rect x="501.4929892203679" y="0" width="116.84185790920878" height="516" fill="green" opacity="0.05" class="call-sel" /><rect x="501.4929892203679" y="143" width="600" height="235" fill="white" class="call-back" filter="url(#shadow)" stroke="#ccc" stroke-width="1" /><g class="call-legend" fill="#555"><use href="#success" x="515.4929892203679" y="157" width="20" height="20" /><text x="545.4929892203679" y="173" font-weight="bold">POST http://api.localhost/v1/auth/login  400</text><g><rect x="527.4929892203679" y="189" width="20" height="20" fill="#1d9688" /><text x="563.4929892203679" y="206">DNS lookup</text><text x="707.4929892203679" y="206">20.0 µs</text></g><g><rect x="527.4929892203679" y="219" width="20" height="20" fill="#9933ff" /><text x="563.4929892203679" y="236">SSL handshake</text><text x="707.4929892203679" y="236">0.0 µs</text></g><g><rect x="527.4929892203679" y="249" width="20" height="20" fill="#18c852" /><text x="563.4929892203679" y="266">Wait</text><text x="707.4929892203679" y="266">297.5 ms</text></g><g><rect x="527.4929892203679" y="279" width="20" height="20" fill="#36a9f4" /><text x="563.4929892203679" y="296">Data transfer</text><text x="707.4929892203679" y="296">51.0 µs</text></g><g font-weight="bold"><text x="563.4929892203679" y="326">Total</text><text x="707.4929892203679" y="326">297.6 ms</text></g><g><text x="881.4929892203679" y="207">Start:</text><text x="981.4929892203679" y="207">1.3 s</text></g><g><text x="881.4929892203679" y="237">Stop:</text><text x="981.4929892203679" y="237">1.6 s</text></g><g><text x="881.4929892203679" y="267">Transferred:</text><text x="981.4929892203679" y="267">83.0 B</text></g><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-run.html#e4:c1"><text x="881.4929892203679" y="323" fill="royalblue" text-decoration="underline">(view run)</text></a><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-source.html#l39"><text x="971.4929892203679" y="323" fill="royalblue" text-decoration="underline">(view source)</text></a><a href="https://hurl.dev/docs/response.html#timings"><text x="881.4929892203679" y="353" fill="royalblue" text-decoration="underline">Explanation</text></a></g></g></g><g><g class="call-summary"><rect x="235.8224025515947" y="101" width="0.010599218391296263" height="18" fill="#1d9688" /><rect x="235.852237388548" y="101" width="265.5685201213015" height="18" fill="#18c852" /><rect x="501.4207575098494" y="101" width="0.011776909323662516" height="18" fill="#36a9f4" /></g><g class="call-detail" font-family="sans-serif" font-size="17px"><rect x="235.8224025515947" y="0" width="265.6211236496139" height="516" fill="green" opacity="0.05" class="call-sel" /><rect x="235.8224025515947" y="119" width="600" height="235" fill="white" class="call-back" filter="url(#shadow)" stroke="#ccc" stroke-width="1" /><g class="call-legend" fill="#555"><use href="#success" x="249.8224025515947" y="133" width="20" height="20" /><text x="279.8224025515947" y="149" font-weight="bold">POST http://api.localhost/v1/auth/change-password  200</text><g><rect x="261.8224025515947" y="165" width="20" height="20" fill="#1d9688" /><text x="297.8224025515947" y="182">DNS lookup</text><text x="441.8224025515947" y="182">27.0 µs</text></g><g><rect x="261.8224025515947" y="195" width="20" height="20" fill="#9933ff" /><text x="297.8224025515947" y="212">SSL handshake</text><text x="441.8224025515947" y="212">0.0 µs</text></g><g><rect x="261.8224025515947" y="225" width="20" height="20" fill="#18c852" /><text x="297.8224025515947" y="242">Wait</text><text x="441.8224025515947" y="242">676.5 ms</text></g><g><rect x="261.8224025515947" y="255" width="20" height="20" fill="#36a9f4" /><text x="297.8224025515947" y="272">Data transfer</text><text x="441.8224025515947" y="272">30.0 µs</text></g><g font-weight="bold"><text x="297.8224025515947" y="302">Total</text><text x="441.8224025515947" y="302">676.6 ms</text></g><g><text x="615.8224025515947" y="183">Start:</text><text x="715.8224025515947" y="183">600.7 ms</text></g><g><text x="615.8224025515947" y="213">Stop:</text><text x="715.8224025515947" y="213">1.3 s</text></g><g><text x="615.8224025515947" y="243">Transferred:</text><text x="715.8224025515947" y="243">29.0 B</text></g><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-run.html#e3:c1"><text x="615.8224025515947" y="299" fill="royalblue" text-decoration="underline">(view run)</text></a><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-source.html#l26"><text x="705.8224025515947" y="299" fill="royalblue" text-decoration="underline">(view source)</text></a><a href="https://hurl.dev/docs/response.html#timings"><text x="615.8224025515947" y="329" fill="royalblue" text-decoration="underline">Explanation</text></a></g></g></g><g><g class="call-summary"><rect x="119.17054544614099" y="77" width="0.01020665474717418" height="18" fill="#1d9688" /><rect x="119.20352079224725" y="77" width="116.54233184874364" height="18" fill="#18c852" /><rect x="235.7458526409909" y="77" width="0.01845049127373794" height="18" fill="#36a9f4" /></g><g class="call-detail" font-family="sans-serif" font-size="17px"><rect x="119.17054544614099" y="0" width="116.60121639536196" height="516" fill="green" opacity="0.05" class="call-sel" /><rect x="119.17054544614099" y="95" width="600" height="235" fill="white" class="call-back" filter="url(#shadow)" stroke="#ccc" stroke-width="1" /><g class="call-legend" fill="#555"><use href="#success" x="133.17054544614098" y="109" width="20" height="20" /><text x="163.17054544614098" y="125" font-weight="bold">POST http://api.localhost/v1/auth/login  200</text><g><rect x="145.17054544614098" y="141" width="20" height="20" fill="#1d9688" /><text x="181.17054544614098" y="158">DNS lookup</text><text x="325.170545446141" y="158">26.0 µs</text></g><g><rect x="145.17054544614098" y="171" width="20" height="20" fill="#9933ff" /><text x="181.17054544614098" y="188">SSL handshake</text><text x="325.170545446141" y="188">0.0 µs</text></g><g><rect x="145.17054544614098" y="201" width="20" height="20" fill="#18c852" /><text x="181.17054544614098" y="218">Wait</text><text x="325.170545446141" y="218">296.9 ms</text></g><g><rect x="145.17054544614098" y="231" width="20" height="20" fill="#36a9f4" /><text x="181.17054544614098" y="248">Data transfer</text><text x="325.170545446141" y="248">47.0 µs</text></g><g font-weight="bold"><text x="181.17054544614098" y="278">Total</text><text x="325.170545446141" y="278">297.0 ms</text></g><g><text x="499.170545446141" y="159">Start:</text><text x="599.170545446141" y="159">303.6 ms</text></g><g><text x="499.170545446141" y="189">Stop:</text><text x="599.170545446141" y="189">600.6 ms</text></g><g><text x="499.170545446141" y="219">Transferred:</text><text x="599.170545446141" y="219">29.0 B</text></g><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-run.html#e2:c1"><text x="499.170545446141" y="275" fill="royalblue" text-decoration="underline">(view run)</text></a><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-source.html#l15"><text x="589.170545446141" y="275" fill="royalblue" text-decoration="underline">(view source)</text></a><a href="https://hurl.dev/docs/response.html#timings"><text x="499.170545446141" y="305" fill="royalblue" text-decoration="underline">Explanation</text></a></g></g></g><g><g class="call-summary"><rect x="0" y="53" width="0.007458709238319593" height="18" fill="#1d9688" /><rect x="0.007458709238319593" y="53" width="0.06634325585663217" height="18" fill="#fa7f03" /><rect x="0.09146732908044554" y="53" width="118.96484209662103" height="18" fill="#18c852" /><rect x="119.05630942570147" y="53" width="0.054566346532969656" height="18" fill="#36a9f4" /></g><g class="call-detail" font-family="sans-serif" font-size="17px"><rect x="0" y="0" width="119.12108242698162" height="516" fill="green" opacity="0.05" class="call-sel" /><rect x="6" y="71" width="600" height="235" fill="white" class="call-back" filter="url(#shadow)" stroke="#ccc" stroke-width="1" /><g class="call-legend" fill="#555"><use href="#success" x="20" y="85" width="20" height="20" /><text x="50" y="101" font-weight="bold">POST http://api.localhost/v1/auth/register  201</text><g><rect x="32" y="117" width="20" height="20" fill="#1d9688" /><text x="68" y="134">DNS lookup</text><text x="212" y="134">19.0 µs</text></g><g><rect x="32" y="147" width="20" height="20" fill="#fa7f03" /><text x="68" y="164">TCP handshake</text><text x="212" y="164">169.0 µs</text></g><g><rect x="32" y="177" width="20" height="20" fill="#18c852" /><text x="68" y="194">Wait</text><text x="212" y="194">303.0 ms</text></g><g><rect x="32" y="207" width="20" height="20" fill="#36a9f4" /><text x="68" y="224">Data transfer</text><text x="212" y="224">139.0 µs</text></g><g font-weight="bold"><text x="68" y="254">Total</text><text x="212" y="254">303.4 ms</text></g><g><text x="386" y="135">Start:</text><text x="486" y="135">0.0 µs</text></g><g><text x="386" y="165">Stop:</text><text x="486" y="165">303.4 ms</text></g><g><text x="386" y="195">Transferred:</text><text x="486" y="195">147.0 B</text></g><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-run.html#e1:c1"><text x="386" y="251" fill="royalblue" text-decoration="underline">(view run)</text></a><a href="d2046a63-1cce-4d7f-86d3-18dae4f3c951-source.html#l7"><text x="476" y="251" fill="royalblue" text-decoration="underline">(view source)</text></a><a href="https://hurl.dev/docs/response.html#timings"><text x="386" y="281" fill="royalblue" text-decoration="underline">Explanation</text></a></g></g></g></svg></div>
+    </div>
+</div>
+</body>
+</html>
