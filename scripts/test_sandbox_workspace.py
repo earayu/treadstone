@@ -38,10 +38,12 @@ async def main() -> None:
                         }""",
                         timeout=60000,
                     )
-                    await frame.locator("canvas").click(position={"x": 150, "y": 150})
-                    await page.keyboard.press("F6")
-                    # VNC key delivery precedes the remote browser's focus update.
-                    await asyncio.sleep(1)
+                    canvas = frame.locator("canvas")
+                    bounds = await canvas.bounding_box()
+                    scale = bounds["width"] / await canvas.evaluate("(element) => element.width")
+                    # Click the pinned Chromium toolbar without invoking host-browser shortcuts.
+                    await canvas.click(position={"x": 500 * scale, "y": 62 * scale}, click_count=3, delay=100)
+                    await asyncio.sleep(0.5)
                     title = f"workspace-{width}"
                     await page.keyboard.type(f"data:text/html,<title>{title}</title><h1>Browser ready</h1>", delay=30)
                     await page.keyboard.press("Enter")
