@@ -1,6 +1,7 @@
 location = / {
     default_type text/html;
-    alias /opt/treadstone/index.html;
+    root /opt/treadstone;
+    index index.html;
 }
 location = /index.html {
     default_type text/html;
