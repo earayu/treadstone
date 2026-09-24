@@ -111,6 +111,8 @@ def test_new_browser_profiles_preserve_persistent_cookies() -> None:
 def test_publish_verifies_loaded_image_before_push_without_rebuilding() -> None:
     workflow = yaml.safe_load((ROOT / ".github/workflows/sandbox-image.yml").read_text())
     steps = workflow["jobs"]["docker"]["steps"]
+    checkout = next(step for step in steps if step.get("uses", "").startswith("actions/checkout@"))
+    assert checkout["with"]["ref"] == "${{ github.sha }}"
     builds = [step for step in steps if step.get("uses", "").startswith("docker/build-push-action@")]
     assert len(builds) == 1
     assert builds[0]["with"]["load"] is True
