@@ -39,9 +39,9 @@ async def main() -> None:
                         timeout=60000,
                     )
                     await frame.locator("canvas").click(position={"x": 150, "y": 150})
-                    await page.keyboard.press("Control+l")
+                    await page.keyboard.press("F6")
                     title = f"workspace-{width}"
-                    await page.keyboard.type(f"data:text/html,<title>{title}</title><h1>Browser ready</h1>")
+                    await page.keyboard.type(f"data:text/html,<title>{title}</title><h1>Browser ready</h1>", delay=30)
                     await page.keyboard.press("Enter")
                     async with asyncio.timeout(30):
                         while True:
@@ -53,6 +53,8 @@ async def main() -> None:
                     await page.screenshot(path=str(output / f"browser-failed-{width}.png"))
                     print(f"Browser errors: {errors}")
                     print(await frame.locator("body").inner_text())
+                    targets = await page.request.get("http://127.0.0.1:8080/cdp/json/list")
+                    print(await targets.json())
                     raise
                 assert await page.evaluate("document.documentElement.scrollWidth <= innerWidth")
                 await page.screenshot(path=str(output / f"browser-{width}.png"))
