@@ -15,7 +15,7 @@ Treadstone is two planes:
 │   │   (Treadstone API)   │   │   (Sandbox runtime)     │ │
 │   │                      │   │                          │ │
 │   │  • Create sandbox    │   │  • Shell / file / browser │ │
-│   │  • List / get        │   │  • Jupyter, MCP, …       │ │
+│   │  • List / get        │   │  • Browser/shell MCP     │ │
 │   │  • Stop / start      │   │                          │ │
 │   │  • Delete            │   │                          │ │
 │   │  • Web-link handoff  │   │                          │ │
@@ -71,7 +71,7 @@ Or pass `--api-key` on each run. Create a key with `treadstone api-keys create -
 | [`control_plane/02_list_sandboxes.py`](control_plane/02_list_sandboxes.py) | [Sandbox lifecycle](https://treadstone-ai.dev/docs/sandbox-lifecycle) | List sandboxes, group by status, optional `--status` filter |
 | [`control_plane/03_lifecycle_stop_start.py`](control_plane/03_lifecycle_stop_start.py) | [Sandbox lifecycle](https://treadstone-ai.dev/docs/sandbox-lifecycle) | Stop → start transitions |
 | [`control_plane/04_browser_handoff.py`](control_plane/04_browser_handoff.py) | [Browser handoff](https://treadstone-ai.dev/docs/browser-handoff) | `web-link` create, status, delete, create again |
-| [`data_plane/01_agent_sandbox_runtime.py`](data_plane/01_agent_sandbox_runtime.py) | [Inside your sandbox](https://treadstone-ai.dev/docs/inside-sandbox) | Scoped data-plane key + `agent_sandbox`: shell, file, browser, Jupyter |
+| [`data_plane/01_agent_sandbox_runtime.py`](data_plane/01_agent_sandbox_runtime.py) | [Inside your sandbox](https://treadstone-ai.dev/docs/inside-sandbox) | Scoped data-plane key + `agent_sandbox`: shell, file and browser |
 | [`data_plane/02_httpx_proxy_shell_exec.py`](data_plane/02_httpx_proxy_shell_exec.py) | [REST API guide](https://treadstone-ai.dev/docs/rest-api-guide), [Inside your sandbox](https://treadstone-ai.dev/docs/inside-sandbox) | Minimal `httpx` `POST /v1/shell/exec` via `urls.proxy` (no `agent-sandbox`) |
 
 Shared helpers: [`_shared.py`](_shared.py).

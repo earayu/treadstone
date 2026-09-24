@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Treadstone Workspace</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body { display: grid; grid-template-rows: auto minmax(0, 1fr); font: 14px system-ui, sans-serif; color: #e4e4e7; background: #18181b; }
+    header { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; padding: 10px 16px; border-bottom: 1px solid #3f3f46; }
+    strong { font-size: 16px; }
+    [role="tablist"] { display: flex; gap: 4px; }
+    button { font: inherit; cursor: pointer; color: #d4d4d8; background: transparent; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px; }
+    button[aria-selected="true"] { color: #fff; border-color: #34d399; }
+    button:focus-visible { outline: 2px solid #34d399; outline-offset: 2px; }
+    main { position: relative; min-height: 0; }
+    iframe { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
+    iframe[hidden] { display: none; }
+    @media (max-width: 420px) { header { gap: 8px; padding: 8px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Treadstone</strong>
+    <div role="tablist" aria-label="Workspace">
+      <button id="browser-tab" role="tab" aria-controls="browser" aria-selected="true">Browser</button>
+      <button id="terminal-tab" role="tab" aria-controls="terminal" aria-selected="false" tabindex="-1">Terminal</button>
+    </div>
+  </header>
+  <main>
+    <iframe id="browser" role="tabpanel" aria-labelledby="browser-tab" title="Browser"></iframe>
+    <iframe id="terminal" role="tabpanel" aria-labelledby="terminal-tab" title="Terminal" hidden></iframe>
+  </main>
+  <script>
+    const prefix = location.pathname.replace(/\/(?:index\.html)?$/, "");
+    const browserUrl = new URL(`${prefix}/vnc/vnc.html`, location.origin);
+    browserUrl.search = new URLSearchParams({
+      autoconnect: "true", resize: "scale", reconnect: "true",
+      path: `${prefix}/websockify`.replace(/^\//, "")
+    });
+    document.getElementById("browser").src = browserUrl;
+    const tabs = [...document.querySelectorAll('[role="tab"]')];
+    function activate(tab) {
+      for (const item of tabs) {
+        const selected = item === tab;
+        item.setAttribute("aria-selected", String(selected));
+        item.tabIndex = selected ? 0 : -1;
+        const panel = document.getElementById(item.getAttribute("aria-controls"));
+        panel.hidden = !selected;
+        if (selected && panel.id === "terminal" && !panel.getAttribute("src")) {
+          panel.src = `${prefix}/terminal`;
+        }
+      }
+    }
+    for (const tab of tabs) {
+      tab.addEventListener("click", () => activate(tab));
+      tab.addEventListener("keydown", event => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+        event.preventDefault();
+        const next = event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[1] : tabs[1 - tabs.indexOf(tab)];
+        activate(next);
+        next.focus();
+      });
+    }
+  </script>
+</body>
+</html>

@@ -16,7 +16,7 @@ How `urls.web` relates to the Console Web row and to the control plane vs data p
 
 ## What The Human Sees
 
-Opening the handoff shows the full workspace in the browser: the in-sandbox browser, VS Code (including the integrated terminal), the file tree, Jupyter, and anything else running there—the same surfaces the agent can use.
+Opening the handoff shows the in-sandbox browser and an interactive terminal. Both use the same workspace as the agent's browser, shell and file operations.
 
 It is also the usual human-in-the-loop entry: someone can watch what the agent is doing and step in to type, click, or fix things when review or takeover is needed.
 

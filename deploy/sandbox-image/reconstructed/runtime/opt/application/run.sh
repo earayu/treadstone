@@ -1,1 +1,0 @@
-/opt/gem/run.sh

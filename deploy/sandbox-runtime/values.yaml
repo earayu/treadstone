@@ -77,7 +77,7 @@ networkPolicies:
 # Rootless baseline for the maintained Treadstone sandbox image. The image now
 # creates `gem` at build time and prepares its writable runtime paths ahead of
 # time, so the main container can run as UID/GID 1000. Keep the root
-# filesystem writable for now because browser/Jupyter/nginx still use
+# filesystem writable for now because browser/nginx still use
 # container-local transient state.
 sandboxPodSecurityContext:
   seccompProfile:
@@ -94,7 +94,7 @@ sandboxContainerSecurityContext:
 
 sandboxTemplates:
   - name: aio-sandbox-tiny
-    displayName: "AIO Sandbox Tiny"
+    displayName: "Treadstone Sandbox Tiny"
     description: "Lightweight sandbox for code execution and scripting"
     cpu: { requests: "250m", limits: "250m" }
     memory: { requests: "1Gi", limits: "1Gi" }
@@ -102,7 +102,7 @@ sandboxTemplates:
     allowedStorageSizes: ["5Gi", "10Gi", "20Gi"]
 
   - name: aio-sandbox-small
-    displayName: "AIO Sandbox Small"
+    displayName: "Treadstone Sandbox Small"
     description: "Small sandbox for simple development tasks"
     cpu: { requests: "500m", limits: "500m" }
     memory: { requests: "2Gi", limits: "2Gi" }
@@ -110,7 +110,7 @@ sandboxTemplates:
     allowedStorageSizes: ["5Gi", "10Gi", "20Gi"]
 
   - name: aio-sandbox-medium
-    displayName: "AIO Sandbox Medium"
+    displayName: "Treadstone Sandbox Medium"
     description: "General-purpose development environment"
     cpu: { requests: "1", limits: "1" }
     memory: { requests: "4Gi", limits: "4Gi" }
@@ -118,7 +118,7 @@ sandboxTemplates:
     allowedStorageSizes: ["5Gi", "10Gi", "20Gi"]
 
   - name: aio-sandbox-large
-    displayName: "AIO Sandbox Large"
+    displayName: "Treadstone Sandbox Large"
     description: "Full-featured sandbox with browser automation"
     cpu: { requests: "2", limits: "2" }
     memory: { requests: "8Gi", limits: "8Gi" }
@@ -126,7 +126,7 @@ sandboxTemplates:
     allowedStorageSizes: ["5Gi", "10Gi", "20Gi"]
 
   - name: aio-sandbox-xlarge
-    displayName: "AIO Sandbox XLarge"
+    displayName: "Treadstone Sandbox XLarge"
     description: "Heavy workloads with maximum resources"
     cpu: { requests: "4", limits: "4" }
     memory: { requests: "16Gi", limits: "16Gi" }

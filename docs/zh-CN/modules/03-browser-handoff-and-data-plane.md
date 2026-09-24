@@ -40,7 +40,7 @@
 
 ## 2. 浏览器接管
 
-打开 handoff 入口后，人类看到的是 sandbox 内部的完整浏览器视图——包括 in-sandbox 浏览器、VS Code（含集成终端）、文件树、Jupyter 等：
+打开 handoff 入口后，人类可以使用 sandbox 内的浏览器和交互式终端，与 agent 共享浏览器状态和工作目录：
 
 ![Sandbox 浏览器接管视图](../../assets/image/sandbox.png)
 
@@ -131,4 +131,3 @@
 - 子域名网关已经是当前仓库里的真实能力，不再是设计稿
 - 数据面代理仍然是 **thin proxy**，不会屏蔽 runtime 自己的路径结构
 - 浏览器 hand-off 是围绕 link/token/ticket/cookie 这套机制实现的，当前没有独立前端网关应用
-

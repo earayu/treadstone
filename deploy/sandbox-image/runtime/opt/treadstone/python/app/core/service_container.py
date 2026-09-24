@@ -1,0 +1,27 @@
+from typing import Literal
+
+
+ServiceName = Literal[
+    'terminal_manager',
+    'terminal_ws_manager',
+    'file_service',
+    'browser_service',
+    'sandbox_service',
+]
+
+
+class ServiceContainer:
+    def __init__(self):
+        self._services = {}
+
+    def register(self, name: ServiceName, service):
+        self._services[name] = service
+
+    def get(self, name: ServiceName):
+        return self._services.get(name)
+
+    def clear(self):
+        self._services.clear()
+
+
+services = ServiceContainer()

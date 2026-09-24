@@ -1,0 +1,48 @@
+"""Build-time contracts for the browser/shell-only sandbox runtime."""
+
+import configparser
+import json
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+IMAGE = ROOT / "deploy/sandbox-image"
+
+
+def test_image_is_built_from_distribution_not_aio() -> None:
+    dockerfile = (IMAGE / "Dockerfile").read_text()
+    assert "FROM python:3.12-slim-bookworm" in dockerfile
+    assert "RECONSTRUCTED_BASE_IMAGE" not in dockerfile
+    assert "USER gem" in dockerfile
+    assert "ENTRYPOINT" in dockerfile
+    for removed in ("code-server", "jupyter", "ipykernel", "mcp-hub", "markitdown"):
+        assert removed not in dockerfile.lower()
+        assert removed not in (IMAGE / "requirements-python-runtime.txt").read_text().lower()
+
+
+def test_only_browser_shell_support_processes_are_started() -> None:
+    config = configparser.ConfigParser(interpolation=None)
+    config.read(IMAGE / "supervisord.conf")
+    programs = {name.removeprefix("program:") for name in config.sections() if name.startswith("program:")}
+    assert programs == {"nginx", "browser", "openbox", "tigervnc", "websocat", "python-server", "gem-server"}
+    assert not (ROOT / ".github/workflows/sandbox-image-reconstructed.yml").exists()
+    assert not (IMAGE / "reconstructed").exists()
+
+
+def test_runtime_openapi_only_advertises_supported_capabilities() -> None:
+    spec = json.loads((ROOT / "scripts/sandbox_openapi_base.json").read_text())
+    assert "/v1/shell/exec" in spec["paths"]
+    assert "/v1/file/read" in spec["paths"]
+    assert "/v1/browser/info" in spec["paths"]
+    assert all(path.startswith(("/v1/shell", "/v1/file", "/v1/browser", "/v1/sandbox")) for path in spec["paths"])
+    serialized = json.dumps(spec).lower()
+    for removed in ("jupyter", "ipykernel", "code-server", "/v1/code", "/v1/nodejs", "markitdown"):
+        assert removed not in serialized
+
+
+def test_workspace_only_has_browser_and_terminal_tabs() -> None:
+    page = (IMAGE / "runtime/opt/treadstone/index.html").read_text()
+    assert 'id="browser-tab"' in page
+    assert 'id="terminal-tab"' in page
+    assert "Treadstone" in page
+    for removed in ("jupyter", "code-server", "vscode"):
+        assert removed not in page.lower()

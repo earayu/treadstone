@@ -122,13 +122,6 @@ The tables below list **every path** in the bundled sandbox OpenAPI spec. Each r
 | `GET` | `/v1/browser/info` | Get browser info |
 | `GET` | `/v1/browser/screenshot` | Take screenshot |
 
-##### `code` — Python execution
-
-| Method | Path suffix | Summary |
-|--------|-------------|---------|
-| `POST` | `/v1/code/execute` | Execute code |
-| `GET` | `/v1/code/info` | Code info |
-
 ##### `file` — filesystem
 
 | Method | Path suffix | Summary |
@@ -142,32 +135,6 @@ The tables below list **every path** in the bundled sandbox OpenAPI spec. Each r
 | `POST` | `/v1/file/str_replace_editor` | Str replace editor |
 | `POST` | `/v1/file/upload` | Upload file |
 | `POST` | `/v1/file/write` | Write file |
-
-##### `jupyter`
-
-| Method | Path suffix | Summary |
-|--------|-------------|---------|
-| `POST` | `/v1/jupyter/execute` | Execute Jupyter code |
-| `GET` | `/v1/jupyter/info` | Jupyter info |
-| `GET` | `/v1/jupyter/sessions` | List sessions |
-| `DELETE` | `/v1/jupyter/sessions` | Cleanup all sessions |
-| `POST` | `/v1/jupyter/sessions/create` | Create Jupyter session |
-| `DELETE` | `/v1/jupyter/sessions/{session_id}` | Cleanup session |
-
-##### `mcp`
-
-| Method | Path suffix | Summary |
-|--------|-------------|---------|
-| `GET` | `/v1/mcp/servers` | List MCP servers |
-| `GET` | `/v1/mcp/{server_name}/tools` | List MCP tools |
-| `POST` | `/v1/mcp/{server_name}/tools/{tool_name}` | Execute MCP tool |
-
-##### `nodejs` — Node execution
-
-| Method | Path suffix | Summary |
-|--------|-------------|---------|
-| `POST` | `/v1/nodejs/execute` | Execute Node.js code |
-| `GET` | `/v1/nodejs/info` | Node.js info |
 
 ##### `sandbox` — environment context
 
@@ -192,21 +159,10 @@ The tables below list **every path** in the bundled sandbox OpenAPI spec. Each r
 | `DELETE` | `/v1/shell/sessions` | Cleanup all sessions |
 | `DELETE` | `/v1/shell/sessions/{session_id}` | Cleanup session |
 
-##### `skills`
-
-| Method | Path suffix | Summary |
-|--------|-------------|---------|
-| `DELETE` | `/v1/skills` | Clear skills |
-| `GET` | `/v1/skills/metadatas` | List skills metadata |
-| `POST` | `/v1/skills/register` | Register skills |
-| `DELETE` | `/v1/skills/{name}` | Delete skill |
-| `GET` | `/v1/skills/{name}/content` | Get skill content |
-
-##### `util`
-
-| Method | Path suffix | Summary |
-|--------|-------------|---------|
-| `POST` | `/v1/util/convert_to_markdown` | Convert to Markdown |
+Python and Node.js programs run through `/v1/shell/exec`. The maintained image
+does not provide notebook kernels, IDE services or document-conversion endpoints.
+MCP clients use `urls.mcp` for the same browser, shell and file tools; there is no
+separate MCP Hub or server-management REST API.
 
 Request and response schemas for these operations are in **`sandbox_openapi_base.json`** and in the hosted **Swagger** / **`openapi.json`** — not duplicated here.
 

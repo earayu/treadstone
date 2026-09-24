@@ -187,7 +187,7 @@ export function SandboxEndpointsDetail({
         id="endpoint-web"
         badge="Web"
         title="Browser workspace"
-        description="Opens the sandbox in your browser (VS Code, terminal, Jupyter). The URL includes a short-lived token while a session is active."
+        description="Opens the sandbox browser and terminal. The URL includes a short-lived token while a session is active."
         docHref={DOC.browserHandoff.howToUseWebUrl}
         docLabel="How to use the Web URL"
       >

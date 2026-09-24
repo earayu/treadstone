@@ -1,5 +1,9 @@
 # `agent-infra/sandbox:1.0.0.152` 重建方案
 
+> 历史记录：2026-09-24 起，重建镜像及其独立 workflow 已退役。保留的浏览器、
+> shell 和文件实现位于 `deploy/sandbox-image/runtime/`，由单一 Dockerfile
+> 直接构建。当前方案见 [sandbox-image README](../../../deploy/sandbox-image/README.md)。
+
 ## 背景
 
 Treadstone 当前已有一条自建 sandbox image 主线：`deploy/sandbox-image/Dockerfile` 在

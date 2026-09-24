@@ -3,7 +3,7 @@
 Control plane: ``treadstone_sdk`` for lifecycle and scoped data-plane keys.
 Data plane: ``agent_sandbox.Sandbox`` with ``base_url=sandbox.urls.proxy``.
 
-Demonstrates shell, file, browser, and Jupyter calls. Mirrors
+Demonstrates shell, file and browser calls. Mirrors
 ``web/public/docs/inside-sandbox.md`` (HTTP shapes) using the Python helper SDK.
 
 Usage:
@@ -37,7 +37,7 @@ from _shared import (  # noqa: E402
 
 
 def main() -> int:
-    args = parse_args("Run data-plane operations (shell, file, browser, jupyter) inside a sandbox.")
+    args = parse_args("Run data-plane operations (shell, file, browser) inside a sandbox.")
 
     try:
         from treadstone_sdk.api.auth import auth_delete_api_key
@@ -151,19 +151,11 @@ def main() -> int:
         else:
             print("  (No screenshot returned — browser may not be available in this template)")
 
-        print_step("Step 8: Jupyter — execute_code")
-        code = """
-import sys
-import math
-
-print(f"Python {sys.version}")
-print(f"Pi ≈ {math.pi:.6f}")
-result = [x**2 for x in range(1, 6)]
-print(f"Squares: {result}")
-result
-"""
-        jupyter_result = sb.jupyter.execute_code(code=code)
-        print_result("jupyter.execute_code", jupyter_result)
+        print_step("Step 8: Run Python through the shell")
+        python_result = sb.shell.exec_command(
+            command="python3 -c 'import sys; print(sys.version); print([x**2 for x in range(1, 6)])'"
+        )
+        print_result("shell.exec_command (Python)", python_result)
 
         print("\n  ✓ All data-plane operations completed successfully.")
 
